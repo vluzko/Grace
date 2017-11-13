@@ -11,11 +11,11 @@ mut type identifier
 identifier = expression
 
 ## Conditionals
-if expression:
+if expression
   code
-else if expression:
+else if expression
   code
-else:
+else
   code
 
 ## Loops

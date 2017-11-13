@@ -18,7 +18,7 @@ else if expression:
 else:
   code
 
-## Loops
+## Flow Control
 
 ### For each
 for var in iterator
@@ -31,6 +31,27 @@ for i, var in enumerated(iterator)
 ### While
 while condition
   code
+
+### Do While
+do
+  code
+while condition
+
+### Switch
+
+switch varname
+  value1
+    code
+  value2
+    code
+  value3
+    code
+
+### Match
+match varname
+  value1 => expr
+  value2 => expr2
+  default => dexpr
 
 ## Functions
 

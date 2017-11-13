@@ -11,11 +11,11 @@ mut type identifier
 identifier = expression
 
 ## Conditionals
-if expression:
+if expression
   code
-else if expression:
+elif expression
   code
-else:
+else
   code
 
 ## Flow Control
@@ -32,13 +32,7 @@ for i, var in enumerated(iterator)
 while condition
   code
 
-### Do While
-do
-  code
-while condition
-
 ### Switch
-
 switch varname
   value1
     code
@@ -47,33 +41,20 @@ switch varname
   value3
     code
 
-### Match
-match varname
-  value1 => expr
-  value2 => expr2
-  default => dexpr
-
 ## Functions
 
 ### Declaration
-func function\_name(argtype argname, argtype2 argname2, ...varargs, kwtype kwname=value, kwtype2 kwname2=value2, {...} kwargs) return\_type
+func function\_name(argtype argname, argtype2 argname2, ...vartype varargs, kwtype kwname=value, kwtype2 kwname2=value2) return\_type
   code
 
 ### Call
 function\_name(arg1)
 
 ### Returns
-func function\_name(arg1: arg1\_type): return\_type
+func function\_name(argtype argname) return\_type
   code
   return foo
 
-func function\_name(arg1: arg1\_type): return\_type
-  code
-  return foo
-  more code
-  return bar
-
-
-
-
+### Lambdas
+(argtype1 argname1, argtype2 argname2) => expr
 

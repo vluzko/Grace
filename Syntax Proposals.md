@@ -13,12 +13,12 @@ identifier = expression
 ## Conditionals
 if expression
   code
-else if expression
+elif expression
   code
 else
   code
 
-## Loops
+## Flow Control
 
 ### For each
 for var in iterator
@@ -32,27 +32,29 @@ for i, var in enumerated(iterator)
 while condition
   code
 
+### Switch
+switch varname
+  value1
+    code
+  value2
+    code
+  value3
+    code
+
 ## Functions
 
 ### Declaration
-func function\_name(argtype argname, argtype2 argname2, ...varargs, kwtype kwname=value, kwtype2 kwname2=value2, {...} kwargs) return\_type
+func function\_name(argtype argname, argtype2 argname2, ...vartype varargs, kwtype kwname=value, kwtype2 kwname2=value2) return\_type
   code
 
 ### Call
 function\_name(arg1)
 
 ### Returns
-func function\_name(arg1: arg1\_type): return\_type
+func function\_name(argtype argname) return\_type
   code
   return foo
 
-func function\_name(arg1: arg1\_type): return\_type
-  code
-  return foo
-  more code
-  return bar
-
-
-
-
+### Lambdas
+(argtype1 argname1, argtype2 argname2) => expr
 

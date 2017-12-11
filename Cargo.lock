@@ -1,7 +1,8 @@
 [root]
-name = "Grace"
+name = "grace"
 version = "0.1.0"
 dependencies = [
+ "libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

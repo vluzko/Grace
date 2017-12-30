@@ -1,5 +1,5 @@
 #[macro_use]
-extern crate nom;
+//extern crate nom;
 
 pub mod error;
-mod parser;
+pub mod parser;

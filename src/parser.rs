@@ -3,6 +3,7 @@ use std::str;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
+use std::env;
 
 extern crate nom;
 use self::nom::*;
@@ -203,7 +204,7 @@ pub fn parse_csv(entry: &str) -> Result<Vec<Vec<String>>, CsvError> {
     parse_csv_from_slice(entry.as_bytes())
 }
 
-#[test]
+//#[test]
 fn check_string_between_quotes() {
     let f = b"\"nom\",age\ncarles,30\nlaure,28\n";
 
@@ -217,7 +218,7 @@ fn check_string_between_quotes() {
     }
 }
 
-#[test]
+//#[test]
 pub fn check_get_cell() {
     let f = b"age\ncarles,30\n";
     let g = b"age2,carles,30\n";
@@ -234,7 +235,7 @@ pub fn check_get_cell() {
     }
 }
 
-#[test]
+//#[test]
 pub fn check_get_line_values() {
     // no terminator, this is not a line
     //let mut cells = vec!();
@@ -262,7 +263,7 @@ pub fn check_get_line_values() {
 //    );
 }
 
-#[test]
+//#[test]
 pub fn check_get_lines_values() {
     let f = b"\"nom\",age\ncarles,30\nlaure,28\n";
 
@@ -280,7 +281,7 @@ pub fn check_get_lines_values() {
                    vec!("laure".to_owned(), "28".to_owned()))));
 }
 
-#[test]
+//#[test]
 pub fn check_parse_csv() {
     let f = "\"nom\",age\ncarles,30\nlaure,28\n";
 
@@ -289,5 +290,20 @@ pub fn check_parse_csv() {
                    vec!("nom".to_owned(), "age".to_owned()),
                    vec!("carles".to_owned(), "30".to_owned()),
                    vec!("laure".to_owned(), "28".to_owned()))));
+}
+
+#[test]
+pub fn basic_file_test() {
+    // Read file
+    let filename= "./test_data/simple_grace.gr";
+    let mut f = File::open(filename).expect("File not found");
+    let mut contents = String::new();
+    f.read_to_string(&mut contents).expect("Problem reading file.");
+    println!("{}", contents);
+
+    // "parse" file
+    let results = parse_csv(&contents);
+    // Print parsing result
+    println!("Result: {:?}", results);
 }
 

@@ -233,7 +233,7 @@ pub fn check_get_cell() {
         nom::IResult::Incomplete(x) => panic!("incomplete: {:?}", x),
         nom::IResult::Error(e) => panic!("error: {:?}", e),
     }
-}
+
 
 //#[test]
 pub fn check_get_line_values() {
@@ -267,19 +267,10 @@ pub fn check_get_line_values() {
 pub fn check_get_lines_values() {
     let f = b"\"nom\",age\ncarles,30\nlaure,28\n";
 
-    assert_eq!(get_lines_values(vec!(), f),
-               Ok(vec!(
-                   vec!("nom".to_owned(), "age".to_owned()),
-                   vec!("carles".to_owned(), "30".to_owned()),
-                   vec!("laure".to_owned(), "28".to_owned()))));
-    let f = b"\"nom\",age\ncarles,30\nlaure,28";
+    #[test]
+    pub fn check_parse_csv() {
+        let f = "\"nom\",age\ncarles,30\nlaure,28\n";
 
-    assert_eq!(get_lines_values(vec!(), f),
-               Ok(vec!(
-                   vec!("nom".to_owned(), "age".to_owned()),
-                   vec!("carles".to_owned(), "30".to_owned()),
-                   vec!("laure".to_owned(), "28".to_owned()))));
-}
 
 //#[test]
 pub fn check_parse_csv() {

@@ -1,5 +1,6 @@
 use grace_error::*;
 use std::str;
+use std::io::BufReader;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
@@ -15,7 +16,7 @@ pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
 
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
-    parse_assignment(input)
+    parse_assignment(input) // for now this is all it can do
 }
 
 fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
@@ -38,8 +39,25 @@ named!(identifier<&[u8],(&[u8])>,
     )
 );
 
+named!(string_literal<&[u8],(&[u8])>,
+    recognize!(
+        tuple!(
+            tag!("\""),
+            opt!(alpha),
+            tag!("\"")
+            )   
+    )
+);
+
+named!(bool<&[u8],(&[u8])>,
+    alt!(tag!("true") | tag!("false"))
+);
+
 named!(assignment<&[u8],(&[u8],&[u8],&[u8])>,
-    tuple!(identifier, ws!(tag!("=")), identifier)
+    tuple!(
+    identifier, 
+    ws!(tag!("=")), 
+    alt!(identifier | string_literal | digit | bool))
 );
 
 #[test]
@@ -47,13 +65,18 @@ pub fn basic_file_test() {
     // Read file
     let filename= "./test_data/simple_grace.gr";
     let mut f = File::open(filename).expect("File not found");
+    let file = BufReader::new(&f);
     let mut contents = String::new();
-    f.read_to_string(&mut contents).expect("Problem reading file.");
-    println!("File contents: {}", contents);
+    for (num, line) in file.lines().enumerate() {
+        let l = line.unwrap();
+        contents = l.chars().collect();
+        //f.read_to_string(&mut contents).expect("Problem reading file.");
+        println!("File contents: {}", contents);
 
-    // "parse" file
-    let results = parse_grace(&contents);
-    // Print parsing result
-    println!("Result: {:?}", results);
+        // parse first line
+        let results = parse_grace(&contents);
+        // Print parsing result
+        println!("Result: {:?}", results);
+    }
 }
 

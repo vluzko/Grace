@@ -1,1 +1,4 @@
-_foo_1=bar
+untrue=false
+bar = 666
+_foo_1 = bar
+baz="lol"

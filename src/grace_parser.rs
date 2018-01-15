@@ -39,6 +39,9 @@ named!(identifier<&[u8],(&[u8])>,
     )
 );
 
+//TODO: Decide: are single quotes and double quotes equivalent
+// a la python, or are single quotes for single characters
+// a la C++? Or some other thing? 
 named!(string_literal<&[u8],(&[u8])>,
     recognize!(
         tuple!(
@@ -57,7 +60,19 @@ named!(assignment<&[u8],(&[u8],&[u8],&[u8])>,
     tuple!(
     identifier, 
     ws!(tag!("=")), 
-    alt!(identifier | string_literal | digit | bool))
+    or_expr)
+);
+
+named!(or_expr<&[u8], &[u8]>,
+    recognize!(
+    tuple!(
+    and_expr, many0!(pair!(tag!(" or "), and_expr))
+    )
+    )
+);
+
+named!(and_expr<&[u8], &[u8]>,
+    alt!(identifier | string_literal | digit | bool)
 );
 
 #[test]

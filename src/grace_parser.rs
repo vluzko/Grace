@@ -60,16 +60,12 @@ named!(assignment<&[u8],(&[u8],&[u8],&[u8])>,
     tuple!(
     identifier, 
     ws!(tag!("=")), 
-    or_expr)
+    and_expr)
 );
 
-named!(or_expr<&[u8], &[u8]>,
-    recognize!(
-    tuple!(
-    and_expr, many0!(pair!(tag!(" or "), and_expr))
-    )
-    )
-);
+//named!(or_expr<[u8], ([u8], [u8], [[u8]])>,
+//    tuple!(and_expr, tag!(" or "), or_expr)
+//);
 
 named!(and_expr<&[u8], &[u8]>,
     alt!(identifier | string_literal | digit | bool)

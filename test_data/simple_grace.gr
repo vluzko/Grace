@@ -2,4 +2,4 @@ untrue=false
 bar = 666
 _foo_1 = bar
 baz="lol"
-_true = true or false or true or false
+_true = true or false

@@ -9,3 +9,4 @@ pub mod grace_error;
 pub mod grace_parser;
 pub mod ast;
 pub mod expression;
+pub mod expression_test;

@@ -8,6 +8,7 @@ use std::env;
 
 extern crate nom;
 use self::nom::*;
+use expression;
 //use nom::Offset;
 
 pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
@@ -20,14 +21,8 @@ pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
 }
 
 fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
-    println!("result {:?}", assignment(input).to_result());
+//    println!("result {:?}", assignment(input).to_result());
     Err(GraceError::GenericError)
-    // whitespace (use existing fn)
-    // identifier
-    // whitespace (use existing fn)
-    // check that the equals sign exists
-    // whitespace (use existing fn)
-    // value
 }
 
 named!(identifier<&[u8],(&[u8])>,
@@ -64,17 +59,26 @@ named!(bool<&[u8],(&[u8])>,
     alt!(tag!("true") | tag!("false"))
 );
 
-named!(assignment<&[u8],(i64, &[u8], &[u8])>,
+fn bool_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::ASTNode>> {
+    println!("CALLED");
+    let parse_result = bool(input);
+    println!("Boolean: {:?}", parse_result);
+    let node = Box::new(expression::Boolean::True) as Box<expression::ASTNode>;
+    return nom::IResult::Done(input, node);
+}
+
+named!(assignment<&[u8],(&[u8], &[u8], Box<expression::ASTNode>)>,
     tuple!(
-        parse_identifier,
+        identifier,
         ws!(tag!("=")),
-        and_expr
+        bool_ast
     )
 );
 
 //named!(or_expr<[u8], ([u8], [u8], [[u8]])>,
 //    tuple!(and_expr, tag!(" or "), or_expr)
 //);
+
 
 named!(and_expr<&[u8], &[u8]>,
     alt!(identifier | string_literal | digit | bool)
@@ -113,7 +117,7 @@ pub fn basic_file_test() {
         // parse first line
         let results = parse_grace(&contents);
         // Print parsing result
-        println!("Result: {:?}", results);
+//        println!("Result: {:?}", results);
     }
 }
 

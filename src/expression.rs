@@ -1,11 +1,26 @@
-#[derive(Copy, Clone)]
-pub enum Operator {
-	or,
-	and,
-	xor,
-	not,
-	value
+
+pub trait ASTNode {}
+
+#[derive(Debug, Copy, Clone)]
+pub enum BinaryOperator {
+	Or,
+	And,
+	Xor,
 }
+
+#[derive(Debug, Copy, Clone)]
+pub enum Boolean {
+    True,
+    False
+}
+
+impl ASTNode for Boolean {}
+
+//pub enum Value {
+//    Boolean(Boolean),
+//}
+//
+//impl ASTNode for Value {}
 
 // Currently this only handles boolean expressions 
 // because they have a fixed size.
@@ -19,14 +34,14 @@ pub enum Operator {
 // single_value, not expressions have a
 // left but no right, and other expressions 
 // have a left and a right.
-pub struct Expression {
-	pub operator: Operator,
-	pub left: Option<Box<Expression>>,
-	pub right: Option<Box<Expression>>,
+pub struct BinaryExpression {
+	pub operator: BinaryOperator,
+	pub left: Option<Box<BinaryExpression>>,
+	pub right: Option<Box<BinaryExpression>>,
 	pub single_value: Option<bool>
 }
 
-pub fn evaluate (expr: Expression) -> Option<bool> {
+pub fn evaluate (expr: BinaryExpression) -> Option<bool> {
 	if !is_valid_expr(expr.operator, expr.single_value.is_some(),
 				 expr.left.is_some(), expr.right.is_some()) {
 		return None
@@ -35,14 +50,14 @@ pub fn evaluate (expr: Expression) -> Option<bool> {
 		return expr.single_value
 	}
 	let result = match expr.operator {
-		Operator::value => expr.single_value,
-		Operator::or => Some(evaluate(*(expr.left.expect("no"))).expect("no") || 
+//		BinaryOperator::Value => expr.single_value,
+		BinaryOperator::Or => Some(evaluate(*(expr.left.expect("no"))).expect("no") ||
 						evaluate(*(expr.right.expect("no"))).expect("no")),
-		Operator::and => Some(evaluate(*(expr.left.expect("no"))).expect("no") && 
+		BinaryOperator::And => Some(evaluate(*(expr.left.expect("no"))).expect("no") &&
 						evaluate(*(expr.right.expect("no"))).expect("no")),
-		Operator::xor => Some(xor(evaluate(*(expr.left.expect("no"))).expect("no"), 
-							      evaluate(*(expr.right.expect("no"))).expect("no"))),
-		Operator::not => Some(!evaluate(*(expr.left.expect("invalid expression"))).expect("no")),
+		BinaryOperator::Xor => Some(xor(evaluate(*(expr.left.expect("no"))).expect("no"),
+                                        evaluate(*(expr.right.expect("no"))).expect("no"))),
+//		BinaryOperator::Not => Some(!evaluate(*(expr.left.expect("invalid expression"))).expect("no")),
 	};
 	result
 }
@@ -53,30 +68,30 @@ fn xor (left: bool, right: bool) -> bool {
 	a || b
 }
 
-fn is_valid_expr(operator: Operator, value_set: bool, left_set: bool, right_set: bool) -> bool{
+fn is_valid_expr(operator: BinaryOperator, value_set: bool, left_set: bool, right_set: bool) -> bool{
 	match operator {
-		Operator::value => value_set && !left_set && !right_set,
-		Operator::or => !value_set && left_set && right_set,
-		Operator::and => {
+//		BinaryOperator::Value => value_set && !left_set && !right_set,
+		BinaryOperator::Or => !value_set && left_set && right_set,
+		BinaryOperator::And => {
 			if value_set || !left_set || !right_set {
 				false
 			} else {
 				true
 			}
 		},
-		Operator::xor => {
+		BinaryOperator::Xor => {
 			if value_set || !left_set || !right_set {
 				false
 			} else {
 				true
 			}
 		},
-		Operator::not => {
-			if value_set || !left_set || right_set {
-				false
-			} else {
-				true
-			}
-		},
+//		BinaryOperator::Not => {
+//			if value_set || !left_set || right_set {
+//				false
+//			} else {
+//				true
+//			}
+//		}
 	}
 }

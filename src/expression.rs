@@ -1,4 +1,5 @@
-enum Operator {
+#[derive(Copy, Clone)]
+pub enum Operator {
 	or,
 	and,
 	xor,
@@ -18,14 +19,18 @@ enum Operator {
 // single_value, not expressions have a
 // left but no right, and other expressions 
 // have a left and a right.
-struct Expression {
-	operator: Operator,
-	left: Option<Box<Expression>>,
-	right: Option<Box<Expression>>,
-	single_value: Option<bool>
+pub struct Expression {
+	pub operator: Operator,
+	pub left: Option<Box<Expression>>,
+	pub right: Option<Box<Expression>>,
+	pub single_value: Option<bool>
 }
 
-fn evaluate (expr: Expression) -> Option<bool> {
+pub fn evaluate (expr: Expression) -> Option<bool> {
+	if !is_valid_expr(expr.operator, expr.single_value.is_some(),
+				 expr.left.is_some(), expr.right.is_some()) {
+		return None
+	}
 	if expr.single_value.is_some() {
 		return expr.single_value
 	}
@@ -48,56 +53,30 @@ fn xor (left: bool, right: bool) -> bool {
 	a || b
 }
 
-//TODO make it real
-fn validate (expr: Expression) -> bool {
-	true
-}
-
-#[test]
-fn test_single_value() {
-    let simple_truth = Expression{
-    operator: Operator::value, 
-    left: None, right: None, 
-    single_value: Some(true)};
-    let value_of_truth = evaluate(simple_truth);
-	assert_eq!(value_of_truth, Some(true));
-}
-
-#[test]
-fn test_tree() {
-    let simple_truth = Expression{
-    	operator: Operator::value, 
-    	left: None, right: None, 
-    	single_value: Some(true)};
-
-    let simply_false = Expression{
-    	operator: Operator::value, 
-    	left: None, right: None, 
-    	single_value: Some(false)};
-
-    let not_false = Expression{
-    	operator: Operator::not, 
-    	left: Some(Box::new(simply_false)), right: None, 
-    	single_value: None};
-
-    let true_and_true = Expression{
-    	operator: Operator::and,
-    	left: Some(Box::new(simple_truth)), right: Some(Box::new(not_false)),
-    	single_value: None};
-    evaluate(true_and_true);
-}
-
-// "value" operator should not be used with left/right
-#[test]
-fn test_bad_value_operator_left() {
-    let simply_false = Expression{
-    	operator: Operator::value, 
-    	left: None, right: None, 
-    	single_value: Some(false)};
-
-    let wrong = Expression{
-    	operator: Operator::value, 
-    	left: Some(Box::new(simply_false)), right: None, 
-    	single_value: None};
-    assert_eq!(evaluate(wrong), None);
+fn is_valid_expr(operator: Operator, value_set: bool, left_set: bool, right_set: bool) -> bool{
+	match operator {
+		Operator::value => value_set && !left_set && !right_set,
+		Operator::or => !value_set && left_set && right_set,
+		Operator::and => {
+			if value_set || !left_set || !right_set {
+				false
+			} else {
+				true
+			}
+		},
+		Operator::xor => {
+			if value_set || !left_set || !right_set {
+				false
+			} else {
+				true
+			}
+		},
+		Operator::not => {
+			if value_set || !left_set || right_set {
+				false
+			} else {
+				true
+			}
+		},
+	}
 }

@@ -39,9 +39,11 @@ named!(identifier<&[u8],(&[u8])>,
     )
 );
 
-fn parse_identifier(input: &[u8]) -> nom::IResult<&[u8], &[u8]>{
+fn parse_identifier(input: &[u8]) -> nom::IResult<&[u8], i64>{
     println!("Called!");
-    return identifier(input);
+//    return identifier(input);
+    let val = nom::IResult::Done(input, 8);
+    return val;
 }
 
 // TODO: Should handle all non-newline characters (well, just ASCII for now).
@@ -62,11 +64,12 @@ named!(bool<&[u8],(&[u8])>,
     alt!(tag!("true") | tag!("false"))
 );
 
-named!(assignment<&[u8],(nom::IResult<&[u8], &[u8]>, &[u8], &[u8])>,
+named!(assignment<&[u8],(i64, &[u8], &[u8])>,
     tuple!(
-    parse_identifier,
-    ws!(tag!("=")), 
-    and_expr)
+        parse_identifier,
+        ws!(tag!("=")),
+        and_expr
+    )
 );
 
 //named!(or_expr<[u8], ([u8], [u8], [[u8]])>,

@@ -39,7 +39,13 @@ named!(identifier<&[u8],(&[u8])>,
     )
 );
 
-//TODO: Decide: are single quotes and double quotes equivalent
+fn parse_identifier(input: &[u8]) -> nom::IResult<&[u8], &[u8]>{
+    println!("Called!");
+    return identifier(input);
+}
+
+// TODO: Should handle all non-newline characters (well, just ASCII for now).
+// TODO: Decide: are single quotes and double quotes equivalent
 // a la python, or are single quotes for single characters
 // a la C++? Or some other thing? 
 named!(string_literal<&[u8],(&[u8])>,
@@ -56,9 +62,9 @@ named!(bool<&[u8],(&[u8])>,
     alt!(tag!("true") | tag!("false"))
 );
 
-named!(assignment<&[u8],(&[u8],&[u8],&[u8])>,
+named!(assignment<&[u8],(nom::IResult<&[u8], &[u8]>, &[u8], &[u8])>,
     tuple!(
-    identifier, 
+    parse_identifier,
     ws!(tag!("=")), 
     and_expr)
 );
@@ -70,6 +76,23 @@ named!(assignment<&[u8],(&[u8],&[u8],&[u8])>,
 named!(and_expr<&[u8], &[u8]>,
     alt!(identifier | string_literal | digit | bool)
 );
+
+//pub fn parse_file(file_name: &str) {
+//    let mut f = File::open(file_name).expect("File not found");
+//    let file = BufReader::new(&f);
+//    let mut contents = String::new();
+//    for (num, line) in file.lines().enumerate() {
+//        let l = line.unwrap();
+//        contents = l.chars().collect();
+//        //f.read_to_string(&mut contents).expect("Problem reading file.");
+//        println!("File contents: {}", contents);
+//
+//        // parse first line
+//        let results = parse_grace(&contents);
+//        // Print parsing result
+//        println!("Result: {:?}", results);
+//    }
+//}
 
 #[test]
 pub fn basic_file_test() {

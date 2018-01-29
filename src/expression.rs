@@ -1,5 +1,7 @@
 
-pub trait ASTNode {}
+
+pub trait ASTNode: ToString {
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {
@@ -14,6 +16,15 @@ pub enum Boolean {
     False
 }
 
+impl ToString for Boolean {
+    fn to_string(&self) -> String {
+        match self {
+            &Boolean::True => "true".to_string(),
+            &Boolean::False => "false".to_string()
+        }
+    }
+
+}
 impl ASTNode for Boolean {}
 
 //pub enum Value {

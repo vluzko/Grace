@@ -21,7 +21,11 @@ pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
 }
 
 fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
-//    println!("result {:?}", assignment(input).to_result());
+    match assignment(input).to_result() {
+        Ok(T) => println!("{}", T.2.to_string()),
+        Err(_) => println!("Error")
+    }
+
     Err(GraceError::GenericError)
 }
 
@@ -35,7 +39,6 @@ named!(identifier<&[u8],(&[u8])>,
 );
 
 fn parse_identifier(input: &[u8]) -> nom::IResult<&[u8], i64>{
-    println!("Called!");
 //    return identifier(input);
     let val = nom::IResult::Done(input, 8);
     return val;
@@ -60,9 +63,27 @@ named!(bool<&[u8],(&[u8])>,
 );
 
 fn bool_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::ASTNode>> {
-    println!("CALLED");
+    let f: &[u8] = &[102, 97, 108, 115, 101];
+    let t: &[u8] = &[116, 114, 117, 101];
     let parse_result = bool(input);
-    println!("Boolean: {:?}", parse_result);
+//    match parse_result.to_result() {
+//        Ok(val) => match from_utf8(val) {
+//            Ok("true") => println!("True"),
+//            Ok("false") => println!("False"),
+//            Ok(&_) => println!("bool somehow matched non true/false string."),
+//            Err(_) => println!("wat")
+//        },
+//        _ => println!("Error in boolean")
+//    }
+    let n: IResult<&[u8], Box<expression::ASTNode>, nom::ErrorKind> = match parse_result.to_result() {
+        Ok(val) => match from_utf8(val) {
+            Ok("true") => nom::IResult::Done(input, Box::new(expression::Boolean::True) as Box<expression::ASTNode>),
+            Ok("false") => nom::IResult::Done(input,Box::new(expression::Boolean::False) as Box<expression::ASTNode>),
+            Ok(&_) => nom::IResult::Error(nom::ErrorKind::Alpha),
+            Err(_) => nom::IResult::Error(nom::ErrorKind::Alpha)
+        },
+        Err(x) => nom::IResult::Error(nom::ErrorKind::Alpha)
+    };
     let node = Box::new(expression::Boolean::True) as Box<expression::ASTNode>;
     return nom::IResult::Done(input, node);
 }

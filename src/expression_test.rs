@@ -5,11 +5,11 @@ use expression::BinaryOperator;
 
 #[test]
 fn test_single_value() {
-//    let simple_truth = BinaryExpression {
-//    operator: BinaryOperator::Value,
-//    left: None, right: None,
-//    single_value: Some(true)};
-//	assert_eq!(evaluate(simple_truth), Some(true));
+    let simple_truth = BinaryExpression {
+    operator: BinaryOperator::Value,
+    left: None, right: None,
+    single_value: Some(true)};
+	assert_eq!(evaluate(simple_truth), Some(true));
 }
 
 #[test]

@@ -37,15 +37,6 @@ impl ASTNode for Boolean {}
 // because they have a fixed size.
 // It should be expanded to other types.
 
-
-// Also currently there can exist invalid
-// expressions like "not(true, true)"
-// or "value(true, false)" or "and(true)".
-// Might want to add some validation here
-// to say that value expressions have a 
-// single_value, not expressions have a
-// left but no right, and other expressions 
-// have a left and a right.
 pub struct BinaryExpression {
 	pub operator: BinaryOperator,
 	pub left: Option<Box<BinaryExpression>>,

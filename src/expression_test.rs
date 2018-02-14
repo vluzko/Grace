@@ -1,15 +1,12 @@
 use expression::*;
-use expression::BinaryExpression;
-use expression::evaluate;
-use expression::BinaryOperator;
 
 #[test]
 fn test_single_value() {
-    let simple_truth = BinaryExpression {
-    operator: BinaryOperator::Value,
-    left: None, right: None,
-    single_value: Some(true)};
-	assert_eq!(evaluate(simple_truth), Some(true));
+//    let simple_truth = BinaryExpression {
+//    operator: BinaryOperator::Value,
+//    left: None, right: None,
+//    single_value: Some(true)};
+//	assert_eq!(evaluate(simple_truth), Some(true));
 }
 
 #[test]
@@ -28,21 +25,11 @@ fn test_not() {
 
 #[test]
 fn test_and() {
-//	let simple_truth = BinaryExpression {
-//		operator: BinaryOperator::Value,
-//		left: None, right: None,
-//		single_value: Some(true)};
-//
-//	let simply_false = BinaryExpression {
-//	    operator: BinaryOperator::Value,
-//	    left: None, right: None,
-//	    single_value: Some(false)};
-//
-//    let true_and_false = BinaryExpression {
-//    	operator: BinaryOperator::and,
-//    	left: Some(Box::new(simple_truth)), right: Some(Box::new(simply_false)),
-//    	single_value: None};
-//    assert_eq!(evaluate(true_and_false), Some(false));
+
+    let true_and_false: BinaryExpression = BinaryExpression {
+    	operator: BinaryOperator::And,
+    	left: &Boolean::True, right: &Boolean::False};
+	println!("{}", true_and_false.to_string())
 }
 
 #[test]

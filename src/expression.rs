@@ -3,11 +3,24 @@
 pub trait ASTNode: ToString {
 }
 
+pub trait Expression: ASTNode{
+}
+
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {
 	Or,
 	And,
 	Xor,
+}
+
+impl ToString for BinaryOperator{
+	fn to_string(&self) -> String {
+		match self {
+			&BinaryOperator::Or => "or".to_string(),
+			&BinaryOperator::And => "and".to_string(),
+			&BinaryOperator::Xor => "xor".to_string(),
+		}
+	}
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -25,45 +38,44 @@ impl ToString for Boolean {
     }
 
 }
-impl ASTNode for Boolean {}
 
-//pub enum Value {
-//    Boolean(Boolean),
-//}
-//
-//impl ASTNode for Value {}
+impl Expression for Boolean {}
+impl ASTNode for Boolean {}
 
 // Currently this only handles boolean expressions 
 // because they have a fixed size.
 // It should be expanded to other types.
-
-pub struct BinaryExpression {
+pub struct BinaryExpression <'a, 'b> {
 	pub operator: BinaryOperator,
-	pub left: Option<Box<BinaryExpression>>,
-	pub right: Option<Box<BinaryExpression>>,
-	pub single_value: Option<bool>
+	pub left: &'a Expression,
+	pub right: &'b Expression
 }
 
-pub fn evaluate (expr: BinaryExpression) -> Option<bool> {
-	if !is_valid_expr(expr.operator, expr.single_value.is_some(),
-				 expr.left.is_some(), expr.right.is_some()) {
-		return None
-	}
-	if expr.single_value.is_some() {
-		return expr.single_value
-	}
+impl<'a, 'b> ToString for BinaryExpression<'a, 'b> {
+    fn to_string(&self) -> String {
+        format!("{} {} {}",
+				self.left.to_string(),
+				self.operator.to_string(),
+				self.right.to_string())
+		//self.left.to_string()
+        //self.operator.to_string()
+    }
+}
+
+impl<'a, 'b> Expression for BinaryExpression<'a, 'b> {}
+impl<'a, 'b> ASTNode for BinaryExpression<'a, 'b> {}
+
+/*pub fn evaluate (expr: BinaryExpression) -> Option<bool> {
 	let result = match expr.operator {
-//		BinaryOperator::Value => expr.single_value,
 		BinaryOperator::Or => Some(evaluate(*(expr.left.expect("no"))).expect("no") ||
 						evaluate(*(expr.right.expect("no"))).expect("no")),
 		BinaryOperator::And => Some(evaluate(*(expr.left.expect("no"))).expect("no") &&
 						evaluate(*(expr.right.expect("no"))).expect("no")),
 		BinaryOperator::Xor => Some(xor(evaluate(*(expr.left.expect("no"))).expect("no"),
                                         evaluate(*(expr.right.expect("no"))).expect("no"))),
-//		BinaryOperator::Not => Some(!evaluate(*(expr.left.expect("invalid expression"))).expect("no")),
 	};
 	result
-}
+}*/
 
 fn xor (left: bool, right: bool) -> bool {
 	let a = left && !right;

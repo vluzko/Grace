@@ -22,7 +22,7 @@ pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
 
 fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
     match assignment(input).to_result() {
-        Ok(T) => println!("{}", T.2.to_string()),
+        Ok(T) => println!("Parsed to: {}", T.2.to_string()),
         Err(_) => println!("Error")
     }
 

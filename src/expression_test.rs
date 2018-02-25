@@ -1,16 +1,16 @@
 use expression::*;
 
-#[test]
-fn test_single_value() {
+//#[test]
+//fn test_single_value() {
 //    let simple_truth = BinaryExpression {
 //    operator: BinaryOperator::Value,
 //    left: None, right: None,
 //    single_value: Some(true)};
 //	assert_eq!(evaluate(simple_truth), Some(true));
-}
+//}
 
-#[test]
-fn test_not() {
+//#[test]
+//fn test_not() {
 //    let simply_false = BinaryExpression {
 //    	operator: BinaryOperator::Value,
 //    	left: None, right: None,
@@ -21,7 +21,7 @@ fn test_not() {
 //    	left: Some(Box::new(simply_false)), right: None,
 //    	single_value: None};
 //    assert_eq!(evaluate(not_false), Some(true));
-}
+//}
 
 #[test]
 fn test_and() {
@@ -32,8 +32,8 @@ fn test_and() {
 	println!("{}", true_and_false.to_string())
 }
 
-#[test]
-fn test_or() {
+//#[test]
+//fn test_or() {
 //	let simple_truth = BinaryExpression {
 //		operator: BinaryOperator::value,
 //		left: None, right: None,
@@ -49,10 +49,10 @@ fn test_or() {
 //    	left: Some(Box::new(simple_truth)), right: Some(Box::new(simply_false)),
 //    	single_value: None};
 //    assert_eq!(evaluate(true_or_false), Some(true));
-}
+//}
 
-#[test]
-fn test_xor() {
+//#[test]
+//fn test_xor() {
 //	let simple_truth = BinaryExpression {
 //		operator: BinaryOperator::value,
 //		left: None, right: None,
@@ -68,10 +68,10 @@ fn test_xor() {
 //    	left: Some(Box::new(simple_truth)), right: Some(Box::new(simply_false)),
 //    	single_value: None};
 //    assert_eq!(evaluate(true_xor_false), Some(true));
-}
+//}
 
-#[test]
-fn test_tree() {  // two layers of nesting
+//#[test]
+//fn test_tree() {  // two layers of nesting
 //    let simple_truth = BinaryExpression {
 //    	operator: BinaryOperator::value,
 //    	left: None, right: None,
@@ -92,10 +92,10 @@ fn test_tree() {  // two layers of nesting
 //    	left: Some(Box::new(simple_truth)), right: Some(Box::new(not_false)),
 //    	single_value: None};
 //    assert_eq!(evaluate(true_and_true), Some(true));
-}
+//}
 
-#[test]
-fn test_bad_value_operator_left_expr_set() {
+//#[test]
+//fn test_bad_value_operator_left_expr_set() {
 //    let simply_false = BinaryExpression {
 //    	operator: BinaryOperator::value,
 //    	left: None, right: None,
@@ -106,10 +106,10 @@ fn test_bad_value_operator_left_expr_set() {
 //    	left: Some(Box::new(simply_false)), right: None,
 //    	single_value: None};
 //    assert_eq!(evaluate(wrong), None);
-}
+//}
 
-#[test]
-fn test_bad_not_operator_right_expr_set() {
+//#[test]
+//fn test_bad_not_operator_right_expr_set() {
 //    let simply_false = BinaryExpression {
 //        operator: BinaryOperator::value,
 //        left: None, right: None,
@@ -124,10 +124,10 @@ fn test_bad_not_operator_right_expr_set() {
 //        left: Some(Box::new(simply_false)), right: Some(Box::new(also_false)),
 //        single_value: None};
 //    assert_eq!(evaluate(wrong), None);
-}
+//}
 
-#[test]
-fn test_bad_and_operator_value_set() {
+//#[test]
+//fn test_bad_and_operator_value_set() {
 //    let simply_false = BinaryExpression {
 //        operator: BinaryOperator::value,
 //        left: None, right: None,
@@ -142,10 +142,10 @@ fn test_bad_and_operator_value_set() {
 //        left: Some(Box::new(simply_false)), right: Some(Box::new(also_false)),
 //        single_value: Some(true)};
 //    assert_eq!(evaluate(wrong), None);
-}
+//}
 
-#[test]
-fn test_bad_and_operator_no_right() {
+//#[test]
+//fn test_bad_and_operator_no_right() {
 //    let simply_false = BinaryExpression {
 //        operator: BinaryOperator::value,
 //        left: None, right: None,
@@ -160,4 +160,4 @@ fn test_bad_and_operator_no_right() {
 //        left: Some(Box::new(simply_false)), right: None,
 //        single_value: None};
 //    assert_eq!(evaluate(wrong), None);
-}
+//}

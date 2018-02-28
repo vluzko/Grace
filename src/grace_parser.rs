@@ -21,8 +21,8 @@ pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
 }
 
 fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
-    match assignment(input).to_result() {
-        Ok(T) => println!("Parsed to: {}", T.2.to_string()),
+    match assignment_rule(input).to_result() {
+        Ok(T) => println!("Parsed to: {:?}", T.2.to_string()),
         Err(_) => println!("Error")
     }
 
@@ -40,6 +40,7 @@ named!(identifier<&[u8],(&[u8])>,
 
 fn parse_identifier(input: &[u8]) -> nom::IResult<&[u8], i64>{
 //    return identifier(input);
+    print("identifier");
     let val = nom::IResult::Done(input, 8);
     return val;
 }
@@ -58,37 +59,11 @@ named!(string_literal<&[u8],(&[u8])>,
     )
 );
 
-named!(bool<&[u8],(&[u8])>,
+named!(boolean_rule<&[u8],(&[u8])>,
     alt!(tag!("true") | tag!("false"))
 );
 
-fn bool_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::ASTNode>> {
-    let f: &[u8] = &[102, 97, 108, 115, 101];
-    let t: &[u8] = &[116, 114, 117, 101];
-    let parse_result = bool(input);
-//    match parse_result.to_result() {
-//        Ok(val) => match from_utf8(val) {
-//            Ok("true") => println!("True"),
-//            Ok("false") => println!("False"),
-//            Ok(&_) => println!("bool somehow matched non true/false string."),
-//            Err(_) => println!("wat")
-//        },
-//        _ => println!("Error in boolean")
-//    }
-    let n: IResult<&[u8], Box<expression::ASTNode>, nom::ErrorKind> = match parse_result.to_result() {
-        Ok(val) => match from_utf8(val) {
-            Ok("true") => nom::IResult::Done(input, Box::new(expression::Boolean::True) as Box<expression::ASTNode>),
-            Ok("false") => nom::IResult::Done(input,Box::new(expression::Boolean::False) as Box<expression::ASTNode>),
-            Ok(&_) => nom::IResult::Error(nom::ErrorKind::Alpha),
-            Err(_) => nom::IResult::Error(nom::ErrorKind::Alpha)
-        },
-        Err(x) => nom::IResult::Error(nom::ErrorKind::Alpha)
-    };
-    let node = Box::new(expression::Boolean::True) as Box<expression::ASTNode>;
-    return nom::IResult::Done(input, node);
-}
-
-named!(assignment<&[u8],(&[u8], &[u8], Box<expression::ASTNode>)>,
+named!(assignment_rule<&[u8],(&[u8], &[u8], Box<expression::Expression>)>,
     tuple!(
         identifier,
         ws!(tag!("=")),
@@ -96,14 +71,41 @@ named!(assignment<&[u8],(&[u8], &[u8], Box<expression::ASTNode>)>,
     )
 );
 
+//fn assignment(input: &[u8]) -> nom::IResult<&[u8], Box<expression::ASTNode>> {
+//    let parse_result = assignment_rule(input);
+//    let node= match parse_result.to_result() {
+//        Ok(val) => nom::IResult::Done(input, Box::new(expression::Assignment{identifier: val.0, expression: val.2})),
+//        Err(_) => nom::IResult::Error(nom::ErrorKind::Alpha)
+//    };
+//
+//    return node;
+//}
+
+named!(and_expr<&[u8], &[u8]>,
+    alt!(identifier | string_literal | digit | boolean_rule)
+);
+
+fn bool_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::Expression>> {
+    let parse_result= boolean_rule(input);
+    let node= match parse_result.to_result() {
+        Ok(val) => match from_utf8(val) {
+            Ok("true") => nom::IResult::Done(input, Box::new(expression::Boolean::True) as Box<expression::Expression>),
+            Ok("false") => nom::IResult::Done(input,Box::new(expression::Boolean::False) as Box<expression::Expression>),
+            _ => nom::IResult::Error(nom::ErrorKind::Alpha),
+        },
+        Err(_) => nom::IResult::Error(nom::ErrorKind::Alpha)
+    };
+
+    return node;
+}
+
+
 //named!(or_expr<[u8], ([u8], [u8], [[u8]])>,
 //    tuple!(and_expr, tag!(" or "), or_expr)
 //);
 
 
-named!(and_expr<&[u8], &[u8]>,
-    alt!(identifier | string_literal | digit | bool)
-);
+
 
 //pub fn parse_file(file_name: &str) {
 //    let mut f = File::open(file_name).expect("File not found");

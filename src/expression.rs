@@ -4,7 +4,7 @@ use std::fmt::Display;
 pub trait ASTNode: Display {
 }
 
-pub trait Expression: ASTNode{
+pub trait Expression: ASTNode + Display{
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -41,6 +41,27 @@ impl Display for BinaryOperator{
             &BinaryOperator::And => "and",
             &BinaryOperator::Xor => "xor",
         })
+    }
+}
+
+pub struct Identifier {
+    pub name: String,
+}
+
+impl Display for Identifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+pub struct Assignment <'a>{
+    pub identifier: Identifier,
+    pub expression: &'a Expression,
+}
+
+impl<'a> Display for Assignment<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} = {}", self.identifier, self.expression.to_string())
     }
 }
 

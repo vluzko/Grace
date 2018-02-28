@@ -1,4 +1,7 @@
-pub trait ASTNode: ToString {
+use std::fmt;
+use std::fmt::Display;
+
+pub trait ASTNode: Display {
 }
 
 pub trait Expression: ASTNode{
@@ -10,14 +13,14 @@ pub enum Boolean {
     False
 }
 
-impl ToString for Boolean {
-    fn to_string(&self) -> String {
-        match self {
-            &Boolean::True => "true".to_string(),
-            &Boolean::False => "false".to_string()
-        }
-    }
+impl Display for Boolean {
 
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &Boolean::True => "true",
+            &Boolean::False => "false"
+        })
+    }
 }
 
 impl Expression for Boolean {}
@@ -30,13 +33,14 @@ pub enum BinaryOperator {
     Xor,
 }
 
-impl ToString for BinaryOperator{
-    fn to_string(&self) -> String {
-        match self {
-            &BinaryOperator::Or => "or".to_string(),
-            &BinaryOperator::And => "and".to_string(),
-            &BinaryOperator::Xor => "xor".to_string(),
-        }
+impl Display for BinaryOperator{
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &BinaryOperator::Or => "or",
+            &BinaryOperator::And => "and",
+            &BinaryOperator::Xor => "xor",
+        })
     }
 }
 
@@ -49,12 +53,10 @@ pub struct BinaryExpression <'a, 'b> {
 	pub right: &'b Expression
 }
 
-impl<'a, 'b> ToString for BinaryExpression<'a, 'b> {
-    fn to_string(&self) -> String {
-        format!("{} {} {}",
-				self.left.to_string(),
-				self.operator.to_string(),
-				self.right.to_string())
+impl<'a, 'b> Display for BinaryExpression<'a, 'b> {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {} {}", self.left, self.operator, self.right)
     }
 }
 
@@ -72,15 +74,16 @@ pub enum UnaryOperator {
     PostDecrement
 }
 
-impl ToString for UnaryOperator{
-    fn to_string(&self) -> String {
-        match self {
-            &UnaryOperator::Not => "not".to_string(),
-            &UnaryOperator::PreIncrement => "++".to_string(),
-            &UnaryOperator::PreDecrement => "--".to_string(),
-            &UnaryOperator::PostIncrement => "++".to_string(),
-            &UnaryOperator::PostDecrement => "--".to_string(),
-        }
+impl Display for UnaryOperator{
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &UnaryOperator::Not => "not",
+            &UnaryOperator::PreIncrement => "++",
+            &UnaryOperator::PreDecrement => "--",
+            &UnaryOperator::PostIncrement => "++",
+            &UnaryOperator::PostDecrement => "--",
+        })
     }
 }
 
@@ -89,15 +92,16 @@ pub struct UnaryExpression <'a> {
     pub operand: &'a Expression
 }
 
-impl<'a> ToString for UnaryExpression<'a> {
-    fn to_string(&self) -> String {
-        match self.operator {
+impl<'a> Display for UnaryExpression<'a> {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self.operator {
             UnaryOperator::Not => format!("{} {}", self.operator.to_string(), self.operand.to_string()),
             UnaryOperator::PreIncrement | UnaryOperator::PreDecrement => format!(
                 "{}{}", self.operator.to_string(), self.operand.to_string()),
             UnaryOperator::PostIncrement | UnaryOperator::PostDecrement => format!(
                 "{}{}", self.operand.to_string(), self.operator.to_string()),
-        }
+        })
     }
 }
 

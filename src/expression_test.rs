@@ -1,5 +1,5 @@
 use expression::*;
-
+/*
 #[test]
 fn test_to_string() {
     let true_and_false: BinaryExpression = BinaryExpression {
@@ -45,4 +45,4 @@ fn test_recursion() {
     assert_eq!("not true and true or false", not_and.to_string());
     //TODO: handle parentheses when printing operators of different precedence
 
-}
+}*/

@@ -4,7 +4,7 @@ use std::fmt::Display;
 pub trait ASTNode: Display {
 }
 
-pub trait Expression: ASTNode + Display{
+pub trait Expression: ASTNode{
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -54,20 +54,26 @@ impl Display for Identifier {
     }
 }
 
-pub struct Assignment <'a>{
+
+impl ASTNode for Identifier {}
+
+pub struct Assignment {
     pub identifier: Identifier,
-    pub expression: &'a Expression,
+    pub expression: Box<Expression>,
 }
 
-impl<'a> Display for Assignment<'a> {
+impl Display for Assignment{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} = {}", self.identifier, self.expression.to_string())
     }
 }
 
+impl ASTNode for Assignment {}
+
 // Currently Expression only handles boolean expressions
 // because they have a fixed size.
 // It should be expanded to other types.
+// TODO: you will have to switch everything to boxes
 pub struct BinaryExpression <'a, 'b> {
 	pub operator: BinaryOperator,
 	pub left: &'a Expression,

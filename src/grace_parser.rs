@@ -8,7 +8,8 @@ use std::env;
 
 extern crate nom;
 use self::nom::*;
-use expression;
+use self::nom::IResult::Done;
+use expression::*;
 //use nom::Offset;
 
 pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
@@ -17,18 +18,25 @@ pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
 
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
-    parse_assignment(input) // for now this is all it can do
-}
-
-fn parse_assignment(input:&[u8]) -> Result<&[u8], GraceError> {
-    match assignment_ast(input) {
-        nom::IResult::Done(i,o) => println!("{}", (*o).to_string()),
+    let output = assignment_ast(input); // for now this is all it can do
+    match output {
+        Done(i, o) => println!("{}", (*o.expression).to_string()),
         _ => panic!()
     }
+
 
     Err(GraceError::GenericError)
 }
 
+//named!(statement_rule<&[u8], (Box<Statement>)>,
+//    recognize!(
+//        tuple!(
+//            tag!("\""),
+//            opt!(alpha),
+//            tag!("\"")
+//            )
+//    )
+//);
 
 named!(identifier_rule<&[u8],(&[u8])>,
     recognize!(
@@ -53,67 +61,104 @@ named!(string_literal_rule<&[u8],(&[u8])>,
     )
 );
 
-named!(boolean_rule<&[u8],(&[u8])>,
-    alt!(tag!("true") | tag!("false"))
-);
-
-named!(assignment_rule<&[u8],(expression::Identifier, &[u8], Box<expression::Expression>)>,
+named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
     tuple!(
         identifier_ast,
         ws!(tag!("=")),
-        bool_expr_ast
+        and_expr_ast
     )
 );
 
-fn assignment_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::ASTNode>> {
+fn assignment_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Assignment>> {
     let parse_result = assignment_rule(input);
     let node= match parse_result {
-        nom::IResult::Done(i,o) => {
-            let val = Box::new(expression::Assignment{identifier: o.0, expression: o.2}) as Box<expression::ASTNode>;
-            nom::IResult::Done(i, val)
+        Done(i,o) => {
+            let val = Box::new(Assignment{identifier: o.0, expression: o.2});
+            Done(i, val)
         },
-        _ => panic!()
-//        Ok(val) => nom::IResult::Done(input, Box::new(expression::Assignment{identifier: val.0, expression: val.2})),
-//        Err(_) => nom::IResult::Error(nom::ErrorKind::Alpha)
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            panic!();
+        },
+        IResult::Error(e) => {
+            println!("err: {}", e);
+            panic!()
+        }
     };
 
     return node;
 }
 
-named!(and_expr<&[u8], &[u8]>,
-    alt!(identifier_rule | string_literal_rule | digit | boolean_rule)
-);
-
-fn identifier_ast(input: &[u8]) -> nom::IResult<&[u8], expression::Identifier> {
+fn identifier_ast(input: &[u8]) -> nom::IResult<&[u8], Identifier> {
     let parse_result= identifier_rule(input);
-    let node: nom::IResult<&[u8], expression::Identifier, u32>= match parse_result {
-        nom::IResult::Done(i,o) => {
+    let node = match parse_result {
+        Done(i,o) => {
             let val = match from_utf8(o) {
                 Ok(v) => v,
                 x => panic!()
             };
-            let ident: expression::Identifier = expression::Identifier{name: val.to_string()};
-            nom::IResult::Done(i,ident)
+            let ident: Identifier = Identifier{name: val.to_string()};
+            Done(i,ident)
         },
         x => panic!()
     };
     return node;
 }
 
-fn bool_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<expression::Expression>> {
+named!(boolean_rule<&[u8],(&[u8])>,
+    alt!(tag!("true") | tag!("false"))
+);
+
+named!(and_rule<&[u8], (Box<Expression>, &[u8], Box<Expression>)>,
+    tuple!(
+        alt!(bool_expr_ast),
+        ws!(tag!("and")),
+        alt!(and_expr_ast | bool_expr_ast)
+    )
+);
+
+
+fn and_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Expression>> {
+    let parse_result = and_rule(input);
+
+
+    let node = match parse_result {
+        Done(i, o) => {
+            Done(i, Box::new(BinaryExpression{
+                operator: BinaryOperator::And,
+                left: o.0,
+                right: o.2
+            }) as Box<Expression>)
+        },
+        // TODO: Error type
+        IResult::Incomplete(_) => IResult::Error(nom::ErrorKind::Alpha),
+        IResult::Error(e) => IResult::Error(e)
+    };
+    return node;
+}
+
+//fn block(input: &[u8], level: u8) -> IResult<&[u8], &[u8]> {
+//    alt!(input,
+//        apply!(start_config) => terminated!( stuff, apply!(end_config)),
+//        apply!(start_external_ref) => terminated!( stuff, apply!(end_external_ref)),
+//        tag!("{") => terminated!( apply!(block, level + 1), tag!("}"))
+//    )
+//}
+
+fn bool_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Expression>> {
     let parse_result= boolean_rule(input);
 
-    let node: nom::IResult<&[u8], Box<expression::Expression>, u32>= match parse_result {
-        nom::IResult::Done(i,o) => {
+
+    let node= match parse_result {
+        Done(i,o) => {
             match from_utf8(o) {
-            Ok("true") => nom::IResult::Done(i, Box::new(expression::Boolean::True) as Box<expression::Expression>),
-            Ok("false") => nom::IResult::Done(i, Box::new(expression::Boolean::False) as Box<expression::Expression>),
-            _ => panic!(),
+                Ok("true") => Done(i, Box::new(Boolean::True) as Box<Expression>),
+                Ok("false") => Done(i, Box::new(Boolean::False) as Box<Expression>),
+                _ => panic!(),
             }
         },
         x => panic!()
     };
-    println!("got to end of bool_expr_ast");
     return node;
 }
 

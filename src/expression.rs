@@ -1,11 +1,12 @@
 use std::fmt;
 use std::fmt::Display;
 
-pub trait ASTNode: Display {
-}
+// TODO: Print subtree
+pub trait ASTNode: Display {}
 
-pub trait Expression: ASTNode{
-}
+pub trait Statement: ASTNode {}
+
+pub trait Expression: Statement {}
 
 #[derive(Debug, Copy, Clone)]
 pub enum Boolean {
@@ -22,27 +23,9 @@ impl Display for Boolean {
         })
     }
 }
-
-impl Expression for Boolean {}
 impl ASTNode for Boolean {}
-
-#[derive(Debug, Copy, Clone)]
-pub enum BinaryOperator {
-    Or,
-    And,
-    Xor,
-}
-
-impl Display for BinaryOperator{
-
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &BinaryOperator::Or => "or",
-            &BinaryOperator::And => "and",
-            &BinaryOperator::Xor => "xor",
-        })
-    }
-}
+impl Statement for Boolean {}
+impl Expression for Boolean {}
 
 pub struct Identifier {
     pub name: String,
@@ -53,9 +36,8 @@ impl Display for Identifier {
         write!(f, "{}", self.name)
     }
 }
-
-
 impl ASTNode for Identifier {}
+
 
 pub struct Assignment {
     pub identifier: Identifier,
@@ -67,28 +49,49 @@ impl Display for Assignment{
         write!(f, "{} = {}", self.identifier, self.expression.to_string())
     }
 }
-
 impl ASTNode for Assignment {}
+impl Statement for Assignment {}
+
+
+
+#[derive(Debug, Copy, Clone)]
+pub enum BinaryOperator {
+    Or,
+    And,
+    Xor,
+}
+
+impl Display for BinaryOperator {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &BinaryOperator::Or => "or",
+            &BinaryOperator::And => "and",
+            &BinaryOperator::Xor => "xor",
+        })
+    }
+}
 
 // Currently Expression only handles boolean expressions
 // because they have a fixed size.
 // It should be expanded to other types.
 // TODO: you will have to switch everything to boxes
-pub struct BinaryExpression <'a, 'b> {
+pub struct BinaryExpression{
 	pub operator: BinaryOperator,
-	pub left: &'a Expression,
-	pub right: &'b Expression
+	pub left: Box<Expression>,
+	pub right: Box<Expression>
 }
 
-impl<'a, 'b> Display for BinaryExpression<'a, 'b> {
+impl Display for BinaryExpression {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {} {}", self.left, self.operator, self.right)
     }
 }
+impl ASTNode for BinaryExpression {}
+impl Statement for BinaryExpression {}
+impl Expression for BinaryExpression {}
 
-impl<'a, 'b> Expression for BinaryExpression<'a, 'b> {}
-impl<'a, 'b> ASTNode for BinaryExpression<'a, 'b> {}
 
 // This is not the set of unary operators we will end up supporting.
 // This is a random grab bag just to get the UnaryExpression struct working.
@@ -114,12 +117,12 @@ impl Display for UnaryOperator{
     }
 }
 
-pub struct UnaryExpression <'a> {
+pub struct UnaryExpression {
     pub operator: UnaryOperator,
-    pub operand: &'a Expression
+    pub operand: Box<Expression>
 }
 
-impl<'a> Display for UnaryExpression<'a> {
+impl<'a> Display for UnaryExpression {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self.operator {
@@ -131,6 +134,7 @@ impl<'a> Display for UnaryExpression<'a> {
         })
     }
 }
+impl ASTNode for UnaryExpression {}
+impl Statement for UnaryExpression {}
+impl Expression for UnaryExpression {}
 
-impl<'a> Expression for UnaryExpression<'a> {}
-impl<'a> ASTNode for UnaryExpression<'a> {}

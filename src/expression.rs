@@ -1,11 +1,12 @@
 use std::fmt;
 use std::fmt::Display;
 
+
 // TODO: Print subtree
-pub trait ASTNode: Display {}
-
+pub trait ASTNode: Display {
+    fn subtree_as_string(&self) -> &str;
+}
 pub trait Statement: ASTNode {}
-
 pub trait Expression: Statement {}
 
 #[derive(Debug, Copy, Clone)]
@@ -23,7 +24,11 @@ impl Display for Boolean {
         })
     }
 }
-impl ASTNode for Boolean {}
+impl ASTNode for Boolean {
+    fn subtree_as_string(&self) -> &str {
+        return "";
+    }
+}
 impl Statement for Boolean {}
 impl Expression for Boolean {}
 
@@ -36,10 +41,15 @@ impl Display for Identifier {
         write!(f, "{}", self.name)
     }
 }
-impl ASTNode for Identifier {}
+impl ASTNode for Identifier {
+
+    fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
 
 
-pub struct Assignment {
+pub struct Assignment{
     pub identifier: Identifier,
     pub expression: Box<Expression>,
 }
@@ -49,7 +59,12 @@ impl Display for Assignment{
         write!(f, "{} = {}", self.identifier, self.expression.to_string())
     }
 }
-impl ASTNode for Assignment {}
+impl ASTNode for Assignment{
+    fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+
+}
 impl Statement for Assignment {}
 
 
@@ -88,7 +103,11 @@ impl Display for BinaryExpression {
         write!(f, "{} {} {}", self.left, self.operator, self.right)
     }
 }
-impl ASTNode for BinaryExpression {}
+impl ASTNode for BinaryExpression {
+    fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
@@ -98,10 +117,6 @@ impl Expression for BinaryExpression {}
 #[derive(Debug, Copy, Clone)]
 pub enum UnaryOperator {
     Not,
-    PreIncrement,
-    PreDecrement,
-    PostIncrement,
-    PostDecrement
 }
 
 impl Display for UnaryOperator{
@@ -109,10 +124,6 @@ impl Display for UnaryOperator{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             &UnaryOperator::Not => "not",
-            &UnaryOperator::PreIncrement => "++",
-            &UnaryOperator::PreDecrement => "--",
-            &UnaryOperator::PostIncrement => "++",
-            &UnaryOperator::PostDecrement => "--",
         })
     }
 }
@@ -127,14 +138,14 @@ impl<'a> Display for UnaryExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self.operator {
             UnaryOperator::Not => format!("{} {}", self.operator.to_string(), self.operand.to_string()),
-            UnaryOperator::PreIncrement | UnaryOperator::PreDecrement => format!(
-                "{}{}", self.operator.to_string(), self.operand.to_string()),
-            UnaryOperator::PostIncrement | UnaryOperator::PostDecrement => format!(
-                "{}{}", self.operand.to_string(), self.operator.to_string()),
         })
     }
 }
-impl ASTNode for UnaryExpression {}
+impl ASTNode for UnaryExpression {
+    fn subtree_as_string(&self) -> &str {
+        panic!();
+    }
+}
 impl Statement for UnaryExpression {}
 impl Expression for UnaryExpression {}
 

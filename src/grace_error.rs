@@ -3,46 +3,46 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
-pub enum CsvError {
+pub enum GraceError {
     InvalidCharacter(CharError),
     InvalidRowLength(SizeError),
     GenericError
 }
 
-impl fmt::Display for CsvError {
+impl fmt::Display for GraceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CsvError::InvalidCharacter(ref c) => write!(f, "InvalidCharacter: {}: expected `{}`, got `{}`",
+            GraceError::InvalidCharacter(ref c) => write!(f, "InvalidCharacter: {}: expected `{}`, got `{}`",
                                                         c.position, c.expected, c.got),
-            CsvError::InvalidRowLength(ref c) => write!(f, "InvalidRowLength: {}: expected `{}` element{}, got `{}`",
+            GraceError::InvalidRowLength(ref c) => write!(f, "InvalidRowLength: {}: expected `{}` element{}, got `{}`",
                                                         c.position, c.nb_elements_expected,
                                                         if c.nb_elements_expected > 1 { "s" } else { "" }, c.nb_elements_got),
-            CsvError::GenericError            => write!(f, "GenericError")
+            GraceError::GenericError            => write!(f, "GenericError")
         }
     }
 }
 
-impl PartialEq for CsvError {
-    fn eq(&self, other: &CsvError) -> bool {
+impl PartialEq for GraceError {
+    fn eq(&self, other: &GraceError) -> bool {
         match (self, other) {
-            (&CsvError::InvalidCharacter(ref c), &CsvError::InvalidCharacter(ref o)) => c == o,
-            (&CsvError::InvalidRowLength(ref c), &CsvError::InvalidRowLength(ref o)) => c == o,
-            (&CsvError::GenericError, &CsvError::GenericError)                       => true,
+            (&GraceError::InvalidCharacter(ref c), &GraceError::InvalidCharacter(ref o)) => c == o,
+            (&GraceError::InvalidRowLength(ref c), &GraceError::InvalidRowLength(ref o)) => c == o,
+            (&GraceError::GenericError, &GraceError::GenericError)                       => true,
             _ => false,
         }
     }
 
-    fn ne(&self, other: &CsvError) -> bool {
+    fn ne(&self, other: &GraceError) -> bool {
         self.eq(other) == false
     }
 }
 
-impl Error for CsvError {
+impl Error for GraceError {
     fn description(&self) -> &str {
         match *self {
-            CsvError::InvalidCharacter(_) => "invalid character",
-            CsvError::InvalidRowLength(_) => "invalid row length",
-            CsvError::GenericError        => "generic parsing error"
+            GraceError::InvalidCharacter(_) => "invalid character",
+            GraceError::InvalidRowLength(_) => "invalid row length",
+            GraceError::GenericError        => "generic parsing error"
         }
     }
 }
@@ -102,4 +102,3 @@ impl SizeError {
         }
     }
 }
-

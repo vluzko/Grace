@@ -18,7 +18,7 @@ pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
 
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
-    let output = statement_ast(input); // for now this is all it can do
+    let output = block_ast(input); // for now this is all it can do
     match output {
         Done(i, o) => println!("{}", (*o).to_string()),
         _ => panic!()
@@ -153,7 +153,6 @@ named!(and_rule<&[u8], (Box<Expression>, &[u8], Box<Expression>)>,
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     let parse_result = and_rule(input);
 
-
     let node = match parse_result {
         Done(i, o) => {
             Done(i, Box::new(BinaryExpression{
@@ -171,7 +170,6 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     let parse_result= boolean_rule(input);
-
 
     let node= match parse_result {
         Done(i,o) => {
@@ -191,15 +189,8 @@ pub fn basic_file_test() {
     // Read file
     let filename= "./test_data/simple_grace.gr";
     let mut f = File::open(filename).expect("File not found");
-    let file = BufReader::new(&f);
     let mut contents = String::new();
-    for (num, line) in file.lines().enumerate() {
-        let l = line.unwrap() + "\n";
-        contents = l.chars().collect();
-        println!("File contents: {}", contents);
-
-        // parse first line
-        let results = parse_grace(&contents);
-    }
+    f.read_to_string(&mut contents);
+    let result = parse_grace(contents.as_str());
 }
 

@@ -59,8 +59,8 @@ named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
     )
 );
 
-named!(statement_rule<&[u8],(Box<Statement>, &[u8])>,
-    tuple!(alt!(assignment_ast), tag!(";"))
+named!(statement_rule<&[u8],(Box<Statement>, char)>,
+    tuple!(alt!(assignment_ast), newline)
 );
 
 named!(block_rule<&[u8],(Vec<Box<Statement>>)>,
@@ -194,7 +194,7 @@ pub fn basic_file_test() {
     let file = BufReader::new(&f);
     let mut contents = String::new();
     for (num, line) in file.lines().enumerate() {
-        let l = line.unwrap();
+        let l = line.unwrap() + "\n";
         contents = l.chars().collect();
         println!("File contents: {}", contents);
 

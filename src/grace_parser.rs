@@ -18,25 +18,15 @@ pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
 
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
-    let output = assignment_ast(input); // for now this is all it can do
+    let output = statement_ast(input); // for now this is all it can do
     match output {
-        Done(i, o) => println!("{}", (*o.expression).to_string()),
+        Done(i, o) => println!("{}", (*o).to_string()),
         _ => panic!()
     }
 
 
     Err(GraceError::GenericError)
 }
-
-//named!(statement_rule<&[u8], (Box<Statement>)>,
-//    recognize!(
-//        tuple!(
-//            tag!("\""),
-//            opt!(alpha),
-//            tag!("\"")
-//            )
-//    )
-//);
 
 named!(identifier_rule<&[u8],(&[u8])>,
     recognize!(
@@ -69,7 +59,49 @@ named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
     )
 );
 
-fn assignment_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Assignment>> {
+named!(statement_rule<&[u8],(Box<Statement>, &[u8])>,
+    tuple!(alt!(assignment_ast), tag!(";"))
+);
+
+named!(block_rule<&[u8],(Vec<Box<Statement>>)>,
+    many0!(statement_ast)
+);
+
+fn block_ast(input: &[u8]) -> IResult<&[u8], Box<Block>> {
+    let parse_result = block_rule(input);
+    let node= match parse_result {
+        Done(i,o) => Done(i,Box::new(Block{statements: o})),
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            panic!();
+        },
+        IResult::Error(e) => {
+            println!("err: {}", e);
+            panic!()
+        }
+    };
+
+    return node;
+}
+
+fn statement_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
+    let parse_result = statement_rule(input);
+    let node= match parse_result {
+        Done(i,o) => Done(i, o.0),
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            panic!();
+        },
+        IResult::Error(e) => {
+            println!("err: {}", e);
+            panic!()
+        }
+    };
+
+    return node;
+}
+
+fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Assignment>> {
     let parse_result = assignment_rule(input);
     let node= match parse_result {
         Done(i,o) => {
@@ -89,7 +121,7 @@ fn assignment_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Assignment>> {
     return node;
 }
 
-fn identifier_ast(input: &[u8]) -> nom::IResult<&[u8], Identifier> {
+fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result= identifier_rule(input);
     let node = match parse_result {
         Done(i,o) => {
@@ -118,7 +150,7 @@ named!(and_rule<&[u8], (Box<Expression>, &[u8], Box<Expression>)>,
 );
 
 
-fn and_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Expression>> {
+fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     let parse_result = and_rule(input);
 
 
@@ -131,21 +163,13 @@ fn and_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Expression>> {
             }) as Box<Expression>)
         },
         // TODO: Error type
-        IResult::Incomplete(_) => IResult::Error(nom::ErrorKind::Alpha),
+        IResult::Incomplete(_) => IResult::Error(ErrorKind::Alpha),
         IResult::Error(e) => IResult::Error(e)
     };
     return node;
 }
 
-//fn block(input: &[u8], level: u8) -> IResult<&[u8], &[u8]> {
-//    alt!(input,
-//        apply!(start_config) => terminated!( stuff, apply!(end_config)),
-//        apply!(start_external_ref) => terminated!( stuff, apply!(end_external_ref)),
-//        tag!("{") => terminated!( apply!(block, level + 1), tag!("}"))
-//    )
-//}
-
-fn bool_expr_ast(input: &[u8]) -> nom::IResult<&[u8], Box<Expression>> {
+fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     let parse_result= boolean_rule(input);
 
 

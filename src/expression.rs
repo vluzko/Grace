@@ -6,6 +6,7 @@ use std::fmt::Display;
 pub trait ASTNode: Display {
     fn subtree_as_string(&self) -> &str;
 }
+
 pub trait Statement: ASTNode {}
 pub trait Expression: Statement {}
 
@@ -67,7 +68,26 @@ impl ASTNode for Assignment{
 }
 impl Statement for Assignment {}
 
+pub struct Block {
+    pub statements: Vec<Box<Statement>>,
+}
 
+//TODO: put all of the statements not just the first
+impl Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let statement_iter = self.statements.iter();
+        let mapped =
+            statement_iter.map( |x| (*x).to_string());
+        let strings = mapped.collect::<Vec<String>>().join(", ");
+        write!(f, "Block containing: {}", strings)
+    }
+}
+
+impl ASTNode for Block {
+    fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {

@@ -49,6 +49,26 @@ impl ASTNode for Identifier {
     }
 }
 
+pub struct IfStatement {
+    pub condition: Box<Expression>,
+    pub main_block: Box<Block>,
+    pub elifs: Option<Vec<(Box<Expression>, Box<Block>)>>,
+    pub else_block: Option<Box<Block>>
+}
+
+impl Display for IfStatement {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "If statement")
+    }
+}
+impl ASTNode for IfStatement {
+    fn subtree_as_string(&self) -> &str {
+        return "";
+    }
+}
+impl Statement for IfStatement {}
+impl Expression for IfStatement {}
 
 pub struct Assignment{
     pub identifier: Identifier,

@@ -18,7 +18,7 @@ pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
 
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
-    let output = block_ast(input); // for now this is all it can do
+    let output = block_ast(input, None); // for now this is all it can do
     match output {
         Done(i, o) => println!("{}", (*o).to_string()),
         _ => panic!()
@@ -27,15 +27,6 @@ pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
 
     Err(GraceError::GenericError)
 }
-
-named!(identifier_rule<&[u8],(&[u8])>,
-    recognize!(
-        pair!(
-            alt!(alpha | tag!("_")),
-            many0!(alt!(alpha | tag!("_") | digit))
-            )   
-    )
-);
 
 // TODO: Should handle all non-newline characters (well, just ASCII for now).
 // TODO: Decide: are single quotes and double quotes equivalent
@@ -51,24 +42,54 @@ named!(string_literal_rule<&[u8],(&[u8])>,
     )
 );
 
-named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
-    tuple!(
-        identifier_ast,
-        ws!(tag!("=")),
-        and_expr_ast
-    )
+//named!(if_rule<&[u8], (&[u8])>,
+//    tuple!(
+//
+//)
+//)
+
+named_args!(indent_rule (number_of_indents: usize) <Vec<&[u8]>>,
+    many_m_n!(number_of_indents, number_of_indents, tag!(" "))
 );
 
-named!(statement_rule<&[u8],(Box<Statement>, char)>,
-    tuple!(alt!(assignment_ast), newline)
-);
+fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Statement>>> {
+    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = many0!(input, tag!(" "));
+    let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
+        Done(i, o) => (i, o),
+        _ => panic!()
+    };
 
-named!(block_rule<&[u8],(Vec<Box<Statement>>)>,
-    many0!(statement_ast)
-);
+    // Break if the block is not indented enough.
+    if full_indent.1.len() < minimum_indent {
+        // TODO: This will happen if the indentation level is too low. Throw a proper error.
+        return IResult::Error(ErrorKind::Count);
+    } else {
+        let expected_indent = full_indent.1.len();
 
-fn block_ast(input: &[u8]) -> IResult<&[u8], Box<Block>> {
-    let parse_result = block_rule(input);
+        // Parser for statements.
+        let first_statement_lam = |i| statement_ast(i, 0);
+        let statement_lam = |i| statement_ast(i, expected_indent);
+        // Parser for indents.
+        let indent_lam = |i| indent_rule(i, expected_indent);
+
+        // We end up reparsing the initial indent, but that's okay. The alternative is joining two
+        // vectors, which is much slower.
+        let statements = tuple!(input,
+            many1!(preceded!(indent_lam, statement_lam))
+        );
+        println!("End of statements");
+
+        return statements;
+    }
+
+}
+
+fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> {
+    let real_indent: usize = match indent {
+        Some(x) => x,
+        None => 0
+    };
+    let parse_result = block_rule(input, real_indent);
     let node= match parse_result {
         Done(i,o) => Done(i,Box::new(Block{statements: o})),
         IResult::Incomplete(n) => {
@@ -84,11 +105,30 @@ fn block_ast(input: &[u8]) -> IResult<&[u8], Box<Block>> {
     return node;
 }
 
-fn statement_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
-    let parse_result = statement_rule(input);
+//named!(statement_rule<&[u8],(Box<Statement>, char)>,
+//    tuple!(alt!(assignment_ast, if_ast), newline)
+//)
+
+
+//fn indent_rule(input: &[u8], number_of_indents: usize) -> IResult<&[u8], u32> {
+//    named!(temp <&[u8], Vec<&[u8]>>, )
+//}
+
+fn statement_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Statement>, char)> {
+    let if_lam = |i| if_ast(i, indent);
+    tuple!(input,
+        alt!(assignment_ast | if_lam),
+        newline
+    )
+}
+
+fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+    println!("STatement Input {:?}", from_utf8(input));
+    let parse_result = statement_rule(input, indent);
     let node= match parse_result {
         Done(i,o) => Done(i, o.0),
         IResult::Incomplete(n) => {
+            println!("Error Statement Input {:?}", from_utf8(input));
             println!("inc {:?}", n);
             panic!();
         },
@@ -101,11 +141,48 @@ fn statement_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     return node;
 }
 
-fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Assignment>> {
+fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (&[u8], Box<Expression>, &[u8], char, Box<Block>)> {
+    let block_lam = |i| block_ast(i, Some(indent));
+    tuple!(input,
+        tag!("if"),
+        ws!(and_expr_ast),
+        tag!(":"),
+        newline,
+        block_lam
+    )
+}
+
+
+//named!(block_rule<&[u8], (Vec<Box<Statement>>)>,
+//
+//);
+
+fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+    let parse_result = if_rule(input, indent);
+    match parse_result {
+        Done(i, o) => {
+            println!("if passed");
+            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: None, else_block: None};
+            Done(i, Box::new(if_statement) as Box<Statement>)
+        },
+        _ => panic!()
+    }
+}
+
+
+named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
+    tuple!(
+        identifier_ast,
+        ws!(tag!("=")),
+        and_expr_ast
+    )
+);
+
+fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     let parse_result = assignment_rule(input);
     let node= match parse_result {
         Done(i,o) => {
-            let val = Box::new(Assignment{identifier: o.0, expression: o.2});
+            let val = Box::new(Assignment{identifier: o.0, expression: o.2}) as Box<Statement>;
             Done(i, val)
         },
         IResult::Incomplete(n) => {
@@ -113,13 +190,22 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Assignment>> {
             panic!();
         },
         IResult::Error(e) => {
-            println!("err: {}", e);
-            panic!()
+//            println!("err: {}", e);
+            IResult::Error(ErrorKind::Alpha)
         }
     };
 
     return node;
 }
+
+named!(identifier_rule<&[u8],(&[u8])>,
+    recognize!(
+        pair!(
+            alt!(alpha | tag!("_")),
+            many0!(alt!(alpha | tag!("_") | digit))
+            )
+    )
+);
 
 fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result= identifier_rule(input);
@@ -132,14 +218,18 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
             let ident: Identifier = Identifier{name: val.to_string()};
             Done(i,ident)
         },
-        x => panic!()
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            panic!();
+        },
+        IResult::Error(e) => {
+            println!("Error in identifier_ast: {}", e);
+            println!("Input was: {:?}", from_utf8(input));
+            IResult::Error(ErrorKind::Alpha)
+        }
     };
     return node;
 }
-
-named!(boolean_rule<&[u8],(&[u8])>,
-    alt!(tag!("true") | tag!("false"))
-);
 
 named!(and_rule<&[u8], (Box<Expression>, &[u8], Box<Expression>)>,
     tuple!(
@@ -167,6 +257,10 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     };
     return node;
 }
+
+named!(boolean_rule<&[u8],(&[u8])>,
+    alt!(tag!("true") | tag!("false"))
+);
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     let parse_result= boolean_rule(input);

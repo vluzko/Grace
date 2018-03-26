@@ -77,7 +77,6 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Sta
         let statements = tuple!(input,
             many1!(preceded!(indent_lam, statement_lam))
         );
-        println!("End of statements");
 
         return statements;
     }
@@ -114,22 +113,25 @@ fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> 
 //    named!(temp <&[u8], Vec<&[u8]>>, )
 //}
 
-fn statement_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Statement>, char)> {
+fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    eof!(input, )
+}
+
+fn statement_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Statement>, &[u8])> {
     let if_lam = |i| if_ast(i, indent);
     tuple!(input,
         alt!(assignment_ast | if_lam),
-        newline
+        // Rust complains if we call eof directly. I have no idea why.
+        alt!(custom_eof | tag!("\n"))
     )
 }
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    println!("STatement Input {:?}", from_utf8(input));
     let parse_result = statement_rule(input, indent);
     let node= match parse_result {
         Done(i,o) => Done(i, o.0),
         IResult::Incomplete(n) => {
-            println!("Error Statement Input {:?}", from_utf8(input));
-            println!("inc {:?}", n);
+            println!("Statement incomplete: {:?}", n);
             panic!();
         },
         IResult::Error(e) => {
@@ -152,21 +154,17 @@ fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (&[u8], Box<Expression
     )
 }
 
-
-//named!(block_rule<&[u8], (Vec<Box<Statement>>)>,
-//
-//);
-
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
     let parse_result = if_rule(input, indent);
-    match parse_result {
+    let node = match parse_result {
         Done(i, o) => {
-            println!("if passed");
             let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: None, else_block: None};
             Done(i, Box::new(if_statement) as Box<Statement>)
         },
         _ => panic!()
-    }
+    };
+
+    return node;
 }
 
 
@@ -190,7 +188,6 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
             panic!();
         },
         IResult::Error(e) => {
-//            println!("err: {}", e);
             IResult::Error(ErrorKind::Alpha)
         }
     };

@@ -59,7 +59,7 @@ pub struct IfStatement {
 impl Display for IfStatement {
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "If statement")
+        write!(f, "If statement.\n  Condition: {}.\n  Block: {}", self.condition, self.main_block)
     }
 }
 impl ASTNode for IfStatement {
@@ -98,8 +98,8 @@ impl Display for Block {
         let statement_iter = self.statements.iter();
         let mapped =
             statement_iter.map( |x| (*x).to_string());
-        let strings = mapped.collect::<Vec<String>>().join(", ");
-        write!(f, "Block containing: {}", strings)
+        let strings = mapped.collect::<Vec<String>>().join("\n");
+        write!(f, "Block containing:\n{}\n", strings)
     }
 }
 

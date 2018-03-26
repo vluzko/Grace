@@ -6,6 +6,7 @@ use std::fmt::Display;
 pub trait ASTNode: Display {
     fn subtree_as_string(&self) -> &str;
 }
+
 pub trait Statement: ASTNode {}
 pub trait Expression: Statement {}
 
@@ -48,6 +49,26 @@ impl ASTNode for Identifier {
     }
 }
 
+pub struct IfStatement {
+    pub condition: Box<Expression>,
+    pub main_block: Box<Block>,
+    pub elifs: Option<Vec<(Box<Expression>, Box<Block>)>>,
+    pub else_block: Option<Box<Block>>
+}
+
+impl Display for IfStatement {
+
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "If statement.\n  Condition: {}.\n  Block: {}", self.condition, self.main_block)
+    }
+}
+impl ASTNode for IfStatement {
+    fn subtree_as_string(&self) -> &str {
+        return "";
+    }
+}
+impl Statement for IfStatement {}
+impl Expression for IfStatement {}
 
 pub struct Assignment{
     pub identifier: Identifier,
@@ -67,7 +88,26 @@ impl ASTNode for Assignment{
 }
 impl Statement for Assignment {}
 
+pub struct Block {
+    pub statements: Vec<Box<Statement>>,
+}
 
+//TODO: put all of the statements not just the first
+impl Display for Block {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let statement_iter = self.statements.iter();
+        let mapped =
+            statement_iter.map( |x| (*x).to_string());
+        let strings = mapped.collect::<Vec<String>>().join("\n");
+        write!(f, "Block containing:\n{}\n", strings)
+    }
+}
+
+impl ASTNode for Block {
+    fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {

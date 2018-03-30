@@ -143,29 +143,96 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
     return node;
 }
 
-fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (&[u8], Box<Expression>, &[u8], char, Box<Block>)> {
+
+fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
+    println!("input for elif: {:?}", from_utf8(input));
     let block_lam = |i| block_ast(i, Some(indent));
-    tuple!(input,
-        tag!("if"),
+    let elif_tuple = tuple!(
+        input,
+        tag!("elif"),
         ws!(and_expr_ast),
         tag!(":"),
         newline,
         block_lam
-    )
+    );
+    return match elif_tuple {
+        Done(i,o) => Done(i, (o.1, o.4)),
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            return IResult::Incomplete(n);
+        },
+        IResult::Error(e) => {
+            println!("err {:?}", e);
+            return IResult::Error(e);
+        }
+    };
+}
+
+
+fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
+    println!("input for else: {:?}", from_utf8(input));
+    let block_lam = |i| block_ast(i, Some(indent));
+    let else_tuple = tuple!(
+        input,
+        tag!("else"),
+        tag!(":"),
+        newline,
+        block_lam
+    );
+    return match else_tuple {
+        Done(i,o) => Done(i, o.3),
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            return IResult::Incomplete(n);
+        },
+        IResult::Error(e) => {
+            println!("err {:?}", e);
+            return IResult::Error(e);
+        }
+    };
+}
+
+fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
+    &[u8], Box<Expression>, &[u8], char, Box<Block>,
+    Vec<(Box<Expression>, Box<Block>)>,
+    Option<Box<Block>>)> {
+    let block_lam = |i| block_ast(i, Some(indent));
+    let elif_lam = |i | elif_rule(i, indent);
+    let else_lam = |i | else_rule(i, indent);
+    return tuple!(
+        input,
+        tag!("if"),
+        ws!(and_expr_ast),
+        tag!(":"),
+        newline,
+        block_lam,
+        many0!(elif_lam),
+        opt!(else_lam)
+    );
 }
 
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+    println!("input for if: {:?}", from_utf8(input));
     let parse_result = if_rule(input, indent);
     let node = match parse_result {
         Done(i, o) => {
-            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: None, else_block: None};
+            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: o.5, else_block: None};
             Done(i, Box::new(if_statement) as Box<Statement>)
         },
-        _ => panic!()
+        IResult::Incomplete(n) => {
+            println!("inc {:?}", n);
+            panic!();
+        },
+        IResult::Error(e) => {
+            println!("err {:?}", e);
+            panic!();
+        }
     };
 
     return node;
 }
+
+
 
 
 named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,

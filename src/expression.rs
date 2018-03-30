@@ -52,14 +52,17 @@ impl ASTNode for Identifier {
 pub struct IfStatement {
     pub condition: Box<Expression>,
     pub main_block: Box<Block>,
-    pub elifs: Option<Vec<(Box<Expression>, Box<Block>)>>,
+    pub elifs: Vec<(Box<Expression>, Box<Block>)>,
     pub else_block: Option<Box<Block>>
 }
 
 impl Display for IfStatement {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "If statement.\n  Condition: {}.\n  Block: {}", self.condition, self.main_block)
+        let elifs_iter = self.elifs.iter();
+        let mapped =
+            elifs_iter.map( |x| (*x).1.to_string());
+        let strings = mapped.collect::<Vec<String>>().join("\n");
+        write!(f, "If statement.\n  Condition: {}.\n  Block: {}\n  elifs: {}", self.condition, self.main_block, strings)
     }
 }
 impl ASTNode for IfStatement {

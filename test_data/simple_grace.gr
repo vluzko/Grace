@@ -1,6 +1,17 @@
 foo = false and false and true and true
+
+
+
+
 bar = true and false
+
+
+
+
 if true and true:
     foo = true and false
+
+
+
 elif false and false:
     bar = false and true

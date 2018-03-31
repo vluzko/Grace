@@ -7,3 +7,4 @@ authors = ["Vincent Luczkow <vincent.luczkow@gmail.com>",
 [dependencies]
 nom = "~3"
 libc = "*"
+log = "0.4"

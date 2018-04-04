@@ -56,13 +56,25 @@ pub struct IfStatement {
     pub else_block: Option<Box<Block>>
 }
 
+// TODO: Prettier printing.
 impl Display for IfStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let elifs_iter = self.elifs.iter();
         let mapped =
             elifs_iter.map( |x| (*x).1.to_string());
         let strings = mapped.collect::<Vec<String>>().join("\n");
-        write!(f, "If statement.\n  Condition: {}.\n  Block: {}\n  elifs: {}", self.condition, self.main_block, strings)
+
+        let else_string = match self.else_block {
+            Some(ref x) => {
+                (*x).to_string()
+            },
+            None => {
+                println!("Else is none");
+                "".to_string()
+            }
+        };
+
+        write!(f, "If statement.\n  Condition: {}.\n  Block: {}elifs: {}else: {}", self.condition, self.main_block, strings, else_string)
     }
 }
 impl ASTNode for IfStatement {

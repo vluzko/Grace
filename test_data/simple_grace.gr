@@ -1,7 +1,6 @@
 foo = false and false and true and true
 
-
-
+test = false
 
 bar = true and false
 
@@ -9,9 +8,23 @@ bar = true and false
 
 
 if true and true:
+
     foo = true and false
 
 
 
-elif false and false:
+elif false:
+
+    test2 = true
+
+
+
+
+
     bar = false and true
+
+
+else:
+
+
+    foobar = true and true

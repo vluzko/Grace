@@ -51,9 +51,6 @@ named!(inline_whitespace<&[u8], Vec<&[u8]>>,
     many0!(whitespace_char)
 );
 
-
-
-
 fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     let n = many0!(input,
         terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
@@ -78,7 +75,7 @@ named_args!(indent_rule (number_of_indents: usize) <Vec<&[u8]>>,
     many_m_n!(number_of_indents, number_of_indents, tag!(" "))
 );
 
-fn inline_wrapped<T>(input: &[u8], parser: &Fn(&[u8]) -> IResult<&[u8], T>) -> IResult<&[u8], T> {
+fn inline_wrapped<T>(input: &[u8], parser: fn(&[u8]) -> IResult<&[u8], T>) -> IResult<&[u8], T> {
     delimited!(input,
         inline_whitespace, parser, inline_whitespace
     )
@@ -152,65 +149,17 @@ named!(follow_value<&[u8], &[u8]>,
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
     let if_lam = |i| if_ast(i, indent);
+    let function_dec_lam = |i| function_declaration_ast(i, indent);
 
     terminated!(input,
-        alt!(assignment_ast | if_lam),
+        alt!(assignment_ast | if_lam | function_dec_lam),
         // Rust complains if we call eof directly. I have no idea why.
         alt!(custom_eof | tag!("\n"))
     )
 }
 
 
-fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let elif_tuple = tuple!(
-        input,
-        tag!("elif"),
-        ws!(and_expr_ast),
-        tag!(":"),
-        newline,
-        block_lam
-    );
-    return match elif_tuple {
-        Done(i,o) => {
 
-            Done(i, (o.1, o.4))
-        },
-        IResult::Incomplete(n) => {
-            println!("elif incomplete: {:?}", n);
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("Elif rule err {:?}", e);
-            IResult::Error(e)
-        }
-    };
-}
-
-
-fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let else_tuple = tuple!(
-        input,
-        tag!("else"),
-        tag!(":"),
-        newline,
-        block_lam
-    );
-    return match else_tuple {
-        Done(i,o) => {
-            Done(i, o.3)
-        },
-        IResult::Incomplete(n) => {
-            println!("else incomplete: {:?}", n);
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("else error {:?}", e);
-            IResult::Error(e)
-        }
-    };
-}
 
 fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
     Box<Expression>,
@@ -247,7 +196,58 @@ fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
     };
 }
 
+fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
+    let block_lam = |i| block_ast(i, Some(indent + 1));
+    let elif_tuple = tuple!(
+        input,
+        tag!("elif"),
+        ws!(and_expr_ast),
+        tag!(":"),
+        newline,
+        block_lam
+    );
+    return match elif_tuple {
+        Done(i,o) => {
+
+            Done(i, (o.1, o.4))
+        },
+        IResult::Incomplete(n) => {
+            println!("elif incomplete: {:?}", n);
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+            println!("Elif rule err {:?}", e);
+            IResult::Error(e)
+        }
+    };
+}
+
+fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
+    let block_lam = |i| block_ast(i, Some(indent + 1));
+    let else_tuple = tuple!(
+        input,
+        tag!("else"),
+        tag!(":"),
+        newline,
+        block_lam
+    );
+    return match else_tuple {
+        Done(i,o) => {
+            Done(i, o.3)
+        },
+        IResult::Incomplete(n) => {
+            println!("else incomplete: {:?}", n);
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+            println!("else error {:?}", e);
+            IResult::Error(e)
+        }
+    };
+}
+
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+    println!("If AST input{:?}", from_utf8(input));
     let parse_result = if_rule(input, indent);
     let node = match parse_result {
         Done(i, o) => {
@@ -270,18 +270,33 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
 
 
 //// TODO: Move indent lambda creation into a separate function.
-//fn function_rule(input: &[u8], indent: usize) {
-//    let block_lam = |i| block_ast(i, Some(indent + 1));
-//
-//    let full_tuple = tuple!(input,
-//        tag!("fn"),
-//
-//    );
-//}
-//
-//fn function_declaration(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-//    let parse_result = function_rule(input);
-//}
+fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+    let block_lam = |i| block_ast(i, Some(indent + 1));
+    let inline_lam = |i| inline_wrapped(i, identifier_ast);
+    let full_tuple = tuple!(input,
+        tag!("fn"),
+        inline_lam,
+        tag!("():"),
+        block_lam
+    );
+
+    let node = match full_tuple {
+        Done(i, o) => {
+            let func_dec = Box::new(FunctionDec{name: o.1, args: vec!(), body: o.3}) as Box<Statement>;
+            Done(i, func_dec)
+        },
+         IResult::Incomplete(n) => {
+            println!("function incomplete: {:?}", n);
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+            println!("function error {:?}", e);
+            IResult::Error(e)
+        }
+    };
+
+    return node;
+}
 
 named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
     tuple!(

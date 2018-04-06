@@ -28,3 +28,6 @@ else:
 
 
     foobar = true and true
+
+
+foo = true

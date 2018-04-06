@@ -49,6 +49,27 @@ impl ASTNode for Identifier {
     }
 }
 
+pub struct FunctionDec {
+    pub name: Identifier,
+    pub args: Vec<Identifier>,
+    pub body: Box<Block>
+}
+
+impl Display for FunctionDec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Function declaration.")
+    }
+}
+
+impl ASTNode for FunctionDec {
+ fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
+
+impl Statement for FunctionDec {}
+
+
 pub struct IfStatement {
     pub condition: Box<Expression>,
     pub main_block: Box<Block>,

@@ -113,7 +113,7 @@ pub struct Assignment{
 
 impl Display for Assignment{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.identifier, self.expression.to_string())
+        write!(f, "Assignment: {} = {}", self.identifier, self.expression.to_string())
     }
 }
 impl ASTNode for Assignment{

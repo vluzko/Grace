@@ -35,4 +35,8 @@ test = true
 
 
 
+def func_def():
+    test = true
+
+
 

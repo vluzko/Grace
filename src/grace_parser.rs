@@ -162,41 +162,6 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
     }
 }
 
-fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
-    Box<Expression>,
-    Box<Block>,
-    Vec<(Box<Expression>, Box<Block>)>,
-    Option<Box<Block>>)> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let elif_lam = |i| elif_rule(i, indent);
-    let else_lam = |i| else_rule(i, indent);
-
-    let full_tuple = tuple!(
-        input,
-        tag!("if"),
-        ws!(and_expr_ast),
-        tag!(":"),
-        newline,
-        block_lam,
-        many0!(elif_lam),
-        opt!(complete!(else_lam))
-    );
-
-    return match full_tuple {
-        Done(i,o) => {
-            Done(i, (o.1, o.4, o.5, o.6))
-        },
-        IResult::Incomplete(n) => {
-            println!("else incomplete: {:?}", n);
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("else error {:?}", e);
-            IResult::Error(e)
-        }
-    };
-}
-
 fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
     let block_lam = |i| block_ast(i, Some(indent + 1));
     let elif_tuple = tuple!(
@@ -248,19 +213,33 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
 }
 
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let parse_result = if_rule(input, indent);
-    let node = match parse_result {
+
+    let block_lam = |i| block_ast(i, Some(indent + 1));
+    let elif_lam = |i| elif_rule(i, indent);
+    let else_lam = |i| else_rule(i, indent);
+
+    let full_tuple = tuple!(
+        input,
+        tag!("if"),
+        ws!(and_expr_ast),
+        tag!(":"),
+        newline,
+        block_lam,
+        many0!(elif_lam),
+        opt!(complete!(else_lam))
+    );
+
+    let node = match full_tuple {
         Done(i, o) => {
-            let if_statement = IfStatement{condition: o.0, main_block: o.1, elifs: o.2, else_block: o.3};
+            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: o.5, else_block: o.6};
             Done(i, Box::new(if_statement) as Box<Statement>)
         },
         IResult::Incomplete(n) => {
-            println!("if incomplete: {:?}", n);
+//            println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             panic!();
         },
         IResult::Error(e) => {
-            println!("if error: {:?}", e);
-
+//            println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };

@@ -49,17 +49,53 @@ impl ASTNode for Identifier {
     }
 }
 
+pub struct FunctionDec {
+    pub name: Identifier,
+    pub args: Vec<Identifier>,
+    pub body: Box<Block>
+}
+
+impl Display for FunctionDec {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Function declaration.")
+    }
+}
+
+impl ASTNode for FunctionDec {
+ fn subtree_as_string(&self) -> &str {
+        panic!()
+    }
+}
+
+impl Statement for FunctionDec {}
+
+
 pub struct IfStatement {
     pub condition: Box<Expression>,
     pub main_block: Box<Block>,
-    pub elifs: Option<Vec<(Box<Expression>, Box<Block>)>>,
+    pub elifs: Vec<(Box<Expression>, Box<Block>)>,
     pub else_block: Option<Box<Block>>
 }
 
+// TODO: Prettier printing.
 impl Display for IfStatement {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "If statement.\n  Condition: {}.\n  Block: {}", self.condition, self.main_block)
+        let elifs_iter = self.elifs.iter();
+        let mapped =
+            elifs_iter.map( |x| (*x).1.to_string());
+        let strings = mapped.collect::<Vec<String>>().join("\n");
+
+        let else_string = match self.else_block {
+            Some(ref x) => {
+                (*x).to_string()
+            },
+            None => {
+                println!("Else is none");
+                "".to_string()
+            }
+        };
+
+        write!(f, "If statement.\n  Condition: {}.\n  Block: {}elifs: {}else: {}", self.condition, self.main_block, strings, else_string)
     }
 }
 impl ASTNode for IfStatement {
@@ -77,7 +113,7 @@ pub struct Assignment{
 
 impl Display for Assignment{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} = {}", self.identifier, self.expression.to_string())
+        write!(f, "Assignment: {} = {}", self.identifier, self.expression.to_string())
     }
 }
 impl ASTNode for Assignment{

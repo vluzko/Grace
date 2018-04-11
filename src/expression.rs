@@ -13,23 +13,22 @@ pub trait ASTNode: Display {}
 pub trait Statement: ASTNode {}
 pub trait Expression: Statement {}
 
-#[derive(Debug, Copy, Clone)]
-pub enum Boolean {
-    True,
-    False
+/// A block of code. Just a series of statements.
+pub struct Block {
+    pub statements: Vec<Box<Statement>>,
 }
-impl Display for Boolean {
+impl Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &Boolean::True => "true",
-            &Boolean::False => "false"
-        })
+        let statement_iter = self.statements.iter();
+        let mapped =
+            statement_iter.map( |x| (*x).to_string());
+        let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
+        write!(f, "Block:\n{}", strings)
     }
 }
-impl ASTNode for Boolean {}
-impl Statement for Boolean {}
-impl Expression for Boolean {}
+impl ASTNode for Block {}
 
+/// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
 pub struct Identifier {
     pub name: String,
 }
@@ -40,6 +39,7 @@ impl Display for Identifier {
 }
 impl ASTNode for Identifier {}
 
+/// A named function declaration.
 pub struct FunctionDec {
     pub name: Identifier,
     pub args: Vec<Identifier>,
@@ -50,13 +50,13 @@ impl Display for FunctionDec {
         let arg_iter = self.args.iter().map(|x| x.to_string());
         let args_string = arg_iter.collect::<Vec<_>>().join(", ");
 
-        write!(f, "Function declaration:\n  Name: {}\n  Args: {}", self.name, args_string)
+        write!(f, "Function declaration:\n  Name: {}\n  Args: {}\n{}", self.name, args_string, indent_block(self.body.to_string()))
     }
 }
 impl ASTNode for FunctionDec {}
 impl Statement for FunctionDec {}
 
-
+/// An if statement. Supports elif and else, but neither is required.
 pub struct IfStatement {
     pub condition: Box<Expression>,
     pub main_block: Box<Block>,
@@ -84,7 +84,8 @@ impl ASTNode for IfStatement {}
 impl Statement for IfStatement {}
 impl Expression for IfStatement {}
 
-pub struct Assignment{
+/// An assignment statement.
+pub struct Assignment {
     pub identifier: Identifier,
     pub expression: Box<Expression>,
 }
@@ -95,20 +96,6 @@ impl Display for Assignment{
 }
 impl ASTNode for Assignment{}
 impl Statement for Assignment {}
-
-pub struct Block {
-    pub statements: Vec<Box<Statement>>,
-}
-impl Display for Block {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let statement_iter = self.statements.iter();
-        let mapped =
-            statement_iter.map( |x| (*x).to_string());
-        let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
-        write!(f, "Block containing:\n{}", strings)
-    }
-}
-impl ASTNode for Block {}
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {
@@ -126,11 +113,10 @@ impl Display for BinaryOperator {
     }
 }
 
-// Currently Expression only handles boolean expressions
-// because they have a fixed size.
-// It should be expanded to other types.
-// TODO: you will have to switch everything to boxes
-pub struct BinaryExpression{
+/// Currently Expression only handles boolean expressions
+/// because they have a fixed size.
+/// It should be expanded to other types.
+pub struct BinaryExpression {
 	pub operator: BinaryOperator,
 	pub left: Box<Expression>,
 	pub right: Box<Expression>
@@ -145,8 +131,8 @@ impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
 
-// This is not the set of unary operators we will end up supporting.
-// This is a random grab bag just to get the UnaryExpression struct working.
+/// This is not the set of unary operators we will end up supporting.
+/// This is a random grab bag just to get the UnaryExpression struct working.
 #[derive(Debug, Copy, Clone)]
 pub enum UnaryOperator {
     Not,
@@ -175,9 +161,27 @@ impl ASTNode for UnaryExpression {}
 impl Statement for UnaryExpression {}
 impl Expression for UnaryExpression {}
 
+/// A boolean value.
+#[derive(Debug, Copy, Clone)]
+pub enum Boolean {
+    True,
+    False
+}
+impl Display for Boolean {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &Boolean::True => "true",
+            &Boolean::False => "false"
+        })
+    }
+}
+impl ASTNode for Boolean {}
+impl Statement for Boolean {}
+impl Expression for Boolean {}
+
 
 #[test]
 fn test_indent() {
-    let block = "Block containing:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
-    assert_eq!(indent_block(block), "  Block containing:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
+    let block = "Block:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
+    assert_eq!(indent_block(block), "  Block:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
 }

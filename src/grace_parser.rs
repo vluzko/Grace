@@ -77,7 +77,7 @@ named!(whitespace_char<&[u8], &[u8]>,
 );
 
 named!(inline_whitespace<&[u8], Vec<&[u8]>>,
-    many0!(whitespace_char)
+    many0!(tag!(" "))
 );
 
 fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
@@ -151,7 +151,7 @@ fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> 
         },
         IResult::Error(e) => {
             println!("Block error: {}. Input was: {:?}", e, from_utf8(input));
-            panic!()
+            IResult::Error(e)
         }
     };
 
@@ -272,23 +272,24 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
         tag!("fn"),
         inline_wrapped!(identifier_ast),
         tag!("("),
-        inline_wrapped!(separated_list_complete!(inline_whitespace, identifier_ast)),
+        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier_ast)),
         tag!(")"),
         inline_wrapped!(tag!(":")),
+        newline,
         call!(block_ast, Some(indent + 1))
     );
 
     let node = match full_tuple {
         Done(i, o) => {
-            let func_dec = Box::new(FunctionDec{name: o.1, args: vec!(), body: o.6}) as Box<Statement>;
+            let func_dec = Box::new(FunctionDec{name: o.1, args: o.3, body: o.7}) as Box<Statement>;
             Done(i, func_dec)
         },
          IResult::Incomplete(n) => {
-            println!("function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            println!("Function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("function error {:?}. Input was: {:?}", e, from_utf8(input));
+            println!("Function error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -337,9 +338,11 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
             Done(i,ident)
         },
         IResult::Incomplete(n) => {
+            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
+            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };

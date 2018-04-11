@@ -20,9 +20,7 @@ pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
 
-    let block_lam = |i| block_ast(i, None);
-//    let output = block_ast(input, None);
-    let output = terminated!(input, block_lam, custom_eof);
+    let output = terminated!(input, call!(block_ast, None), custom_eof);
     return match output {
         Done(i, o) => Done(i, o as Box<ASTNode>),
         IResult::Incomplete(n) => IResult::Incomplete(n),
@@ -47,6 +45,16 @@ macro_rules! inline_wrapped(
 
   ($i:expr, $f:expr) => (
     inline_wrapped!($i, call!($f));
+  );
+);
+
+macro_rules! indented(
+  ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
+    preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
+  );
+
+  ($i:expr, $f:expr, $ind: expr) => (
+    indented!($i, call!($f), $ind);
   );
 );
 
@@ -91,10 +99,6 @@ fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     };
 }
 
-fn indent_rule(input: &[u8], number_of_indents: usize) -> IResult<&[u8], Vec<&[u8]>> {
-    return complete!(input, many_m_n!(number_of_indents, number_of_indents, tag!(" ")));
-}
-
 fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return eof!(input, );
 }
@@ -112,17 +116,19 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Sta
         return IResult::Error(ErrorKind::Count);
     } else {
         let expected_indent = full_indent.1.len();
-        // Parser for statements.
-
-        let statement_lam = |i| statement_ast(i, expected_indent);
-        // Parser for indents.
-        let indent_lam = |i| indent_rule(i, expected_indent);
-
         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
         // vectors, which is much slower.
+        // TODO: See if we can clean this up with a separated_list_complete.
         let statements = delimited!(input, 
             opt!(between_statement),
-            many1!(complete!(preceded!(between_statement, preceded!(indent_lam, statement_lam)))),
+            many1!(
+                complete!(
+                    preceded!(
+                        between_statement,
+                        indented!(call!(statement_ast, expected_indent), expected_indent)
+                    )
+                )
+            ),
             between_statement
         );
 
@@ -161,10 +167,11 @@ named!(follow_value<&[u8], &[u8]>,
 );
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let if_lam = |i| if_ast(i, indent);
-    let function_dec_lam = |i| function_declaration_ast(i, indent);
-
-    let n = alt!(input, assignment_ast | if_lam | function_dec_lam);
+    let n = alt!(input,
+        assignment_ast |
+        call!(if_ast, indent) |
+        call!(function_declaration_ast, indent)
+    );
 
     return match n {
         Done(i, o) => {
@@ -183,19 +190,15 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
 
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
 
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let elif_lam = |i| elif_rule(i, indent);
-    let else_lam = |i| else_rule(i, indent);
-
     let full_tuple = tuple!(
         input,
         tag!("if"),
         ws!(and_expr_ast),
         tag!(":"),
         newline,
-        block_lam,
-        many0!(elif_lam),
-        opt!(complete!(else_lam))
+        call!(block_ast, Some(indent + 1)),
+        many0!(call!(elif_rule, indent)),
+        opt!(complete!(call!(else_rule, indent)))
     );
 
     let node = match full_tuple {
@@ -205,7 +208,7 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
         },
         IResult::Incomplete(n) => {
 //            println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            panic!();
+            IResult::Incomplete(n)
         },
         IResult::Error(e) => {
 //            println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
@@ -217,15 +220,13 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
 }
 
 fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
-    let indent_lam = |i| indent_rule(i, indent);
-    let block_lam = |i| block_ast(i, Some(indent + 1));
     let elif_tuple = tuple!(
         input,
-        preceded!(indent_lam, tag!("elif")),
+        indented!(tag!("elif"), indent),
         inline_wrapped!(and_expr_ast),
         tag!(":"),
         newline,
-        block_lam
+        call!(block_ast, Some(indent + 1))
     );
     return match elif_tuple {
         Done(i,o) => {
@@ -243,14 +244,12 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Bo
 }
 
 fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
-    let indent_lam = |i| indent_rule(i, indent);
-    let block_lam = |i| block_ast(i, Some(indent + 1));
     let else_tuple = tuple!(
         input,
-        preceded!(indent_lam, tag!("else")),
+        indented!(tag!("else"), indent),
         tag!(":"),
         newline,
-        block_lam
+        call!(block_ast, Some(indent + 1))
     );
     return match else_tuple {
         Done(i,o) => {
@@ -268,29 +267,28 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
 }
 
 
-//// TODO: Move indent lambda creation into a separate function.
 fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
     let full_tuple = tuple!(input,
         tag!("fn"),
         inline_wrapped!(identifier_ast),
         tag!("("),
+        inline_wrapped!(separated_list_complete!(inline_whitespace, identifier_ast)),
         tag!(")"),
-        tag!(":"),
-        block_lam
+        inline_wrapped!(tag!(":")),
+        call!(block_ast, Some(indent + 1))
     );
 
     let node = match full_tuple {
         Done(i, o) => {
-            let func_dec = Box::new(FunctionDec{name: o.1, args: vec!(), body: o.5}) as Box<Statement>;
+            let func_dec = Box::new(FunctionDec{name: o.1, args: vec!(), body: o.6}) as Box<Statement>;
             Done(i, func_dec)
         },
          IResult::Incomplete(n) => {
-//            println!("function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            println!("function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("function error {:?}. Input was: {:?}", e, from_utf8(input));
+            println!("function error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };

@@ -39,8 +39,7 @@ test = true
 
 
 
-fn func_def(a, b, c):
-    test = true
+
 
 
 

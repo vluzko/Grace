@@ -142,12 +142,19 @@ impl ASTNode for BinaryExpression {}
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
+
 /// Any binary operator
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum BinaryOperator {
     Or,
     And,
     Xor,
+    Add,
+    Mult,
+    Sub,
+    Div,
+    Mod,
+
 }
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -155,6 +162,7 @@ impl Display for BinaryOperator {
             &BinaryOperator::Or => "or",
             &BinaryOperator::And => "and",
             &BinaryOperator::Xor => "xor",
+            x => ""
         })
     }
 }

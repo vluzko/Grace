@@ -1,10 +1,8 @@
 use grace_error::*;
 use std::str;
-use std::io::BufReader;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
-use std::env;
 
 
 extern crate nom;
@@ -431,11 +429,46 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     return node;
 }
 
+named!(comparisons<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("==") |
+        tag!("<=") |
+        tag!(">=") |
+        tag!("!=") |
+        tag!("<") |
+        tag!(">")
+    ))
+);
+
 fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
     match output.1 {
         Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
         None => output.0
     }
+}
+
+fn comparison(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        and_expr_ast,
+        comparisons,
+        and_expr_ast
+    );
+
+    let node = match parse_result {
+            Done(i, o) => {
+                Done(i, o)
+            },
+            IResult::Incomplete(x) => {
+//              println!("Comparison incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+                IResult::Incomplete(x)
+            },
+            IResult::Error(e) => {
+//              println!("Comparison error: {:?}. input was: {:?}", e, from_utf8(input));
+                IResult::Error(e)
+            }
+    };
+
+    panic!();
 }
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -449,7 +482,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
     let node = match parse_result {
         Done(i, o) => {
-            Done(i, match_binary_expr(BinaryOperator::And, o))
+            Done(i, match_binary_expr(BinaryOperator::And, o ))
         },
         // TODO: Error type
         IResult::Incomplete(x) => {

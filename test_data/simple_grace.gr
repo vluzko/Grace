@@ -23,7 +23,7 @@ elif false:
 
     bar = false and true
 
-
+bar = true
 else:
 
 

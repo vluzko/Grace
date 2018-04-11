@@ -1,11 +1,16 @@
 use std::fmt;
 use std::fmt::Display;
 
+fn indent_block(block_str: String) -> String {
+    let split = block_str.lines();
+    let mut ret: String = "  ".to_string();
+    ret.push_str(&split.collect::<Vec<&str>>().join("\n  "));
+//    println!("Post indent:\n{}", ret);
+    return ret;
+}
 
 // TODO: Print subtree
-pub trait ASTNode: Display {
-    fn subtree_as_string(&self) -> &str;
-}
+pub trait ASTNode: Display {}
 
 pub trait Statement: ASTNode {}
 pub trait Expression: Statement {}
@@ -17,7 +22,6 @@ pub enum Boolean {
 }
 
 impl Display for Boolean {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             &Boolean::True => "true",
@@ -25,11 +29,7 @@ impl Display for Boolean {
         })
     }
 }
-impl ASTNode for Boolean {
-    fn subtree_as_string(&self) -> &str {
-        return "";
-    }
-}
+impl ASTNode for Boolean {}
 impl Statement for Boolean {}
 impl Expression for Boolean {}
 
@@ -43,10 +43,6 @@ impl Display for Identifier {
     }
 }
 impl ASTNode for Identifier {
-
-    fn subtree_as_string(&self) -> &str {
-        panic!()
-    }
 }
 
 pub struct FunctionDec {
@@ -61,11 +57,7 @@ impl Display for FunctionDec {
     }
 }
 
-impl ASTNode for FunctionDec {
- fn subtree_as_string(&self) -> &str {
-        panic!()
-    }
-}
+impl ASTNode for FunctionDec {}
 
 impl Statement for FunctionDec {}
 
@@ -81,27 +73,21 @@ pub struct IfStatement {
 impl Display for IfStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let elifs_iter = self.elifs.iter();
-        let mapped =
-            elifs_iter.map( |x| (*x).1.to_string());
-        let strings = mapped.collect::<Vec<String>>().join("\n");
+        let mapped = elifs_iter.map( |x| (*x).1.to_string());
+        let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
 
         let else_string = match self.else_block {
             Some(ref x) => {
                 (*x).to_string()
             },
             None => {
-                println!("Else is none");
-                "".to_string()
+                "None".to_string()
             }
         };
-
-        write!(f, "If statement.\n  Condition: {}.\n  Block: {}elifs: {}else: {}", self.condition, self.main_block, strings, else_string)
+        write!(f, "If statement:\n  Condition: {}.\n{}\nelifs:\n{}\nelse:\n  {}", self.condition, indent_block(self.main_block.to_string()), strings, indent_block(else_string))
     }
 }
 impl ASTNode for IfStatement {
-    fn subtree_as_string(&self) -> &str {
-        return "";
-    }
 }
 impl Statement for IfStatement {}
 impl Expression for IfStatement {}
@@ -117,9 +103,6 @@ impl Display for Assignment{
     }
 }
 impl ASTNode for Assignment{
-    fn subtree_as_string(&self) -> &str {
-        panic!()
-    }
 
 }
 impl Statement for Assignment {}
@@ -134,15 +117,12 @@ impl Display for Block {
         let statement_iter = self.statements.iter();
         let mapped =
             statement_iter.map( |x| (*x).to_string());
-        let strings = mapped.collect::<Vec<String>>().join("\n");
-        write!(f, "Block containing:\n{}\n", strings)
+        let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
+        write!(f, "Block containing:\n{}", strings)
     }
 }
 
 impl ASTNode for Block {
-    fn subtree_as_string(&self) -> &str {
-        panic!()
-    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -153,7 +133,6 @@ pub enum BinaryOperator {
 }
 
 impl Display for BinaryOperator {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             &BinaryOperator::Or => "or",
@@ -180,9 +159,6 @@ impl Display for BinaryExpression {
     }
 }
 impl ASTNode for BinaryExpression {
-    fn subtree_as_string(&self) -> &str {
-        panic!()
-    }
 }
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
@@ -218,10 +194,13 @@ impl<'a> Display for UnaryExpression {
     }
 }
 impl ASTNode for UnaryExpression {
-    fn subtree_as_string(&self) -> &str {
-        panic!();
-    }
 }
 impl Statement for UnaryExpression {}
 impl Expression for UnaryExpression {}
 
+
+#[test]
+fn test_indent() {
+    let block = "Block containing:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
+    assert_eq!(indent_block(block), "  Block containing:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
+}

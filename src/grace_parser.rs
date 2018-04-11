@@ -219,7 +219,7 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
     return node;
 }
 
-fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
+fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Box<Block>)> {
     let elif_tuple = tuple!(
         input,
         indented!(tag!("elif"), indent),
@@ -266,7 +266,6 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
     };
 }
 
-
 fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
     let full_tuple = tuple!(input,
         tag!("fn"),
@@ -300,8 +299,8 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
 fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     let parse_result = terminated!(input, tuple!(
         identifier_ast,
-        ws!(tag!("=")),
-        and_expr_ast
+        inline_wrapped!(tag!("=")),
+        expression_ast
     ), eof_or_line);
     let node = match parse_result {
         Done(i,o) => {
@@ -321,6 +320,41 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     return node;
 }
 
+fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    return alt!(input,
+        and_expr_ast |
+        identifier_expr
+    );
+}
+
+fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = recognize!(input,
+        pair!(
+        alt!(alpha | tag!("_")),
+        many0!(alt!(alpha | tag!("_") | digit))
+        )
+    );
+    let node = match parse_result {
+        Done(i,o) => {
+            let val = match from_utf8(o) {
+                Ok(v) => v,
+                x => panic!()
+            };
+            let ident: Identifier = Identifier{name: val.to_string()};
+            Done(i, Expr::IdentifierExpr {ident})
+        },
+        IResult::Incomplete(n) => {
+            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    };
+    return node;
+}
+
 fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result = recognize!(input,
         pair!(
@@ -335,7 +369,7 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
                 x => panic!()
             };
             let ident: Identifier = Identifier{name: val.to_string()};
-            Done(i,ident)
+            Done(i, ident)
         },
         IResult::Incomplete(n) => {
             println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
@@ -349,25 +383,24 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     return node;
 }
 
-fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
+fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        bool_expr_ast,
+        alt!(bool_expr_ast | identifier_expr),
         opt!(complete!(preceded!(
             delimited!(many1!(tag!(" ")), tag!("and"), many1!(tag!(" "))),
-            alt!(and_expr_ast | bool_expr_ast)
+            alt!(and_expr_ast | alt!(bool_expr_ast | identifier_expr))
         )))
     );
 
     let node = match parse_result {
         Done(i, o) => {
             match o.1 {
-
                 Some(x) => {
-                    let bin_exp = Box::new(BinaryExpression{
+                    let bin_exp = Expr::BinaryExpr {
                         operator: BinaryOperator::And,
-                        left: o.0,
-                        right: x
-                    }) as Box<Expression>;
+                        left: Box::new(o.0),
+                        right: Box::new(x)
+                    };
                     Done(i, bin_exp)
                 } ,
                 None => Done(i, o.0)
@@ -386,17 +419,17 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
     return node;
 }
 
-fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
+fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(follow_value)) |
         terminated!(tag!("false"), peek!(follow_value))
     );
 
     let node = match parse_result {
-        Done(i,o) => {
+        Done(i, o) => {
             match from_utf8(o) {
-                Ok("true") => Done(i, Box::new(Boolean::True) as Box<Expression>),
-                Ok("false") => Done(i, Box::new(Boolean::False) as Box<Expression>),
+                Ok("true") => Done(i, Expr::Bool(Boolean::True)),
+                Ok("false") => Done(i, Expr::Bool(Boolean::False)),
                 _ => panic!(),
             }
         },
@@ -449,7 +482,7 @@ pub fn test_assignment() {
     let result = parse_grace(input);
     let assignment = Assignment{
         identifier: Identifier{name: "foo".to_string()},
-        expression: Box::new(Boolean::True)
+        expression: Expr::Bool(Boolean::True)
     };
     // TODO: Implement Eq, then reactivate this test.
 //    assert_eq!(result, Done("", assignment));

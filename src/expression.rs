@@ -28,17 +28,6 @@ impl Display for Block {
 }
 impl ASTNode for Block {}
 
-/// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
-pub struct Identifier {
-    pub name: String,
-}
-impl Display for Identifier {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-impl ASTNode for Identifier {}
-
 /// A named function declaration.
 pub struct FunctionDec {
     pub name: Identifier,
@@ -58,9 +47,9 @@ impl Statement for FunctionDec {}
 
 /// An if statement. Supports elif and else, but neither is required.
 pub struct IfStatement {
-    pub condition: Box<Expression>,
+    pub condition: Expr,
     pub main_block: Box<Block>,
-    pub elifs: Vec<(Box<Expression>, Box<Block>)>,
+    pub elifs: Vec<(Expr, Box<Block>)>,
     pub else_block: Option<Box<Block>>
 }
 impl Display for IfStatement {
@@ -87,7 +76,7 @@ impl Expression for IfStatement {}
 /// An assignment statement.
 pub struct Assignment {
     pub identifier: Identifier,
-    pub expression: Box<Expression>,
+    pub expression: Expr,
 }
 impl Display for Assignment{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -97,21 +86,44 @@ impl Display for Assignment{
 impl ASTNode for Assignment{}
 impl Statement for Assignment {}
 
-#[derive(Debug, Copy, Clone)]
-pub enum BinaryOperator {
-    Or,
-    And,
-    Xor,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Expr {
+    BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
+    UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
+    FunctionCall{name: Identifier, args: Vec<Identifier>},
+    IdentifierExpr{ident: Identifier},
+    Bool(Boolean)
 }
-impl Display for BinaryOperator {
+impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &BinaryOperator::Or => "or",
-            &BinaryOperator::And => "and",
-            &BinaryOperator::Xor => "xor",
-        })
+        let string_rep = match self {
+            &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("{} {} {}", left, operator, right),
+            &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
+            &Expr::FunctionCall{ref name, ref args} => {
+                let joined_args = args.iter().map(|x| x.name.clone()).collect::<Vec<String>>().join(", ");
+                format!("Function call. Name: {}. Args: {}", name, joined_args)
+            },
+            &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
+            &Expr::Bool(b) => b.to_string()
+        };
+        write!(f, "{}", string_rep.as_str())
     }
 }
+impl ASTNode for Expr {}
+
+//fn display_unary_expr()
+
+/// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Identifier {
+    pub name: String,
+}
+impl Display for Identifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+impl ASTNode for Identifier {}
 
 /// Currently Expression only handles boolean expressions
 /// because they have a fixed size.
@@ -130,10 +142,26 @@ impl ASTNode for BinaryExpression {}
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
+/// Any binary operator
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum BinaryOperator {
+    Or,
+    And,
+    Xor,
+}
+impl Display for BinaryOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", match self {
+            &BinaryOperator::Or => "or",
+            &BinaryOperator::And => "and",
+            &BinaryOperator::Xor => "xor",
+        })
+    }
+}
 
 /// This is not the set of unary operators we will end up supporting.
 /// This is a random grab bag just to get the UnaryExpression struct working.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Not,
 }
@@ -162,7 +190,7 @@ impl Statement for UnaryExpression {}
 impl Expression for UnaryExpression {}
 
 /// A boolean value.
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Boolean {
     True,
     False

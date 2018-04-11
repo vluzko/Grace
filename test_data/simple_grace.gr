@@ -9,7 +9,7 @@ bar = true and false
 
 if true and true:
 
-    foo = true and false
+    foo = true and _asdf_
 
     if true:
         bar = true

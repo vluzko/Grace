@@ -97,7 +97,7 @@ pub enum Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
-            &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("{} {} {}", left, operator, right),
+            &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
             &Expr::FunctionCall{ref name, ref args} => {
                 let joined_args = args.iter().map(|x| x.name.clone()).collect::<Vec<String>>().join(", ");

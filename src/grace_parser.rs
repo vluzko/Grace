@@ -48,6 +48,14 @@ macro_rules! inline_wrapped(
   );
 );
 
+macro_rules! keyword (
+  ($i:expr, $f:expr) => (
+    {
+      delimited!($i, many1!(inline_whitespace_char), tag!($f), many1!(inline_whitespace_char))
+    }
+  );
+);
+
 macro_rules! indented(
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
     preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
@@ -74,6 +82,10 @@ named!(string_literal_rule<&[u8],(&[u8])>,
 
 named!(whitespace_char<&[u8], &[u8]>,
     alt!(custom_eof | tag!("\n") | tag!(" "))
+);
+
+named!(inline_whitespace_char<&[u8], &[u8]>,
+    tag!(" ")
 );
 
 named!(inline_whitespace<&[u8], Vec<&[u8]>>,
@@ -419,28 +431,25 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     return node;
 }
 
+fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
+    match output.1 {
+        Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
+        None => output.0
+    }
+}
+
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         bool_expr_ast,
         opt!(complete!(preceded!(
-            delimited!(many1!(tag!(" ")), tag!("and"), many1!(tag!(" "))),
+            keyword!("and"),
             expression_ast
         )))
     );
 
     let node = match parse_result {
         Done(i, o) => {
-            match o.1 {
-                Some(x) => {
-                    let bin_exp = Expr::BinaryExpr {
-                        operator: BinaryOperator::And,
-                        left: Box::new(o.0),
-                        right: Box::new(x)
-                    };
-                    Done(i, bin_exp)
-                } ,
-                None => Done(i, o.0)
-            }
+            Done(i, match_binary_expr(BinaryOperator::And, o))
         },
         // TODO: Error type
         IResult::Incomplete(x) => {

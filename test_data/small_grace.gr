@@ -1,0 +1,7 @@
+if true and true:
+    foo = true and false
+
+
+
+elif false:
+    test2 = true

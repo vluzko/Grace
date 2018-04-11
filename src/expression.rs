@@ -5,13 +5,11 @@ fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
     let mut ret: String = "  ".to_string();
     ret.push_str(&split.collect::<Vec<&str>>().join("\n  "));
-//    println!("Post indent:\n{}", ret);
     return ret;
 }
 
 // TODO: Print subtree
 pub trait ASTNode: Display {}
-
 pub trait Statement: ASTNode {}
 pub trait Expression: Statement {}
 
@@ -20,7 +18,6 @@ pub enum Boolean {
     True,
     False
 }
-
 impl Display for Boolean {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -36,29 +33,27 @@ impl Expression for Boolean {}
 pub struct Identifier {
     pub name: String,
 }
-
 impl Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
-impl ASTNode for Identifier {
-}
+impl ASTNode for Identifier {}
 
 pub struct FunctionDec {
     pub name: Identifier,
     pub args: Vec<Identifier>,
     pub body: Box<Block>
 }
-
 impl Display for FunctionDec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Function declaration.")
+        let arg_iter = self.args.iter().map(|x| x.to_string());
+        let args_string = arg_iter.collect::<Vec<_>>().join(", ");
+
+        write!(f, "Function declaration:\n  Name: {}\n  Args: {}", self.name, args_string)
     }
 }
-
 impl ASTNode for FunctionDec {}
-
 impl Statement for FunctionDec {}
 
 
@@ -68,8 +63,6 @@ pub struct IfStatement {
     pub elifs: Vec<(Box<Expression>, Box<Block>)>,
     pub else_block: Option<Box<Block>>
 }
-
-// TODO: Prettier printing.
 impl Display for IfStatement {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let elifs_iter = self.elifs.iter();
@@ -81,14 +74,13 @@ impl Display for IfStatement {
                 (*x).to_string()
             },
             None => {
-                "None".to_string()
+                "".to_string()
             }
         };
         write!(f, "If statement:\n  Condition: {}.\n{}\nelifs:\n{}\nelse:\n  {}", self.condition, indent_block(self.main_block.to_string()), strings, indent_block(else_string))
     }
 }
-impl ASTNode for IfStatement {
-}
+impl ASTNode for IfStatement {}
 impl Statement for IfStatement {}
 impl Expression for IfStatement {}
 
@@ -96,22 +88,17 @@ pub struct Assignment{
     pub identifier: Identifier,
     pub expression: Box<Expression>,
 }
-
 impl Display for Assignment{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Assignment: {} = {}", self.identifier, self.expression.to_string())
     }
 }
-impl ASTNode for Assignment{
-
-}
+impl ASTNode for Assignment{}
 impl Statement for Assignment {}
 
 pub struct Block {
     pub statements: Vec<Box<Statement>>,
 }
-
-//TODO: put all of the statements not just the first
 impl Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let statement_iter = self.statements.iter();
@@ -121,9 +108,7 @@ impl Display for Block {
         write!(f, "Block containing:\n{}", strings)
     }
 }
-
-impl ASTNode for Block {
-}
+impl ASTNode for Block {}
 
 #[derive(Debug, Copy, Clone)]
 pub enum BinaryOperator {
@@ -131,7 +116,6 @@ pub enum BinaryOperator {
     And,
     Xor,
 }
-
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -151,15 +135,12 @@ pub struct BinaryExpression{
 	pub left: Box<Expression>,
 	pub right: Box<Expression>
 }
-
 impl Display for BinaryExpression {
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} {} {}", self.left, self.operator, self.right)
     }
 }
-impl ASTNode for BinaryExpression {
-}
+impl ASTNode for BinaryExpression {}
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
@@ -170,7 +151,6 @@ impl Expression for BinaryExpression {}
 pub enum UnaryOperator {
     Not,
 }
-
 impl Display for UnaryOperator{
 
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -184,17 +164,14 @@ pub struct UnaryExpression {
     pub operator: UnaryOperator,
     pub operand: Box<Expression>
 }
-
-impl<'a> Display for UnaryExpression {
-
+impl Display for UnaryExpression {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self.operator {
             UnaryOperator::Not => format!("{} {}", self.operator.to_string(), self.operand.to_string()),
         })
     }
 }
-impl ASTNode for UnaryExpression {
-}
+impl ASTNode for UnaryExpression {}
 impl Statement for UnaryExpression {}
 impl Expression for UnaryExpression {}
 

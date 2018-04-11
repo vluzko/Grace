@@ -11,6 +11,10 @@ if true and true:
 
     foo = true and false
 
+    if true:
+        bar = true
+    elif false:
+        foo = true
 
 
 elif false:
@@ -23,7 +27,7 @@ elif false:
 
     bar = false and true
 
-bar = true
+
 else:
 
 
@@ -35,7 +39,7 @@ test = true
 
 
 
-def func_def():
+fn func_def(a, b, c):
     test = true
 
 

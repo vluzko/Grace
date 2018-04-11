@@ -1,7 +1,2 @@
-if true and true:
-    foo = true and false
+foo = fals()
 
-
-
-elif false:
-    test2 = true

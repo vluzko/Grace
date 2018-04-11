@@ -178,11 +178,11 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
             Done(i, o)
         },
         IResult::Incomplete(n) => {
-            println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+//            println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
+//            println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     }
@@ -284,11 +284,11 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
             Done(i, func_dec)
         },
          IResult::Incomplete(n) => {
-            println!("Function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+//            println!("Function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("Function error {:?}. Input was: {:?}", e, from_utf8(input));
+//            println!("Function error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -321,10 +321,46 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
 }
 
 fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    return alt!(input,
+    return match alt!(input,
         and_expr_ast |
+        function_call_expr |
         identifier_expr
+    ) {
+        Done(i, o) => {
+            Done(i, o)
+        },
+        IResult::Incomplete(n) => {
+//            println!("Expression incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Expression error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    }
+}
+
+fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        inline_wrapped!(identifier_ast),
+        tag!("("),
+        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier_ast)),
+        inline_wrapped!(tag!(")"))
     );
+
+    return match parse_result {
+        Done(i, o) => {
+            Done(i, Expr::FunctionCall{name: o.0, args: o.2})
+        },
+        IResult::Incomplete(n) => {
+//            println!("Function call incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Function call error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    }
 }
 
 fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -344,11 +380,11 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
             Done(i, Expr::IdentifierExpr {ident})
         },
         IResult::Incomplete(n) => {
-            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -372,11 +408,11 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
             Done(i, ident)
         },
         IResult::Incomplete(n) => {
-            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -385,10 +421,10 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        alt!(bool_expr_ast | identifier_expr),
+        bool_expr_ast,
         opt!(complete!(preceded!(
             delimited!(many1!(tag!(" ")), tag!("and"), many1!(tag!(" "))),
-            alt!(and_expr_ast | alt!(bool_expr_ast | identifier_expr))
+            expression_ast
         )))
     );
 
@@ -412,7 +448,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
              IResult::Incomplete(x)
         },
         IResult::Error(e) => {
-//            println!("and expr error: {:?}. input was: {:?}", e, from_utf8(input));
+//            println!("And expr error: {:?}. input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };

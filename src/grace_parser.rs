@@ -1,10 +1,8 @@
 use grace_error::*;
 use std::str;
-use std::io::BufReader;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
-use std::env;
 
 
 extern crate nom;
@@ -13,22 +11,58 @@ use self::nom::IResult::Done;
 use expression::*;
 //use nom::Offset;
 
-pub fn parse_grace(input: &str) -> Result<&[u8], GraceError> {
+pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
     parse_grace_from_slice(input.as_bytes())
 }
 
 // This is the important function
-pub fn parse_grace_from_slice(input: &[u8]) -> Result<&[u8], GraceError> {
+pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
 
-    let output = block_ast(input, None); // for now this is all it can do
-    match output {
-        Done(i, o) => println!("{}", (*o).to_string()),
-        _ => panic!()
-    }
-
-
-    Err(GraceError::GenericError)
+    let output = terminated!(input, call!(block_ast, None), custom_eof);
+    return match output {
+        Done(i, o) => Done(i, o as Box<ASTNode>),
+        IResult::Incomplete(n) => IResult::Incomplete(n),
+        IResult::Error(e) => IResult::Error(e)
+    };
 }
+
+/// A macro for wrapping a parser in inline whitespace.
+/// Similar to ws!, but doesn't allow for \n, \r, or \t.
+macro_rules! inline_wrapped(
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
+    {
+      match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
+        IResult::Error(a)      => IResult::Error(a),
+        IResult::Incomplete(i) => IResult::Incomplete(i),
+        IResult::Done(remaining, (_,o, _))    => {
+            IResult::Done(remaining, o)
+        }
+      }
+    }
+  );
+
+  ($i:expr, $f:expr) => (
+    inline_wrapped!($i, call!($f));
+  );
+);
+
+macro_rules! keyword (
+  ($i:expr, $f:expr) => (
+    {
+      delimited!($i, many1!(inline_whitespace_char), tag!($f), many1!(inline_whitespace_char))
+    }
+  );
+);
+
+macro_rules! indented(
+  ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
+    preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
+  );
+
+  ($i:expr, $f:expr, $ind: expr) => (
+    indented!($i, call!($f), $ind);
+  );
+);
 
 // TODO: Should handle all non-newline characters (well, just ASCII for now).
 // TODO: Decide: are single quotes and double quotes equivalent
@@ -48,8 +82,12 @@ named!(whitespace_char<&[u8], &[u8]>,
     alt!(custom_eof | tag!("\n") | tag!(" "))
 );
 
+named!(inline_whitespace_char<&[u8], &[u8]>,
+    tag!(" ")
+);
+
 named!(inline_whitespace<&[u8], Vec<&[u8]>>,
-    many0!(whitespace_char)
+    many0!(tag!(" "))
 );
 
 fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
@@ -71,16 +109,6 @@ fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     };
 }
 
-fn indent_rule(input: &[u8], number_of_indents: usize) -> IResult<&[u8], Vec<&[u8]>> {
-    return complete!(input, many_m_n!(number_of_indents, number_of_indents, tag!(" ")));
-}
-
-fn inline_wrapped<T>(input: &[u8], parser: fn(&[u8]) -> IResult<&[u8], T>) -> IResult<&[u8], T> {
-    delimited!(input,
-        inline_whitespace, parser, inline_whitespace
-    )
-}
-
 fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return eof!(input, );
 }
@@ -98,18 +126,20 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Sta
         return IResult::Error(ErrorKind::Count);
     } else {
         let expected_indent = full_indent.1.len();
-        // Parser for statements.
-
-        let statement_lam = |i| statement_ast(i, expected_indent);
-        // Parser for indents.
-        let indent_lam = |i| indent_rule(i, expected_indent);
-
         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
         // vectors, which is much slower.
+        // TODO: See if we can clean this up with a separated_list_complete.
         let statements = delimited!(input, 
             opt!(between_statement),
-            many1!(complete!(preceded!(between_statement, preceded!(indent_lam, statement_lam)))),
-            opt!(between_statement)
+            many1!(
+                complete!(
+                    preceded!(
+                        between_statement,
+                        indented!(call!(statement_ast, expected_indent), expected_indent)
+                    )
+                )
+            ),
+            between_statement
         );
 
         return statements;
@@ -117,6 +147,7 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Sta
 
 }
 
+// TODO: just make it a size and pass 0 instead of None
 fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> {
     let real_indent: usize = match indent {
         Some(x) => x,
@@ -131,14 +162,12 @@ fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> 
         },
         IResult::Error(e) => {
             println!("Block error: {}. Input was: {:?}", e, from_utf8(input));
-            panic!()
+            IResult::Error(e)
         }
     };
 
     return node;
 }
-
-
 
 fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return alt!(input, custom_eof | tag!("\n"));
@@ -149,27 +178,28 @@ named!(follow_value<&[u8], &[u8]>,
 );
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let if_lam = |i| if_ast(i, indent);
-    let function_dec_lam = |i| function_declaration_ast(i, indent);
-
-    let n = alt!(input, assignment_ast | if_lam | function_dec_lam);
+    let n = alt!(input,
+        assignment_ast |
+        call!(if_ast, indent) |
+        call!(function_declaration_ast, indent)
+    );
 
     return match n {
         Done(i, o) => {
             Done(i, o)
         },
-        x => x
+        IResult::Incomplete(n) => {
+//            println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
     }
 }
 
-fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
-    Box<Expression>,
-    Box<Block>,
-    Vec<(Box<Expression>, Box<Block>)>,
-    Option<Box<Block>>)> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let elif_lam = |i| elif_rule(i, indent);
-    let else_lam = |i| else_rule(i, indent);
+fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
 
     let full_tuple = tuple!(
         input,
@@ -177,35 +207,37 @@ fn if_rule(input: &[u8], indent: usize) -> IResult<&[u8], (
         ws!(and_expr_ast),
         tag!(":"),
         newline,
-        block_lam,
-        many0!(elif_lam),
-        opt!(complete!(else_lam))
+        call!(block_ast, Some(indent + 1)),
+        many0!(call!(elif_rule, indent)),
+        opt!(complete!(call!(else_rule, indent)))
     );
 
-    return match full_tuple {
-        Done(i,o) => {
-            Done(i, (o.1, o.4, o.5, o.6))
+    let node = match full_tuple {
+        Done(i, o) => {
+            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: o.5, else_block: o.6};
+            Done(i, Box::new(if_statement) as Box<Statement>)
         },
         IResult::Incomplete(n) => {
-            println!("else incomplete: {:?}", n);
+//            println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("else error {:?}", e);
+//            println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
+
+    return node;
 }
 
-fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Box<Block>)> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
+fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Box<Block>)> {
     let elif_tuple = tuple!(
         input,
-        tag!("elif"),
-        ws!(and_expr_ast),
+        indented!(tag!("elif"), indent),
+        inline_wrapped!(and_expr_ast),
         tag!(":"),
         newline,
-        block_lam
+        call!(block_ast, Some(indent + 1))
     );
     return match elif_tuple {
         Done(i,o) => {
@@ -223,74 +255,51 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Box<Expression>, Bo
 }
 
 fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
-
-    let block_lam = |i| block_ast(i, Some(indent + 1));
     let else_tuple = tuple!(
         input,
-        tag!("else"),
+        indented!(tag!("else"), indent),
         tag!(":"),
         newline,
-        block_lam
+        call!(block_ast, Some(indent + 1))
     );
     return match else_tuple {
         Done(i,o) => {
             Done(i, o.3)
         },
         IResult::Incomplete(n) => {
-            println!("else incomplete: {:?}", n);
+//            println!("else incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("else error {:?}", e);
+//            println!("else error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
 }
 
-fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let parse_result = if_rule(input, indent);
-    let node = match parse_result {
-        Done(i, o) => {
-            let if_statement = IfStatement{condition: o.0, main_block: o.1, elifs: o.2, else_block: o.3};
-            Done(i, Box::new(if_statement) as Box<Statement>)
-        },
-        IResult::Incomplete(n) => {
-            println!("if incomplete: {:?}", n);
-            panic!();
-        },
-        IResult::Error(e) => {
-            println!("if error: {:?}", e);
-
-            IResult::Error(e)
-        }
-    };
-
-    return node;
-}
-
-
-//// TODO: Move indent lambda creation into a separate function.
 fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
-    let block_lam = |i| block_ast(i, Some(indent + 1));
-    let inline_lam = |i| inline_wrapped(i, identifier_ast);
     let full_tuple = tuple!(input,
-        tag!("fn"),
-        inline_lam,
-        tag!("():"),
-        block_lam
+        tag!("fn "),
+        inline_wrapped!(identifier_ast),
+        tag!("("),
+        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier_ast)),
+        tag!(")"),
+        inline_wrapped!(tag!(":")),
+        newline,
+        call!(block_ast, Some(indent + 1))
     );
 
     let node = match full_tuple {
         Done(i, o) => {
-            let func_dec = Box::new(FunctionDec{name: o.1, args: vec!(), body: o.3}) as Box<Statement>;
+            let func_dec = Box::new(FunctionDec{name: o.1, args: o.3, body: o.7}) as Box<Statement>;
             Done(i, func_dec)
         },
          IResult::Incomplete(n) => {
-            println!("function incomplete: {:?}", n);
+//            println!("Function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-            println!("function error {:?}", e);
+//            println!("Function error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -298,16 +307,12 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
     return node;
 }
 
-named!(assignment_rule<&[u8],(Identifier, &[u8], Box<Expression>)>,
-    terminated!(tuple!(
-        identifier_ast,
-        ws!(tag!("=")),
-        and_expr_ast
-    ), eof_or_line)
-);
-
 fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
-    let parse_result = assignment_rule(input);
+    let parse_result = terminated!(input, tuple!(
+        identifier_ast,
+        inline_wrapped!(tag!("=")),
+        expression_ast
+    ), eof_or_line);
     let node = match parse_result {
         Done(i,o) => {
             let val = Box::new(Assignment{identifier: o.0, expression: o.2}) as Box<Statement>;
@@ -326,17 +331,57 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     return node;
 }
 
-named!(identifier_rule<&[u8],(&[u8])>,
-    recognize!(
+fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    return match alt!(input,
+        comparison_ast |
+        and_expr_ast |
+        function_call_expr |
+        identifier_expr
+    ) {
+        Done(i, o) => {
+            Done(i, o)
+        },
+        IResult::Incomplete(n) => {
+//            println!("Expression incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Expression error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    }
+}
+
+fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        inline_wrapped!(identifier_ast),
+        tag!("("),
+        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier_ast)),
+        inline_wrapped!(tag!(")"))
+    );
+
+    return match parse_result {
+        Done(i, o) => {
+            Done(i, Expr::FunctionCall{name: o.0, args: o.2})
+        },
+        IResult::Incomplete(n) => {
+//            println!("Function call incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Function call error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    }
+}
+
+fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = recognize!(input,
         pair!(
             alt!(alpha | tag!("_")),
             many0!(alt!(alpha | tag!("_") | digit))
-            )
-    )
-);
-
-fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let parse_result= identifier_rule(input);
+        )
+    );
     let node = match parse_result {
         Done(i,o) => {
             let val = match from_utf8(o) {
@@ -344,104 +389,191 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
                 x => panic!()
             };
             let ident: Identifier = Identifier{name: val.to_string()};
-            Done(i,ident)
+            Done(i, Expr::IdentifierExpr {ident})
         },
         IResult::Incomplete(n) => {
+//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
+//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
     return node;
 }
 
-// named!(and_rule<&[u8], (Box<Expression>, Option<Box<Expression>>)>,
-//     tuple!(
-//         bool_expr_ast,
-//         opt!(preceded!(
-//             inline_wrapped(tag!("and")),
-//             alt!(and_expr_ast | bool_expr_ast)
-//         ))
-//     )
-// );
-
-
-fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
-    let parse_result = tuple!(input,
-        bool_expr_ast,
-        opt!(complete!(preceded!(
-            delimited!(many1!(tag!(" ")), tag!("and"), many1!(tag!(" "))),
-            alt!(and_expr_ast | bool_expr_ast)
-        )))
+fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
+    let parse_result = recognize!(input,
+        pair!(
+            alt!(alpha | tag!("_")),
+            many0!(alt!(alpha | tag!("_") | digit))
+            )
     );
-    // let parse_result = and_rule(input);
+    let node = match parse_result {
+        Done(i,o) => {
+            let val = match from_utf8(o) {
+                Ok(v) => v,
+                x => panic!()
+            };
+            let ident: Identifier = Identifier{name: val.to_string()};
+            Done(i, ident)
+        },
+        IResult::Incomplete(n) => {
+//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            IResult::Incomplete(n)
+        },
+        IResult::Error(e) => {
+//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    };
+    return node;
+}
+
+named!(comparisons<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("==") |
+        tag!("<=") |
+        tag!(">=") |
+        tag!("!=") |
+        tag!("<")  |
+        tag!(">")
+    ))
+);
+
+fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
+    match output.1 {
+        Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
+        None => output.0
+    }
+}
+
+fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        and_expr_ast,
+        inline_wrapped!(comparisons),
+        and_expr_ast
+    );
 
     let node = match parse_result {
         Done(i, o) => {
-            match o.1 {
-
-                Some(x) => {
-                    let bin_exp = Box::new(BinaryExpression{
-                        operator: BinaryOperator::And,
-                        left: o.0,
-                        right: x
-                    }) as Box<Expression>;
-                    Done(i, bin_exp)
-                } ,
-                None => Done(i, o.0)
-            }
+            let operator = match from_utf8(o.1) {
+                Ok("==") => ComparisonOperator::Equal,
+                Ok(">=") => ComparisonOperator::GreaterEqual,
+                Ok("<=") => ComparisonOperator::LessEqual,
+                Ok(">")  => ComparisonOperator::Greater,
+                Ok("<")  => ComparisonOperator::Less,
+                Ok("!=") => ComparisonOperator::Unequal,
+                _ => panic!(),
+            };
+            let expression = Expr::ComparisonExpr{operator, left: Box::new(o.0), right: Box::new(o.2)};
+            Done(i, expression)
         },
-        // TODO: Error type
         IResult::Incomplete(x) => {
-//             println!("And expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-             IResult::Incomplete(x)
+            println!("Comparison expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+            IResult::Incomplete(x)
         },
         IResult::Error(e) => {
-//            println!("and expr error: {:?}. input was: {:?}", e, from_utf8(input));
+            println!("Comparison expr error: {:?}. input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
     return node;
 }
 
-named!(boolean_rule<&[u8],(&[u8])>,
-    alt!(
+fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        bool_expr_ast,
+        opt!(complete!(preceded!(
+            keyword!("and"),
+            expression_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
+        )))
+    );
+
+    let node = match parse_result {
+        Done(i, o) => {
+            Done(i, match_binary_expr(BinaryOperator::And, o ))
+        },
+        // TODO: Error type
+        IResult::Incomplete(x) => {
+             println!("And expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+             IResult::Incomplete(x)
+        },
+        IResult::Error(e) => {
+            println!("And expr error: {:?}. input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    };
+    return node;
+}
+
+fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(follow_value)) |
         terminated!(tag!("false"), peek!(follow_value))
-    )
-);
+    );
 
-fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Box<Expression>> {
-    let parse_result= boolean_rule(input);
-
-    let node= match parse_result {
-        Done(i,o) => {
+    let node = match parse_result {
+        Done(i, o) => {
             match from_utf8(o) {
-                Ok("true") => Done(i, Box::new(Boolean::True) as Box<Expression>),
-                Ok("false") => Done(i, Box::new(Boolean::False) as Box<Expression>),
+                Ok("true") => Done(i, Expr::Bool(Boolean::True)),
+                Ok("false") => Done(i, Expr::Bool(Boolean::False)),
                 _ => panic!(),
             }
         },
         IResult::Incomplete(x) => {
-             println!("Bool expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+//             println!("Bool expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
              IResult::Incomplete(x)
         },
         IResult::Error(e) => {
-            println!("Bool expr error: {:?}. input was: {:?}", e, from_utf8(input));
+//            println!("Bool expr error: {:?}. input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
     return node;
 }
 
-#[test]
-pub fn basic_file_test() {
-    // Read file
-    let filename= "./test_data/simple_grace.gr";
+fn read_from_file(f_name: &str) -> String {
+    let filename= format!("./test_data/{}.gr", f_name);
     let mut f = File::open(filename).expect("File not found");
     let mut contents = String::new();
     f.read_to_string(&mut contents);
+    return contents;
+}
+
+//#[test]
+pub fn basic_file_test() {
+    let contents = read_from_file("simple_grace");
     let result = parse_grace(contents.as_str());
+
+    match result {
+        Done(i, o) => println!("{}", (*o).to_string()),
+        _ => panic!()
+    }
+}
+
+#[test]
+pub fn small_file_test() {
+    let contents = read_from_file("small_grace");
+    let result = parse_grace(contents.as_str());
+
+    match result {
+        Done(i, o) => println!("{}", (*o).to_string()),
+        _ => panic!()
+    }
+}
+
+
+//#[test]
+pub fn test_assignment() {
+    let input = "foo = true";
+    let result = parse_grace(input);
+    let assignment = Assignment{
+        identifier: Identifier{name: "foo".to_string()},
+        expression: Expr::Bool(Boolean::True)
+    };
+    // TODO: Implement Eq, then reactivate this test.
+//    assert_eq!(result, Done("", assignment));
 }
 

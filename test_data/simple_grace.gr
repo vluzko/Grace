@@ -9,8 +9,12 @@ bar = true and false
 
 if true and true:
 
-    foo = true and false
+    foo = true and _asdf_
 
+    if true:
+        bar = truef()
+    elif false:
+        foo = true
 
 
 elif false:
@@ -33,6 +37,10 @@ else:
 
 test = true
 
+
+
+fn func_def(a, b  ,    c     ):
+    test = true
 
 
 

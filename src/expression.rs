@@ -88,6 +88,7 @@ impl Statement for Assignment {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
+    ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
     FunctionCall{name: Identifier, args: Vec<Identifier>},
@@ -97,6 +98,7 @@ pub enum Expr {
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
+            &Expr::ComparisonExpr{ref operator, ref left, ref right} => format!("Comparison:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
             &Expr::FunctionCall{ref name, ref args} => {
@@ -142,6 +144,22 @@ impl ASTNode for BinaryExpression {}
 impl Statement for BinaryExpression {}
 impl Expression for BinaryExpression {}
 
+/// Any comparator
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum ComparisonOperator {
+    Greater,
+    Less,
+    Equal,
+    Unequal,
+    GreaterEqual,
+    LessEqual
+}
+
+impl Display for ComparisonOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self)
+    }
+}
 
 /// Any binary operator
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

@@ -27,11 +27,13 @@ elif false:
 
     bar = false and true
 
+elif true:
+    bar = true
 
 else:
 
 
-    foobar = true and true
+    foobar = true and true or false
 
 
 

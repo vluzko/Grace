@@ -189,11 +189,11 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
             Done(i, o)
         },
         IResult::Incomplete(n) => {
-//            println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+           println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
+           println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     }
@@ -218,11 +218,11 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
             Done(i, Box::new(if_statement) as Box<Statement>)
         },
         IResult::Incomplete(n) => {
-//            println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+           println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
+           println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -319,11 +319,11 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
             Done(i, val)
         },
         IResult::Incomplete(n) => {
-//            println!("Assignment incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            println!("Assignment incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Assignment error: {:?}. Input was: {:?}", e, from_utf8(input));
+            println!("Assignment error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -333,20 +333,17 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
 
 fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return match alt!(input,
-        comparison_ast |
-        and_expr_ast |
-        function_call_expr |
-        identifier_expr
+        comparison_ast
     ) {
         Done(i, o) => {
             Done(i, o)
         },
         IResult::Incomplete(n) => {
-//            println!("Expression incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            println!("Expression incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Expression error: {:?}. Input was: {:?}", e, from_utf8(input));
+            println!("Expression error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     }
@@ -365,11 +362,11 @@ fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
             Done(i, Expr::FunctionCall{name: o.0, args: o.2})
         },
         IResult::Incomplete(n) => {
-//            println!("Function call incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+           println!("Function call incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Function call error: {:?}. Input was: {:?}", e, from_utf8(input));
+           println!("Function call error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     }
@@ -420,11 +417,11 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
             Done(i, ident)
         },
         IResult::Incomplete(n) => {
-//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+           println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+           println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -452,22 +449,29 @@ fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> 
 fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         and_expr_ast,
-        inline_wrapped!(comparisons),
-        and_expr_ast
+        opt!(complete!(tuple!(
+            inline_wrapped!(comparisons),
+            and_expr_ast
+        )))
     );
 
     let node = match parse_result {
         Done(i, o) => {
-            let operator = match from_utf8(o.1) {
-                Ok("==") => ComparisonOperator::Equal,
-                Ok(">=") => ComparisonOperator::GreaterEqual,
-                Ok("<=") => ComparisonOperator::LessEqual,
-                Ok(">")  => ComparisonOperator::Greater,
-                Ok("<")  => ComparisonOperator::Less,
-                Ok("!=") => ComparisonOperator::Unequal,
-                _ => panic!(),
+            let expression = match (o.1) {
+                None => o.0,
+                Some(x) => {
+                    let operator = match from_utf8(x.0) {
+                        Ok("==") => ComparisonOperator::Equal,
+                        Ok(">=") => ComparisonOperator::GreaterEqual,
+                        Ok("<=") => ComparisonOperator::LessEqual,
+                        Ok(">")  => ComparisonOperator::Greater,
+                        Ok("<")  => ComparisonOperator::Less,
+                        Ok("!=") => ComparisonOperator::Unequal,
+                        _ => panic!(),
+                    };
+                    Expr::ComparisonExpr{operator, left: Box::new(o.0), right: Box::new(x.1)}
+                }
             };
-            let expression = Expr::ComparisonExpr{operator, left: Box::new(o.0), right: Box::new(o.2)};
             Done(i, expression)
         },
         IResult::Incomplete(x) => {
@@ -484,10 +488,10 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        bool_expr_ast,
+        atomic_expr_ast,
         opt!(complete!(preceded!(
             keyword!("and"),
-            expression_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
+            and_expr_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
         )))
     );
 
@@ -497,8 +501,8 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         },
         // TODO: Error type
         IResult::Incomplete(x) => {
-             println!("And expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-             IResult::Incomplete(x)
+            println!("And expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+            IResult::Incomplete(x)
         },
         IResult::Error(e) => {
             println!("And expr error: {:?}. input was: {:?}", e, from_utf8(input));
@@ -506,6 +510,24 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         }
     };
     return node;
+}
+
+fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    return match alt!(input, 
+        bool_expr_ast |
+        function_call_expr |
+        identifier_expr
+    ) {
+        Done(i, o) => Done(i, o),
+        IResult::Incomplete(x) => {
+            println!("Atomic expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+            IResult::Incomplete(x)
+        },
+        IResult::Error(e) => {
+            println!("Atomic expr error: {:?}. input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        } 
+    }
 }
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -542,7 +564,7 @@ fn read_from_file(f_name: &str) -> String {
     return contents;
 }
 
-//#[test]
+#[test]
 pub fn basic_file_test() {
     let contents = read_from_file("simple_grace");
     let result = parse_grace(contents.as_str());
@@ -565,7 +587,7 @@ pub fn small_file_test() {
 }
 
 
-//#[test]
+// #[test]
 pub fn test_assignment() {
     let input = "foo = true";
     let result = parse_grace(input);

@@ -33,7 +33,7 @@ elif true:
 else:
 
 
-    foobar = true and true
+    foobar = true and true or false
 
 
 

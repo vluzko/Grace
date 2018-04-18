@@ -488,7 +488,7 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        atomic_expr_ast,
+        or_expr_ast,
         opt!(complete!(preceded!(
             keyword!("and"),
             and_expr_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
@@ -512,13 +512,41 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        atomic_expr_ast,
+        opt!(complete!(preceded!(
+            keyword!("or"),
+            or_expr_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
+        )))
+    );
+
+    let node = match parse_result {
+        Done(i, o) => {
+            Done(i, match_binary_expr(BinaryOperator::Or, o ))
+        },
+        // TODO: Error type
+        IResult::Incomplete(x) => {
+            println!("Or expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+            IResult::Incomplete(x)
+        },
+        IResult::Error(e) => {
+            println!("Or expr error: {:?}. input was: {:?}", e, from_utf8(input));
+            IResult::Error(e)
+        }
+    };
+    return node;
+}
+
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return match alt!(input, 
         bool_expr_ast |
-        function_call_expr |
+        complete!(function_call_expr) |
         identifier_expr
     ) {
-        Done(i, o) => Done(i, o),
+        Done(i, o) => {
+            Done(i, o)
+        },
         IResult::Incomplete(x) => {
             println!("Atomic expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
             IResult::Incomplete(x)
@@ -545,11 +573,11 @@ fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
             }
         },
         IResult::Incomplete(x) => {
-//             println!("Bool expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
+            println!("Bool expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
              IResult::Incomplete(x)
         },
         IResult::Error(e) => {
-//            println!("Bool expr error: {:?}. input was: {:?}", e, from_utf8(input));
+           println!("Bool expr error: {:?}. input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };

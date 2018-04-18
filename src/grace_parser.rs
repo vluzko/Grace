@@ -113,7 +113,7 @@ fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return eof!(input, );
 }
 
-fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Statement>>> {
+fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Stmt>>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
         Done(i, o) => (i, o),
@@ -177,7 +177,7 @@ named!(follow_value<&[u8], &[u8]>,
     alt!(whitespace_char | tag!(":") | tag!("(") | tag!(")"))
 );
 
-fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
     let n = alt!(input,
         assignment_ast |
         call!(if_ast, indent) |
@@ -199,7 +199,7 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> 
     }
 }
 
-fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
 
     let full_tuple = tuple!(
         input,
@@ -214,8 +214,8 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
 
     let node = match full_tuple {
         Done(i, o) => {
-            let if_statement = IfStatement{condition: o.1, main_block: o.4, elifs: o.5, else_block: o.6};
-            Done(i, Box::new(if_statement) as Box<Statement>)
+            let if_statement = Stmt::IfStmt{condition: o.1, main_block: o.4, elifs: o.5, else_block: o.6};
+            Done(i, Box::new(if_statement))
         },
         IResult::Incomplete(n) => {
            println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
@@ -277,7 +277,7 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
     };
 }
 
-fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Statement>> {
+fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
     let full_tuple = tuple!(input,
         tag!("fn "),
         inline_wrapped!(identifier_ast),
@@ -291,7 +291,7 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
 
     let node = match full_tuple {
         Done(i, o) => {
-            let func_dec = Box::new(FunctionDec{name: o.1, args: o.3, body: o.7}) as Box<Statement>;
+            let func_dec = Box::new(Stmt::FunctionDecStmt{name: o.1, args: o.3, body: o.7});
             Done(i, func_dec)
         },
          IResult::Incomplete(n) => {
@@ -307,7 +307,7 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
     return node;
 }
 
-fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
+fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Stmt>> {
     let parse_result = terminated!(input, tuple!(
         identifier_ast,
         inline_wrapped!(tag!("=")),
@@ -315,7 +315,7 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Statement>> {
     ), eof_or_line);
     let node = match parse_result {
         Done(i,o) => {
-            let val = Box::new(Assignment{identifier: o.0, expression: o.2}) as Box<Statement>;
+            let val = Box::new(Stmt::AssignmentStmt{identifier: o.0, expression: o.2});
             Done(i, val)
         },
         IResult::Incomplete(n) => {
@@ -609,21 +609,21 @@ pub fn small_file_test() {
     let result = parse_grace(contents.as_str());
 
     match result {
-        Done(i, o) => println!("{}", (*o).to_string()),
+        Done(_, o) => println!("{}", (*o).to_string()),
         _ => panic!()
     }
 }
 
 
-// #[test]
+#[test]
 pub fn test_assignment() {
     let input = "foo = true";
-    let result = parse_grace(input);
-    let assignment = Assignment{
+    let result = assignment_ast(input.as_bytes());
+    let assignment = Stmt::AssignmentStmt{
         identifier: Identifier{name: "foo".to_string()},
         expression: Expr::Bool(Boolean::True)
     };
     // TODO: Implement Eq, then reactivate this test.
-//    assert_eq!(result, Done("", assignment));
+   assert_eq!(result, Done("".as_bytes(), Box::new(assignment)));
 }
 

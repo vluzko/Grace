@@ -592,7 +592,7 @@ fn read_from_file(f_name: &str) -> String {
     return contents;
 }
 
-#[test]
+// #[test]
 pub fn basic_file_test() {
     let contents = read_from_file("simple_grace");
     let result = parse_grace(contents.as_str());
@@ -603,7 +603,7 @@ pub fn basic_file_test() {
     }
 }
 
-#[test]
+// #[test]
 pub fn small_file_test() {
     let contents = read_from_file("small_grace");
     let result = parse_grace(contents.as_str());
@@ -627,3 +627,50 @@ pub fn test_assignment() {
    assert_eq!(result, Done("".as_bytes(), Box::new(assignment)));
 }
 
+#[test]
+pub fn test_function_call() {
+    let function_call = expression_ast("ident()".as_bytes());
+    let expected = Expr::FunctionCall{name: Identifier{name: "ident".to_string()}, args: vec!()};
+    assert_eq!(function_call, Done("".as_bytes(), expected));
+
+}
+
+#[test]
+pub fn test_binary_expr() {
+    let binary_exprs = expression_ast("true and false or true".as_bytes());
+    let expected = Expr::BinaryExpr{
+        operator: BinaryOperator::And, 
+        left: Box::new(Expr::Bool(Boolean::True)),
+        right:Box::new(Expr::BinaryExpr{
+            operator: BinaryOperator::Or, 
+            left: Box::new(Expr::Bool(Boolean::False)), 
+            right: Box::new(Expr::Bool(Boolean::True))
+            })
+    };
+    assert_eq!(binary_exprs, Done("".as_bytes(), expected));
+}
+
+#[test]
+pub fn test_identifier_expr() {
+    let identifier_expr = expression_ast("words".as_bytes());
+    let expected = Expr::IdentifierExpr{ident: Identifier{name: "words".to_string()}};
+    assert_eq!(identifier_expr, Done("".as_bytes(), expected));
+}
+
+#[test]
+pub fn test_comparison_expr() {
+    let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
+    let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual, 
+        ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
+    for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
+        let as_str = format!("true {} false", comp_str);
+        let expr = expression_ast(as_str.as_bytes());
+        let expected = Expr::ComparisonExpr{
+            left: Box::new(Expr::Bool(Boolean::True)),
+            right: Box::new(Expr::Bool(Boolean::False)), 
+            operator: *comp_op
+        };
+
+        assert_eq!(expr, Done("".as_bytes(), expected));
+    }
+}

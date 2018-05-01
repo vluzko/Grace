@@ -94,7 +94,6 @@ impl Display for Expr {
 }
 impl ASTNode for Expr {}
 
-//fn display_unary_expr()
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
 #[derive(Debug, Clone, PartialEq, Eq)]

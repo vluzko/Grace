@@ -113,6 +113,25 @@ fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return eof!(input, );
 }
 
+/// Return true if a key
+/// 
+fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    let reserved_list = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false");
+    let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
+    let tag_iter = reserved_list.iter().map(|x| x.as_bytes()).map(tag_lam);
+    let mut final_result: IResult<&[u8], &[u8]> = IResult::Error(ErrorKind::Tag);
+    for res in tag_iter {
+        match res {
+            Done(i, o) => {
+                final_result = Done(i, o);
+                break;
+            },
+            _ => continue
+        }; 
+    }
+    return final_result;
+}
+
 fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Stmt>>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
@@ -558,6 +577,20 @@ fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     }
 }
 
+fn attribute_access_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let result = match tuple!(input,
+        atomic_expr_ast,
+        opt!(complete!(tuple!(
+            inline_wrapped!(tag!(".")),
+            atomic_expr_ast
+        )))
+    ) { 
+     x => x   
+    };
+    panic!();
+}
+
+
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(follow_value)) |
@@ -673,4 +706,13 @@ pub fn test_comparison_expr() {
 
         assert_eq!(expr, Done("".as_bytes(), expected));
     }
+}
+
+#[test]
+pub fn test_repeated_func_calls() {
+    let rep = expression_ast("func(a)(b, c)".as_bytes());
+    let expected = Expr::FunctionCall{
+        name: Identifier{name: "closure".to_string()},
+        args: vec!(Identifier{name: "b".to_string()}, Identifier{name: "c".to_string()})
+    };
 }

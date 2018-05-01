@@ -432,12 +432,7 @@ named!(identifier<&[u8], &[u8]>,
 );
 
 fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let parse_result = recognize!(input,
-        pair!(
-            alt!(alpha | tag!("_")),
-            many0!(alt!(alpha | tag!("_") | digit))
-            )
-    );
+    let parse_result = identifier(input);
     let node = match parse_result {
         Done(i,o) => {
             let val = match from_utf8(o) {

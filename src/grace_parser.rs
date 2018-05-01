@@ -113,12 +113,17 @@ fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return eof!(input, );
 }
 
+pub fn reserved_list() -> Vec<&'static str>{
+    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false");
+    return list;
+}
+
 /// Return true if a key
 /// 
 fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let reserved_list = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false");
     let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-    let tag_iter = reserved_list.iter().map(|x| x.as_bytes()).map(tag_lam);
+    let list = reserved_list();
+    let tag_iter = list.iter().map(|x| x.as_bytes()).map(tag_lam);
     let mut final_result: IResult<&[u8], &[u8]> = IResult::Error(ErrorKind::Tag);
     for res in tag_iter {
         match res {
@@ -392,12 +397,7 @@ fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-    let parse_result = recognize!(input,
-        pair!(
-            alt!(alpha | tag!("_")),
-            many0!(alt!(alpha | tag!("_") | digit))
-        )
-    );
+    let parse_result = identifier(input);
     let node = match parse_result {
         Done(i,o) => {
             let val = match from_utf8(o) {
@@ -418,6 +418,18 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     };
     return node;
 }
+
+named!(identifier<&[u8], &[u8]>, 
+    recognize!(
+        pair!(
+            not!(peek!(reserved_words)),
+            pair!(
+                alt!(alpha | tag!("_")),
+                many0!(alt!(alpha | tag!("_") | digit))
+            )
+        )
+    )
+);
 
 fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result = recognize!(input,
@@ -658,6 +670,14 @@ pub fn test_assignment() {
     };
     // TODO: Implement Eq, then reactivate this test.
    assert_eq!(result, Done("".as_bytes(), Box::new(assignment)));
+}
+
+#[test]
+pub fn test_reserved_words() {
+    for keyword in reserved_list() {
+        let result = identifier(keyword.as_bytes());
+        assert_eq!(result, IResult::Error(ErrorKind::Not));
+    }
 }
 
 #[test]

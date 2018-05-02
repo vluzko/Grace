@@ -71,7 +71,7 @@ pub enum Expr {
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{name: Identifier, args: Vec<Identifier>},
+    FunctionCall{name: Identifier, args: Vec<Expr>},
     IdentifierExpr{ident: Identifier},
     Bool(Boolean)
 }
@@ -82,7 +82,7 @@ impl Display for Expr {
             &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
             &Expr::FunctionCall{ref name, ref args} => {
-                let joined_args = args.iter().map(|x| x.name.clone()).collect::<Vec<String>>().join(", ");
+                let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
                 format!("Function call. Name: {}. Args: {}", name, joined_args)
             },
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),

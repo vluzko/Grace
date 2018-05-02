@@ -199,7 +199,7 @@ fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 named!(follow_value<&[u8], &[u8]>,
-    alt!(whitespace_char | tag!(":") | tag!("(") | tag!(")"))
+    alt!(whitespace_char | tag!(":") | tag!(","))
 );
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
@@ -378,7 +378,7 @@ fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         inline_wrapped!(identifier_ast),
         tag!("("),
-        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier_ast)),
+        inline_wrapped!(args_list),
         inline_wrapped!(tag!(")"))
     );
 
@@ -521,7 +521,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         or_expr_ast,
         opt!(complete!(preceded!(
             keyword!("and"),
-            and_expr_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
+            and_expr_ast
         )))
     );
 
@@ -547,7 +547,7 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         atomic_expr_ast,
         opt!(complete!(preceded!(
             keyword!("or"),
-            or_expr_ast  // TODO: this is broken. It should look for an "atomic" expression (fn call, identifier, value).
+            or_expr_ast
         )))
     );
 
@@ -568,9 +568,14 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+named!(args_list<&[u8], Vec<Expr>>,
+    separated_list_complete!(
+        inline_wrapped!(tag!(",")), 
+        expression_ast
+    )
+);
 
-
-/// Parse dot separated identifiers
+/// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     let parsed = separated_nonempty_list_complete!(input,
@@ -674,8 +679,18 @@ fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected:
     let res = parser(input.as_bytes());
     match res {
         Done(i, o) => {
-            assert_eq!(i, "".as_bytes());
+            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\n", from_utf8(i));
             assert_eq!(o, expected);
+        },
+        _ => panic!()
+    }
+}
+
+fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
+    let res = parser(input.as_bytes());
+    match res {
+        IResult::Error(e) => {
+            assert_eq!(e, expected);
         },
         _ => panic!()
     }
@@ -707,25 +722,31 @@ pub fn test_parenthetical_expressions() {
 
 #[test]
 pub fn test_function_call() {
-    let function_call = expression_ast("ident()".as_bytes());
-    let expected = Expr::FunctionCall{name: Identifier{name: "ident".to_string()}, args: vec!()};
-    assert_eq!(function_call, Done("".as_bytes(), expected));
-
+    let a = match and_expr_ast("true and false".as_bytes()) {Done(i, o) => o, _ => panic!()};
+    let b = match expression_ast("func()".as_bytes()) {Done(i, o) => o, _ => panic!()};
+    let expected = Expr::FunctionCall{name: Identifier{name: "ident".to_string()}, args: vec!(a, b)};
+    check_match("ident(true and false, func())", expression_ast, expected);
 }
 
 #[test]
 pub fn test_binary_expr() {
-    let binary_exprs = expression_ast("true and false or true".as_bytes());
+    // check_match("true and false or true", expression_ast, Expr::BinaryExpr{
+    //     operator: BinaryOperator::And, 
+    //     left: Box::new(Expr::Bool(Boolean::True)),
+    //     right:Box::new(Expr::BinaryExpr{
+    //         operator: BinaryOperator::Or, 
+    //         left: Box::new(Expr::Bool(Boolean::False)), 
+    //         right: Box::new(Expr::Bool(Boolean::True))
+    //         })
+    // });
+    
+    let binary_exprs = expression_ast("true and false,".as_bytes());
     let expected = Expr::BinaryExpr{
         operator: BinaryOperator::And, 
         left: Box::new(Expr::Bool(Boolean::True)),
-        right:Box::new(Expr::BinaryExpr{
-            operator: BinaryOperator::Or, 
-            left: Box::new(Expr::Bool(Boolean::False)), 
-            right: Box::new(Expr::Bool(Boolean::True))
-            })
+        right:Box::new(Expr::Bool(Boolean::False))
     };
-    assert_eq!(binary_exprs, Done("".as_bytes(), expected));
+    assert_eq!(binary_exprs, Done(",".as_bytes(), expected));
 }
 
 #[test]
@@ -757,7 +778,7 @@ pub fn test_comparison_expr() {
 pub fn test_repeated_func_calls() {
     let expected = Expr::FunctionCall{
         name: Identifier{name: "closure".to_string()},
-        args: vec!(Identifier{name: "b".to_string()}, Identifier{name: "c".to_string()})
+        args: vec!(Expr::IdentifierExpr{ident: Identifier{name: "b".to_string()}}, Expr::IdentifierExpr{ident: Identifier{name: "c".to_string()}})
     };
     check_match("func(a)(b, c)", expression_ast, expected);
 }

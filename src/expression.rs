@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::Display;
-use std::fmt::Debug;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
@@ -72,7 +71,7 @@ pub enum Expr {
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{name: Identifier, args: Vec<Identifier>},
+    FunctionCall{name: Identifier, args: Vec<Expr>},
     IdentifierExpr{ident: Identifier},
     Bool(Boolean)
 }
@@ -83,7 +82,7 @@ impl Display for Expr {
             &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
             &Expr::FunctionCall{ref name, ref args} => {
-                let joined_args = args.iter().map(|x| x.name.clone()).collect::<Vec<String>>().join(", ");
+                let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
                 format!("Function call. Name: {}. Args: {}", name, joined_args)
             },
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
@@ -94,7 +93,15 @@ impl Display for Expr {
 }
 impl ASTNode for Expr {}
 
-//fn display_unary_expr()
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DottedIdentifier {
+    pub names: Vec<String>
+}
+impl Display for DottedIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Dotted Ident: {:?}", self.names)
+    }
+}
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -144,7 +151,7 @@ impl Display for BinaryOperator {
             &BinaryOperator::Or => "or",
             &BinaryOperator::And => "and",
             &BinaryOperator::Xor => "xor",
-            x => ""
+            _ => ""
         })
     }
 }

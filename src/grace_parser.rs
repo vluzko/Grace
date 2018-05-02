@@ -568,6 +568,8 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+
+
 /// Parse dot separated identifiers
 /// e.g. ident1.ident2   .   ident3
 fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -608,20 +610,6 @@ fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         } 
     }
 }
-
-fn attribute_access_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    let result = match tuple!(input,
-        atomic_expr_ast,
-        opt!(complete!(tuple!(
-            inline_wrapped!(tag!(".")),
-            atomic_expr_ast
-        )))
-    ) { 
-     x => x   
-    };
-    panic!();
-}
-
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
@@ -777,5 +765,5 @@ pub fn test_repeated_func_calls() {
 #[test]
 pub fn test_dotted_identifier() {
     let expected = DottedIdentifier{names: vec!("asdf".to_string(), "dfgr_1".to_string(), "_asdf".to_string())};
-    check_match("asdf.dfgr_1._asdf", dotted_identifier, expected);
+    check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
 }

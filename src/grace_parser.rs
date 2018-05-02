@@ -404,7 +404,7 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
         Done(i,o) => {
             let val = match from_utf8(o) {
                 Ok(v) => v,
-                x => panic!()
+                _ => panic!()
             };
             let ident: Identifier = Identifier{name: val.to_string()};
             Done(i, Expr::IdentifierExpr {ident})
@@ -441,7 +441,7 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
         Done(i,o) => {
             let val = match from_utf8(o) {
                 Ok(v) => v,
-                x => panic!()
+                _ => panic!()
             };
             let ident: Identifier = Identifier{name: val.to_string()};
             Done(i, ident)
@@ -642,7 +642,7 @@ pub fn basic_file_test() {
     let result = parse_grace(contents.as_str());
 
     match result {
-        Done(i, o) => println!("{}", (*o).to_string()),
+        Done(_, o) => println!("{}", (*o).to_string()),
         _ => panic!()
     }
 }
@@ -663,6 +663,7 @@ fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected:
     let res = parser(input.as_bytes());
     match res {
         Done(i, o) => {
+            assert_eq!(i, "".as_bytes());
             assert_eq!(o, expected);
         },
         _ => panic!()

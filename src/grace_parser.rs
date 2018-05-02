@@ -568,6 +568,27 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+/// Parse dot separated identifiers
+/// e.g. ident1.ident2   .   ident3
+fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
+    let parsed = separated_nonempty_list_complete!(input,
+        inline_wrapped!(tag!(".")),
+        identifier
+    );
+
+    return match parsed {
+        Done(i, o) => {
+            let names: Vec<String> = o.iter().map(|x| match from_utf8(x) {
+                Ok(i) => i.to_string(),
+                _ => panic!()
+            }).collect::<Vec<String>>();
+            Done(i, DottedIdentifier{names})
+        },
+        IResult::Incomplete(n) => panic!(),
+        IResult::Error(e) => panic!()
+    };
+}
+
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return match alt!(input, 
         bool_expr_ast |
@@ -751,4 +772,10 @@ pub fn test_repeated_func_calls() {
         args: vec!(Identifier{name: "b".to_string()}, Identifier{name: "c".to_string()})
     };
     check_match("func(a)(b, c)", expression_ast, expected);
+}
+
+#[test]
+pub fn test_dotted_identifier() {
+    let expected = DottedIdentifier{names: vec!("asdf".to_string(), "dfgr_1".to_string(), "_asdf".to_string())};
+    check_match("asdf.dfgr_1._asdf", dotted_identifier, expected);
 }

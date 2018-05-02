@@ -93,6 +93,15 @@ impl Display for Expr {
 }
 impl ASTNode for Expr {}
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DottedIdentifier {
+    pub names: Vec<String>
+}
+impl Display for DottedIdentifier {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Dotted Ident: {:?}", self.names)
+    }
+}
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
 #[derive(Debug, Clone, PartialEq, Eq)]

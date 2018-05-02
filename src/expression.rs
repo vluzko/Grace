@@ -1,6 +1,5 @@
 use std::fmt;
 use std::fmt::Display;
-use std::fmt::Debug;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
@@ -143,7 +142,7 @@ impl Display for BinaryOperator {
             &BinaryOperator::Or => "or",
             &BinaryOperator::And => "and",
             &BinaryOperator::Xor => "xor",
-            x => ""
+            _ => ""
         })
     }
 }

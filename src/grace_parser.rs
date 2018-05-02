@@ -487,7 +487,7 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
     let node = match parse_result {
         Done(i, o) => {
-            let expression = match (o.1) {
+            let expression = match o.1 {
                 None => o.0,
                 Some(x) => {
                     let operator = match from_utf8(x.0) {
@@ -632,8 +632,10 @@ fn read_from_file(f_name: &str) -> String {
     let filename= format!("./test_data/{}.gr", f_name);
     let mut f = File::open(filename).expect("File not found");
     let mut contents = String::new();
-    f.read_to_string(&mut contents);
-    return contents;
+    match f.read_to_string(&mut contents) {
+        Ok(_) => return contents,
+        _ => panic!()
+    };
 }
 
 // #[test]

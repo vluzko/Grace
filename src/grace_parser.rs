@@ -1,8 +1,9 @@
-use grace_error::*;
+// use grace_error::*;
 use std::str;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
+use std::fmt::Debug;
 
 
 extern crate nom;
@@ -396,6 +397,7 @@ fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     }
 }
 
+/// Parse input into an identifier expression.
 fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = identifier(input);
     let node = match parse_result {
@@ -419,6 +421,7 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+/// Parser to recognize a valid Grace identifier.
 named!(identifier<&[u8], &[u8]>, 
     recognize!(
         pair!(
@@ -431,6 +434,7 @@ named!(identifier<&[u8], &[u8]>,
     )
 );
 
+/// Parser to return an Identifier AST.
 fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result = identifier(input);
     let node = match parse_result {
@@ -654,6 +658,16 @@ pub fn small_file_test() {
     }
 }
 
+fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
+    where T: Debug + PartialEq + Eq {
+    let res = parser(input.as_bytes());
+    match res {
+        Done(i, o) => {
+            assert_eq!(o, expected);
+        },
+        _ => panic!()
+    }
+}
 
 #[test]
 pub fn test_assignment() {
@@ -663,7 +677,6 @@ pub fn test_assignment() {
         identifier: Identifier{name: "foo".to_string()},
         expression: Expr::Bool(Boolean::True)
     };
-    // TODO: Implement Eq, then reactivate this test.
    assert_eq!(result, Done("".as_bytes(), Box::new(assignment)));
 }
 
@@ -673,6 +686,11 @@ pub fn test_reserved_words() {
         let result = identifier(keyword.as_bytes());
         assert_eq!(result, IResult::Error(ErrorKind::Not));
     }
+}
+
+#[test]
+pub fn test_parenthetical_expressions() {
+
 }
 
 #[test]
@@ -725,9 +743,9 @@ pub fn test_comparison_expr() {
 
 #[test]
 pub fn test_repeated_func_calls() {
-    let rep = expression_ast("func(a)(b, c)".as_bytes());
     let expected = Expr::FunctionCall{
         name: Identifier{name: "closure".to_string()},
         args: vec!(Identifier{name: "b".to_string()}, Identifier{name: "c".to_string()})
     };
+    check_match("func(a)(b, c)", expression_ast, expected);
 }

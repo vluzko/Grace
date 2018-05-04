@@ -103,6 +103,12 @@ impl Display for DottedIdentifier {
     }
 }
 
+#[derive (Debug, Clone, PartialEq, Eq)]
+pub enum PostIdent {
+    Call{args: Vec<Expr>},
+    Access{name: Identifier}
+}
+
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Identifier {

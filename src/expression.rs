@@ -71,9 +71,11 @@ pub enum Expr {
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{name: Identifier, args: Vec<Expr>},
+    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>},
+    AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
     IdentifierExpr{ident: Identifier},
     Bool(Boolean)
+
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -81,10 +83,11 @@ impl Display for Expr {
             &Expr::ComparisonExpr{ref operator, ref left, ref right} => format!("Comparison:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
-            &Expr::FunctionCall{ref name, ref args} => {
+            &Expr::FunctionCall{ref func_expr, ref args} => {
                 let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
-                format!("Function call. Name: {}. Args: {}", name, joined_args)
+                format!("Function call. Func: {}. Args: {}", func_expr, joined_args)
             },
+            &Expr::AttributeAccess{ref container, ref attributes} => format!("This is an attribute access"), //TODO: make this happen
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
             &Expr::Bool(b) => b.to_string()
         };
@@ -92,15 +95,26 @@ impl Display for Expr {
     }
 }
 impl ASTNode for Expr {}
+impl Expr {
+    pub fn from(input: &str) -> Self{
+        return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DottedIdentifier {
-    pub names: Vec<String>
+    pub attributes: Vec<String>
 }
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Dotted Ident: {:?}", self.names)
+        write!(f, "Dotted Ident: {:?}", self.attributes)
     }
+}
+
+#[derive (Debug, Clone, PartialEq, Eq)]
+pub enum PostIdent {
+    Call{args: Vec<Expr>},
+    Access{attributes: Vec<Identifier>}
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.

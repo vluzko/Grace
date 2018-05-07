@@ -98,11 +98,11 @@ impl Display for Expr {
     }
 }
 impl ASTNode for Expr {}
-//impl From<&str> for Expr {
-//    fn from(input: &str) -> Self{
-//        IdentifierExpr{ident:Identifier{name: input.to_string()}}
-//    }
-//}
+impl Expr {
+    pub fn from(input: &str) -> Self{
+        return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DottedIdentifier {
@@ -117,7 +117,7 @@ impl Display for DottedIdentifier {
 #[derive (Debug, Clone, PartialEq, Eq)]
 pub enum PostIdent {
     Call{args: Vec<Expr>},
-    Access{names: Vec<Identifier>}
+    Access{names: Vec<Identifier>}//TODO: attributes instead of names
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.

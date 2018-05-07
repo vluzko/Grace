@@ -414,7 +414,7 @@ named!(post_access<&[u8], Vec<Identifier>>,
 
 fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        inline_wrapped!(identifier_ast),
+        inline_wrapped!(identifier_expr),
         tag!("("),
         inline_wrapped!(args_list),
         inline_wrapped!(tag!(")"))
@@ -446,7 +446,19 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
             };
             let ident: Identifier = Identifier{name: val.to_string()};
             //a.b(1,2).c
-            Done(i, Expr::IdentifierExpr {ident})
+            let mut tree_base : Expr = Expr::IdentifierExpr {ident};
+            for postval in o.1 {
+                match postval {
+                    PostIdent::Call{args} => {
+                        tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+                    },
+
+                    PostIdent::Access{names} => {
+                        tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: names};
+                    }
+                }
+            }
+            Done(i, tree_base)
         },
         IResult::Incomplete(n) => {
 //            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
@@ -763,7 +775,7 @@ fn test_parenthetical_expressions() {
 fn test_function_call() {
     let a = match and_expr_ast("true and false".as_bytes()) {Done(i, o) => o, _ => panic!()};
     let b = match expression_ast("func()".as_bytes()) {Done(i, o) => o, _ => panic!()};
-    let expected = Expr::FunctionCall{func_expr: Box::new(IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
+    let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
     check_match("ident(true and false, func())", expression_ast, expected);
 }
 
@@ -816,11 +828,13 @@ fn test_comparison_expr() {
 #[test]
 fn test_repeated_func_calls() {
     let expected = Expr::FunctionCall{
-        func_expr: Box::new(IdentifierExpr{ident: Identifier{name: "closure".to_string()}}),
-        args: vec!(Expr::IdentifierExpr{ident: Identifier{name: "b".to_string()}}, Expr::IdentifierExpr{ident: Identifier{name: "c".to_string()}})
+        func_expr: Box::new(Expr::FunctionCall{func_expr: Box::new(Expr::from("func")), args: vec!(Expr::from("a"))}),
+        args: vec!(Expr::from("b"), Expr::from("c"))
     };
     check_match("func(a)(b, c)", expression_ast, expected);
 }
+
+//FunctionCall(func_name: , args: )
 
 #[test]
 fn test_dotted_identifier() {
@@ -831,7 +845,7 @@ fn test_dotted_identifier() {
 
 #[test]
 fn test_post_ident() {
-    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::IdentifierExpr{ident: Identifier{name: x.to_string()}}).collect();
+    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(x)).collect();
     check_match("(a, b, c)", post_identifier, PostIdent::Call{args: expected_args});
 
     check_match(".asdf_", post_identifier, PostIdent::Access{names: vec!(Identifier{name: "asdf_".to_string()})});

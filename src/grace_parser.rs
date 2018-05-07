@@ -61,10 +61,11 @@ macro_rules! inline_wrapped(
 macro_rules! keyword (
   ($i:expr, $f:expr) => (
     {
-      delimited!($i, many1!(inline_whitespace_char), tag!($f), many1!(inline_whitespace_char))
+      delimited!($i, inline_whitespace, tag!($f), many1!(inline_whitespace_char))
     }
   );
 );
+
 
 macro_rules! indented(
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
@@ -210,7 +211,7 @@ fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 named!(follow_value<&[u8], &[u8]>,
-    alt!(whitespace_char | tag!(":") | tag!(","))
+    alt!(whitespace_char | tag!(":") | tag!(",") | tag!(")"))
 );
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
@@ -368,6 +369,7 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Stmt>> {
 }
 
 fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    println!("Expression input is {:?}", from_utf8(input));
     return match alt!(input,
         comparison_ast
     ) {
@@ -461,11 +463,11 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
             Done(i, tree_base)
         },
         IResult::Incomplete(n) => {
-//            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
+            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
             IResult::Incomplete(n)
         },
         IResult::Error(e) => {
-//            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
+            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
             IResult::Error(e)
         }
     };
@@ -568,6 +570,7 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    println!("and expr input is {:?}", from_utf8(input));
     let parse_result = tuple!(input,
         or_expr_ast,
         opt!(complete!(preceded!(
@@ -594,6 +597,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    println!("Or expr input: {:?}", from_utf8(input));
     let parse_result = tuple!(input,
         atomic_expr_ast,
         opt!(complete!(preceded!(
@@ -604,6 +608,7 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
     let node = match parse_result {
         Done(i, o) => {
+            println!("Or expr leftovers is: {:?}", from_utf8(i));
             Done(i, match_binary_expr(BinaryOperator::Or, o ))
         },
         // TODO: Error type
@@ -648,12 +653,14 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 }
 
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    println!("Atomic input is: {:?}", from_utf8(input));
     return match alt!(input, 
         bool_expr_ast |
-        complete!(function_call_expr) |
-        identifier_expr
+        identifier_expr |
+        delimited!(inline_wrapped!(tag!("(")), expression_ast, inline_wrapped!(tag!(")")))
     ) {
         Done(i, o) => {
+            println!("Atomic i: {:?}, o: {:?}", from_utf8(i), o);
             Done(i, o)
         },
         IResult::Incomplete(x) => {
@@ -675,6 +682,7 @@ fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
     let node = match parse_result {
         Done(i, o) => {
+            println!("bool expr leftovers: {:?}", from_utf8(i));
             match from_utf8(o) {
                 Ok("true") => Done(i, Expr::Bool(Boolean::True)),
                 Ok("false") => Done(i, Expr::Bool(Boolean::False)),
@@ -767,8 +775,24 @@ fn test_reserved_words() {
 }
 
 #[test]
-fn test_parenthetical_expressions() {
+fn test_simple_parenthetical_expressions() {
+    let expected =Expr::BinaryExpr {
+            operator:BinaryOperator::And,
+            left: Box::new(Expr::Bool(Boolean::True)),
+            right: Box::new(Expr::Bool(Boolean::False))};
+    check_match("(true and false)", expression_ast, expected);
+}
 
+#[test]
+fn test_parenthetical_expressions() {
+    let expected = Expr::BinaryExpr {
+        operator: BinaryOperator::Or,
+        left:Box::new(Expr::BinaryExpr {
+            operator:BinaryOperator::And,
+            left: Box::new(Expr::Bool(Boolean::True)),
+            right: Box::new(Expr::Bool(Boolean::False))}),
+        right:Box::new(Expr::Bool(Boolean::True))};
+    check_match("(true and false) or true", expression_ast, expected);
 }
 
 #[test]
@@ -850,4 +874,3 @@ fn test_post_ident() {
 
     check_match(".asdf_", post_identifier, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
 }
-

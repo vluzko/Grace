@@ -76,9 +76,6 @@ pub enum Expr {
     IdentifierExpr{ident: Identifier},
     Bool(Boolean)
 
-    //a.b(1,2).c
-    //(a.b)(1,2).c is the precedence
-    //AttributeAccess(container: FunctionCall(name:AttributeAccess(container:a, names:[b]), args:[1,2]), names:[c])
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -106,18 +103,18 @@ impl Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DottedIdentifier {
-    pub names: Vec<String>
+    pub attributes: Vec<String>
 }
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Dotted Ident: {:?}", self.names)
+        write!(f, "Dotted Ident: {:?}", self.attributes)
     }
 }
 
 #[derive (Debug, Clone, PartialEq, Eq)]
 pub enum PostIdent {
     Call{args: Vec<Expr>},
-    Access{names: Vec<Identifier>}//TODO: attributes instead of names
+    Access{attributes: Vec<Identifier>}
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.

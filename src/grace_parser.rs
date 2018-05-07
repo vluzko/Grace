@@ -387,7 +387,7 @@ fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
 fn post_identifier(input: &[u8]) -> IResult<&[u8], PostIdent> {
     let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{names: x};
+    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
     let result = alt!(input, 
         map!(post_call, call_to_enum) |
         map!(post_access, access_to_enum)
@@ -453,8 +453,8 @@ fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
                         tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
                     },
 
-                    PostIdent::Access{names} => {
-                        tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: names};
+                    PostIdent::Access{attributes} => {
+                        tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
                     }
                 }
             }
@@ -636,11 +636,11 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 
     return match parsed {
         Done(i, o) => {
-            let names: Vec<String> = o.iter().map(|x| match from_utf8(x) {
+            let attributes: Vec<String> = o.iter().map(|x| match from_utf8(x) {
                 Ok(i) => i.to_string(),
                 _ => panic!()
             }).collect::<Vec<String>>();
-            Done(i, DottedIdentifier{names})
+            Done(i, DottedIdentifier{attributes})
         },
         IResult::Incomplete(n) => panic!(),
         IResult::Error(e) => panic!()
@@ -838,7 +838,7 @@ fn test_repeated_func_calls() {
 
 #[test]
 fn test_dotted_identifier() {
-    let expected = DottedIdentifier{names: vec!("asdf".to_string(), "dfgr_1".to_string(), "_asdf".to_string())};
+    let expected = DottedIdentifier{attributes: vec!("asdf".to_string(), "dfgr_1".to_string(), "_asdf".to_string())};
     check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
 }
 
@@ -848,6 +848,6 @@ fn test_post_ident() {
     let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(x)).collect();
     check_match("(a, b, c)", post_identifier, PostIdent::Call{args: expected_args});
 
-    check_match(".asdf_", post_identifier, PostIdent::Access{names: vec!(Identifier{name: "asdf_".to_string()})});
+    check_match(".asdf_", post_identifier, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
 }
 

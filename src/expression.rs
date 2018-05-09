@@ -102,9 +102,14 @@ impl Expr {
     }
 
 }
+impl From<bool> for Expr {
+    fn from(input: bool) -> Self {
+        return Expr::Bool(Boolean::from(input));
+    }
+}
 impl<'a> From<&'a [u8]> for Expr {
     fn from(input: &'a [u8]) -> Self {
-        return Expr::IdentifierExpr {ident: <Identifier as From<&[u8]>>::from(input)};
+        return Expr::IdentifierExpr {ident: Identifier::from(input)};
     }
 }
 
@@ -217,6 +222,14 @@ impl Display for Boolean {
     }
 }
 impl ASTNode for Boolean {}
+impl From<bool> for Boolean{
+    fn from(input: bool) -> Self{
+        return match input {
+            true => Boolean::True,
+            false => Boolean::False
+        };
+    }
+}
 
 
 #[test]

@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Display;
+use std::str::from_utf8;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
@@ -98,6 +99,18 @@ impl ASTNode for Expr {}
 impl Expr {
     pub fn from(input: &str) -> Self{
         return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    }
+
+}
+
+impl<'a> From<&'a [u8]> for Expr {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        let ident: Identifier = Identifier{name: val.to_string()};
+        return Expr::IdentifierExpr {ident};
     }
 }
 
@@ -206,4 +219,9 @@ impl ASTNode for Boolean {}
 fn test_indent() {
     let block = "Block:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
     assert_eq!(indent_block(block), "  Block:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
+}
+
+#[test]
+fn test_expr_from() {
+    assert_eq!(<Expr as From<&[u8]>>::from("asdf".as_bytes()), Expr::IdentifierExpr {ident: Identifier{name: "asdf".to_string()}});
 }

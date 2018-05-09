@@ -2,6 +2,7 @@
 //extern crate nom;
 
 extern crate log;
+extern crate cute;
 
 //pub mod error;
 //pub mod parser;
@@ -10,4 +11,3 @@ extern crate log;
 pub mod grace_error;
 pub mod grace_parser;
 pub mod expression;
-pub mod expression_test;

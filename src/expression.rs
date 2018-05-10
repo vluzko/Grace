@@ -35,6 +35,7 @@ pub enum Stmt {
     AssignmentStmt{identifier: Identifier, expression: Expr},
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
+    ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
     FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block}
 }
 impl Display for Stmt {
@@ -62,7 +63,8 @@ impl Display for Stmt {
                 let args_string = arg_iter.collect::<Vec<_>>().join(", ");
 
                 format!("Function declaration:\n  Name: {}\n  Args: {}\n{}", name, args_string, indent_block(body.to_string()))
-            }
+            },
+            _ => "Not implemented".to_string()
         };
         write!(f, "{}", string_rep.as_str())
     }

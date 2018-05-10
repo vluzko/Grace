@@ -26,6 +26,10 @@ pub fn fmap_iresult<X, T>(res: IResult<&[u8], X>, func: fn(X) -> T) -> IResult<&
 pub fn output<T>(res: IResult<&[u8], T>) -> T {
     return match res {
         Done(i, o) => o,
+        IResult::Error(e) => {
+            println!("Output error: {:?}.", e);
+            panic!()
+        },
         _ => panic!()
     };
 }
@@ -107,6 +111,19 @@ macro_rules! inline_wrapped(
   );
 );
 
+/// Matches a keyword at the beginning of a line.
+/// Used for "if", "elif", "else", "for", "while", etc.
+macro_rules! opening_keyword (
+  ($i:expr, $f:expr) => (
+    {
+      terminated!($i, tag!($f), many1!(inline_whitespace_char))
+    }
+  );
+);
+
+
+/// Matches a keyword within a line.
+/// Used for "and", "or", "xor", "in", etc.
 macro_rules! inline_keyword (
   ($i:expr, $f:expr) => (
     {
@@ -115,7 +132,7 @@ macro_rules! inline_keyword (
   );
 );
 
-
+/// Check that a macro is indented correctly.
 macro_rules! indented(
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
     preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
@@ -124,6 +141,13 @@ macro_rules! indented(
   ($i:expr, $f:expr, $ind: expr) => (
     indented!($i, call!($f), $ind);
   );
+);
+
+named!(ending_colon <&[u8], &[u8]>,
+    terminated!(
+        inline_wrapped!(tag!(":")),
+        newline
+    )
 );
 
 // TODO: Should handle all non-newline characters (well, just ASCII for now).
@@ -164,7 +188,7 @@ fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn reserved_list() -> Vec<&'static str>{
-    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false");
+    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in");
     return list;
 }
 
@@ -240,6 +264,7 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let node = alt!(input,
         assignment_ast |
         call!(while_ast, indent) |
+        call!(for_in_ast, indent) |
         call!(if_ast, indent) |
         call!(function_declaration_ast, indent)
     );
@@ -260,6 +285,24 @@ fn while_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     );
 
     return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.2, block: x.5});
+}
+
+// Parse a for in loop.
+fn for_in_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
+    let parse_result = tuple!(input,
+        delimited!(
+            opening_keyword!("for"),
+            inline_wrapped!(identifier_ast),
+            inline_keyword!("in")
+        ),
+        terminated!(
+            inline_wrapped!(expression_ast),
+            ending_colon
+        ),
+        call!(block_ast, indent+1)
+    );
+
+    return fmap_iresult(parse_result, |x| Stmt::ForInStmt {iter_var: x.0, iterator: x.1, block: x.2});
 }
 
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
@@ -617,17 +660,6 @@ fn small_file_test() {
 }
 
 #[test]
-fn test_assignment() {
-    let input = "foo = true";
-    let result = assignment_ast(input.as_bytes());
-    let assignment = Stmt::AssignmentStmt{
-        identifier: Identifier{name: "foo".to_string()},
-        expression: Expr::Bool(Boolean::True)
-    };
-   assert_eq!(result, Done("".as_bytes(),assignment));
-}
-
-#[test]
 fn test_reserved_words() {
     for keyword in reserved_list() {
         let result = identifier(keyword.as_bytes());
@@ -740,6 +772,14 @@ fn test_post_ident() {
 }
 
 #[test]
+fn test_assignment() {
+    check_match("foo = true", assignment_ast, Stmt::AssignmentStmt {
+        identifier: Identifier::from("foo"),
+        expression: Expr::from(true)
+    });
+}
+
+#[test]
 fn test_if_stmt() {
     let good_input = "if (a and b):\n x = true";
 
@@ -760,5 +800,14 @@ fn test_while_stmt() {
     check_match("while true:\n x=true", |x| statement_ast(x, 0), Stmt::WhileStmt {
         condition: Expr::from(true),
         block: Block{statements: vec!(output(assignment_ast("x=true".as_bytes())))}
+    });
+}
+
+#[test]
+fn test_for_in() {
+    check_match("for x in y:\n a=true", |x| statement_ast(x, 0), Stmt::ForInStmt {
+        iter_var: Identifier::from("x"),
+        iterator: Expr::from("y"),
+        block: output(block_ast("a=true".as_bytes(), 0))
     });
 }

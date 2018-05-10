@@ -151,20 +151,6 @@ named!(ending_colon <&[u8], &[u8]>,
     )
 );
 
-// TODO: Should handle all non-newline characters (well, just ASCII for now).
-// TODO: Decide: are single quotes and double quotes equivalent
-// a la python, or are single quotes for single characters
-// a la C++? Or some other thing?
-named!(string_literal_rule<&[u8],(&[u8])>,
-    recognize!(
-        tuple!(
-            tag!("\""),
-            opt!(alpha),
-            tag!("\"")
-            )
-    )
-);
-
 named!(whitespace_char<&[u8], &[u8]>,
     alt!(custom_eof | tag!("\n") | tag!(" "))
 );
@@ -495,6 +481,7 @@ fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         bool_expr_ast |
         complete!(float_ast) |
         complete!(int_ast) |
+        complete!(string_ast) |
         expr_with_trailer
     );
     return node;
@@ -639,6 +626,34 @@ fn float_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return fmap_iresult(parse_result, |x| Expr::Float(FloatLiteral::from(x)));
 }
 
+named!(string_char<&[u8], &[u8]>,
+    recognize!(
+        alt!(
+            tag!("\\\"") |
+            tag!("\\\\") |
+            tag!("\\\n") |
+            tag!("\\\r") |
+            recognize!(none_of!("\n\""))
+        )
+    )
+);
+
+named!(string_literal<&[u8],&[u8]>,
+    recognize!(
+        tuple!(
+            tag!("\""),
+            many0!(string_char),
+            tag!("\"")
+        )
+    )
+);
+
+fn string_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = string_literal(input);
+
+    return fmap_iresult(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
+}
+
 fn read_from_file(f_name: &str) -> String {
     let filename= format!("./test_data/{}.gr", f_name);
     let mut f = File::open(filename).expect("File not found");
@@ -692,6 +707,16 @@ fn small_file_test() {
         Done(_, o) => println!("{}", (*o).to_string()),
         _ => panic!()
     }
+}
+
+#[test]
+fn test_literals() {
+    let int = format!("{}", rand::random::<i64>());
+    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
+    let float = format!("{}", rand::random::<f64>());
+    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
+
+    check_match("\"asdf\\\"\\\rasdf\"", expression_ast, Expr::String("\"asdf\\\"\\\rasdf\"".to_string()));
 }
 
 #[test]
@@ -844,13 +869,4 @@ fn test_for_in() {
         iterator: Expr::from("y"),
         block: output(block_ast("a=true".as_bytes(), 0))
     });
-}
-
-#[test]
-fn test_literals() {
-    let int = format!("{}", rand::random::<i64>());
-    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
-
-    let float = format!("{}", rand::random::<f64>());
-    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
 }

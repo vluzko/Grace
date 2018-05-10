@@ -81,7 +81,8 @@ pub enum Expr {
     IdentifierExpr{ident: Identifier},
     Bool(Boolean),
     Int(IntegerLiteral),
-    Float(FloatLiteral)
+    Float(FloatLiteral),
+    String(String)
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

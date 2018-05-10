@@ -1,5 +1,6 @@
 use std::fmt;
 use std::fmt::Display;
+use std::str::from_utf8;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
@@ -95,9 +96,20 @@ impl Display for Expr {
     }
 }
 impl ASTNode for Expr {}
-impl Expr {
-    pub fn from(input: &str) -> Self{
+impl <'a> From<&'a str> for Expr {
+    fn from(input: &'a str) -> Self{
         return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    }
+
+}
+impl From<bool> for Expr {
+    fn from(input: bool) -> Self {
+        return Expr::Bool(Boolean::from(input));
+    }
+}
+impl<'a> From<&'a [u8]> for Expr {
+    fn from(input: &'a [u8]) -> Self {
+        return Expr::IdentifierExpr {ident: Identifier::from(input)};
     }
 }
 
@@ -128,6 +140,16 @@ impl Display for Identifier {
     }
 }
 impl ASTNode for Identifier {}
+
+impl <'a> From<&'a [u8]> for Identifier {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        return Identifier{name: val.to_string()};
+    }
+}
 
 /// Any comparator
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -200,10 +222,23 @@ impl Display for Boolean {
     }
 }
 impl ASTNode for Boolean {}
+impl From<bool> for Boolean{
+    fn from(input: bool) -> Self{
+        return match input {
+            true => Boolean::True,
+            false => Boolean::False
+        };
+    }
+}
 
 
 #[test]
 fn test_indent() {
     let block = "Block:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
     assert_eq!(indent_block(block), "  Block:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
+}
+
+#[test]
+fn test_expr_from() {
+    assert_eq!(<Expr as From<&[u8]>>::from("asdf".as_bytes()), Expr::IdentifierExpr {ident: Identifier{name: "asdf".to_string()}});
 }

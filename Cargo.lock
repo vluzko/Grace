@@ -4,9 +4,15 @@ version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
+name = "cute"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "grace"
 version = "0.1.0"
 dependencies = [
+ "cute 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "nom 3.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -43,6 +49,7 @@ dependencies = [
 
 [metadata]
 "checksum cfg-if 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "d4c819a1287eb618df47cc647173c5c4c66ba19d888a6e50d605672aed3140de"
+"checksum cute 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)" = "45e700c2d1c3feea9b695e79b2dfeeb93040556a58c556fae23f71b1e6b449fd"
 "checksum libc 0.2.33 (registry+https://github.com/rust-lang/crates.io-index)" = "5ba3df4dcb460b9dfbd070d41c94c19209620c191b0340b929ce748a2bcd42d2"
 "checksum log 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)" = "89f010e843f2b1a31dbd316b3b8d443758bc634bed37aabade59c686d644e0a2"
 "checksum memchr 1.0.2 (registry+https://github.com/rust-lang/crates.io-index)" = "148fab2e51b4f1cfc66da2a7c32981d1d3c083a803978268bb11fe4b86925e7a"

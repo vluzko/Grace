@@ -23,6 +23,55 @@ pub fn fmap_iresult<X, T>(res: IResult<&[u8], X>, func: fn(X) -> T) -> IResult<&
     };
 }
 
+pub fn output<T>(res: IResult<&[u8], T>) -> T {
+    return match res {
+        Done(i, o) => o,
+        _ => panic!()
+    };
+}
+
+pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
+    println!("{} input was: {:?}", name, from_utf8(input));
+    return match res {
+        Done(i, o) => {
+            println!("{} leftover input is {:?}", name, from_utf8(i));
+            Done(i, func(o))
+        },
+        IResult::Error(e) => {
+            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
+            IResult::Error(e)
+        },
+        IResult::Incomplete(n) => {
+            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
+            IResult::Incomplete(n)
+        }
+    };
+}
+
+// TODO: Change
+/// Map an IResult and log errors and incomplete values.
+pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
+    return match res {
+        Done(i, o) => Done(i, func(o)),
+        IResult::Error(e) => {
+            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
+            IResult::Error(e)
+        },
+        IResult::Incomplete(n) => {
+            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
+            IResult::Incomplete(n)
+        }
+    };
+}
+
+pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
+    return fmap_and_full_log(res, |x| x, name, input);
+}
+
+pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
+    return fmap_and_log(res, |x| x, name, input);
+}
+
 pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
     parse_grace_from_slice(input.as_bytes())
 }
@@ -107,19 +156,7 @@ fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     let n = many0!(input,
         terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
     );
-    return match n {
-        Done(i, o) => {
-            Done(i, o)
-        },
-        IResult::Incomplete(n) => {
-            println!("Between incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("Between error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+    return n;
 }
 
 fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -191,19 +228,7 @@ fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> 
         None => 0
     };
     let parse_result = block_rule(input, real_indent);
-    let node = match parse_result {
-        Done(i,o) => Done(i,Box::new(Block{statements: o})),
-        IResult::Incomplete(n) => {
-            println!("Block incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            panic!();
-        },
-        IResult::Error(e) => {
-            println!("Block error: {}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
-
-    return node;
+    return fmap_iresult(parse_result, |x| Box::new(Block{statements: x}));
 }
 
 fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -215,30 +240,18 @@ named!(follow_value<&[u8], &[u8]>,
 );
 
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
-    let n = alt!(input,
+    let node = alt!(input,
         assignment_ast |
         call!(if_ast, indent) |
         call!(function_declaration_ast, indent)
     );
 
-    return match n {
-        Done(i, o) => {
-            Done(i, o)
-        },
-        IResult::Incomplete(n) => {
-           println!("Statement incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-           println!("Statement error {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    }
+    return node;
 }
 
 fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
 
-    let full_tuple = tuple!(
+    let parse_result = tuple!(
         input,
         tag!("if"),
         ws!(and_expr_ast),
@@ -249,26 +262,15 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
         opt!(complete!(call!(else_rule, indent)))
     );
 
-    let node = match full_tuple {
-        Done(i, o) => {
-            let if_statement = Stmt::IfStmt{condition: o.1, main_block: o.4, elifs: o.5, else_block: o.6};
-            Done(i, Box::new(if_statement))
-        },
-        IResult::Incomplete(n) => {
-           println!("if incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-           println!("if error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+    let node = fmap_iresult(parse_result, |x| Box::new(
+        Stmt::IfStmt{condition: x.1, main_block: x.4, elifs: x.5, else_block: x.6}
+    ));
 
     return node;
 }
 
 fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Box<Block>)> {
-    let elif_tuple = tuple!(
+    let parse_result = tuple!(
         input,
         indented!(tag!("elif"), indent),
         inline_wrapped!(and_expr_ast),
@@ -276,42 +278,23 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Box<Block>)> 
         newline,
         call!(block_ast, Some(indent + 1))
     );
-    return match elif_tuple {
-        Done(i,o) => {
-            Done(i, (o.1, o.4))
-        },
-        IResult::Incomplete(n) => {
-//            println!("elif incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-//            println!("elif error {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+
+    let node = fmap_iresult(parse_result, |x| (x.1, x.4));
+    return node;
 }
 
 fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
-    let else_tuple = tuple!(
+    let parse_result = tuple!(
         input,
         indented!(tag!("else"), indent),
         tag!(":"),
         newline,
         call!(block_ast, Some(indent + 1))
     );
-    return match else_tuple {
-        Done(i,o) => {
-            Done(i, o.3)
-        },
-        IResult::Incomplete(n) => {
-//            println!("else incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-//            println!("else error {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+
+    let node = fmap_iresult(parse_result, |x| x.3);
+
+    return node;
 }
 
 fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
@@ -326,20 +309,7 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
         call!(block_ast, Some(indent + 1))
     );
 
-    let node = match full_tuple {
-        Done(i, o) => {
-            let func_dec = Box::new(Stmt::FunctionDecStmt{name: o.1, args: o.3, body: o.7});
-            Done(i, func_dec)
-        },
-         IResult::Incomplete(n) => {
-//            println!("Function incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-//            println!("Function error {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+    let node = fmap_iresult(full_tuple, |x| Box::new(Stmt::FunctionDecStmt{name: x.1, args: x.3, body: x.7}));
 
     return node;
 }
@@ -350,164 +320,17 @@ fn assignment_ast(input: &[u8]) -> IResult<&[u8], Box<Stmt>> {
         inline_wrapped!(tag!("=")),
         expression_ast
     ), eof_or_line);
-    let node = match parse_result {
-        Done(i,o) => {
-            let val = Box::new(Stmt::AssignmentStmt{identifier: o.0, expression: o.2});
-            Done(i, val)
-        },
-        IResult::Incomplete(n) => {
-            println!("Assignment incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("Assignment error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+
+    let node = fmap_iresult(parse_result, |x| Box::new(Stmt::AssignmentStmt{identifier: x.0, expression: x.2}));
 
     return node;
 }
 
 fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    println!("Expression input is {:?}", from_utf8(input));
-    return match alt!(input,
+    let node = alt!(input,
         comparison_ast
-    ) {
-        Done(i, o) => {
-            Done(i, o)
-        },
-        IResult::Incomplete(n) => {
-            println!("Expression incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("Expression error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    }
-}
-
-fn post_identifier(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
-    let result = alt!(input, 
-        map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum)
-    );
-    return result; 
-}
-
-named!(post_call<&[u8], Vec<Expr>>,
-    delimited!(
-        tag!("("),
-        inline_wrapped!(args_list),
-        inline_wrapped!(tag!(")"))
-    )
-);
-
-named!(post_access<&[u8], Vec<Identifier>>,
-    many1!(
-        preceded!(
-            inline_wrapped!(tag!(".")),
-            identifier_ast
-        )
-    )
-);
-
-fn function_call_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-    let parse_result = tuple!(input,
-        inline_wrapped!(identifier_expr),
-        tag!("("),
-        inline_wrapped!(args_list),
-        inline_wrapped!(tag!(")"))
     );
 
-    return match parse_result {
-        Done(i, o) => {
-            Done(i, Expr::FunctionCall{func_expr: Box::new(o.0), args: o.2})
-        },
-        IResult::Incomplete(n) => {
-           println!("Function call incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-           println!("Function call error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    }
-}
-
-/// Parse input into an identifier expression.
-fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-    let parse_result = tuple!(input, identifier, many0!(post_identifier));
-    let node = match parse_result {
-        Done(i,o) => {
-            let val = match from_utf8(o.0) {
-                Ok(v) => v,
-                _ => panic!()
-            };
-            let ident: Identifier = Identifier{name: val.to_string()};
-            //a.b(1,2).c
-            let mut tree_base : Expr = Expr::IdentifierExpr {ident};
-            for postval in o.1 {
-                match postval {
-                    PostIdent::Call{args} => {
-                        tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
-                    },
-
-                    PostIdent::Access{attributes} => {
-                        tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
-                    }
-                }
-            }
-            Done(i, tree_base)
-        },
-        IResult::Incomplete(n) => {
-            println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-            println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
-    return node;
-}
-
-/// Parser to recognize a valid Grace identifier.
-named!(identifier<&[u8], &[u8]>, 
-    recognize!(
-        pair!(
-            not!(peek!(reserved_words)),
-            pair!(
-                alt!(alpha | tag!("_")),
-                many0!(alt!(alpha | tag!("_") | digit))
-            )
-        )
-    )
-);
-
-/// Parser to return an Identifier AST.
-fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let parse_result = identifier(input);
-    let node = match parse_result {
-        Done(i,o) => {
-            let val = match from_utf8(o) {
-                Ok(v) => v,
-                _ => panic!()
-            };
-            let ident: Identifier = Identifier{name: val.to_string()};
-            Done(i, ident)
-        },
-        IResult::Incomplete(n) => {
-           println!("Identifier incomplete: {:?}. Input was: {:?}", n, from_utf8(input));
-            IResult::Incomplete(n)
-        },
-        IResult::Error(e) => {
-           println!("Identifier error: {:?}. Input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
     return node;
 }
 
@@ -538,39 +361,27 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         )))
     );
 
-    let node = match parse_result {
-        Done(i, o) => {
-            let expression = match o.1 {
-                None => o.0,
-                Some(x) => {
-                    let operator = match from_utf8(x.0) {
-                        Ok("==") => ComparisonOperator::Equal,
-                        Ok(">=") => ComparisonOperator::GreaterEqual,
-                        Ok("<=") => ComparisonOperator::LessEqual,
-                        Ok(">")  => ComparisonOperator::Greater,
-                        Ok("<")  => ComparisonOperator::Less,
-                        Ok("!=") => ComparisonOperator::Unequal,
-                        _ => panic!(),
-                    };
-                    Expr::ComparisonExpr{operator, left: Box::new(o.0), right: Box::new(x.1)}
-                }
+    let map = |x: (Expr, Option<(&[u8], Expr)>)| match x.1 {
+        None => x.0,
+        Some(y) => {
+            let operator = match from_utf8(y.0) {
+                Ok("==") => ComparisonOperator::Equal,
+                Ok(">=") => ComparisonOperator::GreaterEqual,
+                Ok("<=") => ComparisonOperator::LessEqual,
+                Ok(">")  => ComparisonOperator::Greater,
+                Ok("<")  => ComparisonOperator::Less,
+                Ok("!=") => ComparisonOperator::Unequal,
+                _ => panic!(),
             };
-            Done(i, expression)
-        },
-        IResult::Incomplete(x) => {
-            println!("Comparison expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-            IResult::Incomplete(x)
-        },
-        IResult::Error(e) => {
-            println!("Comparison expr error: {:?}. input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
+            Expr::ComparisonExpr{operator, left: Box::new(x.0), right: Box::new(y.1)}
         }
     };
+
+    let node = fmap_iresult(parse_result, map);
     return node;
 }
 
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    println!("and expr input is {:?}", from_utf8(input));
     let parse_result = tuple!(input,
         or_expr_ast,
         opt!(complete!(preceded!(
@@ -579,25 +390,11 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         )))
     );
 
-    let node = match parse_result {
-        Done(i, o) => {
-            Done(i, match_binary_expr(BinaryOperator::And, o ))
-        },
-        // TODO: Error type
-        IResult::Incomplete(x) => {
-            println!("And expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-            IResult::Incomplete(x)
-        },
-        IResult::Error(e) => {
-            println!("And expr error: {:?}. input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+    let node = fmap_iresult(parse_result, |x| match_binary_expr(BinaryOperator::And, x));
     return node;
 }
 
 fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    println!("Or expr input: {:?}", from_utf8(input));
     let parse_result = tuple!(input,
         atomic_expr_ast,
         opt!(complete!(preceded!(
@@ -606,21 +403,7 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         )))
     );
 
-    let node = match parse_result {
-        Done(i, o) => {
-            println!("Or expr leftovers is: {:?}", from_utf8(i));
-            Done(i, match_binary_expr(BinaryOperator::Or, o ))
-        },
-        // TODO: Error type
-        IResult::Incomplete(x) => {
-            println!("Or expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-            IResult::Incomplete(x)
-        },
-        IResult::Error(e) => {
-            println!("Or expr error: {:?}. input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
+    let node = fmap_iresult(parse_result, |x| match_binary_expr(BinaryOperator::Or, x));
     return node;
 }
 
@@ -653,52 +436,139 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 }
 
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    println!("Atomic input is: {:?}", from_utf8(input));
-    return match alt!(input, 
+    let node = alt!(input,
         bool_expr_ast |
-        identifier_expr |
-        delimited!(inline_wrapped!(tag!("(")), expression_ast, inline_wrapped!(tag!(")")))
-    ) {
-        Done(i, o) => {
-            println!("Atomic i: {:?}, o: {:?}", from_utf8(i), o);
-            Done(i, o)
-        },
-        IResult::Incomplete(x) => {
-            println!("Atomic expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-            IResult::Incomplete(x)
-        },
-        IResult::Error(e) => {
-            println!("Atomic expr error: {:?}. input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        } 
-    }
+        expr_with_trailer
+    );
+    return node;
 }
+
+fn wrapped_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let node = delimited!(input,
+        inline_wrapped!(tag!("(")),
+        expression_ast,
+        inline_wrapped!(tag !(")"))
+    );
+
+    return node;
+}
+
+/// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
+fn expr_with_trailer(input: &[u8]) -> IResult<&[u8], Expr> {
+    let ident = |x| fmap_iresult(
+        identifier_ast(x),
+        |y: Identifier| Expr::IdentifierExpr {ident: y}
+    );
+
+    let parse_result = tuple!(input,
+        alt!(ident | wrapped_expr),
+        many0!(trailer)
+    );
+
+
+    let map = |x: (Expr, Vec<PostIdent>)| {
+        let mut tree_base = x.0;
+        for postval in x.1 {
+            match postval {
+                PostIdent::Call{args} => {
+                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+                },
+
+                PostIdent::Access{attributes} => {
+                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
+                }
+            }
+        };
+        return tree_base;
+    };
+
+    let node = fmap_iresult(parse_result, map);
+    return node;
+}
+
+fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
+    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
+    let result = alt!(input,
+        map!(post_call, call_to_enum) |
+        map!(post_access, access_to_enum)
+    );
+    return result;
+}
+
+named!(post_call<&[u8], Vec<Expr>>,
+    delimited!(
+        inline_wrapped!(tag!("(")),
+        inline_wrapped!(args_list),
+        inline_wrapped!(tag!(")"))
+    )
+);
+
+named!(post_access<&[u8], Vec<Identifier>>,
+    many1!(
+        preceded!(
+            inline_wrapped!(tag!(".")),
+            identifier_ast
+        )
+    )
+);
+
+///// Parse input into an identifier expression.
+//fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+//    let parse_result = tuple!(input, identifier, many0!(trailer));
+//
+//    let map = |x: (&[u8], Vec<PostIdent>)| {
+//        let mut tree_base = <Expr as From<&[u8]>>::from(x.0);
+//        for postval in x.1 {
+//            match postval {
+//                PostIdent::Call{args} => {
+//                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+//                },
+//
+//                PostIdent::Access{attributes} => {
+//                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
+//                }
+//            }
+//        };
+//        return tree_base;
+//    };
+//
+//    let node = fmap_iresult(parse_result, map);
+//
+//    return node;
+//}
+
+/// Parser to recognize a valid Grace identifier.
+named!(identifier<&[u8], &[u8]>,
+    recognize!(
+        pair!(
+            not!(peek!(reserved_words)),
+            pair!(
+                alt!(alpha | tag!("_")),
+                many0!(alt!(alpha | tag!("_") | digit))
+            )
+        )
+    )
+);
+
+/// Parser to return an Identifier AST.
+fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
+    let parse_result = identifier(input);
+    let node = fmap_iresult(parse_result,  Identifier::from);
+    return node;
+}
+
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(follow_value)) |
         terminated!(tag!("false"), peek!(follow_value))
     );
-
-    let node = match parse_result {
-        Done(i, o) => {
-            println!("bool expr leftovers: {:?}", from_utf8(i));
-            match from_utf8(o) {
-                Ok("true") => Done(i, Expr::Bool(Boolean::True)),
-                Ok("false") => Done(i, Expr::Bool(Boolean::False)),
-                _ => panic!(),
-            }
-        },
-        IResult::Incomplete(x) => {
-            println!("Bool expr incomplete: {:?}. Input was: {:?}", x, from_utf8(input));
-             IResult::Incomplete(x)
-        },
-        IResult::Error(e) => {
-           println!("Bool expr error: {:?}. input was: {:?}", e, from_utf8(input));
-            IResult::Error(e)
-        }
-    };
-    return node;
+    return fmap_iresult(parse_result, |x| match from_utf8(x) {
+        Ok("true") => Expr::Bool(Boolean::True),
+        Ok("false") => Expr::Bool(Boolean::False),
+        _ => panic!(),
+    });
 }
 
 fn read_from_file(f_name: &str) -> String {
@@ -716,7 +586,8 @@ fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected:
     let res = parser(input.as_bytes());
     match res {
         Done(i, o) => {
-            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\n", from_utf8(i));
+            let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
             assert_eq!(o, expected);
         },
         _ => panic!()
@@ -805,15 +676,15 @@ fn test_function_call() {
 
 #[test]
 fn test_binary_expr() {
-    // check_match("true and false or true", expression_ast, Expr::BinaryExpr{
-    //     operator: BinaryOperator::And, 
-    //     left: Box::new(Expr::Bool(Boolean::True)),
-    //     right:Box::new(Expr::BinaryExpr{
-    //         operator: BinaryOperator::Or, 
-    //         left: Box::new(Expr::Bool(Boolean::False)), 
-    //         right: Box::new(Expr::Bool(Boolean::True))
-    //         })
-    // });
+     check_match("true and false or true", expression_ast, Expr::BinaryExpr{
+         operator: BinaryOperator::And,
+         left: Box::new(Expr::from(true)),
+         right:Box::new(Expr::BinaryExpr{
+             operator: BinaryOperator::Or,
+             left: Box::new(Expr::from(false)),
+             right: Box::new(Expr::from(true))
+         })
+     });
     
     let binary_exprs = expression_ast("true and false,".as_bytes());
     let expected = Expr::BinaryExpr{
@@ -856,9 +727,12 @@ fn test_repeated_func_calls() {
         args: vec!(Expr::from("b"), Expr::from("c"))
     };
     check_match("func(a)(b, c)", expression_ast, expected);
-}
 
-//FunctionCall(func_name: , args: )
+    check_match("(a and b)(true)", expression_ast, Expr::FunctionCall {
+        func_expr: Box::new(output(and_expr_ast("a and b".as_bytes()))),
+        args: vec!(Expr::from(true))
+    });
+}
 
 #[test]
 fn test_dotted_identifier() {
@@ -869,8 +743,8 @@ fn test_dotted_identifier() {
 
 #[test]
 fn test_post_ident() {
-    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(x)).collect();
-    check_match("(a, b, c)", post_identifier, PostIdent::Call{args: expected_args});
+    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
+    check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args});
 
-    check_match(".asdf_", post_identifier, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
+    check_match(".asdf_", trailer, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
 }

@@ -79,7 +79,7 @@ pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
 // This is the important function
 pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
 
-    let output = terminated!(input, call!(block_ast, None), custom_eof);
+    let output = terminated!(input, call!(block_ast, 0), custom_eof);
     return match output {
         Done(i, o) => Done(i, o as Box<ASTNode>),
         IResult::Incomplete(n) => IResult::Incomplete(n),
@@ -187,6 +187,7 @@ fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return final_result;
 }
 
+// TODO: Merge block_rule with block_ast
 fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Stmt>>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
@@ -222,12 +223,8 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Box<Stm
 }
 
 // TODO: just make it a size and pass 0 instead of None
-fn block_ast(input: &[u8], indent: Option<usize>) -> IResult<&[u8], Box<Block>> {
-    let real_indent: usize = match indent {
-        Some(x) => x,
-        None => 0
-    };
-    let parse_result = block_rule(input, real_indent);
+fn block_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
+    let parse_result = block_rule(input, indent);
     return fmap_iresult(parse_result, |x| Box::new(Block{statements: x}));
 }
 
@@ -257,7 +254,7 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<Stmt>> {
         ws!(and_expr_ast),
         tag!(":"),
         newline,
-        call!(block_ast, Some(indent + 1)),
+        call!(block_ast, indent + 1),
         many0!(call!(elif_rule, indent)),
         opt!(complete!(call!(else_rule, indent)))
     );
@@ -276,7 +273,7 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Box<Block>)> 
         inline_wrapped!(and_expr_ast),
         tag!(":"),
         newline,
-        call!(block_ast, Some(indent + 1))
+        call!(block_ast, indent + 1)
     );
 
     let node = fmap_iresult(parse_result, |x| (x.1, x.4));
@@ -289,7 +286,7 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Box<Block>> {
         indented!(tag!("else"), indent),
         tag!(":"),
         newline,
-        call!(block_ast, Some(indent + 1))
+        call!(block_ast, indent + 1)
     );
 
     let node = fmap_iresult(parse_result, |x| x.3);
@@ -306,7 +303,7 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Box<S
         tag!(")"),
         inline_wrapped!(tag!(":")),
         newline,
-        call!(block_ast, Some(indent + 1))
+        call!(block_ast, indent + 1)
     );
 
     let node = fmap_iresult(full_tuple, |x| Box::new(Stmt::FunctionDecStmt{name: x.1, args: x.3, body: x.7}));

@@ -23,6 +23,31 @@ pub fn fmap_iresult<X, T>(res: IResult<&[u8], X>, func: fn(X) -> T) -> IResult<&
     };
 }
 
+pub fn output<T>(res: IResult<&[u8], T>) -> T {
+    return match res {
+        Done(i, o) => o,
+        _ => panic!()
+    };
+}
+
+pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
+    println!("{} input was: {:?}", name, from_utf8(input));
+    return match res {
+        Done(i, o) => {
+            println!("{} leftover input is {:?}", name, from_utf8(i));
+            Done(i, func(o))
+        },
+        IResult::Error(e) => {
+            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
+            IResult::Error(e)
+        },
+        IResult::Incomplete(n) => {
+            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
+            IResult::Incomplete(n)
+        }
+    };
+}
+
 // TODO: Change
 /// Map an IResult and log errors and incomplete values.
 pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
@@ -37,6 +62,10 @@ pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name:
             IResult::Incomplete(n)
         }
     };
+}
+
+pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
+    return fmap_and_full_log(res, |x| x, name, input);
 }
 
 pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
@@ -305,78 +334,6 @@ fn expression_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
-fn post_identifier(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
-    let result = alt!(input, 
-        map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum)
-    );
-    return result; 
-}
-
-named!(post_call<&[u8], Vec<Expr>>,
-    delimited!(
-        tag!("("),
-        inline_wrapped!(args_list),
-        inline_wrapped!(tag!(")"))
-    )
-);
-
-named!(post_access<&[u8], Vec<Identifier>>,
-    many1!(
-        preceded!(
-            inline_wrapped!(tag!(".")),
-            identifier_ast
-        )
-    )
-);
-
-/// Parse input into an identifier expression.
-fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-    let parse_result = tuple!(input, identifier, many0!(post_identifier));
-
-    let map = |x: (&[u8], Vec<PostIdent>)| {
-        let mut tree_base = <Expr as From<&[u8]>>::from(x.0);
-        for postval in x.1 {
-            match postval {
-                PostIdent::Call{args} => {
-                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
-                },
-
-                PostIdent::Access{attributes} => {
-                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
-                }
-            }
-        };
-        return tree_base;
-    };
-
-    let node = fmap_iresult(parse_result, map);
-
-    return node;
-}
-
-/// Parser to recognize a valid Grace identifier.
-named!(identifier<&[u8], &[u8]>, 
-    recognize!(
-        pair!(
-            not!(peek!(reserved_words)),
-            pair!(
-                alt!(alpha | tag!("_")),
-                many0!(alt!(alpha | tag!("_") | digit))
-            )
-        )
-    )
-);
-
-/// Parser to return an Identifier AST.
-fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let parse_result = identifier(input);
-    let node = fmap_iresult(parse_result,  Identifier::from);
-    return node;
-}
-
 named!(comparisons<&[u8], &[u8]>,
     recognize!(alt!(
         tag!("==") |
@@ -481,11 +438,126 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let node = alt!(input,
         bool_expr_ast |
-        identifier_expr |
-        delimited!(inline_wrapped!(tag!("(")), expression_ast, inline_wrapped!(tag!(")")))
+        expr_with_trailer
     );
     return node;
 }
+
+fn wrapped_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let node = delimited!(input,
+        inline_wrapped!(tag!("(")),
+        expression_ast,
+        inline_wrapped!(tag !(")"))
+    );
+
+    return node;
+}
+
+/// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
+fn expr_with_trailer(input: &[u8]) -> IResult<&[u8], Expr> {
+    let ident = |x| fmap_iresult(
+        identifier_ast(x),
+        |y: Identifier| Expr::IdentifierExpr {ident: y}
+    );
+
+    let parse_result = tuple!(input,
+        alt!(ident | wrapped_expr),
+        many0!(trailer)
+    );
+
+
+    let map = |x: (Expr, Vec<PostIdent>)| {
+        let mut tree_base = x.0;
+        for postval in x.1 {
+            match postval {
+                PostIdent::Call{args} => {
+                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+                },
+
+                PostIdent::Access{attributes} => {
+                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
+                }
+            }
+        };
+        return tree_base;
+    };
+
+    let node = fmap_iresult(parse_result, map);
+    return node;
+}
+
+fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
+    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
+    let result = alt!(input,
+        map!(post_call, call_to_enum) |
+        map!(post_access, access_to_enum)
+    );
+    return result;
+}
+
+named!(post_call<&[u8], Vec<Expr>>,
+    delimited!(
+        inline_wrapped!(tag!("(")),
+        inline_wrapped!(args_list),
+        inline_wrapped!(tag!(")"))
+    )
+);
+
+named!(post_access<&[u8], Vec<Identifier>>,
+    many1!(
+        preceded!(
+            inline_wrapped!(tag!(".")),
+            identifier_ast
+        )
+    )
+);
+
+///// Parse input into an identifier expression.
+//fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+//    let parse_result = tuple!(input, identifier, many0!(trailer));
+//
+//    let map = |x: (&[u8], Vec<PostIdent>)| {
+//        let mut tree_base = <Expr as From<&[u8]>>::from(x.0);
+//        for postval in x.1 {
+//            match postval {
+//                PostIdent::Call{args} => {
+//                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+//                },
+//
+//                PostIdent::Access{attributes} => {
+//                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
+//                }
+//            }
+//        };
+//        return tree_base;
+//    };
+//
+//    let node = fmap_iresult(parse_result, map);
+//
+//    return node;
+//}
+
+/// Parser to recognize a valid Grace identifier.
+named!(identifier<&[u8], &[u8]>,
+    recognize!(
+        pair!(
+            not!(peek!(reserved_words)),
+            pair!(
+                alt!(alpha | tag!("_")),
+                many0!(alt!(alpha | tag!("_") | digit))
+            )
+        )
+    )
+);
+
+/// Parser to return an Identifier AST.
+fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
+    let parse_result = identifier(input);
+    let node = fmap_iresult(parse_result,  Identifier::from);
+    return node;
+}
+
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
@@ -514,7 +586,8 @@ fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected:
     let res = parser(input.as_bytes());
     match res {
         Done(i, o) => {
-            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\n", from_utf8(i));
+            let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
             assert_eq!(o, expected);
         },
         _ => panic!()
@@ -603,15 +676,15 @@ fn test_function_call() {
 
 #[test]
 fn test_binary_expr() {
-    // check_match("true and false or true", expression_ast, Expr::BinaryExpr{
-    //     operator: BinaryOperator::And, 
-    //     left: Box::new(Expr::Bool(Boolean::True)),
-    //     right:Box::new(Expr::BinaryExpr{
-    //         operator: BinaryOperator::Or, 
-    //         left: Box::new(Expr::Bool(Boolean::False)), 
-    //         right: Box::new(Expr::Bool(Boolean::True))
-    //         })
-    // });
+     check_match("true and false or true", expression_ast, Expr::BinaryExpr{
+         operator: BinaryOperator::And,
+         left: Box::new(Expr::from(true)),
+         right:Box::new(Expr::BinaryExpr{
+             operator: BinaryOperator::Or,
+             left: Box::new(Expr::from(false)),
+             right: Box::new(Expr::from(true))
+         })
+     });
     
     let binary_exprs = expression_ast("true and false,".as_bytes());
     let expected = Expr::BinaryExpr{
@@ -654,9 +727,12 @@ fn test_repeated_func_calls() {
         args: vec!(Expr::from("b"), Expr::from("c"))
     };
     check_match("func(a)(b, c)", expression_ast, expected);
-}
 
-//FunctionCall(func_name: , args: )
+    check_match("(a and b)(true)", expression_ast, Expr::FunctionCall {
+        func_expr: Box::new(output(and_expr_ast("a and b".as_bytes()))),
+        args: vec!(Expr::from(true))
+    });
+}
 
 #[test]
 fn test_dotted_identifier() {
@@ -667,8 +743,8 @@ fn test_dotted_identifier() {
 
 #[test]
 fn test_post_ident() {
-    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(x)).collect();
-    check_match("(a, b, c)", post_identifier, PostIdent::Call{args: expected_args});
+    let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
+    check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args});
 
-    check_match(".asdf_", post_identifier, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
+    check_match(".asdf_", trailer, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
 }

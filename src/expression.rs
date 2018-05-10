@@ -96,8 +96,8 @@ impl Display for Expr {
     }
 }
 impl ASTNode for Expr {}
-impl Expr {
-    pub fn from(input: &str) -> Self{
+impl <'a> From<&'a str> for Expr {
+    fn from(input: &'a str) -> Self{
         return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
     }
 

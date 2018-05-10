@@ -757,5 +757,8 @@ fn test_if_stmt() {
 
 #[test]
 fn test_while_stmt() {
-
+    check_match("while true:\n x=true", |x| statement_ast(x, 0), Stmt::WhileStmt {
+        condition: Expr::from(true),
+        block: Block{statements: vec!(output(assignment_ast("x=true".as_bytes())))}
+    });
 }

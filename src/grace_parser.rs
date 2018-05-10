@@ -4,6 +4,7 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
 use std::fmt::Debug;
+use rand;
 
 
 extern crate nom;
@@ -492,6 +493,8 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let node = alt!(input,
         bool_expr_ast |
+        complete!(float_ast) |
+        complete!(int_ast) |
         expr_with_trailer
     );
     return node;
@@ -591,7 +594,7 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
     return node;
 }
 
-
+// TODO: Use Boolean::from
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(not!(valid_identifier_char))) |
@@ -602,6 +605,38 @@ fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
         Ok("false") => Expr::Bool(Boolean::False),
         _ => panic!(),
     });
+}
+
+fn int_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
+        tuple!(
+            opt!(alt!(tag!("+") | tag!("-"))),
+            many1!(digit)
+        )
+    );
+    return fmap_iresult(parse_result, |x| Expr::Int(IntegerLiteral::from(x)));
+}
+
+fn float_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    // Stolen directly from the nom source. There's a nom function called 'recognize_float',
+    // but it's not public.
+    let parse_result = recognize!(input,
+        tuple!(
+              opt!(alt!(char!('+') | char!('-'))),
+              alt!(
+                    value!((), tuple!(digit, opt!(pair!(char!('.'), opt!(digit)))))
+                  | value!((), tuple!(char!('.'), digit))
+              ),
+              opt!(tuple!(
+                    alt!(char!('e') | char!('E')),
+                    opt!(alt!(char!('+') | char!('-'))),
+                    digit
+                    )
+              )
+        )
+    );
+
+    return fmap_iresult(parse_result, |x| Expr::Float(FloatLiteral::from(x)));
 }
 
 fn read_from_file(f_name: &str) -> String {
@@ -762,7 +797,6 @@ fn test_dotted_identifier() {
     check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
 }
 
-
 #[test]
 fn test_post_ident() {
     let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
@@ -810,4 +844,13 @@ fn test_for_in() {
         iterator: Expr::from("y"),
         block: output(block_ast("a=true".as_bytes(), 0))
     });
+}
+
+#[test]
+fn test_literals() {
+    let int = format!("{}", rand::random::<i64>());
+    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
+
+    let float = format!("{}", rand::random::<f64>());
+    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
 }

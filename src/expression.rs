@@ -79,8 +79,9 @@ pub enum Expr {
     FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>},
     AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
     IdentifierExpr{ident: Identifier},
-    Bool(Boolean)
-
+    Bool(Boolean),
+    Int(IntegerLiteral),
+    Float(FloatLiteral)
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -94,7 +95,8 @@ impl Display for Expr {
             },
             &Expr::AttributeAccess{ref container, ref attributes} => format!("This is an attribute access"), //TODO: make this happen
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
-            &Expr::Bool(b) => b.to_string()
+            &Expr::Bool(b) => b.to_string(),
+            _ => "Not implemented".to_string()
         };
         write!(f, "{}", string_rep.as_str())
     }
@@ -229,8 +231,8 @@ impl Display for Boolean {
     }
 }
 impl ASTNode for Boolean {}
-impl From<bool> for Boolean{
-    fn from(input: bool) -> Self{
+impl From<bool> for Boolean {
+    fn from(input: bool) -> Self {
         return match input {
             true => Boolean::True,
             false => Boolean::False
@@ -238,6 +240,55 @@ impl From<bool> for Boolean{
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegerLiteral {
+    pub string_rep: String
+}
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.string_rep)
+    }
+}
+impl ASTNode for IntegerLiteral {}
+impl From<i64> for IntegerLiteral {
+    fn from(input: i64) -> Self {
+        return IntegerLiteral{string_rep: format!("{}", input)}
+    }
+}
+impl <'a> From<&'a [u8]> for IntegerLiteral {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        return IntegerLiteral{string_rep: val.to_string()};
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FloatLiteral {
+    pub string_rep: String
+}
+impl Display for FloatLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.string_rep)
+    }
+}
+impl ASTNode for FloatLiteral {}
+impl From<f64> for FloatLiteral {
+    fn from(input: f64) -> Self {
+        return FloatLiteral{string_rep: format!("{}", input)}
+    }
+}
+impl <'a> From<&'a [u8]> for FloatLiteral {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        return FloatLiteral{string_rep: val.to_string()};
+    }
+}
 
 #[test]
 fn test_indent() {

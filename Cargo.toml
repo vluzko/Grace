@@ -9,6 +9,7 @@ nom = "~3"
 libc = "*"
 log = "0.4"
 cute = "*"
+rand = "*"
 
 [lib]
 doctest = false

@@ -17,13 +17,13 @@ pub trait ASTNode: Display{}
 /// A block of code. Just a series of statements.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
-    pub statements: Vec<Box<Stmt>>,
+    pub statements: Vec<Stmt>,
 }
 impl Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let statement_iter = self.statements.iter();
         let mapped =
-            statement_iter.map( |x| (*x).to_string());
+            statement_iter.map( |x| x.to_string());
         let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
         write!(f, "Block:\n{}", strings)
     }
@@ -33,13 +33,16 @@ impl ASTNode for Block {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, expression: Expr},
-    IfStmt{condition: Expr, main_block: Box<Block>, elifs: Vec<(Expr, Box<Block>)>, else_block: Option<Box<Block>>},
-    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Box<Block>}
+    IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
+    WhileStmt{condition: Expr, block: Block},
+    ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
+    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block}
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
             &Stmt::AssignmentStmt{ref identifier, ref expression} => format!("Assignment:\n Name: {} Expression: {}", identifier, expression),
+            &Stmt::WhileStmt {ref condition, ref block} => format!("While statement:\n  Condition: {}\n{}", condition, indent_block(block.to_string())),
             &Stmt::IfStmt{ref condition, ref main_block, ref elifs, ref else_block} => {
                 let elifs_iter = elifs.iter();
                 let mapped = elifs_iter.map( |x| (*x).1.to_string());
@@ -60,7 +63,8 @@ impl Display for Stmt {
                 let args_string = arg_iter.collect::<Vec<_>>().join(", ");
 
                 format!("Function declaration:\n  Name: {}\n  Args: {}\n{}", name, args_string, indent_block(body.to_string()))
-            }
+            },
+            _ => "Not implemented".to_string()
         };
         write!(f, "{}", string_rep.as_str())
     }
@@ -75,8 +79,10 @@ pub enum Expr {
     FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>},
     AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
     IdentifierExpr{ident: Identifier},
-    Bool(Boolean)
-
+    Bool(Boolean),
+    Int(IntegerLiteral),
+    Float(FloatLiteral),
+    String(String)
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -90,17 +96,17 @@ impl Display for Expr {
             },
             &Expr::AttributeAccess{ref container, ref attributes} => format!("This is an attribute access"), //TODO: make this happen
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
-            &Expr::Bool(b) => b.to_string()
+            &Expr::Bool(b) => b.to_string(),
+            _ => "Not implemented".to_string()
         };
         write!(f, "{}", string_rep.as_str())
     }
 }
 impl ASTNode for Expr {}
 impl <'a> From<&'a str> for Expr {
-    fn from(input: &'a str) -> Self{
-        return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    fn from(input: &'a str) -> Self {
+        return Expr::IdentifierExpr{ident: Identifier::from(input)};
     }
-
 }
 impl From<bool> for Expr {
     fn from(input: bool) -> Self {
@@ -140,7 +146,11 @@ impl Display for Identifier {
     }
 }
 impl ASTNode for Identifier {}
-
+impl <'a> From<&'a str> for Identifier {
+    fn from(input: &'a str) -> Self {
+        return Identifier{name: input.to_string()};
+    }
+}
 impl <'a> From<&'a [u8]> for Identifier {
     fn from(input: &'a [u8]) -> Self {
         let val = match from_utf8(input) {
@@ -222,8 +232,8 @@ impl Display for Boolean {
     }
 }
 impl ASTNode for Boolean {}
-impl From<bool> for Boolean{
-    fn from(input: bool) -> Self{
+impl From<bool> for Boolean {
+    fn from(input: bool) -> Self {
         return match input {
             true => Boolean::True,
             false => Boolean::False
@@ -231,6 +241,55 @@ impl From<bool> for Boolean{
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IntegerLiteral {
+    pub string_rep: String
+}
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.string_rep)
+    }
+}
+impl ASTNode for IntegerLiteral {}
+impl From<i64> for IntegerLiteral {
+    fn from(input: i64) -> Self {
+        return IntegerLiteral{string_rep: format!("{}", input)}
+    }
+}
+impl <'a> From<&'a [u8]> for IntegerLiteral {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        return IntegerLiteral{string_rep: val.to_string()};
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FloatLiteral {
+    pub string_rep: String
+}
+impl Display for FloatLiteral {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.string_rep)
+    }
+}
+impl ASTNode for FloatLiteral {}
+impl From<f64> for FloatLiteral {
+    fn from(input: f64) -> Self {
+        return FloatLiteral{string_rep: format!("{}", input)}
+    }
+}
+impl <'a> From<&'a [u8]> for FloatLiteral {
+    fn from(input: &'a [u8]) -> Self {
+        let val = match from_utf8(input) {
+            Ok(v) => v,
+            _ => panic!()
+        };
+        return FloatLiteral{string_rep: val.to_string()};
+    }
+}
 
 #[test]
 fn test_indent() {

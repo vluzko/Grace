@@ -17,13 +17,13 @@ pub trait ASTNode: Display{}
 /// A block of code. Just a series of statements.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
-    pub statements: Vec<Box<Stmt>>,
+    pub statements: Vec<Stmt>,
 }
 impl Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let statement_iter = self.statements.iter();
         let mapped =
-            statement_iter.map( |x| (*x).to_string());
+            statement_iter.map( |x| x.to_string());
         let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
         write!(f, "Block:\n{}", strings)
     }
@@ -33,13 +33,15 @@ impl ASTNode for Block {}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, expression: Expr},
-    IfStmt{condition: Expr, main_block: Box<Block>, elifs: Vec<(Expr, Box<Block>)>, else_block: Option<Box<Block>>},
-    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Box<Block>}
+    IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
+    WhileStmt{condition: Expr, block: Block},
+    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block}
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
             &Stmt::AssignmentStmt{ref identifier, ref expression} => format!("Assignment:\n Name: {} Expression: {}", identifier, expression),
+            &Stmt::WhileStmt {ref condition, ref block} => format!("While statement:\n  Condition: {}\n{}", condition, indent_block(block.to_string())),
             &Stmt::IfStmt{ref condition, ref main_block, ref elifs, ref else_block} => {
                 let elifs_iter = elifs.iter();
                 let mapped = elifs_iter.map( |x| (*x).1.to_string());

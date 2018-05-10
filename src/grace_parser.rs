@@ -414,22 +414,20 @@ named!(args_list<&[u8], Vec<Expr>>,
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
-    let parsed = separated_nonempty_list_complete!(input,
+    let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(".")),
         identifier
     );
 
-    return match parsed {
-        Done(i, o) => {
-            let attributes: Vec<String> = o.iter().map(|x| match from_utf8(x) {
-                Ok(i) => i.to_string(),
-                _ => panic!()
-            }).collect::<Vec<String>>();
-            Done(i, DottedIdentifier{attributes})
-        },
-        IResult::Incomplete(n) => panic!(),
-        IResult::Error(e) => panic!()
+    let map = |x: Vec<&[u8]>| {
+        let attributes = x.iter().map(|y| match from_utf8(y) {
+            Ok(i) => i.to_string(),
+            _ => panic!()
+        }).collect();
+        return DottedIdentifier{attributes: attributes};
     };
+
+    return fmap_iresult(parse_result, map);
 }
 
 fn atomic_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {

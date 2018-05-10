@@ -107,7 +107,7 @@ macro_rules! inline_wrapped(
   );
 );
 
-macro_rules! keyword (
+macro_rules! inline_keyword (
   ($i:expr, $f:expr) => (
     {
       delimited!($i, inline_whitespace, tag!($f), many1!(inline_whitespace_char))
@@ -382,7 +382,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         or_expr_ast,
         opt!(complete!(preceded!(
-            keyword!("and"),
+            inline_keyword!("and"),
             and_expr_ast
         )))
     );
@@ -395,7 +395,7 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         atomic_expr_ast,
         opt!(complete!(preceded!(
-            keyword!("or"),
+            inline_keyword!("or"),
             or_expr_ast
         )))
     );

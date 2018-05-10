@@ -267,15 +267,16 @@ fn if_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let parse_result = tuple!(
         input,
         tag!("if"),
-        inline_wrapped!(and_expr_ast),
-        tag!(":"),
+        many1!(inline_whitespace_char),
+        inline_wrapped!(expression_ast),
+        inline_wrapped!(tag!(":")),
         newline,
         call!(block_ast, indent + 1),
         many0!(call!(elif_rule, indent)),
         opt!(complete!(call!(else_rule, indent)))
     );
 
-    let node = fmap_iresult(parse_result, |x|Stmt::IfStmt{condition: x.1, main_block: x.4, elifs: x.5, else_block: x.6});
+    let node = fmap_iresult(parse_result, |x|Stmt::IfStmt{condition: x.2, main_block: x.5, elifs: x.6, else_block: x.7});
 
     return node;
 }
@@ -284,13 +285,14 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Block)> {
     let parse_result = tuple!(
         input,
         indented!(tag!("elif"), indent),
+        many1!(inline_whitespace_char),
         inline_wrapped!(and_expr_ast),
-        tag!(":"),
+        inline_wrapped!(tag!(":")),
         newline,
         call!(block_ast, indent + 1)
     );
 
-    let node = fmap_iresult(parse_result, |x| (x.1, x.4));
+    let node = fmap_iresult(parse_result, |x| (x.2, x.5));
     return node;
 }
 
@@ -298,7 +300,7 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
     let parse_result = tuple!(
         input,
         indented!(tag!("else"), indent),
-        tag!(":"),
+        inline_wrapped!(tag!(":")),
         newline,
         call!(block_ast, indent + 1)
     );
@@ -735,4 +737,25 @@ fn test_post_ident() {
     check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args});
 
     check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+}
+
+#[test]
+fn test_if_stmt() {
+    let good_input = "if (a and b):\n x = true";
+
+    let good_output = Stmt::IfStmt{
+        condition: output(expression_ast("a and b".as_bytes())),
+        main_block: Block{statements: vec!(output(assignment_ast("x = true".as_bytes())))},
+        elifs: vec!(),
+        else_block: None
+    };
+
+    check_match(good_input, |x| statement_ast(x, 0), good_output);
+
+    check_failed("ifa and b:\n x = true", |x| statement_ast(x, 0), nom::ErrorKind::Alt);
+}
+
+#[test]
+fn test_while_stmt() {
+
 }

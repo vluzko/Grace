@@ -97,10 +97,9 @@ impl Display for Expr {
 }
 impl ASTNode for Expr {}
 impl <'a> From<&'a str> for Expr {
-    fn from(input: &'a str) -> Self{
-        return Expr::IdentifierExpr{ident:Identifier{name: input.to_string()}};
+    fn from(input: &'a str) -> Self {
+        return Expr::IdentifierExpr{ident: Identifier::from(input)};
     }
-
 }
 impl From<bool> for Expr {
     fn from(input: bool) -> Self {
@@ -140,7 +139,11 @@ impl Display for Identifier {
     }
 }
 impl ASTNode for Identifier {}
-
+impl <'a> From<&'a str> for Identifier {
+    fn from(input: &'a str) -> Self {
+        return Identifier{name: input.to_string()};
+    }
+}
 impl <'a> From<&'a [u8]> for Identifier {
     fn from(input: &'a [u8]) -> Self {
         let val = match from_utf8(input) {

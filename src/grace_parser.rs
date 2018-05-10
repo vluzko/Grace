@@ -510,32 +510,6 @@ named!(post_access<&[u8], Vec<Identifier>>,
     )
 );
 
-///// Parse input into an identifier expression.
-//fn identifier_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-//    let parse_result = tuple!(input, identifier, many0!(trailer));
-//
-//    let map = |x: (&[u8], Vec<PostIdent>)| {
-//        let mut tree_base = <Expr as From<&[u8]>>::from(x.0);
-//        for postval in x.1 {
-//            match postval {
-//                PostIdent::Call{args} => {
-//                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
-//                },
-//
-//                PostIdent::Access{attributes} => {
-//                    tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
-//                }
-//            }
-//        };
-//        return tree_base;
-//    };
-//
-//    let node = fmap_iresult(parse_result, map);
-//
-//    return node;
-//}
-
-
 named!(valid_identifier_char<&[u8], &[u8]>,
     alt!(alpha | tag!("_") | digit)
 );
@@ -748,5 +722,5 @@ fn test_post_ident() {
     let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
     check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args});
 
-    check_match(".asdf_", trailer, PostIdent::Access{attributes: vec!(Identifier{name: "asdf_".to_string()})});
+    check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
 }

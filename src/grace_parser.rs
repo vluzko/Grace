@@ -535,6 +535,11 @@ named!(post_access<&[u8], Vec<Identifier>>,
 //    return node;
 //}
 
+
+named!(valid_identifier_char<&[u8], &[u8]>,
+    alt!(alpha | tag!("_") | digit)
+);
+
 /// Parser to recognize a valid Grace identifier.
 named!(identifier<&[u8], &[u8]>,
     recognize!(
@@ -542,7 +547,7 @@ named!(identifier<&[u8], &[u8]>,
             not!(peek!(reserved_words)),
             pair!(
                 alt!(alpha | tag!("_")),
-                many0!(alt!(alpha | tag!("_") | digit))
+                many0!(valid_identifier_char)
             )
         )
     )
@@ -558,8 +563,8 @@ fn identifier_ast(input: &[u8]) -> IResult<&[u8], Identifier> {
 
 fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result= alt!(input,
-        terminated!(tag!("true"), peek!(follow_value)) |
-        terminated!(tag!("false"), peek!(follow_value))
+        terminated!(tag!("true"), peek!(not!(valid_identifier_char))) |
+        terminated!(tag!("false"), peek!(not!(valid_identifier_char)))
     );
     return fmap_iresult(parse_result, |x| match from_utf8(x) {
         Ok("true") => Expr::Bool(Boolean::True),

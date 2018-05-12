@@ -112,23 +112,19 @@ macro_rules! inline_wrapped(
   );
 );
 
-/// Matches a keyword at the beginning of a line.
-/// Used for "if", "elif", "else", "for", "while", etc.
-macro_rules! opening_keyword (
-  ($i:expr, $f:expr) => (
-    {
-      terminated!($i, tag!($f), many1!(inline_whitespace_char))
-    }
-  );
+named!(valid_identifier_char<&[u8], &[u8]>,
+    alt!(alpha | tag!("_") | digit)
 );
-
 
 /// Matches a keyword within a line.
 /// Used for "and", "or", "xor", "in", etc.
 macro_rules! inline_keyword (
   ($i:expr, $f:expr) => (
     {
-      delimited!($i, inline_whitespace, tag!($f), many1!(inline_whitespace_char))
+      delimited!($i,
+        inline_whitespace,
+        tag!($f),
+        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
     }
   );
 );
@@ -149,10 +145,6 @@ named!(ending_colon <&[u8], &[u8]>,
         inline_wrapped!(tag!(":")),
         newline
     )
-);
-
-named!(whitespace_char<&[u8], &[u8]>,
-    alt!(custom_eof | tag!("\n") | tag!(" "))
 );
 
 named!(inline_whitespace_char<&[u8], &[u8]>,
@@ -243,10 +235,6 @@ fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return alt!(input, custom_eof | tag!("\n"));
 }
 
-named!(follow_value<&[u8], &[u8]>,
-    alt!(whitespace_char | tag!(":") | tag!(",") | tag!(")"))
-);
-
 fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let node = alt!(input,
         assignment_ast |
@@ -263,22 +251,21 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
 fn while_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let parse_result = tuple!(
         input,
-        tag!("while"),
-        many1!(inline_whitespace_char),
+        tag!("while "),
         inline_wrapped!(expression_ast),
         tag!(":"),
         newline,
         call!(block_ast, indent+1)
     );
 
-    return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.2, block: x.5});
+    return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.1, block: x.4});
 }
 
 // Parse a for in loop.
 fn for_in_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let parse_result = tuple!(input,
         delimited!(
-            opening_keyword!("for"),
+            tag!("for "),
             inline_wrapped!(identifier_ast),
             inline_keyword!("in")
         ),
@@ -557,10 +544,6 @@ named!(post_access<&[u8], Vec<Identifier>>,
     )
 );
 
-named!(valid_identifier_char<&[u8], &[u8]>,
-    alt!(alpha | tag!("_") | digit)
-);
-
 /// Parser to recognize a valid Grace identifier.
 named!(identifier<&[u8], &[u8]>,
     recognize!(
@@ -688,26 +671,15 @@ fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected
 }
 
 // #[test]
-fn basic_file_test() {
-    let contents = read_from_file("simple_grace");
-    let result = parse_grace(contents.as_str());
-
-    match result {
-        Done(_, o) => println!("{}", (*o).to_string()),
-        _ => panic!()
-    }
-}
-
-// #[test]
-fn small_file_test() {
-    let contents = read_from_file("small_grace");
-    let result = parse_grace(contents.as_str());
-
-    match result {
-        Done(_, o) => println!("{}", (*o).to_string()),
-        _ => panic!()
-    }
-}
+//fn basic_file_test() {
+//    let contents = read_from_file("simple_grace");
+//    let result = parse_grace(contents.as_str());
+//
+//    match result {
+//        Done(_, o) => println!("{}", (*o).to_string()),
+//        _ => panic!()
+//    }
+//}
 
 #[test]
 fn test_literals() {
@@ -767,7 +739,7 @@ fn test_binary_expr() {
              right: Box::new(Expr::from(true))
          })
      });
-    
+
     let binary_exprs = expression_ast("true and false,".as_bytes());
     let expected = Expr::BinaryExpr{
         operator: BinaryOperator::And, 

@@ -411,6 +411,7 @@ fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+// TODO: Maybe abstract these out?
 fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         or_expr_ast,
@@ -426,7 +427,7 @@ fn and_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 
 fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
-        atomic_expr_ast,
+        xor_expr_ast,
         opt!(complete!(preceded!(
             inline_keyword!("or"),
             or_expr_ast
@@ -437,6 +438,20 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     return node;
 }
 
+fn xor_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        atomic_expr_ast,
+        opt!(complete!(preceded!(
+            inline_keyword!("xor"),
+            xor_expr_ast
+        )))
+    );
+
+    let node = fmap_iresult(parse_result, |x| match_binary_expr(BinaryOperator::Xor, x));
+    return node;
+}
+
+// TODO: Use everywhere
 named!(args_list<&[u8], Vec<Expr>>,
     separated_list_complete!(
         inline_wrapped!(tag!(",")), 
@@ -747,6 +762,11 @@ fn test_binary_expr() {
         right:Box::new(Expr::Bool(Boolean::False))
     };
     assert_eq!(binary_exprs, Done(",".as_bytes(), expected));
+
+    check_match("x xor y", expression_ast, Expr::BinaryExpr {
+        operator: BinaryOperator::Xor,
+        left: Box::new(Expr::from("x")),
+        right: Box::new(Expr::from("y"))});
 }
 
 #[test]

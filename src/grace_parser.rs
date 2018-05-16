@@ -463,6 +463,16 @@ fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> E
     };
 }
 
+fn match_unary_exprs(operators: &HashMap<&[u8], UnaryOperator>, output: (Option<&[u8]>, Expr)) -> Expr {
+    return match output.0 {
+        Some(x) => {
+            let op: UnaryOperator = *operators.get(x).unwrap();
+            Expr::UnaryExpr {operator: op, operand: Box::new(output.1)}
+        },
+        None => output.1
+    };
+}
+
 fn comparison_ast(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         and_expr_ast,
@@ -507,12 +517,12 @@ fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u
 }
 
 /// Match a binary expression whose operator is a keyword.
-fn binary_keyword_matcher<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
+fn binary_op_keyword<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
         next_expr,
         opt!(complete!(preceded!(
             inline_keyword!(symbol),
-            call!(binary_keyword_matcher, symbol, operator, next_expr)
+            call!(binary_op_keyword, symbol, operator, next_expr)
         )))
     );
 
@@ -521,12 +531,12 @@ fn binary_keyword_matcher<'a>(input: &'a [u8], symbol: &str, operator: BinaryOpe
 }
 
 /// Match a binary expression whose operator is a symbol.
-fn binary_symbol_matcher<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
+fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
         next_expr,
         opt!(complete!(preceded!(
             inline_wrapped!(tag!(symbol)),
-            call!(binary_symbol_matcher, symbol, operator, next_expr)
+            call!(binary_op_symbol, symbol, operator, next_expr)
         )))
     );
 
@@ -534,12 +544,12 @@ fn binary_symbol_matcher<'a>(input: &'a [u8], symbol: &str, operator: BinaryOper
     return node;
 }
 
-fn match_binary_operator_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
+fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
         next_expr,
         opt!(tuple!(
             inline_wrapped!(call!(match_any, symbols)),
-            call!(match_binary_operator_list, symbols, operators, next_expr)
+            call!(binary_op_list, symbols, operators, next_expr)
         ))
     );
 
@@ -549,45 +559,45 @@ fn match_binary_operator_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operator
 
 // TODO: Maybe abstract these out?
 fn and_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_keyword_matcher(input, "and", BinaryOperator::And, or_expr_ast);
+    return binary_op_keyword(input, "and", BinaryOperator::And, or_expr_ast);
 }
 
 fn or_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_keyword_matcher(input, "or", BinaryOperator::Or, xor_expr_ast);
+    return binary_op_keyword(input, "or", BinaryOperator::Or, xor_expr_ast);
 }
 
 fn xor_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_keyword_matcher(input, "xor", BinaryOperator::Xor, bit_or);
+    return binary_op_keyword(input, "xor", BinaryOperator::Xor, bit_or);
 }
 
 fn bit_or(input: &[u8]) -> ExprRes {
-    return binary_symbol_matcher(input, "|",BinaryOperator::BitOr, bit_and);
+    return binary_op_symbol(input, "|", BinaryOperator::BitOr, bit_and);
 }
 
 fn bit_and(input: &[u8]) -> ExprRes {
-    return binary_symbol_matcher(input, "&",BinaryOperator::BitAnd, bit_xor);
+    return binary_op_symbol(input, "&", BinaryOperator::BitAnd, bit_xor);
 }
 
 fn bit_xor(input: &[u8]) -> ExprRes {
-    return binary_symbol_matcher(input, "^",BinaryOperator::BitXor, bit_shift);
+    return binary_op_symbol(input, "^", BinaryOperator::BitXor, bit_shift);
 }
 
 fn bit_shift(input: &[u8]) -> ExprRes {
     let symbols = vec![">>", "<<"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return match_binary_operator_list(input, &symbols, &operators, addition_expr_ast);
+    return binary_op_list(input, &symbols, &operators, addition_expr_ast);
 }
 
 fn addition_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["+", "-"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return match_binary_operator_list(input, &symbols, &operators, mult_expr_ast);
+    return binary_op_list(input, &symbols, &operators, mult_expr_ast);
 }
 
 fn mult_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["*", "/", "%"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return match_binary_operator_list(input, &symbols, &operators, not_expr);
+    return binary_op_list(input, &symbols, &operators, not_expr);
 }
 
 /// Match a not expression.

@@ -783,17 +783,6 @@ fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected
     }
 }
 
-// #[test]
-//fn basic_file_test() {
-//    let contents = read_from_file("simple_grace");
-//    let result = parse_grace(contents.as_str());
-//
-//    match result {
-//        Done(_, o) => println!("{}", (*o).to_string()),
-//        _ => panic!()
-//    }
-//}
-
 #[test]
 fn test_literals() {
     let int = format!("{}", rand::random::<i64>());

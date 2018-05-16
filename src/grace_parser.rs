@@ -569,7 +569,13 @@ fn bit_and(input: &[u8]) -> ExprRes {
 }
 
 fn bit_xor(input: &[u8]) -> ExprRes {
-    return binary_symbol_matcher(input, "^",BinaryOperator::BitXor, addition_expr_ast);
+    return binary_symbol_matcher(input, "^",BinaryOperator::BitXor, bit_shift);
+}
+
+fn bit_shift(input: &[u8]) -> ExprRes {
+    let symbols = vec![">>", "<<"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return match_binary_operator_list(input, &symbols, &operators, addition_expr_ast);
 }
 
 fn addition_expr_ast(input: &[u8]) -> ExprRes {
@@ -885,7 +891,7 @@ fn test_function_call() {
 
 #[test]
 fn test_binary_expr() {
-     check_match("true and false or true", expression_ast, Expr::BinaryExpr{
+    check_match("true and false or true", expression_ast, Expr::BinaryExpr{
          operator: BinaryOperator::And,
          left: Box::new(Expr::from(true)),
          right:Box::new(Expr::BinaryExpr{
@@ -895,37 +901,15 @@ fn test_binary_expr() {
          })
      });
 
-    let binary_exprs = expression_ast("true and false,".as_bytes());
-    let expected = Expr::BinaryExpr{
-        operator: BinaryOperator::And, 
-        left: Box::new(Expr::Bool(Boolean::True)),
-        right:Box::new(Expr::Bool(Boolean::False))
-    };
-    assert_eq!(binary_exprs, Done(",".as_bytes(), expected));
-
-    check_match("x xor y", expression_ast, Expr::BinaryExpr {
-        operator: BinaryOperator::Xor,
-        left: Box::new(Expr::from("x")),
-        right: Box::new(Expr::from("y"))});
-
-
-    check_match("x + y", expression_ast, Expr::BinaryExpr {
-        operator: BinaryOperator::Add,
-        left: Box::new(Expr::from("x")),
-        right: Box::new(Expr::from("y")),
-    });
-
-    check_match("x * y", expression_ast, Expr::BinaryExpr {
-        operator: BinaryOperator::Mult,
-        left: Box::new(Expr::from("x")),
-        right: Box::new(Expr::from("y")),
-    });
-
-    check_match("x / y", expression_ast, Expr::BinaryExpr {
-        operator: BinaryOperator::Div,
-        left: Box::new(Expr::from("x")),
-        right: Box::new(Expr::from("y")),
-    });
+    let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<"];
+    for op in all_ops {
+        let input = format!("x {} y", op);
+        check_match(input.as_str(), expression_ast, Expr::BinaryExpr {
+            operator: BinaryOperator::from(op),
+            left: Box::new(Expr::from("x")),
+            right: Box::new(Expr::from("y")),
+        });
+    }
 }
 
 #[test]

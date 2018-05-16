@@ -249,7 +249,11 @@ impl<'a> From<&'a str> for BinaryOperator {
             "^" => BinaryOperator::BitXor,
             "<<" => BinaryOperator::BitShiftL,
             ">>" => BinaryOperator::BitShiftR,
-            _ => panic!()
+            _ => {
+                // TODO: Log
+                println!("Bad input to BinaryOperator::from<&str>: {}", input);
+                panic!()
+            }
         };
     }
 }

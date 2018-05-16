@@ -263,13 +263,29 @@ impl<'a> From<&'a str> for BinaryOperator {
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum UnaryOperator {
     Not,
+    Positive,
+    Negative,
+    BitNot
 }
 impl Display for UnaryOperator{
-
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
             &UnaryOperator::Not => "not",
+            &UnaryOperator::Positive => "+",
+            &UnaryOperator::Negative => "-",
+            &UnaryOperator::BitNot => "~",
         })
+    }
+}
+impl <'a> From<&'a str> for UnaryOperator {
+    fn from(input: &'a str) -> Self {
+        return match input {
+            "not" => UnaryOperator::Not,
+            "+" => UnaryOperator::Positive,
+            "-" => UnaryOperator::Negative,
+            "~" => UnaryOperator::BitNot,
+            _ => panic!()
+        };
     }
 }
 

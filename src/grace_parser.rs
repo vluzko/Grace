@@ -463,16 +463,6 @@ fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> E
     };
 }
 
-fn match_unary_exprs(operators: &HashMap<&[u8], UnaryOperator>, output: (Option<&[u8]>, Expr)) -> Expr {
-    return match output.0 {
-        Some(x) => {
-            let op: UnaryOperator = *operators.get(x).unwrap();
-            Expr::UnaryExpr {operator: op, operand: Box::new(output.1)}
-        },
-        None => output.1
-    };
-}
-
 fn comparison_ast(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         and_expr_ast,
@@ -602,12 +592,72 @@ fn mult_expr_ast(input: &[u8]) -> ExprRes {
 
 /// Match a not expression.
 fn not_expr(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        opt!(inline_keyword!("not")),
-        atomic_expr_ast
+    let parse_result = alt!(input,
+        tuple!(
+            map!(inline_keyword!("not"), Some),
+            not_expr
+        ) |
+        tuple!(
+            value!(None, tag!("")),
+            positive
+        )
     );
 
     return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
+}
+
+/// Parse a positive expression. Does not match -int or -float
+fn positive(input: &[u8]) -> ExprRes {
+    let parse_result = alt!(input,
+        tuple!(
+            map!(
+                terminated!(inline_wrapped!(tag!("+")), not!(alt!(dec_digit | tag!(".")))),
+                Some
+            ),
+            positive
+        ) |
+        tuple!(
+            value!(None, tag!("")),
+            negative
+        )
+    );
+
+    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Positive, o));
+//    return unary_op_symbol(input, "+", UnaryOperator::Positive, negative);
+}
+
+/// Parse a negated expression. Does not match -int or -float
+fn negative(input: &[u8]) -> ExprRes {
+    let parse_result = alt!(input,
+        tuple!(
+            map!(
+                terminated!(inline_wrapped!(tag!("-")), not!(alt!(dec_digit | tag!(".")))),
+                Some
+            ),
+            negative
+        ) |
+        tuple!(
+            value!(None, tag!("")),
+            bit_not
+        )
+    );
+
+    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Negative, o));
+}
+
+fn bit_not(input: &[u8]) -> ExprRes {
+    let parse_result = alt!(input,
+        tuple!(
+            map!(inline_wrapped!(tag!("~")), Some),
+            bit_not
+        ) |
+        tuple!(
+            value!(None, tag!("")),
+            atomic_expr_ast
+        )
+    );
+
+    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::BitNot, o));
 }
 
 // TODO: Use everywhere
@@ -924,6 +974,14 @@ fn test_binary_expr() {
 
 #[test]
 fn test_unary_expr() {
+    let ops = vec!["not", "+", "-", "~"];
+    for op in ops {
+        let input = format!("{} y", op);
+        check_match(input.as_str(), expression_ast, Expr::UnaryExpr {
+            operator: UnaryOperator::from(op),
+            operand: Box::new(Expr::from("y")),
+        });
+    }
     check_match("not true", expression_ast, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Expr::from(true))});
 }
 

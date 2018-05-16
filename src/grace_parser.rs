@@ -555,17 +555,19 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn xor_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    return binary_keyword_matcher(input, "xor", BinaryOperator::Xor, not_expr);
+    return binary_keyword_matcher(input, "xor", BinaryOperator::Xor, bit_or);
 }
 
-/// Match a not expression.
-fn not_expr(input: &[u8]) -> IResult<&[u8], Expr> {
-    let parse_result = tuple!(input,
-        opt!(inline_keyword!("not")),
-        addition_expr_ast
-    );
+fn bit_or(input: &[u8]) -> IResult<&[u8], Expr> {
+    return binary_symbol_matcher(input, "|",BinaryOperator::BitOr, bit_and);
+}
 
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
+fn bit_and(input: &[u8]) -> IResult<&[u8], Expr> {
+    return binary_symbol_matcher(input, "&",BinaryOperator::BitAnd, bit_xor);
+}
+
+fn bit_xor(input: &[u8]) -> IResult<&[u8], Expr> {
+    return binary_symbol_matcher(input, "^",BinaryOperator::BitXor, addition_expr_ast);
 }
 
 fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -577,7 +579,17 @@ fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 fn mult_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let symbols = vec!["*", "/", "%"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return match_binary_operator_list(input, &symbols, &operators, atomic_expr_ast);
+    return match_binary_operator_list(input, &symbols, &operators, not_expr);
+}
+
+/// Match a not expression.
+fn not_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        opt!(inline_keyword!("not")),
+        atomic_expr_ast
+    );
+
+    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
 }
 
 // TODO: Use everywhere

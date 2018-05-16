@@ -164,6 +164,22 @@ impl <'a> From<&'a [u8]> for Identifier {
     }
 }
 
+/// An assignment
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Assignment {
+    Normal,
+    Add,
+    Mult,
+    Div,
+    Sub,
+    Mod,
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitShiftL,
+    BitShiftR,
+}
+
 /// Any comparator
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum ComparisonOperator {
@@ -174,7 +190,6 @@ pub enum ComparisonOperator {
     GreaterEqual,
     LessEqual
 }
-
 impl Display for ComparisonOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
@@ -188,11 +203,15 @@ pub enum BinaryOperator {
     And,
     Xor,
     Add,
-    Mult,
     Sub,
+    Mult,
     Div,
     Mod,
-
+    BitAnd,
+    BitOr,
+    BitXor,
+    BitShiftL,
+    BitShiftR
 }
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -200,7 +219,16 @@ impl Display for BinaryOperator {
             &BinaryOperator::Or => "or",
             &BinaryOperator::And => "and",
             &BinaryOperator::Xor => "xor",
-            _ => ""
+            &BinaryOperator::Add => "+",
+            &BinaryOperator::Sub => "-",
+            &BinaryOperator::Mult=> "*",
+            &BinaryOperator::Div => "/",
+            &BinaryOperator::Mod => "%",
+            &BinaryOperator::BitAnd => "&",
+            &BinaryOperator::BitOr => "|",
+            &BinaryOperator::BitXor => "^",
+            &BinaryOperator::BitShiftL => "<<",
+            &BinaryOperator::BitShiftR => ">>",
         })
     }
 }
@@ -234,7 +262,6 @@ impl Display for Boolean {
         })
     }
 }
-impl ASTNode for Boolean {}
 impl From<bool> for Boolean {
     fn from(input: bool) -> Self {
         return match input {
@@ -298,9 +325,4 @@ impl <'a> From<&'a [u8]> for FloatLiteral {
 fn test_indent() {
     let block = "Block:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
     assert_eq!(indent_block(block), "  Block:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
-}
-
-#[test]
-fn test_expr_from() {
-    assert_eq!(<Expr as From<&[u8]>>::from("asdf".as_bytes()), Expr::IdentifierExpr {ident: Identifier{name: "asdf".to_string()}});
 }

@@ -8,6 +8,7 @@ use std::collections::HashMap;
 use rand;
 
 
+extern crate cute;
 extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
@@ -157,6 +158,43 @@ named!(inline_whitespace<&[u8], Vec<&[u8]>>,
     many0!(tag!(" "))
 );
 
+named!(num_follow<&[u8], &[u8]> ,
+    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":")))
+);
+
+named!(dec_digit<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("0") |
+        tag!("1") |
+        tag!("2") |
+        tag!("3") |
+        tag!("4") |
+        tag!("5") |
+        tag!("6") |
+        tag!("7") |
+        tag!("8") |
+        tag!("9")
+    ))
+);
+
+named!(dec_seq<&[u8], &[u8]>,
+    recognize!(many1!(dec_digit))
+);
+
+named!(sign<&[u8], &[u8]>,
+    recognize!(alt!(tag!("+") | tag!("-")))
+);
+
+named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
+    preceded!(
+        alt!(tag!("e") | tag!("E")),
+        tuple!(
+            opt!(sign),
+            dec_seq
+        )
+    )
+);
+
 fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     let n = many0!(input,
         terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
@@ -263,7 +301,7 @@ fn while_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.1, block: x.4});
 }
 
-// Parse a for in loop.
+/// Parse a for in loop.
 fn for_in_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     let parse_result = tuple!(input,
         delimited!(
@@ -346,6 +384,23 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt>
     return node;
 }
 
+named!(assignments<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("=") |
+        tag!("+=") |
+        tag!("-=") |
+        tag!("*=") |
+        tag!("/=") |
+        tag!("%=") |
+        tag!("**=") |
+        tag!("&=") |
+        tag!("|=") |
+        tag!("^=") |
+        tag!(">>=") |
+        tag!("<<=")
+    ))
+);
+
 fn assignment_ast(input: &[u8]) -> IResult<&[u8], Stmt> {
     let parse_result = terminated!(input, tuple!(
         identifier_ast,
@@ -376,7 +431,6 @@ named!(comparisons<&[u8], &[u8]>,
         tag!(">")
     ))
 );
-
 
 fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
     return match output.1 {
@@ -490,7 +544,23 @@ fn or_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn xor_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    return binary_keyword_matcher(input, "xor", BinaryOperator::Xor, addition_expr_ast);
+    return binary_keyword_matcher(input, "xor", BinaryOperator::Xor, not_expr);
+}
+
+/// Match a not expression.
+fn not_expr(input: &[u8]) -> IResult<&[u8], Expr> {
+    let parse_result = tuple!(input,
+        opt!(inline_keyword!("not")),
+        addition_expr_ast
+    );
+
+    return fmap_iresult(parse_result, |o| match o.0 {
+        Some(k) => {
+            assert_eq!(k, "not".as_bytes());
+            Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(o.1)}
+        },
+        None => o.1
+    });
 }
 
 fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -498,9 +568,9 @@ fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn mult_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    let mut operators = HashMap::new();
-    operators.insert("*".as_bytes(), BinaryOperator::Mult);
-    operators.insert("/".as_bytes(), BinaryOperator::Div);
+    let symb = vec!["*", "/", "%"];
+    let ops = vec![BinaryOperator::Mult, BinaryOperator::Div, BinaryOperator::Mod];
+    let operators = c!{k => v, for (k, v) in vec![("*".as_bytes(), BinaryOperator::Mult), ("/".as_bytes(), BinaryOperator::Div)]};
     return match_binary_operator_list(input, &vec!["*", "/"], &operators, atomic_expr_ast);
 }
 
@@ -645,10 +715,6 @@ fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     });
 }
 
-named!(num_follow<&[u8], &[u8]> ,
-    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":")))
-);
-
 // TODO: Hex encoded, byte encoded
 // TODO:
 fn int_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -663,39 +729,6 @@ fn int_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     );
     return fmap_iresult(parse_result, |x| Expr::Int(IntegerLiteral::from(x)));
 }
-
-named!(dec_digit<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("0") |
-        tag!("1") |
-        tag!("2") |
-        tag!("3") |
-        tag!("4") |
-        tag!("5") |
-        tag!("6") |
-        tag!("7") |
-        tag!("8") |
-        tag!("9")
-    ))
-);
-
-named!(dec_seq<&[u8], &[u8]>,
-    recognize!(many1!(dec_digit))
-);
-
-named!(sign<&[u8], &[u8]>,
-    recognize!(alt!(tag!("+") | tag!("-")))
-);
-
-named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
-    preceded!(
-        alt!(tag!("e") | tag!("E")),
-        tuple!(
-            opt!(sign),
-            dec_seq
-        )
-    )
-);
 
 fn float_ast<'a>(input: &'a[u8]) -> IResult<&[u8], Expr> {
 
@@ -873,6 +906,11 @@ fn test_binary_expr() {
         left: Box::new(Expr::from("x")),
         right: Box::new(Expr::from("y")),
     });
+}
+
+#[test]
+fn test_unary_expr() {
+    check_match("not true", expression_ast, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Expr::from(true))});
 }
 
 #[test]

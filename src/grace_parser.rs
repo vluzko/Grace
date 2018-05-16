@@ -450,6 +450,17 @@ fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Expr,
     };
 }
 
+/// Create a binary expression, where one of several operators is possible.
+fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> Expr {
+    return match output.0 {
+        Some(x) => {
+            assert_eq!(x, operator.to_string().as_bytes());
+            Expr::UnaryExpr {operator: operator, operand: Box::new(output.1)}
+        },
+        None => output.1
+    };
+}
+
 fn comparison_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result = tuple!(input,
         and_expr_ast,
@@ -554,13 +565,7 @@ fn not_expr(input: &[u8]) -> IResult<&[u8], Expr> {
         addition_expr_ast
     );
 
-    return fmap_iresult(parse_result, |o| match o.0 {
-        Some(k) => {
-            assert_eq!(k, "not".as_bytes());
-            Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(o.1)}
-        },
-        None => o.1
-    });
+    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
 }
 
 fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
@@ -568,10 +573,11 @@ fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn mult_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    let symb = vec!["*", "/", "%"];
     let ops = vec![BinaryOperator::Mult, BinaryOperator::Div, BinaryOperator::Mod];
-    let operators = c!{k => v, for (k, v) in vec![("*".as_bytes(), BinaryOperator::Mult), ("/".as_bytes(), BinaryOperator::Div)]};
-    return match_binary_operator_list(input, &vec!["*", "/"], &operators, atomic_expr_ast);
+    let symbols: Vec<String> = ops.iter().map(|x| x.to_string()).collect();
+    let operators = c!{k.as_bytes() => *v, for (k, v) in symbols.iter().zip(ops.iter())};
+    let symb_strs = symbols.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
+    return match_binary_operator_list(input, &symb_strs, &operators, atomic_expr_ast);
 }
 
 // TODO: Use everywhere

@@ -94,8 +94,10 @@ impl Display for Expr {
                 let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
                 format!("Function call. Func: {}. Args: {}", func_expr, joined_args)
             },
-            &Expr::AttributeAccess{ref container, ref attributes} => format!("Attribute access. Container: {}. Attributes: {}", container,
-                                                                             attributes.iter().map(|x| x.to_string()).collect().join(".")), //TODO: make this happen
+            &Expr::AttributeAccess{ref container, ref attributes} => {
+                format!("Attribute access. Container: {}. Attributes: {}", container,
+                        attributes.iter().map(|x| x.to_string()).collect::<Vec<String>>().join("."))
+            },
             &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
             &Expr::Bool(b) => b.to_string(),
             _ => "Not implemented".to_string()

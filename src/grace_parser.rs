@@ -28,7 +28,7 @@ pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], 
 
 pub fn output<T>(res: IResult<&[u8], T>) -> T {
     return match res {
-        Done(i, o) => o,
+        Done(_, o) => o,
         IResult::Error(e) => {
             println!("Output error: {:?}.", e);
             panic!()
@@ -645,35 +645,75 @@ fn bool_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     });
 }
 
+named!(num_follow<&[u8], &[u8]> ,
+    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":")))
+);
+
 // TODO: Hex encoded, byte encoded
+// TODO:
 fn int_ast(input: &[u8]) -> IResult<&[u8], Expr> {
     let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
         tuple!(
-            opt!(alt!(tag!("+") | tag!("-"))),
-            many1!(digit)
+            opt!(sign),
+            terminated!(
+                dec_seq,
+                num_follow
+            )
         )
     );
     return fmap_iresult(parse_result, |x| Expr::Int(IntegerLiteral::from(x)));
 }
 
-fn float_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    // Stolen directly from the nom source. There's a nom function called 'recognize_float',
-    // but it's not public.
-    let parse_result = recognize!(input,
+named!(dec_digit<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("0") |
+        tag!("1") |
+        tag!("2") |
+        tag!("3") |
+        tag!("4") |
+        tag!("5") |
+        tag!("6") |
+        tag!("7") |
+        tag!("8") |
+        tag!("9")
+    ))
+);
+
+named!(dec_seq<&[u8], &[u8]>,
+    recognize!(many1!(dec_digit))
+);
+
+named!(sign<&[u8], &[u8]>,
+    recognize!(alt!(tag!("+") | tag!("-")))
+);
+
+named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
+    preceded!(
+        alt!(tag!("e") | tag!("E")),
         tuple!(
-              opt!(alt!(char!('+') | char!('-'))),
-              alt!(
-                    value!((), tuple!(digit, opt!(pair!(char!('.'), opt!(digit)))))
-                  | value!((), tuple!(char!('.'), digit))
-              ),
-              opt!(tuple!(
-                    alt!(char!('e') | char!('E')),
-                    opt!(alt!(char!('+') | char!('-'))),
-                    digit
-                    )
-              )
+            opt!(sign),
+            dec_seq
         )
+    )
+);
+
+fn float_ast<'a>(input: &'a[u8]) -> IResult<&[u8], Expr> {
+
+    let with_dec = |x: &'a[u8]| tuple!(x,
+        tag!("."),
+        many0!(dec_digit),
+        opt!(complete!(exponent))
     );
+
+    let parse_result = recognize!(input, tuple!(
+        opt!(sign),
+        many0!(dec_digit),
+        alt!(
+            value!((), with_dec) |
+            value!((), complete!(exponent))
+        ),
+        num_follow
+    ));
 
     return fmap_iresult(parse_result, |x| Expr::Float(FloatLiteral::from(x)));
 }
@@ -725,6 +765,10 @@ fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected:
             assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
             assert_eq!(o, expected);
         },
+        IResult::Error(e) => {
+            println!("Error: {}. Input was: {}", e, input);
+            panic!()
+        },
         _ => panic!()
     }
 }
@@ -739,23 +783,12 @@ fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected
     }
 }
 
-// #[test]
-//fn basic_file_test() {
-//    let contents = read_from_file("simple_grace");
-//    let result = parse_grace(contents.as_str());
-//
-//    match result {
-//        Done(_, o) => println!("{}", (*o).to_string()),
-//        _ => panic!()
-//    }
-//}
-
 #[test]
 fn test_literals() {
     let int = format!("{}", rand::random::<i64>());
     check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
     let float = format!("{}", rand::random::<f64>());
-    check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
+    check_match(float.as_str(), float_ast, Expr::Float(FloatLiteral{string_rep: float.clone()}));
 
     check_match("\"asdf\\\"\\\rasdf\"", expression_ast, Expr::String("\"asdf\\\"\\\rasdf\"".to_string()));
 }
@@ -791,8 +824,8 @@ fn test_parenthetical_expressions() {
 
 #[test]
 fn test_function_call() {
-    let a = match and_expr_ast("true and false".as_bytes()) {Done(i, o) => o, _ => panic!()};
-    let b = match expression_ast("func()".as_bytes()) {Done(i, o) => o, _ => panic!()};
+    let a = output(and_expr_ast("true and false".as_bytes()));
+    let b = output(expression_ast("func()".as_bytes()));
     let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
     check_match("ident(true and false, func())", expression_ast, expected);
 }

@@ -569,15 +569,15 @@ fn not_expr(input: &[u8]) -> IResult<&[u8], Expr> {
 }
 
 fn addition_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    return binary_symbol_matcher(input, "+", BinaryOperator::Add, mult_expr_ast);
+    let symbols = vec!["+", "-"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return match_binary_operator_list(input, &symbols, &operators, mult_expr_ast);
 }
 
 fn mult_expr_ast(input: &[u8]) -> IResult<&[u8], Expr> {
-    let ops = vec![BinaryOperator::Mult, BinaryOperator::Div, BinaryOperator::Mod];
-    let symbols: Vec<String> = ops.iter().map(|x| x.to_string()).collect();
-    let operators = c!{k.as_bytes() => *v, for (k, v) in symbols.iter().zip(ops.iter())};
-    let symb_strs = symbols.iter().map(|x| x.as_str()).collect::<Vec<&str>>();
-    return match_binary_operator_list(input, &symb_strs, &operators, atomic_expr_ast);
+    let symbols = vec!["*", "/", "%"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return match_binary_operator_list(input, &symbols, &operators, atomic_expr_ast);
 }
 
 // TODO: Use everywhere

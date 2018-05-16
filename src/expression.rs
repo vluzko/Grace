@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
+use std::collections::HashMap;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();
@@ -230,6 +231,26 @@ impl Display for BinaryOperator {
             &BinaryOperator::BitShiftL => "<<",
             &BinaryOperator::BitShiftR => ">>",
         })
+    }
+}
+impl<'a> From<&'a str> for BinaryOperator {
+    fn from(input: &'a str) -> Self {
+        return match input {
+            "or" => BinaryOperator::Or,
+            "and" => BinaryOperator::And,
+            "xor" => BinaryOperator::Xor,
+            "+" => BinaryOperator::Add,
+            "-" => BinaryOperator::Sub,
+            "*" => BinaryOperator::Mult,
+            "/" => BinaryOperator::Div,
+            "%" => BinaryOperator::Mod,
+            "&" => BinaryOperator::BitAnd,
+            "|" => BinaryOperator::BitOr,
+            "^" => BinaryOperator::BitXor,
+            "<<" => BinaryOperator::BitShiftL,
+            ">>" => BinaryOperator::BitShiftR,
+            _ => panic!()
+        };
     }
 }
 

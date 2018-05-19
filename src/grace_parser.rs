@@ -547,7 +547,41 @@ fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<
     return node;
 }
 
+fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
+    let parse_result: IResult<&[u8], (Option<&[u8]>, Expr)> = alt!(input,
+        tuple!(
+            map!(inline_wrapped!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
+            unary_expr)
+         |
+        tuple!(
+            value!(None, tag!("")),
+            power_expr_ast
+        )
+    );
+
+    let node = fmap_iresult(parse_result, |x: (Option<&[u8]>, Expr)|
+        match x.0 {
+            Some(y) => {
+                let unary_op = match from_utf8(y).unwrap() {
+                    "+" => UnaryOperator::Positive,
+                    "-" => UnaryOperator::Negative,
+                    "~" => UnaryOperator::BitNot,
+                    "not" => UnaryOperator::Not,
+                    _ => panic!()
+
+                };
+                Expr::UnaryExpr {operator: unary_op, operand: Box::new(x.1)}
+            },
+            None => x.1
+
+    });
+    return node;
+}
+
 // TODO: Maybe abstract these out?
+
+//TODO munge or and and together, they should have the same precedence
+// TODO research the Chesterton's fence situation first
 fn and_expr_ast(input: &[u8]) -> ExprRes {
     return binary_op_keyword(input, "and", BinaryOperator::And, or_expr_ast);
 }
@@ -560,6 +594,8 @@ fn xor_expr_ast(input: &[u8]) -> ExprRes {
     return binary_op_keyword(input, "xor", BinaryOperator::Xor, bit_or);
 }
 
+
+//TODO munge bit or and bit and together, they should have the same precedence
 fn bit_or(input: &[u8]) -> ExprRes {
     return binary_op_symbol(input, "|", BinaryOperator::BitOr, bit_and);
 }
@@ -575,10 +611,10 @@ fn bit_xor(input: &[u8]) -> ExprRes {
 fn bit_shift(input: &[u8]) -> ExprRes {
     let symbols = vec![">>", "<<"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, addition_expr_ast);
+    return binary_op_list(input, &symbols, &operators, additive_expr_ast);
 }
 
-fn addition_expr_ast(input: &[u8]) -> ExprRes {
+fn additive_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["+", "-"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_op_list(input, &symbols, &operators, mult_expr_ast);
@@ -587,7 +623,13 @@ fn addition_expr_ast(input: &[u8]) -> ExprRes {
 fn mult_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["*", "/", "%"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, not_expr);
+    return binary_op_list(input, &symbols, &operators, unary_expr);
+}
+
+fn power_expr_ast(input: &[u8]) -> ExprRes {
+    let symbols = vec!["**"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators, atomic_expr_ast);
 }
 
 /// Match a not expression.
@@ -610,10 +652,7 @@ fn not_expr(input: &[u8]) -> ExprRes {
 fn positive(input: &[u8]) -> ExprRes {
     let parse_result = alt!(input,
         tuple!(
-            map!(
-                terminated!(inline_wrapped!(tag!("+")), not!(alt!(dec_digit | tag!(".")))),
-                Some
-            ),
+            map!(inline_wrapped!(tag!("+")), Some),
             positive
         ) |
         tuple!(
@@ -630,10 +669,7 @@ fn positive(input: &[u8]) -> ExprRes {
 fn negative(input: &[u8]) -> ExprRes {
     let parse_result = alt!(input,
         tuple!(
-            map!(
-                terminated!(inline_wrapped!(tag!("-")), not!(alt!(dec_digit | tag!(".")))),
-                Some
-            ),
+            map!(inline_wrapped!(tag!("-")), Some),
             negative
         ) |
         tuple!(
@@ -653,11 +689,15 @@ fn bit_not(input: &[u8]) -> ExprRes {
         ) |
         tuple!(
             value!(None, tag!("")),
-            atomic_expr_ast
+            exponent_expr
         )
     );
 
     return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::BitNot, o));
+}
+
+fn exponent_expr(input: &[u8]) -> ExprRes {
+    return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr_ast);
 }
 
 // TODO: Use everywhere
@@ -687,6 +727,7 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     return fmap_iresult(parse_result, map);
 }
 
+//TODO get rid of all the _ast bits
 fn atomic_expr_ast(input: &[u8]) -> ExprRes {
     let node = alt!(input,
         bool_expr_ast |
@@ -904,9 +945,9 @@ fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected
 
 #[test]
 fn test_literals() {
-    let int = format!("{}", rand::random::<i64>());
+    let int = format!("{}", rand::random::<i64>().abs());
     check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
-    let float = format!("{}", rand::random::<f64>());
+    let float = format!("{}", rand::random::<f64>().abs());
     check_match(float.as_str(), float_ast, Expr::Float(FloatLiteral{string_rep: float.clone()}));
 
     check_match("\"asdf\\\"\\\rasdf\"", expression_ast, Expr::String("\"asdf\\\"\\\rasdf\"".to_string()));
@@ -961,7 +1002,7 @@ fn test_binary_expr() {
          })
      });
 
-    let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<"];
+    let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
     for op in all_ops {
         let input = format!("x {} y", op);
         check_match(input.as_str(), expression_ast, Expr::BinaryExpr {
@@ -982,6 +1023,10 @@ fn test_unary_expr() {
             operand: Box::new(Expr::from("y")),
         });
     }
+    check_match("~+y", expression_ast, Expr::UnaryExpr {
+        operator: UnaryOperator::BitNot,
+        operand: Box::new(output(expression_ast("+y".as_bytes()))),
+    });
     check_match("not true", expression_ast, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Expr::from(true))});
 }
 

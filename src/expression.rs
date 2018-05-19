@@ -212,7 +212,8 @@ pub enum BinaryOperator {
     BitOr,
     BitXor,
     BitShiftL,
-    BitShiftR
+    BitShiftR,
+    Exponent
 }
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -230,6 +231,7 @@ impl Display for BinaryOperator {
             &BinaryOperator::BitXor => "^",
             &BinaryOperator::BitShiftL => "<<",
             &BinaryOperator::BitShiftR => ">>",
+            &BinaryOperator::Exponent => "**",
         })
     }
 }
@@ -249,6 +251,7 @@ impl<'a> From<&'a str> for BinaryOperator {
             "^" => BinaryOperator::BitXor,
             "<<" => BinaryOperator::BitShiftL,
             ">>" => BinaryOperator::BitShiftR,
+            "**" => BinaryOperator::Exponent,
             _ => {
                 // TODO: Log
                 println!("Bad input to BinaryOperator::from<&str>: {}", input);

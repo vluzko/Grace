@@ -283,10 +283,16 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
         call!(while_ast, indent) |
         call!(for_in_ast, indent) |
         call!(if_ast, indent) |
-        call!(function_declaration_ast, indent)
+        call!(function_declaration_ast, indent) |
+        call!(import)
     );
 
     return node;
+}
+
+fn import(input: &[u8]) -> IResult<&[u8], Stmt> {
+    let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
+    return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
 }
 
 /// Parse a while loop.
@@ -386,31 +392,15 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt>
     return node;
 }
 
-named!(assignments<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("=") |
-        tag!("+=") |
-        tag!("-=") |
-        tag!("*=") |
-        tag!("/=") |
-        tag!("%=") |
-        tag!("**=") |
-        tag!("&=") |
-        tag!("|=") |
-        tag!("^=") |
-        tag!(">>=") |
-        tag!("<<=")
-    ))
-);
-
 fn assignment_ast(input: &[u8]) -> IResult<&[u8], Stmt> {
     let parse_result = terminated!(input, tuple!(
         identifier_ast,
-        inline_wrapped!(tag!("=")),
+        inline_wrapped!(assignments),
         expression_ast
     ), eof_or_line);
 
-    let node = fmap_iresult(parse_result, |x| Stmt::AssignmentStmt{identifier: x.0, expression: x.2});
+    let node = fmap_iresult(parse_result, |x| Stmt::AssignmentStmt{
+        identifier: x.0, operator:Assignment::from(from_utf8(x.1).unwrap()), expression: x.2});
 
     return node;
 }
@@ -422,6 +412,24 @@ fn expression_ast(input: &[u8]) -> ExprRes {
 
     return node;
 }
+
+
+named!(assignments<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("=")   |
+        tag!("+=")  |
+        tag!("-=")  |
+        tag!("*=")  |
+        tag!("/=")  |
+        tag!("**=") |
+        tag!("%=")  |
+        tag!(">>=") |
+        tag!("<<=") |
+        tag!("|=")  |
+        tag!("&=")  |
+        tag!("^=")
+    ))
+);
 
 named!(comparisons<&[u8], &[u8]>,
     recognize!(alt!(
@@ -627,76 +635,6 @@ fn mult_expr_ast(input: &[u8]) -> ExprRes {
 }
 
 fn power_expr_ast(input: &[u8]) -> ExprRes {
-    let symbols = vec!["**"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, atomic_expr_ast);
-}
-
-/// Match a not expression.
-fn not_expr(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(inline_keyword!("not"), Some),
-            not_expr
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            positive
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
-}
-
-/// Parse a positive expression. Does not match -int or -float
-fn positive(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(inline_wrapped!(tag!("+")), Some),
-            positive
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            negative
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Positive, o));
-//    return unary_op_symbol(input, "+", UnaryOperator::Positive, negative);
-}
-
-/// Parse a negated expression. Does not match -int or -float
-fn negative(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(inline_wrapped!(tag!("-")), Some),
-            negative
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            bit_not
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Negative, o));
-}
-
-fn bit_not(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(inline_wrapped!(tag!("~")), Some),
-            bit_not
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            exponent_expr
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::BitNot, o));
-}
-
-fn exponent_expr(input: &[u8]) -> ExprRes {
     return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr_ast);
 }
 
@@ -1087,8 +1025,20 @@ fn test_post_ident() {
 fn test_assignment() {
     check_match("foo = true", assignment_ast, Stmt::AssignmentStmt {
         identifier: Identifier::from("foo"),
+        operator: Assignment::Normal,
         expression: Expr::from(true)
     });
+
+    let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+    for op in all_ops {
+        let input = format!("x {} y", op);
+        check_match(input.as_str(), assignment_ast, Stmt::AssignmentStmt {
+            identifier: Identifier::from("x"),
+            operator: Assignment::from(op),
+            expression: Expr::from("y"),
+        });
+    }
+
 }
 
 #[test]
@@ -1113,6 +1063,14 @@ fn test_while_stmt() {
         condition: Expr::from(true),
         block: Block{statements: vec!(output(assignment_ast("x=true".as_bytes())))}
     });
+}
+
+
+
+#[test]
+fn test_import() {
+    let expected = Stmt::ImportStmt {module: DottedIdentifier{attributes: vec!("foo".to_string(), "bar".to_string(), "baz".to_string())}};
+    check_match("import foo.bar.baz", |x| statement_ast(x, 0), expected);
 }
 
 #[test]

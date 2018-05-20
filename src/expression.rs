@@ -33,16 +33,18 @@ impl ASTNode for Block {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
-    AssignmentStmt{identifier: Identifier, expression: Expr},
+    AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
-    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block}
+    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block},
+    ImportStmt{module: DottedIdentifier},
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
-            &Stmt::AssignmentStmt{ref identifier, ref expression} => format!("Assignment:\n Name: {} Expression: {}", identifier, expression),
+            &Stmt::AssignmentStmt{ref identifier, ref operator, ref expression} =>
+                format!("Assignment:\n Name: {} Operator {:?} Expression: {}", identifier, operator, expression),
             &Stmt::WhileStmt {ref condition, ref block} => format!("While statement:\n  Condition: {}\n{}", condition, indent_block(block.to_string())),
             &Stmt::IfStmt{ref condition, ref main_block, ref elifs, ref else_block} => {
                 let elifs_iter = elifs.iter();
@@ -65,6 +67,9 @@ impl Display for Stmt {
 
                 format!("Function declaration:\n  Name: {}\n  Args: {}\n{}", name, args_string, indent_block(body.to_string()))
             },
+            &Stmt::ImportStmt {ref module} => {
+                format!("Import: module {}", module)
+            }
             _ => "Not implemented".to_string()
         };
         write!(f, "{}", string_rep.as_str())
@@ -173,12 +178,36 @@ pub enum Assignment {
     Mult,
     Div,
     Sub,
+    Exponent,
     Mod,
     BitAnd,
     BitOr,
     BitXor,
     BitShiftL,
     BitShiftR,
+}
+impl<'a> From<&'a str> for Assignment {
+    fn from(input: &'a str) -> Self {
+        return match input {
+            "=" => Assignment::Normal,
+            "+=" => Assignment::Add,
+            "-=" => Assignment::Sub,
+            "*=" => Assignment::Mult,
+            "/=" => Assignment::Div,
+            "%=" => Assignment::Mod,
+            "&=" => Assignment::BitAnd,
+            "|=" => Assignment::BitOr,
+            "^=" => Assignment::BitXor,
+            "<<=" => Assignment::BitShiftL,
+            ">>=" => Assignment::BitShiftR,
+            "**=" => Assignment::Exponent,
+            _ => {
+                // TODO: Log
+                println!("Bad input to Assignment::from<&str>: {}", input);
+                panic!()
+            }
+        };
+    }
 }
 
 /// Any comparator

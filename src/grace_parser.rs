@@ -355,7 +355,7 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Block)> {
         input,
         indented!(tag!("elif"), indent),
         many1!(inline_whitespace_char),
-        inline_wrapped!(and_expr_ast),
+        inline_wrapped!(boolean_op_expr),
         inline_wrapped!(tag!(":")),
         newline,
         call!(block_ast, indent + 1)
@@ -477,10 +477,10 @@ fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> E
 
 fn comparison_ast(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        and_expr_ast,
+        boolean_op_expr,
         opt!(complete!(tuple!(
             inline_wrapped!(comparisons),
-            and_expr_ast
+            boolean_op_expr
         )))
     );
 
@@ -590,34 +590,16 @@ fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
     return node;
 }
 
-// TODO: Maybe abstract these out?
-
-//TODO munge or and and together, they should have the same precedence
-// TODO research the Chesterton's fence situation first
-fn and_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "and", BinaryOperator::And, or_expr_ast);
+fn boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["and", "or", "xor"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators,bit_boolean_op_expr);
 }
 
-fn or_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "or", BinaryOperator::Or, xor_expr_ast);
-}
-
-fn xor_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "xor", BinaryOperator::Xor, bit_or);
-}
-
-
-//TODO munge bit or and bit and together, they should have the same precedence
-fn bit_or(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "|", BinaryOperator::BitOr, bit_and);
-}
-
-fn bit_and(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "&", BinaryOperator::BitAnd, bit_xor);
-}
-
-fn bit_xor(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "^", BinaryOperator::BitXor, bit_shift);
+fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["&", "|", "^"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators,bit_shift);
 }
 
 fn bit_shift(input: &[u8]) -> ExprRes {
@@ -927,7 +909,7 @@ fn test_parenthetical_expressions() {
 
 #[test]
 fn test_function_call() {
-    let a = output(and_expr_ast("true and false".as_bytes()));
+    let a = output(boolean_op_expr("true and false".as_bytes()));
     let b = output(expression_ast("func()".as_bytes()));
     let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
     check_match("ident(true and false, func())", expression_ast, expected);
@@ -1007,7 +989,7 @@ fn test_repeated_func_calls() {
     check_match("func(a)(b, c)", expression_ast, expected);
 
     check_match("(a and b)(true)", expression_ast, Expr::FunctionCall {
-        func_expr: Box::new(output(and_expr_ast("a and b".as_bytes()))),
+        func_expr: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
         args: vec!(Expr::from(true))
     });
 }

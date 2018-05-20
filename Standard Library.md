@@ -1,5 +1,0 @@
-# Standard Library
-
-## Regex
-
-## Requests

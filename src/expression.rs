@@ -1,7 +1,6 @@
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
-use std::collections::HashMap;
 
 fn indent_block(block_str: String) -> String {
     let split = block_str.lines();

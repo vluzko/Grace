@@ -97,7 +97,7 @@ pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
 
 /// A macro for wrapping a parser in inline whitespace.
 /// Similar to ws!, but doesn't allow for \n, \r, or \t.
-macro_rules! inline_wrapped(
+macro_rules! inline_wrapped (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
     {
       match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
@@ -122,18 +122,22 @@ named!(valid_identifier_char<&[u8], &[u8]>,
 /// Matches a keyword within a line.
 /// Used for "and", "or", "xor", "in", etc.
 macro_rules! inline_keyword (
-  ($i:expr, $f:expr) => (
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
     {
       delimited!($i,
         inline_whitespace,
-        tag!($f),
+        $submac!($($args)*),
         preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
     }
+  );
+
+  ($i:expr, $f:expr) => (
+    inline_wrapped!($i, tag!($f));
   );
 );
 
 /// Check that a macro is indented correctly.
-macro_rules! indented(
+macro_rules! indented (
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
     preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
   );
@@ -518,20 +522,6 @@ fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u
     return ret
 }
 
-/// Match a binary expression whose operator is a keyword.
-fn binary_op_keyword<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
-    let parse_result = tuple!(input,
-        next_expr,
-        opt!(complete!(preceded!(
-            inline_keyword!(symbol),
-            call!(binary_op_keyword, symbol, operator, next_expr)
-        )))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
-    return node;
-}
-
 /// Match a binary expression whose operator is a symbol.
 fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
@@ -543,6 +533,21 @@ fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator,
     );
 
     let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
+    return node;
+}
+
+/// Match a binary expression whose operator is a keyword
+/// Currently only used for and, or, and xor.
+fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
+    let parse_result = tuple!(input,
+        next_expr,
+        opt!(tuple!(
+            inline_keyword!(call!(match_any, symbols)),
+            call!(binary_op_list, symbols, operators, next_expr)
+        ))
+    );
+
+    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
     return node;
 }
 
@@ -559,6 +564,38 @@ fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<
     return node;
 }
 
+fn boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["and", "or", "xor"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_keyword_list(input, &symbols, &operators, bit_boolean_op_expr);
+}
+
+fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["&", "|", "^"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators,bit_shift);
+}
+
+fn bit_shift(input: &[u8]) -> ExprRes {
+    let symbols = vec![">>", "<<"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators, additive_expr_ast);
+}
+
+fn additive_expr_ast(input: &[u8]) -> ExprRes {
+    let symbols = vec!["+", "-"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators, mult_expr_ast);
+}
+
+fn mult_expr_ast(input: &[u8]) -> ExprRes {
+    let symbols = vec!["*", "/", "%"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators, unary_expr);
+}
+
+/// Match any unary expression.
+/// Implemented as a single parser because all unary expressions have the same precedence.
 fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
     let parse_result: IResult<&[u8], (Option<&[u8]>, Expr)> = alt!(input,
         tuple!(
@@ -586,38 +623,8 @@ fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
             },
             None => x.1
 
-    });
+        });
     return node;
-}
-
-fn boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["and", "or", "xor"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators,bit_boolean_op_expr);
-}
-
-fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["&", "|", "^"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators,bit_shift);
-}
-
-fn bit_shift(input: &[u8]) -> ExprRes {
-    let symbols = vec![">>", "<<"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, additive_expr_ast);
-}
-
-fn additive_expr_ast(input: &[u8]) -> ExprRes {
-    let symbols = vec!["+", "-"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, mult_expr_ast);
-}
-
-fn mult_expr_ast(input: &[u8]) -> ExprRes {
-    let symbols = vec!["*", "/", "%"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, unary_expr);
 }
 
 fn power_expr_ast(input: &[u8]) -> ExprRes {

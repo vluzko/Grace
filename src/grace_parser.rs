@@ -1,4 +1,3 @@
-// use grace_error::*;
 use std::str;
 use std::io::prelude::*;
 use std::fs::File;
@@ -13,7 +12,6 @@ extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
 use expression::*;
-//use nom::Offset;
 
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
 
@@ -860,6 +858,7 @@ fn read_from_file(f_name: &str) -> String {
     };
 }
 
+
 fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
     where T: Debug + PartialEq + Eq {
     let res = parser(input.as_bytes());
@@ -908,9 +907,9 @@ fn test_reserved_words() {
 #[test]
 fn test_simple_parenthetical_expressions() {
     let expected =Expr::BinaryExpr {
-            operator:BinaryOperator::And,
-            left: Box::new(Expr::Bool(Boolean::True)),
-            right: Box::new(Expr::Bool(Boolean::False))};
+        operator:BinaryOperator::And,
+        left: Box::new(Expr::Bool(Boolean::True)),
+        right: Box::new(Expr::Bool(Boolean::False))};
     check_match("(true and false)", expression_ast, expected);
 }
 
@@ -937,14 +936,14 @@ fn test_function_call() {
 #[test]
 fn test_binary_expr() {
     check_match("true and false or true", expression_ast, Expr::BinaryExpr{
-         operator: BinaryOperator::And,
-         left: Box::new(Expr::from(true)),
-         right:Box::new(Expr::BinaryExpr{
-             operator: BinaryOperator::Or,
-             left: Box::new(Expr::from(false)),
-             right: Box::new(Expr::from(true))
-         })
-     });
+        operator: BinaryOperator::And,
+        left: Box::new(Expr::from(true)),
+        right:Box::new(Expr::BinaryExpr{
+            operator: BinaryOperator::Or,
+            left: Box::new(Expr::from(false)),
+            right: Box::new(Expr::from(true))
+        })
+    });
 
     let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
     for op in all_ops {
@@ -984,14 +983,14 @@ fn test_identifier_expr() {
 #[test]
 fn test_comparison_expr() {
     let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-    let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual, 
-        ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
+    let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
+                        ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
     for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
         let as_str = format!("true {} false", comp_str);
         let expr = expression_ast(as_str.as_bytes());
         let expected = Expr::ComparisonExpr{
             left: Box::new(Expr::Bool(Boolean::True)),
-            right: Box::new(Expr::Bool(Boolean::False)), 
+            right: Box::new(Expr::Bool(Boolean::False)),
             operator: *comp_op
         };
 
@@ -1079,7 +1078,7 @@ fn test_import() {
 
 #[test]
 fn test_return() {
-    let expected = Stmt::ReturnStmt {value: Expr::from("true")};
+    let expected = Stmt::ReturnStmt {value: Expr::from(true)};
     check_match("return true", |x| statement_ast(x, 0), expected);
 }
 
@@ -1091,3 +1090,5 @@ fn test_for_in() {
         block: output(block_ast("a=true".as_bytes(), 0))
     });
 }
+
+

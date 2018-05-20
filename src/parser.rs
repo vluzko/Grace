@@ -1,4 +1,3 @@
-// use grace_error::*;
 use std::str;
 use std::io::prelude::*;
 use std::fs::File;
@@ -13,7 +12,6 @@ extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
 use expression::*;
-//use nom::Offset;
 
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
 
@@ -99,7 +97,7 @@ pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
 
 /// A macro for wrapping a parser in inline whitespace.
 /// Similar to ws!, but doesn't allow for \n, \r, or \t.
-macro_rules! inline_wrapped(
+macro_rules! inline_wrapped (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
     {
       match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
@@ -124,18 +122,22 @@ named!(valid_identifier_char<&[u8], &[u8]>,
 /// Matches a keyword within a line.
 /// Used for "and", "or", "xor", "in", etc.
 macro_rules! inline_keyword (
-  ($i:expr, $f:expr) => (
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
     {
       delimited!($i,
         inline_whitespace,
-        tag!($f),
+        $submac!($($args)*),
         preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
     }
+  );
+
+  ($i:expr, $f:expr) => (
+    inline_wrapped!($i, tag!($f));
   );
 );
 
 /// Check that a macro is indented correctly.
-macro_rules! indented(
+macro_rules! indented (
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
     preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
   );
@@ -283,10 +285,22 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
         call!(while_ast, indent) |
         call!(for_in_ast, indent) |
         call!(if_ast, indent) |
-        call!(function_declaration_ast, indent)
+        call!(function_declaration_ast, indent) |
+        call!(import) |
+        call!(return_stmt)
     );
 
     return node;
+}
+
+fn import(input: &[u8]) -> IResult<&[u8], Stmt> {
+    let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
+    return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
+}
+
+fn return_stmt(input: &[u8]) -> IResult<&[u8], Stmt> {
+    let parse_result = tuple!(input, inline_keyword!("return"), expression_ast);
+    return fmap_iresult(parse_result,|x| Stmt::ReturnStmt {value: x.1});
 }
 
 /// Parse a while loop.
@@ -345,7 +359,7 @@ fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Block)> {
         input,
         indented!(tag!("elif"), indent),
         many1!(inline_whitespace_char),
-        inline_wrapped!(and_expr_ast),
+        inline_wrapped!(boolean_op_expr),
         inline_wrapped!(tag!(":")),
         newline,
         call!(block_ast, indent + 1)
@@ -386,31 +400,15 @@ fn function_declaration_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt>
     return node;
 }
 
-named!(assignments<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("=") |
-        tag!("+=") |
-        tag!("-=") |
-        tag!("*=") |
-        tag!("/=") |
-        tag!("%=") |
-        tag!("**=") |
-        tag!("&=") |
-        tag!("|=") |
-        tag!("^=") |
-        tag!(">>=") |
-        tag!("<<=")
-    ))
-);
-
 fn assignment_ast(input: &[u8]) -> IResult<&[u8], Stmt> {
     let parse_result = terminated!(input, tuple!(
         identifier_ast,
-        inline_wrapped!(tag!("=")),
+        inline_wrapped!(assignments),
         expression_ast
     ), eof_or_line);
 
-    let node = fmap_iresult(parse_result, |x| Stmt::AssignmentStmt{identifier: x.0, expression: x.2});
+    let node = fmap_iresult(parse_result, |x| Stmt::AssignmentStmt{
+        identifier: x.0, operator:Assignment::from(from_utf8(x.1).unwrap()), expression: x.2});
 
     return node;
 }
@@ -422,6 +420,24 @@ fn expression_ast(input: &[u8]) -> ExprRes {
 
     return node;
 }
+
+
+named!(assignments<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("=")   |
+        tag!("+=")  |
+        tag!("-=")  |
+        tag!("*=")  |
+        tag!("/=")  |
+        tag!("**=") |
+        tag!("%=")  |
+        tag!(">>=") |
+        tag!("<<=") |
+        tag!("|=")  |
+        tag!("&=")  |
+        tag!("^=")
+    ))
+);
 
 named!(comparisons<&[u8], &[u8]>,
     recognize!(alt!(
@@ -465,10 +481,10 @@ fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> E
 
 fn comparison_ast(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        and_expr_ast,
+        boolean_op_expr,
         opt!(complete!(tuple!(
             inline_wrapped!(comparisons),
-            and_expr_ast
+            boolean_op_expr
         )))
     );
 
@@ -506,20 +522,6 @@ fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u
     return ret
 }
 
-/// Match a binary expression whose operator is a keyword.
-fn binary_op_keyword<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
-    let parse_result = tuple!(input,
-        next_expr,
-        opt!(complete!(preceded!(
-            inline_keyword!(symbol),
-            call!(binary_op_keyword, symbol, operator, next_expr)
-        )))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
-    return node;
-}
-
 /// Match a binary expression whose operator is a symbol.
 fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
@@ -531,6 +533,21 @@ fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator,
     );
 
     let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
+    return node;
+}
+
+/// Match a binary expression whose operator is a keyword
+/// Currently only used for and, or, and xor.
+fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
+    let parse_result = tuple!(input,
+        next_expr,
+        opt!(tuple!(
+            inline_keyword!(call!(match_any, symbols)),
+            call!(binary_op_list, symbols, operators, next_expr)
+        ))
+    );
+
+    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
     return node;
 }
 
@@ -547,38 +564,25 @@ fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<
     return node;
 }
 
-// TODO: Maybe abstract these out?
-fn and_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "and", BinaryOperator::And, or_expr_ast);
+fn boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["and", "or", "xor"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_keyword_list(input, &symbols, &operators, bit_boolean_op_expr);
 }
 
-fn or_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "or", BinaryOperator::Or, xor_expr_ast);
-}
-
-fn xor_expr_ast(input: &[u8]) -> ExprRes {
-    return binary_op_keyword(input, "xor", BinaryOperator::Xor, bit_or);
-}
-
-fn bit_or(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "|", BinaryOperator::BitOr, bit_and);
-}
-
-fn bit_and(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "&", BinaryOperator::BitAnd, bit_xor);
-}
-
-fn bit_xor(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "^", BinaryOperator::BitXor, bit_shift);
+fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
+    let symbols = vec!["&", "|", "^"];
+    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+    return binary_op_list(input, &symbols, &operators,bit_shift);
 }
 
 fn bit_shift(input: &[u8]) -> ExprRes {
     let symbols = vec![">>", "<<"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, addition_expr_ast);
+    return binary_op_list(input, &symbols, &operators, additive_expr_ast);
 }
 
-fn addition_expr_ast(input: &[u8]) -> ExprRes {
+fn additive_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["+", "-"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_op_list(input, &symbols, &operators, mult_expr_ast);
@@ -587,77 +591,44 @@ fn addition_expr_ast(input: &[u8]) -> ExprRes {
 fn mult_expr_ast(input: &[u8]) -> ExprRes {
     let symbols = vec!["*", "/", "%"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, not_expr);
+    return binary_op_list(input, &symbols, &operators, unary_expr);
 }
 
-/// Match a not expression.
-fn not_expr(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
+/// Match any unary expression.
+/// Implemented as a single parser because all unary expressions have the same precedence.
+fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
+    let parse_result: IResult<&[u8], (Option<&[u8]>, Expr)> = alt!(input,
         tuple!(
-            map!(inline_keyword!("not"), Some),
-            not_expr
-        ) |
+            map!(inline_wrapped!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
+            unary_expr)
+         |
         tuple!(
             value!(None, tag!("")),
-            positive
+            power_expr_ast
         )
     );
 
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Not, o));
+    let node = fmap_iresult(parse_result, |x: (Option<&[u8]>, Expr)|
+        match x.0 {
+            Some(y) => {
+                let unary_op = match from_utf8(y).unwrap() {
+                    "+" => UnaryOperator::Positive,
+                    "-" => UnaryOperator::Negative,
+                    "~" => UnaryOperator::BitNot,
+                    "not" => UnaryOperator::Not,
+                    _ => panic!()
+
+                };
+                Expr::UnaryExpr {operator: unary_op, operand: Box::new(x.1)}
+            },
+            None => x.1
+
+        });
+    return node;
 }
 
-/// Parse a positive expression. Does not match -int or -float
-fn positive(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(
-                terminated!(inline_wrapped!(tag!("+")), not!(alt!(dec_digit | tag!(".")))),
-                Some
-            ),
-            positive
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            negative
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Positive, o));
-//    return unary_op_symbol(input, "+", UnaryOperator::Positive, negative);
-}
-
-/// Parse a negated expression. Does not match -int or -float
-fn negative(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(
-                terminated!(inline_wrapped!(tag!("-")), not!(alt!(dec_digit | tag!(".")))),
-                Some
-            ),
-            negative
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            bit_not
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::Negative, o));
-}
-
-fn bit_not(input: &[u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(inline_wrapped!(tag!("~")), Some),
-            bit_not
-        ) |
-        tuple!(
-            value!(None, tag!("")),
-            atomic_expr_ast
-        )
-    );
-
-    return fmap_iresult(parse_result, |o| match_unary_expr(UnaryOperator::BitNot, o));
+fn power_expr_ast(input: &[u8]) -> ExprRes {
+    return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr_ast);
 }
 
 // TODO: Use everywhere
@@ -687,6 +658,7 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     return fmap_iresult(parse_result, map);
 }
 
+//TODO get rid of all the _ast bits
 fn atomic_expr_ast(input: &[u8]) -> ExprRes {
     let node = alt!(input,
         bool_expr_ast |
@@ -875,6 +847,7 @@ fn read_from_file(f_name: &str) -> String {
     };
 }
 
+
 fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
     where T: Debug + PartialEq + Eq {
     let res = parser(input.as_bytes());
@@ -904,9 +877,9 @@ fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected
 
 #[test]
 fn test_literals() {
-    let int = format!("{}", rand::random::<i64>());
+    let int = format!("{}", rand::random::<i64>().abs());
     check_match(int.as_str(), expression_ast, Expr::Int(IntegerLiteral{string_rep: int.clone()}));
-    let float = format!("{}", rand::random::<f64>());
+    let float = format!("{}", rand::random::<f64>().abs());
     check_match(float.as_str(), float_ast, Expr::Float(FloatLiteral{string_rep: float.clone()}));
 
     check_match("\"asdf\\\"\\\rasdf\"", expression_ast, Expr::String("\"asdf\\\"\\\rasdf\"".to_string()));
@@ -923,9 +896,9 @@ fn test_reserved_words() {
 #[test]
 fn test_simple_parenthetical_expressions() {
     let expected =Expr::BinaryExpr {
-            operator:BinaryOperator::And,
-            left: Box::new(Expr::Bool(Boolean::True)),
-            right: Box::new(Expr::Bool(Boolean::False))};
+        operator:BinaryOperator::And,
+        left: Box::new(Expr::Bool(Boolean::True)),
+        right: Box::new(Expr::Bool(Boolean::False))};
     check_match("(true and false)", expression_ast, expected);
 }
 
@@ -943,7 +916,7 @@ fn test_parenthetical_expressions() {
 
 #[test]
 fn test_function_call() {
-    let a = output(and_expr_ast("true and false".as_bytes()));
+    let a = output(boolean_op_expr("true and false".as_bytes()));
     let b = output(expression_ast("func()".as_bytes()));
     let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
     check_match("ident(true and false, func())", expression_ast, expected);
@@ -952,16 +925,16 @@ fn test_function_call() {
 #[test]
 fn test_binary_expr() {
     check_match("true and false or true", expression_ast, Expr::BinaryExpr{
-         operator: BinaryOperator::And,
-         left: Box::new(Expr::from(true)),
-         right:Box::new(Expr::BinaryExpr{
-             operator: BinaryOperator::Or,
-             left: Box::new(Expr::from(false)),
-             right: Box::new(Expr::from(true))
-         })
-     });
+        operator: BinaryOperator::And,
+        left: Box::new(Expr::from(true)),
+        right:Box::new(Expr::BinaryExpr{
+            operator: BinaryOperator::Or,
+            left: Box::new(Expr::from(false)),
+            right: Box::new(Expr::from(true))
+        })
+    });
 
-    let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<"];
+    let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
     for op in all_ops {
         let input = format!("x {} y", op);
         check_match(input.as_str(), expression_ast, Expr::BinaryExpr {
@@ -982,6 +955,10 @@ fn test_unary_expr() {
             operand: Box::new(Expr::from("y")),
         });
     }
+    check_match("~+y", expression_ast, Expr::UnaryExpr {
+        operator: UnaryOperator::BitNot,
+        operand: Box::new(output(expression_ast("+y".as_bytes()))),
+    });
     check_match("not true", expression_ast, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Expr::from(true))});
 }
 
@@ -995,14 +972,14 @@ fn test_identifier_expr() {
 #[test]
 fn test_comparison_expr() {
     let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-    let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual, 
-        ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
+    let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
+                        ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
     for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
         let as_str = format!("true {} false", comp_str);
         let expr = expression_ast(as_str.as_bytes());
         let expected = Expr::ComparisonExpr{
             left: Box::new(Expr::Bool(Boolean::True)),
-            right: Box::new(Expr::Bool(Boolean::False)), 
+            right: Box::new(Expr::Bool(Boolean::False)),
             operator: *comp_op
         };
 
@@ -1019,7 +996,7 @@ fn test_repeated_func_calls() {
     check_match("func(a)(b, c)", expression_ast, expected);
 
     check_match("(a and b)(true)", expression_ast, Expr::FunctionCall {
-        func_expr: Box::new(output(and_expr_ast("a and b".as_bytes()))),
+        func_expr: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
         args: vec!(Expr::from(true))
     });
 }
@@ -1042,8 +1019,20 @@ fn test_post_ident() {
 fn test_assignment() {
     check_match("foo = true", assignment_ast, Stmt::AssignmentStmt {
         identifier: Identifier::from("foo"),
+        operator: Assignment::Normal,
         expression: Expr::from(true)
     });
+
+    let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+    for op in all_ops {
+        let input = format!("x {} y", op);
+        check_match(input.as_str(), assignment_ast, Stmt::AssignmentStmt {
+            identifier: Identifier::from("x"),
+            operator: Assignment::from(op),
+            expression: Expr::from("y"),
+        });
+    }
+
 }
 
 #[test]
@@ -1071,6 +1060,18 @@ fn test_while_stmt() {
 }
 
 #[test]
+fn test_import() {
+    let expected = Stmt::ImportStmt {module: DottedIdentifier{attributes: vec!("foo".to_string(), "bar".to_string(), "baz".to_string())}};
+    check_match("import foo.bar.baz", |x| statement_ast(x, 0), expected);
+}
+
+#[test]
+fn test_return() {
+    let expected = Stmt::ReturnStmt {value: Expr::from(true)};
+    check_match("return true", |x| statement_ast(x, 0), expected);
+}
+
+#[test]
 fn test_for_in() {
     check_match("for x in y:\n a=true", |x| statement_ast(x, 0), Stmt::ForInStmt {
         iter_var: Identifier::from("x"),
@@ -1078,3 +1079,5 @@ fn test_for_in() {
         block: output(block_ast("a=true".as_bytes(), 0))
     });
 }
+
+

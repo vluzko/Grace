@@ -7,5 +7,5 @@ extern crate log;
 extern crate cute;
 
 pub mod grace_error;
-pub mod grace_parser;
+pub mod parser;
 pub mod expression;

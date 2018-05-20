@@ -39,6 +39,7 @@ pub enum Stmt {
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
     FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block},
     ImportStmt{module: DottedIdentifier},
+    ReturnStmt{value: Expr}
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -69,6 +70,9 @@ impl Display for Stmt {
             },
             &Stmt::ImportStmt {ref module} => {
                 format!("Import: module {}", module)
+            },
+            &Stmt::ReturnStmt {ref value} => {
+                format!("Return: value {}", value)
             }
             _ => "Not implemented".to_string()
         };

@@ -284,7 +284,8 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
         call!(for_in_ast, indent) |
         call!(if_ast, indent) |
         call!(function_declaration_ast, indent) |
-        call!(import)
+        call!(import) |
+        call!(return_stmt)
     );
 
     return node;
@@ -293,6 +294,11 @@ fn statement_ast(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
 fn import(input: &[u8]) -> IResult<&[u8], Stmt> {
     let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
     return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
+}
+
+fn return_stmt(input: &[u8]) -> IResult<&[u8], Stmt> {
+    let parse_result = tuple!(input, inline_keyword!("return"), expression_ast);
+    return fmap_iresult(parse_result,|x| Stmt::ReturnStmt {value: x.1});
 }
 
 /// Parse a while loop.
@@ -1065,12 +1071,16 @@ fn test_while_stmt() {
     });
 }
 
-
-
 #[test]
 fn test_import() {
     let expected = Stmt::ImportStmt {module: DottedIdentifier{attributes: vec!("foo".to_string(), "bar".to_string(), "baz".to_string())}};
     check_match("import foo.bar.baz", |x| statement_ast(x, 0), expected);
+}
+
+#[test]
+fn test_return() {
+    let expected = Stmt::ReturnStmt {value: Expr::from("true")};
+    check_match("return true", |x| statement_ast(x, 0), expected);
 }
 
 #[test]

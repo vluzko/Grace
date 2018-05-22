@@ -89,7 +89,7 @@ impl ASTNode for Stmt {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
-    MatchExpr{value: Box<Expr>, cases: Vec<(Identifier, Block)>},
+    MatchExpr{value: Box<Expr>, cases: Vec<(Expr, Expr)>},
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},

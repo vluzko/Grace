@@ -212,7 +212,7 @@ fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
 }
 
 pub fn reserved_list() -> Vec<&'static str>{
-    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in");
+    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield");
     return list;
 }
 
@@ -481,35 +481,10 @@ fn yield_stmt(input: &[u8]) -> StmtRes {
 }
 
 fn expression(input: &[u8]) -> ExprRes {
-    let node = alt!(input,
+    return alt_complete!(input,
         comparison
     );
-
-    let x= match 5 {
-        (yield_stmt("asdf".as_bytes())) => panic!(),
-        _ => panic!()
-    };
-
-    return node;
 }
-
-//fn match_expr(input: &[u8]) -> ExprRes {
-//    let parse_result = tuple!(input,
-//        delimited!(
-//            tag!("match"),
-//            inline_wrapped!(expression),
-//            between_statement
-//        ),
-//        separated_nonempty_list_complete!(
-//            tuple!(
-//
-//            ),
-//            between_statement
-//        )
-//    );
-//
-//    panic!()
-//}
 
 named!(comparisons<&[u8], &[u8]>,
     recognize!(alt!(
@@ -524,7 +499,7 @@ named!(comparisons<&[u8], &[u8]>,
 
 fn comparison(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        boolean_op_expr,
+        alt!(match_expr | boolean_op_expr),
         opt!(complete!(tuple!(
             inline_wrapped!(comparisons),
             boolean_op_expr
@@ -551,6 +526,30 @@ fn comparison(input: &[u8]) -> ExprRes {
     return node;
 }
 
+fn match_expr(input: &[u8]) -> ExprRes {
+
+    let parse_result = tuple!(input,
+        delimited!(
+            tag!("match"),
+            inline_wrapped!(expression),
+            tuple!(
+                inline_wrapped!(tag!(":")),
+                between_statement
+            )
+        ),
+        separated_nonempty_list_complete!(
+            between_statement,
+            separated_pair!(
+                alt!(float | int | string),
+                inline_wrapped!(tag!("=>")),
+                expression
+            )
+        )
+    );
+
+    return fmap_iresult(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
+}
+
 fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
     return match output.1 {
         Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
@@ -566,17 +565,6 @@ fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Expr,
             Expr::BinaryExpr {operator: op, left: Box::new(output.0), right: Box::new(x.1)}
         },
         None => output.0
-    };
-}
-
-/// Create a binary expression, where one of several operators is possible.
-fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> Expr {
-    return match output.0 {
-        Some(x) => {
-            assert_eq!(x, operator.to_string().as_bytes());
-            Expr::UnaryExpr {operator: operator, operand: Box::new(output.1)}
-        },
-        None => output.1
     };
 }
 
@@ -752,6 +740,7 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
     return node;
 }
 
+/// Match the for part of a comprehension.
 fn comprehension_for(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(",")),
@@ -761,6 +750,7 @@ fn comprehension_for(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return parse_result;
 }
 
+/// Match the if part of a comprehension.
 fn comprehension_if(input: &[u8]) -> ExprRes {
     return preceded!(input,
         inline_keyword!("if"),
@@ -768,6 +758,7 @@ fn comprehension_if(input: &[u8]) -> ExprRes {
     );
 }
 
+/// Match a vector comprehension.
 fn vector_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         boolean_op_expr,
@@ -787,6 +778,7 @@ fn vector_comprehension(input: &[u8]) -> ExprRes {
     });
 }
 
+/// Match a map or a set.
 fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
             boolean_op_expr,
@@ -882,19 +874,6 @@ named!(post_access<&[u8], Vec<Identifier>>,
         )
     )
 );
-
-/// Parser to recognize a valid Grace identifier.
-//named!(identifier<&[u8], &[u8]>,
-//    recognize!(
-//        pair!(
-//            not!(peek!(reserved_words)),
-//            pair!(
-//                alt!(alpha | tag!("_")),
-//                many0!(valid_identifier_char)
-//            )
-//        )
-//    )
-//);
 
 /// Parser to return an Identifier AST.
 fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
@@ -1262,4 +1241,12 @@ fn test_simple_statements() {
     check_match("pass", |x| statement(x, 0), Stmt::PassStmt);
     check_match("continue", |x| statement(x, 0), Stmt::ContinueStmt);
     check_match("break", |x| statement(x, 0), Stmt::BreakStmt);
+}
+
+#[test]
+fn test_match() {
+    check_match("match x:\n5 => 5", expression, Expr::MatchExpr {
+        value: Box::new(Expr::from("x")),
+        cases: vec![(output(expression("5".as_bytes())), output(expression("5".as_bytes())))]
+    });
 }

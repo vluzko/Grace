@@ -405,6 +405,23 @@ fn function_declaration(input: &[u8], indent: usize) -> StmtRes {
     return node;
 }
 
+named!(assignments<&[u8], &[u8]>,
+    recognize!(alt!(
+        tag!("=")   |
+        tag!("+=")  |
+        tag!("-=")  |
+        tag!("*=")  |
+        tag!("/=")  |
+        tag!("**=") |
+        tag!("%=")  |
+        tag!(">>=") |
+        tag!("<<=") |
+        tag!("|=")  |
+        tag!("&=")  |
+        tag!("^=")
+    ))
+);
+
 fn assignment(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input, tuple!(
         identifier,
@@ -468,26 +485,25 @@ fn expression(input: &[u8]) -> ExprRes {
         comparison
     );
 
+    let x = match match 5 {
+        5 => 5
+    } {
+        5 => 5
+    };
+
     return node;
 }
 
-
-named!(assignments<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("=")   |
-        tag!("+=")  |
-        tag!("-=")  |
-        tag!("*=")  |
-        tag!("/=")  |
-        tag!("**=") |
-        tag!("%=")  |
-        tag!(">>=") |
-        tag!("<<=") |
-        tag!("|=")  |
-        tag!("&=")  |
-        tag!("^=")
-    ))
-);
+//fn match_expr(input: &[u8]) -> ExprRes {
+//    let parse_result = tuple!(input,
+//        delimited!(
+//            tag!("match"),
+//            inline_wrapped!()
+//        )
+//    );
+//
+//    panic!()
+//}
 
 named!(comparisons<&[u8], &[u8]>,
     recognize!(alt!(
@@ -499,35 +515,6 @@ named!(comparisons<&[u8], &[u8]>,
         tag!(">")
     ))
 );
-
-fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
-    return match output.1 {
-        Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
-        None => output.0
-    };
-}
-
-/// Create a binary expression, where one of several operators is possible.
-fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Expr, Option<(&[u8], Expr)>)) -> Expr {
-    return match output.1 {
-        Some(x) => {
-            let op: BinaryOperator = *operators.get(x.0).unwrap();
-            Expr::BinaryExpr {operator: op, left: Box::new(output.0), right: Box::new(x.1)}
-        },
-        None => output.0
-    };
-}
-
-/// Create a binary expression, where one of several operators is possible.
-fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> Expr {
-    return match output.0 {
-        Some(x) => {
-            assert_eq!(x, operator.to_string().as_bytes());
-            Expr::UnaryExpr {operator: operator, operand: Box::new(output.1)}
-        },
-        None => output.1
-    };
-}
 
 fn comparison(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
@@ -556,6 +543,35 @@ fn comparison(input: &[u8]) -> ExprRes {
 
     let node = fmap_iresult(parse_result, map);
     return node;
+}
+
+fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
+    return match output.1 {
+        Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
+        None => output.0
+    };
+}
+
+/// Create a binary expression, where one of several operators is possible.
+fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Expr, Option<(&[u8], Expr)>)) -> Expr {
+    return match output.1 {
+        Some(x) => {
+            let op: BinaryOperator = *operators.get(x.0).unwrap();
+            Expr::BinaryExpr {operator: op, left: Box::new(output.0), right: Box::new(x.1)}
+        },
+        None => output.0
+    };
+}
+
+/// Create a binary expression, where one of several operators is possible.
+fn match_unary_expr(operator: UnaryOperator, output: (Option<&[u8]>, Expr)) -> Expr {
+    return match output.0 {
+        Some(x) => {
+            assert_eq!(x, operator.to_string().as_bytes());
+            Expr::UnaryExpr {operator: operator, operand: Box::new(output.1)}
+        },
+        None => output.1
+    };
 }
 
 /// Match any of a list of strings. Return the matched string.

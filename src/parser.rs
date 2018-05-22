@@ -485,10 +485,9 @@ fn expression(input: &[u8]) -> ExprRes {
         comparison
     );
 
-    let x = match match 5 {
-        5 => 5
-    } {
-        5 => 5
+    let x= match 5 {
+        (yield_stmt("asdf".as_bytes())) => panic!(),
+        _ => panic!()
     };
 
     return node;
@@ -498,7 +497,14 @@ fn expression(input: &[u8]) -> ExprRes {
 //    let parse_result = tuple!(input,
 //        delimited!(
 //            tag!("match"),
-//            inline_wrapped!()
+//            inline_wrapped!(expression),
+//            between_statement
+//        ),
+//        separated_nonempty_list_complete!(
+//            tuple!(
+//
+//            ),
+//            between_statement
 //        )
 //    );
 //

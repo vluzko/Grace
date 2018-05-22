@@ -660,14 +660,85 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 
 //TODO get rid of all the _ast bits
 fn atomic_expr_ast(input: &[u8]) -> ExprRes {
-    let node = alt!(input,
+    let node = alt_complete!(input,
         bool_expr_ast |
-        complete!(float_ast) |
-        complete!(int_ast) |
-        complete!(string_ast) |
+        float_ast |
+        int_ast |
+        string_ast |
+        delimited!(
+            inline_wrapped!(tag!("{")),
+            map_or_set_comprehension,
+            inline_wrapped!(tag!("}"))
+        ) |
+        delimited!(
+            inline_wrapped!(tag!("[")),
+            vector_comprehension,
+            inline_wrapped!(tag!("]"))
+        ) |
         expr_with_trailer
     );
     return node;
+}
+
+fn comprehension_for(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+    let parse_result = separated_nonempty_list_complete!(input,
+        inline_wrapped!(tag!(",")),
+        identifier_ast
+    );
+
+    return parse_result;
+}
+
+fn comprehension_if(input: &[u8]) -> ExprRes {
+    return preceded!(input,
+        inline_keyword!("if"),
+        expression_ast
+    );
+}
+
+fn vector_comprehension(input: &[u8]) -> ExprRes {
+    let parse_result = tuple!(input,
+        boolean_op_expr,
+        delimited!(
+            inline_keyword!("for"),
+            comprehension_for,
+            inline_keyword!("in")
+        ),
+        boolean_op_expr,
+        opt!(complete!(comprehension_if))
+    );
+
+    return fmap_iresult(parse_result, |x: (Expr, Vec<Identifier>, Expr, Option<Expr>)| Expr::VecComprehension {
+        values: Box::new(x.0),
+        iterator_unpacking: x.1,
+        iterator: Box::new(x.2)
+    });
+}
+
+fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+    let parse_result = tuple!(input,
+            boolean_op_expr,
+            opt!(complete!(preceded!(
+                inline_wrapped!(tag!(":")),
+                boolean_op_expr
+            ))),
+            delimited!(
+                inline_keyword!("for"),
+                comprehension_for,
+                inline_keyword!("in")
+            ),
+            boolean_op_expr,
+            opt!(complete!(comprehension_if))
+    );
+
+    return fmap_iresult(parse_result, |x: (Expr, Option<Expr>, Vec<Identifier>, Expr, Option<Expr>)| match x.1 {
+        Some(y) => {
+            Expr::MapComprehension {keys: Box::new(x.0), values: Box::new(y), iterator_unpacking: x.2, iterator: Box::new(x.3)}
+        },
+        None => {
+            Expr::SetComprehension {values: Box::new(x.0), iterator_unpacking: x.2, iterator: Box::new(x.3)}
+        }
+    })
 }
 
 fn wrapped_expr(input: &[u8]) -> ExprRes {
@@ -1077,6 +1148,28 @@ fn test_for_in() {
         iter_var: Identifier::from("x"),
         iterator: Expr::from("y"),
         block: output(block_ast("a=true".as_bytes(), 0))
+    });
+}
+
+#[test]
+fn test_comprehensions() {
+    check_match("{x for x in y}", expression_ast, Expr::SetComprehension {
+        values: Box::new(Expr::from("x")),
+        iterator_unpacking: vec![Identifier::from("x")],
+        iterator: Box::new(Expr::from("y"))
+    });
+
+    check_match("{x:z for x in y}", expression_ast, Expr::MapComprehension {
+        keys: Box::new(Expr::from("x")),
+        values: Box::new(Expr::from("z")),
+        iterator_unpacking: vec![Identifier::from("x")],
+        iterator: Box::new(Expr::from("y"))
+    });
+
+    check_match("[x for x in y]", expression_ast, Expr::VecComprehension {
+        values: Box::new(Expr::from("x")),
+        iterator_unpacking: vec![Identifier::from("x")],
+        iterator: Box::new(Expr::from("y"))
     });
 }
 

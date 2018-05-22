@@ -99,7 +99,10 @@ pub enum Expr {
     Bool(Boolean),
     Int(IntegerLiteral),
     Float(FloatLiteral),
-    String(String)
+    String(String),
+    VecComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
+    MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
+    SetComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>}
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

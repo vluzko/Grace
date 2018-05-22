@@ -144,7 +144,7 @@ impl<'a> From<&'a [u8]> for Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DottedIdentifier {
-    pub attributes: Vec<String>
+    pub attributes: Vec<Identifier>
 }
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

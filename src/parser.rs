@@ -14,6 +14,7 @@ use self::nom::IResult::Done as Done;
 use expression::*;
 
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
+type StmtRes<'a> = IResult<&'a[u8], Stmt>;
 
 // TODO: Move to a utils file
 /// Map the contents of an IResult.
@@ -279,32 +280,35 @@ fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return alt!(input, custom_eof | tag!("\n"));
 }
 
-fn statement(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
-    let node = alt!(input,
+fn statement(input: &[u8], indent: usize) -> StmtRes {
+    let node = alt_complete!(input,
         assignment |
         call!(while_stmt, indent) |
         call!(for_in, indent) |
         call!(if_stmt, indent) |
         call!(function_declaration, indent) |
-        call!(import) |
-        call!(return_stmt)
+        import |
+        return_stmt |
+        break_stmt |
+        pass_stmt |
+        continue_stmt
     );
 
     return node;
 }
 
-fn import(input: &[u8]) -> IResult<&[u8], Stmt> {
+fn import(input: &[u8]) -> StmtRes {
     let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
     return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
 }
 
-fn return_stmt(input: &[u8]) -> IResult<&[u8], Stmt> {
+fn return_stmt(input: &[u8]) -> StmtRes {
     let parse_result = tuple!(input, inline_keyword!("return"), expression);
     return fmap_iresult(parse_result,|x| Stmt::ReturnStmt {value: x.1});
 }
 
 /// Parse a while loop.
-fn while_stmt(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
+fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(
         input,
         tag!("while "),
@@ -318,7 +322,7 @@ fn while_stmt(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
 }
 
 /// Parse a for in loop.
-fn for_in(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
+fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         delimited!(
             tag!("for "),
@@ -335,7 +339,7 @@ fn for_in(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     return fmap_iresult(parse_result, |x| Stmt::ForInStmt {iter_var: x.0, iterator: x.1, block: x.2});
 }
 
-fn if_stmt(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
+fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     // TODO: Should be expression.
     let parse_result = tuple!(
         input,
@@ -383,7 +387,7 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
     return node;
 }
 
-fn function_declaration(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
+fn function_declaration(input: &[u8], indent: usize) -> StmtRes {
     let full_tuple = tuple!(input,
         tag!("fn "),
         inline_wrapped!(identifier),
@@ -400,7 +404,7 @@ fn function_declaration(input: &[u8], indent: usize) -> IResult<&[u8], Stmt> {
     return node;
 }
 
-fn assignment(input: &[u8]) -> IResult<&[u8], Stmt> {
+fn assignment(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input, tuple!(
         identifier,
         inline_wrapped!(assignments),
@@ -411,6 +415,42 @@ fn assignment(input: &[u8]) -> IResult<&[u8], Stmt> {
         identifier: x.0, operator:Assignment::from(from_utf8(x.1).unwrap()), expression: x.2});
 
     return node;
+}
+
+fn break_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = terminated!(input,
+        tag!("break"),
+        terminated!(
+            inline_whitespace,
+            eof_or_line
+        )
+    );
+
+    return fmap_iresult(parse_result, |_x| Stmt::BreakStmt);
+}
+
+fn pass_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = terminated!(input,
+        tag!("pass"),
+        terminated!(
+            inline_whitespace,
+            eof_or_line
+        )
+    );
+
+    return fmap_iresult(parse_result, |_x| Stmt::PassStmt);
+}
+
+fn continue_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = terminated!(input,
+        tag!("continue"),
+        terminated!(
+            inline_whitespace,
+            eof_or_line
+        )
+    );
+
+    return fmap_iresult(parse_result, |_x| Stmt::ContinueStmt);
 }
 
 fn expression(input: &[u8]) -> ExprRes {
@@ -1182,3 +1222,9 @@ fn test_comprehensions() {
 }
 
 
+#[test]
+fn test_simple_statements() {
+    check_match("pass", |x| statement(x, 0), Stmt::PassStmt);
+    check_match("continue", |x| statement(x, 0), Stmt::ContinueStmt);
+    check_match("break", |x| statement(x, 0), Stmt::BreakStmt);
+}

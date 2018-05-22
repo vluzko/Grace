@@ -291,7 +291,8 @@ fn statement(input: &[u8], indent: usize) -> StmtRes {
         return_stmt |
         break_stmt |
         pass_stmt |
-        continue_stmt
+        continue_stmt |
+        yield_stmt
     );
 
     return node;
@@ -451,6 +452,15 @@ fn continue_stmt(input: &[u8]) -> StmtRes {
     );
 
     return fmap_iresult(parse_result, |_x| Stmt::ContinueStmt);
+}
+
+fn yield_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = preceded!(input,
+        tag!("yield"),
+        inline_wrapped!(expression)
+    );
+
+    return fmap_iresult(parse_result, |x| Stmt::YieldStmt(x))
 }
 
 fn expression(input: &[u8]) -> ExprRes {
@@ -1180,14 +1190,18 @@ fn test_while_stmt() {
 
 #[test]
 fn test_import() {
-    let expected = Stmt::ImportStmt {module: DottedIdentifier{attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))}};
-    check_match("import foo.bar.baz", |x| statement(x, 0), expected);
+    check_match("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt {
+        module: DottedIdentifier{attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))}
+    });
 }
 
 #[test]
-fn test_return() {
-    let expected = Stmt::ReturnStmt {value: Expr::from(true)};
-    check_match("return true", |x| statement(x, 0), expected);
+fn test_returns() {
+    check_match("return true", |x| statement(x, 0), Stmt::ReturnStmt {
+        value: Expr::from(true)
+    });
+
+    check_match("yield true", |x| statement(x, 0), Stmt::YieldStmt (Expr::from(true)));
 }
 
 #[test]
@@ -1220,7 +1234,6 @@ fn test_comprehensions() {
         iterator: Box::new(Expr::from("y"))
     });
 }
-
 
 #[test]
 fn test_simple_statements() {

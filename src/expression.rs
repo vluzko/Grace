@@ -37,8 +37,15 @@ pub enum Stmt {
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
     FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block},
+    // TODO: Change to be tuples instead of records.
     ImportStmt{module: DottedIdentifier},
-    ReturnStmt{value: Expr}
+    ReturnStmt{value: Expr},
+    BreakStmt,
+    PassStmt,
+    ContinueStmt,
+    YieldStmt(Expr),
+    // TODO: Fix contents of exception
+    TryExceptStmt{main: Block, exception: Block, finally: Option<Block>}
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -82,6 +89,7 @@ impl ASTNode for Stmt {}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
+    MatchExpr{value: Box<Expr>, cases: Vec<(Expr, Expr)>},
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
@@ -91,7 +99,10 @@ pub enum Expr {
     Bool(Boolean),
     Int(IntegerLiteral),
     Float(FloatLiteral),
-    String(String)
+    String(String),
+    VecComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
+    MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
+    SetComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>}
 }
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -133,7 +144,7 @@ impl<'a> From<&'a [u8]> for Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DottedIdentifier {
-    pub attributes: Vec<String>
+    pub attributes: Vec<Identifier>
 }
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

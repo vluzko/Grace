@@ -36,7 +36,7 @@ pub enum Stmt {
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
-    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, body: Block},
+    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, vararg: Option<Identifier>, keyword_args: Option<Vec<(Identifier, Expr)>>, varkwarg: Option<Identifier>, body: Block},
     // TODO: Change to be tuples instead of records.
     ImportStmt{module: DottedIdentifier},
     ReturnStmt{value: Expr},
@@ -68,7 +68,7 @@ impl Display for Stmt {
                 };
                 format!("If statement:\n  Condition: {}.\n{}\nelifs:\n{}\nelse:\n  {}", condition, indent_block(main_block.to_string()), strings, indent_block(else_string))
             },
-            &Stmt::FunctionDecStmt{ref name, ref args, ref body} => {
+            &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body} => {
                 let arg_iter = args.iter().map(|x| x.to_string());
                 let args_string = arg_iter.collect::<Vec<_>>().join(", ");
 

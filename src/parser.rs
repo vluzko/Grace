@@ -167,7 +167,7 @@ named!(inline_whitespace<&[u8], Vec<&[u8]>>,
 );
 
 named!(num_follow<&[u8], &[u8]> ,
-    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n")))
+    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")))
 );
 
 named!(dec_digit<&[u8], &[u8]>,
@@ -290,7 +290,7 @@ fn statement(input: &[u8], indent: usize) -> StmtRes {
         call!(for_in, indent) |
         call!(if_stmt, indent) |
         call!(function_declaration, indent) |
-//        call!(try_except, indent) |
+        call!(try_except, indent) |
         import |
         return_stmt |
         break_stmt |
@@ -392,21 +392,78 @@ fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
     return node;
 }
 
+named!(args_dec_list<&[u8], Vec<Identifier>>,
+    inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier))
+);
+
+named!(vararg<&[u8], Option<Identifier>>,
+    opt!(complete!(preceded!(
+        tuple!(
+            inline_wrapped!(tag!(",")),
+            inline_wrapped!(tag!("*"))
+        ),
+        inline_wrapped!(identifier)
+    )))
+);
+
+named!(keyword_args<&[u8], Option<Vec<(Identifier, Expr)>>>,
+    opt!(complete!(preceded!(
+        inline_wrapped!(tag!(",")),
+        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")),
+            tuple!(
+                inline_wrapped!(identifier),
+                preceded!(
+                    inline_wrapped!(tag!("=")),
+                    inline_wrapped!(expression)
+                )
+            )
+        ))
+    )))
+);
+
+named!(kwvararg<&[u8], Option<Identifier>>,
+    opt!(complete!(preceded!(
+        tuple!(
+            inline_wrapped!(tag!(",")),
+            inline_wrapped!(tag!("**"))
+        ),
+        inline_wrapped!(identifier)
+    )))
+);
+
 fn function_declaration(input: &[u8], indent: usize) -> StmtRes {
     let full_tuple = tuple!(input,
-        tag!("fn "),
-        inline_wrapped!(identifier),
-        tag!("("),
-        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier)),
-        tag!(")"),
-        inline_wrapped!(tag!(":")),
-        newline,
-        call!(block, indent + 1)
+        preceded!(
+            tag!("fn "),
+            inline_wrapped!(identifier)
+        ),
+        delimited!(
+            tag!("("),
+            tuple!(
+                args_dec_list,
+                vararg,
+                keyword_args,
+                kwvararg
+            ),
+            tag!(")")
+        ),
+        preceded!(
+            tuple!(
+                inline_wrapped!(tag!(":")),
+                newline
+            ),
+            call!(block, indent + 1)
+        )
     );
 
-    let node = fmap_iresult(full_tuple, |x| Stmt::FunctionDecStmt{name: x.1, args: x.3, body: x.7});
-
-    return node;
+    return fmap_iresult(full_tuple, |x| Stmt::FunctionDecStmt{
+        name: x.0,
+        args: (x.1).0,
+        vararg: (x.1).1,
+        keyword_args: (x.1).2,
+        varkwarg: (x.1).3,
+        body: x.2
+    });
 }
 
 fn try_except(input: &[u8], indent: usize) -> StmtRes {
@@ -1005,38 +1062,37 @@ fn read_from_file(f_name: &str) -> String {
     };
 }
 
-
-fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
-    where T: Debug + PartialEq + Eq {
-    let res = parser(input.as_bytes());
-    match res {
-        Done(i, o) => {
-            let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-            assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-            assert_eq!(o, expected);
-        },
-        IResult::Error(e) => {
-            println!("Error: {}. Input was: {}", e, input);
-            panic!()
-        },
-        _ => panic!()
-    }
-}
-
-fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
-    let res = parser(input.as_bytes());
-    match res {
-        IResult::Error(e) => {
-            assert_eq!(e, expected);
-        },
-        _ => panic!()
-    }
-}
-
 #[cfg(test)]
 mod tests {
 
     use super::*;
+
+    fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(input.as_bytes());
+        match res {
+            Done(i, o) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
+                assert_eq!(o, expected);
+            },
+            IResult::Error(e) => {
+                println!("Error: {}. Input was: {}", e, input);
+                panic!()
+            },
+            _ => panic!()
+        }
+    }
+
+    fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
+        let res = parser(input.as_bytes());
+        match res {
+            IResult::Error(e) => {
+                assert_eq!(e, expected);
+            },
+            _ => panic!()
+        }
+    }
 
     #[test]
     fn test_block() {
@@ -1045,6 +1101,21 @@ mod tests {
                 output(assignment("x=0\n".as_bytes())),
                 output(assignment("y=true".as_bytes()))
             ]
+        });
+    }
+
+    #[test]
+    fn test_func_dec() {
+        check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            name: Identifier::from("x"),
+            args: c![Identifier::from(x), for x in vec!("a", "b")],
+            vararg: Some(Identifier::from("args")),
+            keyword_args: Some(vec!(
+                (Identifier::from("c"), output(expression("5".as_bytes()))),
+                (Identifier::from("d"), output(expression("7".as_bytes())))
+            )),
+            varkwarg: Some(Identifier::from("kwargs")),
+            body: output(block("x=5\n".as_bytes(), 0))
         });
     }
 
@@ -1068,7 +1139,7 @@ mod tests {
 
     #[test]
     fn test_simple_parenthetical_expressions() {
-        let expected =Expr::BinaryExpr {
+        let expected = Expr::BinaryExpr {
             operator:BinaryOperator::And,
             left: Box::new(Expr::Bool(Boolean::True)),
             right: Box::new(Expr::Bool(Boolean::False))};

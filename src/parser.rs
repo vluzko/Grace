@@ -593,13 +593,7 @@ fn power_expr(input: &[u8]) -> ExprRes {
     return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr);
 }
 
-// TODO: Use everywhere
-named!(args_list<&[u8], Vec<Expr>>,
-    separated_list_complete!(
-        inline_wrapped!(tag!(",")),
-        expression
-    )
-);
+
 
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
@@ -735,8 +729,8 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
         let mut tree_base = x.0;
         for postval in x.1 {
             match postval {
-                PostIdent::Call{args} => {
-                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args:args};
+                PostIdent::Call{args, kwargs} => {
+                    tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args: args, kwargs: kwargs};
                 },
 
                 PostIdent::Access{attributes} => {
@@ -751,23 +745,47 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
     return node;
 }
 
-fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: Vec<Expr>| PostIdent::Call{args: x};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
-    let result = alt!(input,
-        map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum)
+fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Expr>> {
+    let parse_result = separated_list_complete!(input,
+        inline_wrapped!(tag!(",")),
+        terminated!(
+            boolean_op_expr,
+            peek!(inline_wrapped!(alt_complete!(tag!(")") | tag!(","))))
+        )
     );
-    return result;
+    return parse_result;
 }
 
-named!(post_call<&[u8], Vec<Expr>>,
-    delimited!(
+fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Expr)>> {
+    let parse_result = separated_list_complete!(input,
+        inline_wrapped!(tag!(",")),
+        tuple!(
+            identifier,
+            preceded!(
+                inline_wrapped!(tag!("=")),
+                boolean_op_expr
+            )
+        )
+    );
+
+    return parse_result;
+}
+
+fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Expr>, Option<Vec<(Identifier, Expr)>>)> {
+    let parse_result = delimited!(input,
         inline_wrapped!(tag!("(")),
-        inline_wrapped!(args_list),
+        tuple!(
+            inline_wrapped!(args_list),
+            opt!(complete!(preceded!(
+                inline_wrapped!(tag!(",")),
+                inline_wrapped!(kwargs_list)
+            )))
+        ),
         inline_wrapped!(tag!(")"))
-    )
-);
+    );
+
+    return parse_result;
+}
 
 named!(post_access<&[u8], Vec<Identifier>>,
     many1!(
@@ -777,6 +795,16 @@ named!(post_access<&[u8], Vec<Identifier>>,
         )
     )
 );
+
+fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    let call_to_enum = |x: (Vec<Expr>, Option<Vec<(Identifier, Expr)>>)| PostIdent::Call{args: x.0, kwargs: x.1};
+    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
+    let result = alt!(input,
+        map!(post_call, call_to_enum) |
+        map!(post_access, access_to_enum)
+    );
+    return result;
+}
 
 /// Parser to return an Identifier AST.
 fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
@@ -980,8 +1008,17 @@ mod tests {
     fn test_function_call() {
         let a = output(boolean_op_expr("true and false".as_bytes()));
         let b = output(expression("func()".as_bytes()));
-        let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b)};
-        check_match("ident(true and false, func())", expression, expected);
+        let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b), kwargs: None};
+//        check_match("ident(true and false, func())", expression, expected);
+
+        check_match("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
+            func_expr: Box::new(Expr::from("func")),
+            args: c![Expr::from(x), for x in vec!("a", "b")],
+            kwargs: Some(vec!(
+                (Identifier::from("c"), Expr::from(true)),
+                (Identifier::from("d"), Expr::from(true))
+            ))
+        });
     }
 
     #[test]
@@ -1052,14 +1089,16 @@ mod tests {
     #[test]
     fn test_repeated_func_calls() {
         let expected = Expr::FunctionCall{
-            func_expr: Box::new(Expr::FunctionCall{func_expr: Box::new(Expr::from("func")), args: vec!(Expr::from("a"))}),
-            args: vec!(Expr::from("b"), Expr::from("c"))
+            func_expr: Box::new(Expr::FunctionCall{func_expr: Box::new(Expr::from("func")), args: vec!(Expr::from("a")), kwargs: None}),
+            args: vec!(Expr::from("b"), Expr::from("c")),
+            kwargs: None
         };
         check_match("func(a)(b, c)", expression, expected);
 
         check_match("(a and b)(true)", expression, Expr::FunctionCall {
             func_expr: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
-            args: vec!(Expr::from(true))
+            args: vec!(Expr::from(true)),
+            kwargs: None
         });
     }
 
@@ -1072,7 +1111,11 @@ mod tests {
     #[test]
     fn test_post_ident() {
         let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
-        check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args});
+        check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args, kwargs: None});
+        check_match("(a, b=true)", trailer, PostIdent::Call {
+            args: vec!(Expr::from("a")),
+            kwargs: Some(vec!((Identifier::from("b"), Expr::from(true))))
+        });
 
         check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
     }

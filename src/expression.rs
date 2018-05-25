@@ -93,7 +93,7 @@ pub enum Expr {
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>},
+    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
     AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
     IdentifierExpr{ident: Identifier},
     Bool(Boolean),
@@ -110,7 +110,7 @@ impl Display for Expr {
             &Expr::ComparisonExpr{ref operator, ref left, ref right} => format!("Comparison:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
-            &Expr::FunctionCall{ref func_expr, ref args} => {
+            &Expr::FunctionCall{ref func_expr, ref args, ref kwargs} => {
                 let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
                 format!("Function call. Func: {}. Args: {}", func_expr, joined_args)
             },
@@ -154,7 +154,7 @@ impl Display for DottedIdentifier {
 
 #[derive (Debug, Clone, PartialEq, Eq)]
 pub enum PostIdent {
-    Call{args: Vec<Expr>},
+    Call{args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
     Access{attributes: Vec<Identifier>}
 }
 

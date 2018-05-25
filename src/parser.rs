@@ -12,77 +12,10 @@ extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
 use expression::*;
+use utils::*;
 
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
 type StmtRes<'a> = IResult<&'a[u8], Stmt>;
-
-// TODO: Move to a utils file
-/// Map the contents of an IResult.
-/// Rust functors plox
-pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], T>
-    where F: Fn(X) -> T {
-    return match res {
-        Done(i, o) => Done(i, func(o)),
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n)
-    };
-}
-
-pub fn output<T>(res: IResult<&[u8], T>) -> T {
-    return match res {
-        Done(_, o) => o,
-        IResult::Error(e) => {
-            println!("Output error: {:?}.", e);
-            panic!()
-        },
-        IResult::Incomplete(n) => {
-            println!("Incomplete: {:?}", n);
-            panic!()
-        }
-    };
-}
-
-pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
-    println!("{} input was: {:?}", name, from_utf8(input));
-    return match res {
-        Done(i, o) => {
-            println!("{} leftover input is {:?}", name, from_utf8(i));
-            Done(i, func(o))
-        },
-        IResult::Error(e) => {
-            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
-            IResult::Error(e)
-        },
-        IResult::Incomplete(n) => {
-            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
-            IResult::Incomplete(n)
-        }
-    };
-}
-
-// TODO: Change
-/// Map an IResult and log errors and incomplete values.
-pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
-    return match res {
-        Done(i, o) => Done(i, func(o)),
-        IResult::Error(e) => {
-            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
-            IResult::Error(e)
-        },
-        IResult::Incomplete(n) => {
-            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
-            IResult::Incomplete(n)
-        }
-    };
-}
-
-pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
-    return fmap_and_full_log(res, |x| x, name, input);
-}
-
-pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
-    return fmap_and_log(res, |x| x, name, input);
-}
 
 pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
     parse_grace_from_slice(input.as_bytes())
@@ -98,58 +31,6 @@ pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
         IResult::Error(e) => IResult::Error(e)
     };
 }
-
-/// A macro for wrapping a parser in inline whitespace.
-/// Similar to ws!, but doesn't allow for \n, \r, or \t.
-macro_rules! inline_wrapped (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
-        IResult::Error(a)      => IResult::Error(a),
-        IResult::Incomplete(i) => IResult::Incomplete(i),
-        IResult::Done(remaining, (_,o, _))    => {
-            IResult::Done(remaining, o)
-        }
-      }
-    }
-  );
-
-  ($i:expr, $f:expr) => (
-    inline_wrapped!($i, call!($f));
-  );
-);
-
-named!(valid_identifier_char<&[u8], &[u8]>,
-    alt!(alpha | tag!("_") | digit)
-);
-
-/// Matches a keyword within a line.
-/// Used for "and", "or", "xor", "in", etc.
-macro_rules! inline_keyword (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      delimited!($i,
-        inline_whitespace,
-        $submac!($($args)*),
-        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
-    }
-  );
-
-  ($i:expr, $f:expr) => (
-    inline_wrapped!($i, tag!($f));
-  );
-);
-
-/// Check that a macro is indented correctly.
-macro_rules! indented (
-  ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
-    preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
-  );
-
-  ($i:expr, $f:expr, $ind: expr) => (
-    indented!($i, call!($f), $ind);
-  );
-);
 
 /// Create a rule of the form: KEYWORD PARSER COLON BLOCK
 /// if, elif, except, fn are all rules of this form.
@@ -185,40 +66,6 @@ macro_rules! keyword_then_block (
     );
 );
 
-named!(ending_colon <&[u8], &[u8]>,
-    terminated!(
-        inline_wrapped!(tag!(":")),
-        newline
-    )
-);
-
-named!(inline_whitespace_char<&[u8], &[u8]>,
-    tag!(" ")
-);
-
-named!(inline_whitespace<&[u8], Vec<&[u8]>>,
-    many0!(tag!(" "))
-);
-
-named!(num_follow<&[u8], &[u8]> ,
-    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")))
-);
-
-named!(dec_digit<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("0") |
-        tag!("1") |
-        tag!("2") |
-        tag!("3") |
-        tag!("4") |
-        tag!("5") |
-        tag!("6") |
-        tag!("7") |
-        tag!("8") |
-        tag!("9")
-    ))
-);
-
 named!(dec_seq<&[u8], &[u8]>,
     recognize!(many1!(dec_digit))
 );
@@ -236,17 +83,6 @@ named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
         )
     )
 );
-
-fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
-    let n = many0!(input,
-        terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
-    );
-    return n;
-}
-
-fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return eof!(input, );
-}
 
 pub fn reserved_list() -> Vec<&'static str>{
     let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield");
@@ -307,16 +143,12 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Stmt>> 
 
 }
 
-// TODO: just make it a size and pass 0 instead of None
 fn block(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
     let parse_result = block_rule(input, indent);
     return fmap_iresult(parse_result, |x| Block{statements: x});
 }
 
-fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return alt!(input, eof!() | tag!("\n"));
-}
-
+/// Match any statement.
 fn statement(input: &[u8], indent: usize) -> StmtRes {
     let node = alt_complete!(input,
         assignment |
@@ -336,11 +168,13 @@ fn statement(input: &[u8], indent: usize) -> StmtRes {
     return fmap_iresult(node, |x| x);
 }
 
+/// Match an import statement.
 fn import(input: &[u8]) -> StmtRes {
     let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
     return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
 }
 
+/// Match a return statement.
 fn return_stmt(input: &[u8]) -> StmtRes {
     let parse_result = tuple!(input, inline_keyword!("return"), expression);
     return fmap_iresult(parse_result,|x| Stmt::ReturnStmt {value: x.1});
@@ -349,7 +183,6 @@ fn return_stmt(input: &[u8]) -> StmtRes {
 /// Parse a while loop.
 fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "while", expression, indent);
-
     return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
 }
 
@@ -451,7 +284,7 @@ fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
 fn try_except(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         keyword_then_block!("try", indent),
-        keyword_then_block!("except", indent),
+        many1!(keyword_then_block!("except", indent)),
         opt!(complete!(
             keyword_then_block!("else", indent)
         )),
@@ -461,6 +294,7 @@ fn try_except(input: &[u8], indent: usize) -> StmtRes {
     return fmap_iresult(parse_result, |x| Stmt::TryExceptStmt {
         main: x.0,
         exception: x.1,
+        else_block: x.2,
         finally: x.3
     });
 }
@@ -487,7 +321,7 @@ fn assignment(input: &[u8]) -> StmtRes {
         tuple!(
             identifier,
             inline_wrapped!(assignments),
-            expression
+            inline_wrapped!(expression)
         ),
         alt_complete!(recognize!(newline)| custom_eof)
     );
@@ -1245,11 +1079,13 @@ mod tests {
 
     #[test]
     fn test_try_except() {
-        check_match("try:\n x = 0\nexcept:\n x = 0", |x| try_except(x, 0), Stmt::TryExceptStmt {
-            main: Block{statements: vec![output(assignment("x=0".as_bytes()))]},
-            exception: Block{statements: vec![output(assignment("x=0".as_bytes()))]},
-            finally: None
-        })
+        let blk = output(block("x=0".as_bytes(), 0));
+        check_match("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
+            main: blk.clone(),
+            exception: vec!(blk.clone()),
+            else_block: Some(blk.clone()),
+            finally: Some(blk.clone())
+        });
     }
 
     #[test]

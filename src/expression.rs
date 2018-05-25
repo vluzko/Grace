@@ -45,7 +45,7 @@ pub enum Stmt {
     ContinueStmt,
     YieldStmt(Expr),
     // TODO: Fix contents of exception
-    TryExceptStmt{main: Block, exception: Block, finally: Option<Block>}
+    TryExceptStmt{main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>}
 }
 impl Display for Stmt {
      fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

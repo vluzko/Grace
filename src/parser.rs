@@ -316,6 +316,16 @@ named!(assignments<&[u8], &[u8]>,
     ))
 );
 
+fn let_stmt(input: &[u8]) -> Stmt {
+    let parse_result = separated_pair!(input,
+        preceded!(
+
+        ),
+        inline_wrapped!(tag!("=")),
+        expression
+    );
+}
+
 fn assignment(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
@@ -589,11 +599,10 @@ fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
     return node;
 }
 
+/// An exponentiation.
 fn power_expr(input: &[u8]) -> ExprRes {
     return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr);
 }
-
-
 
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3

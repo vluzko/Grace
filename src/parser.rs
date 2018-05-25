@@ -151,6 +151,40 @@ macro_rules! indented (
   );
 );
 
+/// Create a rule of the form: KEYWORD PARSER COLON BLOCK
+/// if, elif, except, fn are all rules of this form.
+macro_rules! line_then_block (
+    ($i:expr, $keyword: expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
+        tuple!($i,
+            delimited!(
+                terminated!(
+                    indented!(tag!($keyword), $indent),
+                    not!(valid_identifier_char)
+                ),
+                inline_wrapped!($submac!($($args)*)),
+                ending_colon
+            ),
+            call!(block, $indent + 1)
+        )
+    );
+
+    ($i:expr, $keyword: expr, $func: expr, $indent: expr) => (
+        line_then_block!($i, $keyword, call!($func), $indent)
+    );
+);
+
+/// Create a rule of the form: KEYWORD COLON BLOCK
+/// else and try are both rules of this form.
+macro_rules! keyword_then_block (
+    ($i:expr, $keyword: expr, $indent: expr) => (
+        match line_then_block!($i, $keyword, inline_whitespace, $indent) {
+            IResult::Error(a)      => IResult::Error(a),
+            IResult::Incomplete(i) => IResult::Incomplete(i),
+            IResult::Done(remaining, (_,o)) => IResult::Done(remaining, o)
+        }
+    );
+);
+
 named!(ending_colon <&[u8], &[u8]>,
     terminated!(
         inline_wrapped!(tag!(":")),
@@ -314,88 +348,40 @@ fn return_stmt(input: &[u8]) -> StmtRes {
 
 /// Parse a while loop.
 fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = tuple!(
-        input,
-        tag!("while "),
-        inline_wrapped!(expression),
-        tag!(":"),
-        newline,
-        call!(block, indent+1)
-    );
+    let parse_result = line_then_block!(input, "while", expression, indent);
 
-    return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.1, block: x.4});
+    return fmap_iresult(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
 }
 
 /// Parse a for in loop.
 fn for_in(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = tuple!(input,
-        delimited!(
-            tag!("for "),
-            inline_wrapped!(identifier),
-            inline_keyword!("in")
-        ),
-        terminated!(
-            inline_wrapped!(expression),
-            ending_colon
-        ),
-        call!(block, indent+1)
-    );
+    let parse_result = line_then_block!(input, "for", tuple!(
+        inline_wrapped!(identifier),
+        preceded!(
+            inline_keyword!("in"),
+            inline_wrapped!(expression)
+        )
+    ), indent);
 
-    return fmap_iresult(parse_result, |x| Stmt::ForInStmt {iter_var: x.0, iterator: x.1, block: x.2});
+    return fmap_iresult(parse_result, |x| Stmt::ForInStmt {iter_var: (x.0).0, iterator: (x.0).1, block: x.1});
 }
 
 fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
-    // TODO: Should be expression.
-    let parse_result = tuple!(
-        input,
-        tag!("if"),
-        many1!(inline_whitespace_char),
-        inline_wrapped!(expression),
-        inline_wrapped!(tag!(":")),
-        newline,
-        call!(block, indent + 1),
-        many0!(call!(elif_rule, indent)),
-        opt!(complete!(call!(else_rule, indent)))
+    let parse_result = tuple!(input,
+        line_then_block!("if", expression, indent),
+        many0!(line_then_block!("elif", expression, indent)),
+        opt!(complete!(keyword_then_block!("else", indent)))
     );
 
-    let node = fmap_iresult(parse_result, |x|Stmt::IfStmt{condition: x.2, main_block: x.5, elifs: x.6, else_block: x.7});
-
-    return node;
+    return fmap_iresult(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, main_block: (x.0).1, elifs: x.1, else_block: x.2});
 }
 
-fn elif_rule(input: &[u8], indent: usize) -> IResult<&[u8], (Expr, Block)> {
-    let parse_result = tuple!(
-        input,
-        indented!(tag!("elif"), indent),
-        many1!(inline_whitespace_char),
-        inline_wrapped!(boolean_op_expr),
-        inline_wrapped!(tag!(":")),
-        newline,
-        call!(block, indent + 1)
-    );
-
-    let node = fmap_iresult(parse_result, |x| (x.2, x.5));
-    return node;
-}
-
-fn else_rule(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
-    let parse_result = tuple!(
-        input,
-        indented!(tag!("else"), indent),
-        inline_wrapped!(tag!(":")),
-        newline,
-        call!(block, indent + 1)
-    );
-
-    let node = fmap_iresult(parse_result, |x| x.3);
-
-    return node;
-}
-
+/// Match all normal arguments.
 named!(args_dec_list<&[u8], Vec<Identifier>>,
     inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier))
 );
 
+/// Match the variable length argument.
 named!(vararg<&[u8], Option<Identifier>>,
     opt!(complete!(preceded!(
         tuple!(
@@ -406,6 +392,7 @@ named!(vararg<&[u8], Option<Identifier>>,
     )))
 );
 
+/// Match all default arguments
 named!(keyword_args<&[u8], Option<Vec<(Identifier, Expr)>>>,
     opt!(complete!(preceded!(
         inline_wrapped!(tag!(",")),
@@ -421,6 +408,7 @@ named!(keyword_args<&[u8], Option<Vec<(Identifier, Expr)>>>,
     )))
 );
 
+/// Match the variable length keyword argument.
 named!(kwvararg<&[u8], Option<Identifier>>,
     opt!(complete!(preceded!(
         tuple!(
@@ -431,12 +419,10 @@ named!(kwvararg<&[u8], Option<Identifier>>,
     )))
 );
 
-fn function_declaration(input: &[u8], indent: usize) -> StmtRes {
-    let full_tuple = tuple!(input,
-        preceded!(
-            tag!("fn "),
-            inline_wrapped!(identifier)
-        ),
+/// Match a function declaration.
+fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
+    let arg_parser = |i: &'a [u8]| tuple!(i,
+        inline_wrapped!(identifier),
         delimited!(
             tag!("("),
             tuple!(
@@ -446,46 +432,36 @@ fn function_declaration(input: &[u8], indent: usize) -> StmtRes {
                 kwvararg
             ),
             tag!(")")
-        ),
-        preceded!(
-            tuple!(
-                inline_wrapped!(tag!(":")),
-                newline
-            ),
-            call!(block, indent + 1)
         )
     );
 
-    return fmap_iresult(full_tuple, |x| Stmt::FunctionDecStmt{
-        name: x.0,
-        args: (x.1).0,
-        vararg: (x.1).1,
-        keyword_args: (x.1).2,
-        varkwarg: (x.1).3,
-        body: x.2
+    let parse_result = line_then_block!(input, "fn", arg_parser, indent);
+
+    return fmap_iresult(parse_result, |x| Stmt::FunctionDecStmt{
+        name: x.0 .0,
+        args: x.0 .1 .0,
+        vararg: x.0 .1 .1,
+        keyword_args: x.0 .1 .2,
+        varkwarg: x.0 .1 . 3,
+        body: x.1
     });
 }
 
+/// Match a try except statement.
 fn try_except(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
-        tuple!(
-            indented!(tag!("try"), indent),
-            ending_colon,
-            between_statement
-        ),
-        call!(block, indent + 1),
-        tuple!(
-            indented!(tag!("except"), indent),
-            ending_colon,
-            between_statement
-        ),
-        call!(block, indent + 1)
+        keyword_then_block!("try", indent),
+        keyword_then_block!("except", indent),
+        opt!(complete!(
+            keyword_then_block!("else", indent)
+        )),
+        opt!(complete!(keyword_then_block!("finally", indent)))
     );
 
     return fmap_iresult(parse_result, |x| Stmt::TryExceptStmt {
-        main: x.1,
-        exception: x.3,
-        finally: None
+        main: x.0,
+        exception: x.1,
+        finally: x.3
     });
 }
 
@@ -635,6 +611,7 @@ fn match_expr(input: &[u8]) -> ExprRes {
     return fmap_iresult(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
 }
 
+/// Match a single binary expression.
 fn match_binary_expr(operator: BinaryOperator, output: (Expr, Option<Expr>)) -> Expr {
     return match output.1 {
         Some(x) => Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)},
@@ -696,6 +673,7 @@ fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &Has
     return node;
 }
 
+/// Match a list of binary operations
 fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
         next_expr,
@@ -709,30 +687,35 @@ fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<
     return node;
 }
 
+/// Match boolean operators.
 fn boolean_op_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["and", "or", "xor"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_keyword_list(input, &symbols, &operators, bit_boolean_op_expr);
 }
 
+/// Match bitwise boolean operations.
 fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["&", "|", "^"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_op_list(input, &symbols, &operators,bit_shift);
 }
 
+/// Match the bit shift operators.
 fn bit_shift(input: &[u8]) -> ExprRes {
     let symbols = vec![">>", "<<"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_op_list(input, &symbols, &operators, additive_expr);
 }
 
+/// Match addition and subtraction.
 fn additive_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["+", "-"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
     return binary_op_list(input, &symbols, &operators, mult_expr);
 }
 
+/// Match multiplication, division, and modulo.
 fn mult_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["*", "/", "%"];
     let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
@@ -890,6 +873,7 @@ fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
     })
 }
 
+/// An expression wrapped in parentheses.
 fn wrapped_expr(input: &[u8]) -> ExprRes {
     let node = delimited!(input,
         inline_wrapped!(tag!("(")),
@@ -1308,6 +1292,13 @@ mod tests {
         check_match(good_input, |x| statement(x, 0), good_output);
 
         check_failed("ifa and b:\n x = true", |x| statement(x, 0), nom::ErrorKind::Alt);
+
+        check_match("if    true   :     \n\n\n x = true\nelif    false   :   \n\n\n y = true\nelse     :  \n z = true", |x| if_stmt(x, 0), Stmt::IfStmt {
+            condition: Expr::from(true),
+            main_block: output(block("x = true".as_bytes(), 0)),
+            elifs: vec!((Expr::from(false), output(block("y = true".as_bytes(), 0)))),
+            else_block: Some(output(block("z = true".as_bytes(), 0)))
+        });
     }
 
     #[test]

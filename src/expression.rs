@@ -57,14 +57,21 @@ pub enum Expr {
     Int(IntegerLiteral),
     Float(FloatLiteral),
     String(String),
-    VecComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
-    MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
-    SetComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>}
+    VecComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TypeAnnotation {
     Simple(Identifier)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ComprehensionIter {
+    pub iter_vars: Vec<Identifier>,
+    pub iterator: Box<Expr>,
+    pub if_clauses: Vec<Expr>
 }
 
 /// A helper Enum for trailers.
@@ -172,7 +179,6 @@ impl Display for Block {
         write!(f, "Block:\n{}", strings)
     }
 }
-
 impl Display for Stmt {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
@@ -211,7 +217,6 @@ impl Display for Stmt {
         write!(f, "{}", string_rep.as_str())
     }
 }
-
 impl Display for Expr {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let string_rep = match self {
@@ -233,13 +238,11 @@ impl Display for Expr {
         write!(f, "{}", string_rep.as_str())
     }
 }
-
 impl Display for ComparisonOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self)
     }
 }
-
 impl Display for BinaryOperator {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -260,7 +263,6 @@ impl Display for BinaryOperator {
         })
     }
 }
-
 impl Display for UnaryOperator{
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -271,25 +273,21 @@ impl Display for UnaryOperator{
         })
     }
 }
-
 impl Display for TypedIdent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} (typed)", self.name)
     }
 }
-
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Dotted Ident: {:?}", self.attributes)
     }
 }
-
 impl Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
     }
 }
-
 impl Display for Boolean {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", match self {
@@ -298,19 +296,16 @@ impl Display for Boolean {
         })
     }
 }
-
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.string_rep)
     }
 }
-
 impl Display for FloatLiteral {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.string_rep)
     }
 }
-
 
 /// From implementations
 

@@ -668,20 +668,34 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
 }
 
 /// Match the for part of a comprehension.
-fn comprehension_for(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    let parse_result = separated_nonempty_list_complete!(input,
-        inline_wrapped!(tag!(",")),
-        identifier
+fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
+    let parse_result = tuple!(input,
+        delimited!(
+            inline_keyword!("for"),
+            separated_nonempty_list_complete!(
+                inline_wrapped!(tag!(",")),
+                identifier
+            ),
+            inline_keyword!("in")
+        ),
+        boolean_op_expr,
+        comprehension_if
     );
 
-    return parse_result;
+    return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
+        iter_vars: iter_vars,
+        iterator: Box::new(iterator),
+        if_clauses: if_clauses
+    });
 }
 
 /// Match the if part of a comprehension.
-fn comprehension_if(input: &[u8]) -> ExprRes {
-    return preceded!(input,
-        inline_keyword!("if"),
-        expression
+fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Expr>> {
+    return many0!(input,
+        preceded!(
+            inline_keyword!("if"),
+            inline_wrapped!(boolean_op_expr)
+        )
     );
 }
 
@@ -689,19 +703,12 @@ fn comprehension_if(input: &[u8]) -> ExprRes {
 fn vector_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         boolean_op_expr,
-        delimited!(
-            inline_keyword!("for"),
-            comprehension_for,
-            inline_keyword!("in")
-        ),
-        boolean_op_expr,
-        opt!(complete!(comprehension_if))
+        many1!(comprehension_for)
     );
 
-    return fmap_iresult(parse_result, |x: (Expr, Vec<Identifier>, Expr, Option<Expr>)| Expr::VecComprehension {
+    return fmap_iresult(parse_result, |x: (Expr, Vec<ComprehensionIter>)| Expr::VecComprehension {
         values: Box::new(x.0),
-        iterator_unpacking: x.1,
-        iterator: Box::new(x.2)
+        iterators: x.1
     });
 }
 
@@ -713,23 +720,20 @@ fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
                 inline_wrapped!(tag!(":")),
                 boolean_op_expr
             ))),
-            delimited!(
-                inline_keyword!("for"),
-                comprehension_for,
-                inline_keyword!("in")
-            ),
-            boolean_op_expr,
-            opt!(complete!(comprehension_if))
+            many1!(comprehension_for)
     );
 
-    return fmap_iresult(parse_result, |x: (Expr, Option<Expr>, Vec<Identifier>, Expr, Option<Expr>)| match x.1 {
-        Some(y) => {
-            Expr::MapComprehension {keys: Box::new(x.0), values: Box::new(y), iterator_unpacking: x.2, iterator: Box::new(x.3)}
+    return fmap_iresult(parse_result, |(keys_or_values, values, iters): (Expr, Option<Expr>, Vec<ComprehensionIter>)| match values {
+        Some(y) => Expr::MapComprehension {
+            keys: Box::new(keys_or_values),
+            values: Box::new(y),
+            iterators: iters
         },
-        None => {
-            Expr::SetComprehension {values: Box::new(x.0), iterator_unpacking: x.2, iterator: Box::new(x.3)}
+        None => Expr::SetComprehension {
+            values: Box::new(keys_or_values),
+            iterators: iters
         }
-    })
+    });
 }
 
 /// An expression wrapped in parentheses.
@@ -1245,21 +1249,49 @@ mod tests {
         fn test_comprehensions() {
             check_match("{x for x in y}", expression, Expr::SetComprehension {
                 values: Box::new(Expr::from("x")),
-                iterator_unpacking: vec![Identifier::from("x")],
-                iterator: Box::new(Expr::from("y"))
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                })
             });
 
             check_match("{x:z for x in y}", expression, Expr::MapComprehension {
                 keys: Box::new(Expr::from("x")),
                 values: Box::new(Expr::from("z")),
-                iterator_unpacking: vec![Identifier::from("x")],
-                iterator: Box::new(Expr::from("y"))
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                })
             });
 
             check_match("[x for x in y]", expression, Expr::VecComprehension {
                 values: Box::new(Expr::from("x")),
-                iterator_unpacking: vec![Identifier::from("x")],
-                iterator: Box::new(Expr::from("y"))
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                })
+            });
+
+            check_match("[x for x in y for x in y]", expression, Expr::VecComprehension {
+                values: Box::new(Expr::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                }, ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                })
+            });
+
+            check_match("for a, b in c if true if false", comprehension_for, ComprehensionIter{
+                iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
+                iterator: Box::new(Expr::from("c")),
+                if_clauses: c![Expr::from(x), for x in vec!(true, false)]
             });
         }
 

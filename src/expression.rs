@@ -22,7 +22,7 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
-    LetStmt{identifier: Identifier, value: Expr},
+    LetStmt{identifier: Identifier, value: Expr, type_annotation: Option<TypeAnnotation>},
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
@@ -54,6 +54,11 @@ pub enum Expr {
     VecComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
     MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>},
     SetComprehension{values: Box<Expr>, iterator_unpacking: Vec<Identifier>, iterator: Box<Expr>}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TypeAnnotation {
+    Simple(Identifier)
 }
 
 /// A helper Enum for trailers.

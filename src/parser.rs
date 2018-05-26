@@ -108,6 +108,12 @@ fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return final_result;
 }
 
+fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
+    let parse_result = identifier(input);
+
+    return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
+}
+
 // TODO: Merge block_rule with block
 fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Stmt>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
@@ -318,16 +324,17 @@ named!(assignments<&[u8], &[u8]>,
 );
 
 fn let_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = separated_pair!(input,
+    let parse_result = tuple!(input,
         preceded!(
             tuple!(tag!("let"), many1!(inline_whitespace_char)),
             identifier
         ),
+        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
         inline_wrapped!(tag!("=")),
         inline_wrapped!(expression)
     );
 
-    return fmap_iresult(parse_result, |x| Stmt::LetStmt {identifier: x.0, value: x.1})
+    return fmap_iresult(parse_result, |x| Stmt::LetStmt {identifier: x.0, value: x.3, type_annotation: x.1})
 }
 
 fn assignment(input: &[u8]) -> StmtRes {
@@ -961,7 +968,8 @@ mod tests {
         fn test_let() {
             check_match("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
                 identifier: Identifier::from("x"),
-                value: Expr::Float(FloatLiteral{string_rep: "3.0".to_string()})
+                value: Expr::Float(FloatLiteral{string_rep: "3.0".to_string()}),
+                type_annotation: None
             })
         }
 

@@ -22,7 +22,7 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
-    LetStmt{identifier: Identifier, expression: Expr},
+    LetStmt{identifier: Identifier, value: Expr},
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},

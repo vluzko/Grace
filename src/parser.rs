@@ -217,9 +217,19 @@ fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Match all normal arguments.
-named!(args_dec_list<&[u8], Vec<TypedIdent>>,
-    inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), typed_identifier))
-);
+fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<TypedIdent>> {
+    inline_wrapped!(input,
+        separated_list_complete!(
+            inline_wrapped!(tag!(",")),
+            terminated!(
+                typed_identifier,
+                alt!(recognize!(many1!(inline_whitespace_char)) |
+                peek!(tag!(",")) |
+                peek!(tag!(")")))
+            )
+        )
+    )
+}
 
 /// Match the variable length argument.
 named!(vararg<&[u8], Option<Identifier>>,
@@ -234,7 +244,7 @@ named!(vararg<&[u8], Option<Identifier>>,
 
 /// Match all default arguments
 fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>> {
-    opt!(input, complete!(preceded!(
+    let parse_result = opt!(input, complete!(preceded!(
         inline_wrapped!(tag!(",")),
         inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
@@ -245,7 +255,9 @@ fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>>
                 )
             )
         ))
-    )))
+    )));
+
+    return parse_result;
 }
 
 /// Match the variable length keyword argument.
@@ -984,15 +996,26 @@ mod tests {
 
         #[test]
         fn test_func_dec() {
-            check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+//            check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+//                name: Identifier::from("x"),
+//                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+//                vararg: Some(Identifier::from("args")),
+//                keyword_args: Some(vec!(
+//                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
+//                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+//                )),
+//                varkwarg: Some(Identifier::from("kwargs")),
+//                body: output(block("x=5\n".as_bytes(), 0))
+//            });
+
+            check_match("fn x(a: int, c: int=5):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("x"),
-                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
-                vararg: Some(Identifier::from("args")),
+                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
+                vararg: None,
                 keyword_args: Some(vec!(
-                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
                 )),
-                varkwarg: Some(Identifier::from("kwargs")),
+                varkwarg: None,
                 body: output(block("x=5\n".as_bytes(), 0))
             });
         }

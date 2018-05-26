@@ -461,6 +461,13 @@ impl <'a> From<&'a [u8]> for FloatLiteral {
     }
 }
 
+/// From for TypeAnnotation
+impl <'a> From<&'a str> for TypeAnnotation {
+    fn from(input: &'a str) -> Self {
+        return TypeAnnotation::Simple(Identifier::from(input));
+    }
+}
+
 /// ASTNode implementations
 
 impl ASTNode for Block {}

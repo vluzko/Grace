@@ -22,11 +22,11 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
-    LetStmt{identifier: Identifier, value: Expr, type_annotation: Option<TypeAnnotation>},
+    LetStmt{value_name: TypedIdent, value: Expr},
     IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
     WhileStmt{condition: Expr, block: Block},
     ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
-    FunctionDecStmt{name: Identifier, args: Vec<Identifier>, vararg: Option<Identifier>, keyword_args: Option<Vec<(Identifier, Expr)>>, varkwarg: Option<Identifier>, body: Block},
+    FunctionDecStmt{name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>, keyword_args: Option<Vec<(TypedIdent, Expr)>>, varkwarg: Option<Identifier>, body: Block},
     // TODO: Change to be values instead of records.
     ImportStmt{module: DottedIdentifier},
     ReturnStmt{value: Expr},
@@ -35,6 +35,12 @@ pub enum Stmt {
     ContinueStmt,
     YieldStmt(Expr),
     TryExceptStmt{main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TypedIdent {
+    pub name: Identifier,
+    pub type_annotation: Option<TypeAnnotation>
 }
 
 /// An expression.
@@ -266,6 +272,12 @@ impl Display for UnaryOperator{
     }
 }
 
+impl Display for TypedIdent {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} (typed)", self.name)
+    }
+}
+
 impl Display for DottedIdentifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "Dotted Ident: {:?}", self.attributes)
@@ -381,6 +393,13 @@ impl <'a> From<&'a str> for UnaryOperator {
             "~" => UnaryOperator::BitNot,
             _ => panic!()
         };
+    }
+}
+
+/// From for TypedIdent
+impl <'a> From<&'a str> for TypedIdent {
+    fn from(input: &'a str) -> Self {
+        return TypedIdent{name: Identifier::from(input), type_annotation: None};
     }
 }
 

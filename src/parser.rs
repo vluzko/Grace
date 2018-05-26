@@ -85,7 +85,7 @@ named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
 );
 
 pub fn reserved_list() -> Vec<&'static str>{
-    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield");
+    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield", "let");
     return list;
 }
 
@@ -217,8 +217,8 @@ fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Match all normal arguments.
-named!(args_dec_list<&[u8], Vec<Identifier>>,
-    inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), identifier))
+named!(args_dec_list<&[u8], Vec<TypedIdent>>,
+    inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")), typed_identifier))
 );
 
 /// Match the variable length argument.
@@ -233,12 +233,12 @@ named!(vararg<&[u8], Option<Identifier>>,
 );
 
 /// Match all default arguments
-named!(keyword_args<&[u8], Option<Vec<(Identifier, Expr)>>>,
-    opt!(complete!(preceded!(
+fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>> {
+    opt!(input, complete!(preceded!(
         inline_wrapped!(tag!(",")),
         inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                inline_wrapped!(identifier),
+                inline_wrapped!(typed_identifier),
                 preceded!(
                     inline_wrapped!(tag!("=")),
                     inline_wrapped!(expression)
@@ -246,7 +246,7 @@ named!(keyword_args<&[u8], Option<Vec<(Identifier, Expr)>>>,
             )
         ))
     )))
-);
+}
 
 /// Match the variable length keyword argument.
 named!(kwvararg<&[u8], Option<Identifier>>,
@@ -324,17 +324,16 @@ named!(assignments<&[u8], &[u8]>,
 );
 
 fn let_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input,
+    let parse_result = separated_pair!(input,
         preceded!(
             tuple!(tag!("let"), many1!(inline_whitespace_char)),
-            identifier
+            typed_identifier
         ),
-        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
         inline_wrapped!(tag!("=")),
         inline_wrapped!(expression)
     );
 
-    return fmap_iresult(parse_result, |x| Stmt::LetStmt {identifier: x.0, value: x.3, type_annotation: x.1})
+    return fmap_iresult(parse_result, |x| Stmt::LetStmt {value_name: x.0, value: x.1});
 }
 
 fn assignment(input: &[u8]) -> StmtRes {
@@ -830,15 +829,23 @@ fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
 fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result = recognize!(input,
         pair!(
-            not!(peek!(reserved_words)),
+            not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
             pair!(
                 alt!(alpha | tag!("_")),
                 many0!(valid_identifier_char)
             )
         )
     );
-    let node = fmap_iresult(parse_result,  Identifier::from);
-    return node;
+    return fmap_iresult(parse_result,  Identifier::from);
+}
+
+fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
+    let parse_result = tuple!(input,
+        identifier,
+        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
+    );
+
+    return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
 // TODO: Use Boolean::from
@@ -966,10 +973,12 @@ mod tests {
 
         #[test]
         fn test_let() {
-            check_match("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                identifier: Identifier::from("x"),
+            check_match("let x: int = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                value_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: Some(TypeAnnotation::Simple(Identifier::from("int")))
+                },
                 value: Expr::Float(FloatLiteral{string_rep: "3.0".to_string()}),
-                type_annotation: None
             })
         }
 
@@ -977,11 +986,11 @@ mod tests {
         fn test_func_dec() {
             check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("x"),
-                args: c![Identifier::from(x), for x in vec!("a", "b")],
+                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
                 vararg: Some(Identifier::from("args")),
                 keyword_args: Some(vec!(
-                    (Identifier::from("c"), output(expression("5".as_bytes()))),
-                    (Identifier::from("d"), output(expression("7".as_bytes())))
+                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
+                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
                 )),
                 varkwarg: Some(Identifier::from("kwargs")),
                 body: output(block("x=5\n".as_bytes(), 0))

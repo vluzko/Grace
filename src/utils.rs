@@ -177,6 +177,10 @@ named!(pub close_bracket <&[u8], &[u8]>,
     inline_wrapped!(tag!("]"))
 );
 
+named!(pub colon <&[u8], &[u8]>,
+    inline_wrapped!(tag!(":"))
+);
+
 named!(pub ending_colon <&[u8], &[u8]>,
     terminated!(
         inline_wrapped!(tag!(":")),
@@ -230,3 +234,14 @@ macro_rules! separated_at_least_m {
         separated_at_least_m!($i, $m, call!($f), call!($g));
     );
 }
+
+/// Alias for opt!(complete!())
+macro_rules! optc (
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
+    opt!($i, complete!($submac!($($args)*)))
+  );
+
+  ($i:expr, $f:expr, $ind: expr) => (
+    optc!($i, call!($f));
+  );
+);

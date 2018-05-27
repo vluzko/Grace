@@ -83,6 +83,7 @@ pub struct ComprehensionIter {
 #[derive (Debug, Clone, PartialEq, Eq)]
 pub enum PostIdent {
     Call{args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
+    Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
     Access{attributes: Vec<Identifier>}
 }
 

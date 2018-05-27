@@ -865,10 +865,10 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
                 PostIdent::Call{args, kwargs} => {
                     tree_base = Expr::FunctionCall {func_expr: Box::new(tree_base), args: args, kwargs: kwargs};
                 },
-
                 PostIdent::Access{attributes} => {
                     tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
                 }
+                _ => panic!()
             }
         };
         return tree_base;
@@ -906,18 +906,60 @@ fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Expr)>> {
 
 fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Expr>, Option<Vec<(Identifier, Expr)>>)> {
     let parse_result = delimited!(input,
-        inline_wrapped!(tag!("(")),
+        open_paren,
         tuple!(
             inline_wrapped!(args_list),
             opt!(complete!(preceded!(
-                inline_wrapped!(tag!(",")),
+                comma,
                 inline_wrapped!(kwargs_list)
             )))
         ),
-        inline_wrapped!(tag!(")"))
+        close_paren
     );
 
     return parse_result;
+}
+
+fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    let parse_result = delimited!(input,
+        open_bracket,
+        separated_nonempty_list_complete!(
+            comma,
+            alt_complete!(
+                tuple!(
+                    map!(boolean_op_expr, |x| Some(x)),
+                    optc!(tuple!(
+                        preceded!(
+                            colon,
+                            boolean_op_expr
+                        ),
+                        optc!(preceded!(
+                            colon,
+                            boolean_op_expr
+                        ))
+                    ))
+                ) |
+                map!(colon, |_| (None, None))
+            )
+        ),
+        close_bracket
+    );
+
+    fn flatten((lower_or_upper, rest): (Option<Expr>, Option<(Expr, Option<Expr>)>)) -> (Option<Expr>, Option<Expr>, Option<Expr>) {
+        match lower_or_upper {
+            Some(_) => {
+                match rest {
+                    Some((upper, step)) => (lower_or_upper, Some(upper), step),
+                    None => (lower_or_upper, None, None)
+                }
+            },
+            None => (None, None, None)
+        }
+    }
+
+    return fmap_iresult(parse_result, |x: Vec<(Option<Expr>, Option<(Expr, Option<Expr>)>)>| PostIdent::Index {
+        slices: c![flatten(y), for y in x]
+    });
 }
 
 named!(post_access<&[u8], Vec<Identifier>>,
@@ -934,7 +976,8 @@ fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
     let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
     let result = alt!(input,
         map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum)
+        map!(post_access, access_to_enum) |
+        post_index
     );
     return result;
 }
@@ -1100,17 +1143,18 @@ mod tests {
 
         #[test]
         fn test_func_dec() {
-//            check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-//                name: Identifier::from("x"),
-//                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
-//                vararg: Some(Identifier::from("args")),
-//                keyword_args: Some(vec!(
-//                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-//                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
-//                )),
-//                varkwarg: Some(Identifier::from("kwargs")),
-//                body: output(block("x=5\n".as_bytes(), 0))
-//            });
+            check_match("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("x"),
+                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+                vararg: Some(Identifier::from("args")),
+                keyword_args: Some(vec!(
+                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
+                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                )),
+                varkwarg: Some(Identifier::from("kwargs")),
+                body: output(block("x=5\n".as_bytes(), 0)),
+                return_type: None
+            });
 
             check_match("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("x"),
@@ -1463,6 +1507,14 @@ mod tests {
         });
 
         check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+
+        check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+            slices: vec!(
+                (Some(Expr::from("a")), Some(Expr::from("b")), Some(Expr::from("c"))),
+                (None, None, None),
+                (Some(Expr::from("d")), None, None)
+            )
+        })
     }
 
 }

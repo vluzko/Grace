@@ -52,6 +52,7 @@ pub enum Expr {
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
     FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
     AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
+    Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
     IdentifierExpr{ident: Identifier},
     Bool(Boolean),
     Int(IntegerLiteral),

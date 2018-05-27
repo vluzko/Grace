@@ -868,7 +868,9 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
                 PostIdent::Access{attributes} => {
                     tree_base = Expr::AttributeAccess {container: Box::new(tree_base), attributes: attributes};
                 }
-                _ => panic!()
+                PostIdent::Index{slices} => {
+                    tree_base = Expr::Index {slices: slices}
+                }
             }
         };
         return tree_base;

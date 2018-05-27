@@ -281,28 +281,33 @@ named!(kwvararg<&[u8], Option<Identifier>>,
 /// Match a function declaration.
 fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
     let arg_parser = |i: &'a [u8]| tuple!(i,
-        inline_wrapped!(identifier),
-        delimited!(
-            tag!("("),
-            tuple!(
-                args_dec_list,
-                vararg,
-                keyword_args,
-                kwvararg
-            ),
-            tag!(")")
-        )
+        identifier,
+        preceded!(
+            open_paren,
+            args_dec_list
+        ),
+        vararg,
+        keyword_args,
+        terminated!(
+            kwvararg,
+            close_paren)
+        ,
+        opt!(complete!(preceded!(
+            inline_wrapped!(tag!("->")),
+            type_annotation
+        )))
     );
 
     let parse_result = line_then_block!(input, "fn", arg_parser, indent);
 
-    return fmap_iresult(parse_result, |x| Stmt::FunctionDecStmt{
-        name: x.0 .0,
-        args: x.0 .1 .0,
-        vararg: x.0 .1 .1,
-        keyword_args: x.0 .1 .2,
-        varkwarg: x.0 .1 . 3,
-        body: x.1
+    return fmap_iresult(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
+        name: name,
+        args: args,
+        vararg: vararg,
+        keyword_args: keyword_args,
+        varkwarg: varkwarg,
+        body: body,
+        return_type: return_type
     });
 }
 
@@ -721,7 +726,6 @@ fn vec_literal(input: &[u8]) -> ExprRes {
 }
 
 fn set_literal(input: &[u8]) -> ExprRes {
-
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
             inline_wrapped!(tag!(",")),
@@ -937,12 +941,14 @@ fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
 
 /// Parser to return an Identifier AST.
 fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let parse_result = recognize!(input,
-        pair!(
-            not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
+    let parse_result = inline_wrapped!(input,
+        recognize!(
             pair!(
-                alt!(alpha | tag!("_")),
-                many0!(valid_identifier_char)
+                not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
+                pair!(
+                    alt!(alpha | tag!("_")),
+                    many0!(valid_identifier_char)
+                )
             )
         )
     );
@@ -1106,7 +1112,7 @@ mod tests {
 //                body: output(block("x=5\n".as_bytes(), 0))
 //            });
 
-            check_match("fn x(a: int, c: int=5):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_match("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("x"),
                 args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
                 vararg: None,
@@ -1114,7 +1120,8 @@ mod tests {
                     (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
                 )),
                 varkwarg: None,
-                body: output(block("x=5\n".as_bytes(), 0))
+                body: output(block("x=5\n".as_bytes(), 0)),
+                return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
             });
         }
 

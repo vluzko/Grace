@@ -108,6 +108,13 @@ fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return final_result;
 }
 
+fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+    return separated_nonempty_list_complete!(input,
+        inline_wrapped!(tag!(",")),
+        inline_wrapped!(identifier)
+    );
+}
+
 fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
     let parse_result = identifier(input);
 
@@ -513,7 +520,7 @@ fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u
 /// Match a binary expression whose operator is a symbol.
 fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        next_expr,
+        inline_wrapped!(next_expr),
         opt!(complete!(preceded!(
             inline_wrapped!(tag!(symbol)),
             call!(binary_op_symbol, symbol, operator, next_expr)
@@ -528,7 +535,7 @@ fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator,
 /// Currently only used for and, or, and xor.
 fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        next_expr,
+        inline_wrapped!(next_expr),
         opt!(tuple!(
             inline_keyword!(call!(match_any, symbols)),
             call!(binary_op_list, symbols, operators, next_expr)
@@ -542,7 +549,7 @@ fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &Has
 /// Match a list of binary operations
 fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        next_expr,
+        inline_wrapped!(next_expr),
         opt!(tuple!(
             inline_wrapped!(call!(match_any, symbols)),
             call!(binary_op_list, symbols, operators, next_expr)
@@ -654,12 +661,16 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
         string |
         delimited!(
             inline_wrapped!(tag!("{")),
-            map_or_set_comprehension,
+            alt_complete!(
+                map_or_set_comprehension |
+                set_literal |
+                map_literal
+            ),
             inline_wrapped!(tag!("}"))
         ) |
         delimited!(
             inline_wrapped!(tag!("[")),
-            vector_comprehension,
+            alt_complete!(vector_comprehension | vec_literal),
             inline_wrapped!(tag!("]"))
         ) |
         expr_with_trailer
@@ -672,10 +683,7 @@ fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
     let parse_result = tuple!(input,
         delimited!(
             inline_keyword!("for"),
-            separated_nonempty_list_complete!(
-                inline_wrapped!(tag!(",")),
-                identifier
-            ),
+            variable_unpacking,
             inline_keyword!("in")
         ),
         boolean_op_expr,
@@ -694,19 +702,105 @@ fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Expr>> {
     return many0!(input,
         preceded!(
             inline_keyword!("if"),
-            inline_wrapped!(boolean_op_expr)
+            boolean_op_expr
         )
     );
+}
+
+fn vec_literal(input: &[u8]) -> ExprRes {
+
+    let parse_result = terminated!(input,
+        separated_nonempty_list_complete!(
+            inline_wrapped!(tag!(",")),
+            inline_wrapped!(boolean_op_expr)
+        ),
+        peek!(close_bracket)
+    );
+
+    return fmap_iresult(parse_result, |x| Expr::VecLiteral(x));
+}
+
+fn set_literal(input: &[u8]) -> ExprRes {
+
+    let parse_result = terminated!(input,
+        separated_nonempty_list_complete!(
+            inline_wrapped!(tag!(",")),
+            inline_wrapped!(boolean_op_expr)
+        ),
+        peek!(close_brace)
+    );
+
+    return fmap_iresult(parse_result, |x| Expr::SetLiteral(x));
+}
+
+/// Match a map literal.
+fn map_literal(input: &[u8]) -> ExprRes {
+
+    let parse_result = terminated!(input,
+        separated_nonempty_list_complete!(
+            inline_wrapped!(tag!(",")),
+            separated_pair!(
+                inline_wrapped!(identifier),
+                inline_wrapped!(tag!(":")),
+                inline_wrapped!(boolean_op_expr)
+            )
+        ),
+        peek!(close_brace)
+    );
+
+    return fmap_iresult(parse_result, |x| Expr::MapLiteral (x));
+}
+
+/// Match a tuple literal
+/// e.g. (), (1, ), (1,2,3), (1,2,3,)
+fn tuple_literal(input: &[u8]) -> ExprRes {
+    let parse_result = alt_complete!(input,
+        map!(
+            terminated!(
+                inline_whitespace,
+                peek!(close_paren)
+            ), |_| vec!()) |
+        map!(
+            terminated!(
+                inline_wrapped!(boolean_op_expr),
+                tuple!(
+                    comma,
+                    peek!(close_paren)
+                )
+            ), |x| vec!(x)
+        ) |
+        terminated!(
+            separated_at_least_m!(2, comma, boolean_op_expr),
+            terminated!(
+                opt!(complete!(comma)),
+                peek!(close_paren)
+            )
+        )
+    );
+
+    return fmap_iresult(parse_result, |x: Vec<Expr>| Expr::TupleLiteral(x));
 }
 
 /// Match a vector comprehension.
 fn vector_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        boolean_op_expr,
+        inline_wrapped!(boolean_op_expr),
         many1!(comprehension_for)
     );
 
     return fmap_iresult(parse_result, |x: (Expr, Vec<ComprehensionIter>)| Expr::VecComprehension {
+        values: Box::new(x.0),
+        iterators: x.1
+    });
+}
+
+fn generator_comprehension(input: &[u8]) -> ExprRes {
+    let parse_result = tuple!(input,
+        boolean_op_expr,
+        many1!(comprehension_for)
+    );
+
+    return fmap_iresult(parse_result, |x: (Expr, Vec<ComprehensionIter>)| Expr::GenComprehension {
         values: Box::new(x.0),
         iterators: x.1
     });
@@ -739,9 +833,9 @@ fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
 /// An expression wrapped in parentheses.
 fn wrapped_expr(input: &[u8]) -> ExprRes {
     let node = delimited!(input,
-        inline_wrapped!(tag!("(")),
-        expression,
-        inline_wrapped!(tag !(")"))
+        open_paren,
+        alt_complete!(generator_comprehension | tuple_literal | expression),
+        close_paren
     );
 
     return node;
@@ -1275,6 +1369,15 @@ mod tests {
                 })
             });
 
+            check_match("(x for x in y)", expression, Expr::GenComprehension {
+                values: Box::new(Expr::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Expr::from("y")),
+                    if_clauses: vec!()
+                })
+            });
+
             check_match("[x for x in y for x in y]", expression, Expr::VecComprehension {
                 values: Box::new(Expr::from("x")),
                 iterators: vec!(ComprehensionIter {
@@ -1311,6 +1414,11 @@ mod tests {
             check_match(rand_float.as_str(), float, Expr::Float(FloatLiteral{string_rep: rand_float.clone()}));
 
             check_match("\"asdf\\\"\\\rasdf\"", expression, Expr::String("\"asdf\\\"\\\rasdf\"".to_string()));
+
+            check_match("{x : y}", expression, Expr::MapLiteral(vec!((Identifier::from("x"), Expr::from("y")))));
+            check_match("[true, false]", expression, Expr::VecLiteral(vec!(Expr::from(true), Expr::from(false))));
+            check_match("{true, false}", expression, Expr::SetLiteral(vec!(Expr::from(true), Expr::from(false))));
+            check_match("(true, false)", expression, Expr::TupleLiteral(vec!(Expr::from(true), Expr::from(false))));
         }
     }
 

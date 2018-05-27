@@ -81,6 +81,7 @@ pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     let n = many0!(input,
         terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
     );
+
     return n;
 }
 
@@ -148,6 +149,34 @@ macro_rules! indented (
   );
 );
 
+named!(pub comma <&[u8], &[u8]>,
+    inline_wrapped!(tag!(","))
+);
+
+named!(pub open_paren <&[u8], &[u8]>,
+    inline_wrapped!(tag!("("))
+);
+
+named!(pub close_paren <&[u8], &[u8]>,
+    inline_wrapped!(tag!(")"))
+);
+
+named!(pub open_brace <&[u8], &[u8]>,
+    inline_wrapped!(tag!("{"))
+);
+
+named!(pub close_brace <&[u8], &[u8]>,
+    inline_wrapped!(tag!("}"))
+);
+
+named!(pub open_bracket <&[u8], &[u8]>,
+    inline_wrapped!(tag!("["))
+);
+
+named!(pub close_bracket <&[u8], &[u8]>,
+    inline_wrapped!(tag!("]"))
+);
+
 named!(pub ending_colon <&[u8], &[u8]>,
     terminated!(
         inline_wrapped!(tag!(":")),
@@ -174,3 +203,30 @@ named!(pub dec_digit<&[u8], &[u8]>,
         tag!("9")
     ))
 );
+
+
+macro_rules! separated_at_least_m {
+    ($i:expr, $m: expr, $sep:ident!( $($args:tt)* ), $submac:ident!( $($args2:tt)* )) => ({
+        match separated_list_complete!($i, complete!($sep!($($args)*)), complete!($submac!($($args2)*))) {
+            IResult::Done(i, o) => {
+                if o.len() < $m {
+                    IResult::Error(ErrorKind::ManyMN)
+                } else {
+                    IResult::Done(i, o)
+                }
+            },
+            IResult::Error(e) => IResult::Error(e),
+            IResult::Incomplete(n) => IResult::Incomplete(n)
+        }
+    });
+
+    ($i:expr, $m: expr, $submac:ident!( $($args:tt)* ), $g:expr) => (
+        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g));
+    );
+    ($i:expr, $m: expr, $f:expr, $submac:ident!( $($args:tt)* )) => (
+        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*));
+    );
+    ($i:expr, $m: expr, $f:expr, $g:expr) => (
+        separated_at_least_m!($i, $m, call!($f), call!($g));
+    );
+}

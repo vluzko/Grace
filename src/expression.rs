@@ -57,7 +57,12 @@ pub enum Expr {
     Int(IntegerLiteral),
     Float(FloatLiteral),
     String(String),
+    VecLiteral(Vec<Expr>),
+    SetLiteral(Vec<Expr>),
+    TupleLiteral(Vec<Expr>),
+    MapLiteral(Vec<(Identifier, Expr)>),
     VecComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    GenComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
     MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }

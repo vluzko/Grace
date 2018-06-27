@@ -1,0 +1,9 @@
+{
+  "name": "grace_js_test",
+  "version": "0.0.1",
+  "description": "Javascript tests for Grace",
+  "license": "MIT",
+  "devDependencies": {
+    "jasmine": "^3.1.0"
+  }
+}

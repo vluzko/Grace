@@ -9,7 +9,6 @@ fn indent_block(block_str: String) -> String {
     return ret;
 }
 
-// TODO: Print subtree
 pub trait ASTNode: Display{}
 
 /// A block of code. Just a series of statements.

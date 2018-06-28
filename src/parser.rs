@@ -17,16 +17,16 @@ use utils::*;
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
 type StmtRes<'a> = IResult<&'a[u8], Stmt>;
 
-pub fn parse_grace(input: &str) -> IResult<&[u8], Box<ASTNode>> {
+pub fn parse_grace(input: &str) -> IResult<&[u8], Block> {
     parse_grace_from_slice(input.as_bytes())
 }
 
 // This is the important function
-pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Box<ASTNode>> {
+pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Block> {
 
     let output = terminated!(input, call!(block, 0), custom_eof);
     return match output {
-        Done(i, o) => Done(i, Box::new(o) as Box<ASTNode>),
+        Done(i, o) => Done(i, o),
         IResult::Incomplete(n) => IResult::Incomplete(n),
         IResult::Error(e) => IResult::Error(e)
     };

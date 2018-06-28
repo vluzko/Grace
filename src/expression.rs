@@ -9,8 +9,6 @@ fn indent_block(block_str: String) -> String {
     return ret;
 }
 
-pub trait ASTNode: Display{}
-
 /// A block of code. Just a series of statements.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
@@ -468,15 +466,6 @@ impl <'a> From<&'a str> for TypeAnnotation {
         return TypeAnnotation::Simple(Identifier::from(input));
     }
 }
-
-/// ASTNode implementations
-
-impl ASTNode for Block {}
-impl ASTNode for Stmt {}
-impl ASTNode for Expr {}
-impl ASTNode for Identifier {}
-impl ASTNode for IntegerLiteral {}
-impl ASTNode for FloatLiteral {}
 
 #[test]
 fn test_indent() {

@@ -11,4 +11,5 @@ pub mod utils;
 pub mod grace_error;
 pub mod parser;
 pub mod expression;
+pub mod bytecode;
 

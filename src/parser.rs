@@ -419,7 +419,7 @@ fn yield_stmt(input: &[u8]) -> StmtRes {
     return fmap_iresult(parse_result, |x| Stmt::YieldStmt(x))
 }
 
-fn expression(input: &[u8]) -> ExprRes {
+pub fn expression(input: &[u8]) -> ExprRes {
     return alt_complete!(input,
         comparison
     );
@@ -1518,5 +1518,4 @@ mod tests {
             )
         })
     }
-
 }

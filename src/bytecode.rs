@@ -82,5 +82,3 @@ mod tests {
         assert_eq!(int_lit.generate_bytecode(), "i32.const 5".to_string());
     }
 }
-
-

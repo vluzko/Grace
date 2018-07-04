@@ -121,6 +121,22 @@ fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
     return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
 }
 
+fn module(input: &[u8]) -> IResult<&[u8], Module> {
+    let parse_result = delimited!(input,
+        opt!(between_statement),
+        many1!(complete!(
+            preceded!(
+                between_statement,
+                call!(function_declaration, 0)
+            )
+        )),
+        between_statement
+
+    );
+
+    return fmap_iresult(parse_result, |x| Module{declarations: x});
+}
+
 // TODO: Merge block_rule with block
 fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Stmt>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
@@ -1473,6 +1489,17 @@ mod tests {
             check_match("{true, false}", expression, Expr::SetLiteral(vec!(Expr::from(true), Expr::from(false))));
             check_match("(true, false)", expression, Expr::TupleLiteral(vec!(Expr::from(true), Expr::from(false))));
         }
+    }
+
+    #[test]
+    fn test_module() {
+        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+        check_match(module_str, module, Module{
+            declarations: vec!(
+                output(function_declaration("fn a():\n return 0".as_bytes(), 0)),
+                output(function_declaration("fn b():\n return 1".as_bytes(), 0))
+            )
+        })
     }
 
     #[test]

@@ -9,6 +9,12 @@ fn indent_block(block_str: String) -> String {
     return ret;
 }
 
+/// A top level module.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Module {
+    pub declarations: Vec<Stmt>
+}
+
 /// A block of code. Just a series of statements.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Block {
@@ -174,6 +180,11 @@ pub struct FloatLiteral {
 
 
 /// Display implementations
+impl Display for Module {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Block")
+    }
+}
 impl Display for Block {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let statement_iter = self.statements.iter();

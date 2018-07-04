@@ -1,7 +1,11 @@
 use std::fmt::Display;
 use expression::*;
-use utils::*;
 use parser;
+use utils::*;
+
+
+extern crate itertools;
+
 
 pub trait ASTNode: Display{
     fn generate_bytecode(&self) -> String;
@@ -9,6 +13,14 @@ pub trait ASTNode: Display{
 
 
 /// ASTNode implementations
+
+impl ASTNode for Module {
+    fn generate_bytecode(&self) -> String {
+        let decls = self.declarations.iter().map(|x| x.generate_bytecode());
+        let joined = itertools::join(decls, "\n");
+        return format!("(module\n {}\n)", joined).to_string();
+    }
+}
 
 impl ASTNode for Block {
     fn generate_bytecode(&self) -> String {

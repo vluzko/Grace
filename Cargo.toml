@@ -10,6 +10,7 @@ libc = "*"
 log = "0.4"
 cute = "*"
 rand = "*"
+itertools = "*"
 
 [lib]
 doctest = false

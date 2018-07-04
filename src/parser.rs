@@ -2,10 +2,9 @@ use std::str;
 use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
-use std::fmt::Debug;
 use std::collections::HashMap;
+use std::fmt::Debug;
 use rand;
-
 
 extern crate cute;
 extern crate nom;

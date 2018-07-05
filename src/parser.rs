@@ -120,7 +120,7 @@ fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
     return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
 }
 
-fn module(input: &[u8]) -> IResult<&[u8], Module> {
+pub fn module(input: &[u8]) -> IResult<&[u8], Module> {
     let parse_result = delimited!(input,
         opt!(between_statement),
         many1!(complete!(

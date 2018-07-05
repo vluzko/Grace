@@ -100,6 +100,13 @@ mod tests {
     use super::*;
 
     #[test]
+    pub fn test_generate_module() {
+        let module = parser::module("fn a(b):\n x = 5 + 6\n".as_bytes());
+        let mod_bytecode = "(module\n (func $a (param $b i64) (result i64)\n)\n(export \"a\" (func $a))\n\n)".to_string();
+        assert_eq!(output(module).generate_bytecode(), mod_bytecode);
+    }
+
+    #[test]
     pub fn test_generate_function() {
         let func_dec = parser::statement("fn a(b):\n x = 5 + 6\n".as_bytes(), 0);
         let func_bytecode = "(func $a (param $b i64) (result i64)\n)\n(export \"a\" (func $a))\n".to_string();

@@ -38,10 +38,10 @@ impl ASTNode for Stmt {
                     params = params,
                     body = body_bytecode
                 );
-                return func_dec
+                func_dec
             },
             &Stmt::AssignmentStmt {ref identifier, ref operator, ref expression} => {
-                return "".to_string()
+                "".to_string()
             }
             _ => panic!()
         };
@@ -52,13 +52,24 @@ impl ASTNode for Stmt {
 impl ASTNode for Expr {
     fn generate_bytecode(&self) -> String {
         let bytecode_rep = match self {
-            &Expr::Int(ref int_lit) => int_lit.generate_bytecode(),
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
                 let template = operator.generate_bytecode();
                 let with_first = template.replace("first", left.generate_bytecode().as_str());
                 let full_expr = with_first.replace("second", right.generate_bytecode().as_str());
-                return full_expr;
+                full_expr
             },
+            &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
+                let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
+                let call = match &**func_expr {
+                    &Expr::IdentifierExpr {ref ident} => format!("call ${func_name}", func_name=ident.to_string()),
+                    _ => panic!()
+                };
+                format!("{loads}\n{call}\n", loads=arg_load, call=call)
+            },
+            &Expr::IdentifierExpr {ref ident} => {
+                format!("get_local ${ident}", ident=ident.to_string())
+            },
+            &Expr::Int(ref int_lit) => int_lit.generate_bytecode(),
             _ => panic!()
         };
         return bytecode_rep;
@@ -98,6 +109,13 @@ pub fn node_to_file(file_name: String, node: Box<ASTNode>) {
 mod tests {
 
     use super::*;
+
+    #[test]
+    pub fn test_generate_function_call() {
+        let function_call = parser::expression("a(b)".as_bytes());
+        let bytecode = "get_local $b\ncall $a\n".to_string();
+        assert_eq!(output(function_call).generate_bytecode(), bytecode);
+    }
 
     #[test]
     pub fn test_generate_module() {

@@ -177,7 +177,7 @@ fn block(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
 }
 
 /// Match any statement.
-fn statement(input: &[u8], indent: usize) -> StmtRes {
+pub fn statement(input: &[u8], indent: usize) -> StmtRes {
     let node = alt_complete!(input,
         let_stmt |
         assignment |

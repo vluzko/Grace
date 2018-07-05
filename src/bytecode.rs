@@ -24,12 +24,29 @@ impl ASTNode for Module {
 
 impl ASTNode for Block {
     fn generate_bytecode(&self) -> String {
-        panic!()
+        return "".to_string();
     }
 }
 impl ASTNode for Stmt {
     fn generate_bytecode(&self) -> String {
-        panic!()
+        let bytecode = match self {
+            &Stmt::FunctionDecStmt {ref name, ref args, ref keyword_args, ref vararg, ref varkwarg, ref body, ref return_type} => {
+                let body_bytecode = body.generate_bytecode();
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} i64)", x.name.to_string())), " ");
+                let func_dec = format!("(func ${func_name} {params} (result i64)\n{body})\n(export \"{func_name}\" (func ${func_name}))\n",
+                    func_name = name.to_string(),
+                    params = params,
+                    body = body_bytecode
+                );
+                return func_dec
+            },
+            &Stmt::AssignmentStmt {ref identifier, ref operator, ref expression} => {
+                return "".to_string()
+            }
+            _ => panic!()
+        };
+
+        return bytecode;
     }
 }
 impl ASTNode for Expr {
@@ -51,7 +68,7 @@ impl ASTNode for Expr {
 impl BinaryOperator {
     fn generate_bytecode(&self) -> String {
         return match self {
-            &BinaryOperator::Add => "first\nsecond\ni32.add\n".to_string(),
+            &BinaryOperator::Add => "first\nsecond\ni64.add\n".to_string(),
             _ => panic!()
         };
     }
@@ -64,7 +81,7 @@ impl ASTNode for Identifier {
 }
 impl ASTNode for IntegerLiteral {
     fn generate_bytecode(&self) -> String {
-        return format!("i32.const {}", self.string_rep);
+        return format!("i64.const {}", self.string_rep);
     }
 }
 impl ASTNode for FloatLiteral {
@@ -83,14 +100,21 @@ mod tests {
     use super::*;
 
     #[test]
+    pub fn test_generate_function() {
+        let func_dec = parser::statement("fn a(b):\n x = 5 + 6\n".as_bytes(), 0);
+        let func_bytecode = "(func $a (param $b i64) (result i64)\n)\n(export \"a\" (func $a))\n".to_string();
+        assert_eq!(output(func_dec).generate_bytecode(), func_bytecode);
+    }
+
+    #[test]
     pub fn test_generate_add() {
         let add_expr = parser::expression("5 + 6".as_bytes());
-        assert_eq!(output(add_expr).generate_bytecode(), "i32.const 5\ni32.const 6\ni32.add\n".to_string());
+        assert_eq!(output(add_expr).generate_bytecode(), "i64.const 5\ni64.const 6\ni64.add\n".to_string());
     }
 
     #[test]
     pub fn test_integer_literal_generation() {
         let int_lit = IntegerLiteral::from(5);
-        assert_eq!(int_lit.generate_bytecode(), "i32.const 5".to_string());
+        assert_eq!(int_lit.generate_bytecode(), "i64.const 5".to_string());
     }
 }

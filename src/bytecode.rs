@@ -41,8 +41,18 @@ impl ASTNode for Stmt {
                 func_dec
             },
             &Stmt::AssignmentStmt {ref identifier, ref operator, ref expression} => {
-                "".to_string()
-            }
+	        match operator {
+	    	    Assignment::Normal => {
+			let identifier_bytecode = identifier.generate_bytecode();
+			let expression_bytecode = expression.generate_bytecode();
+			let assignment_bytecode = format!("{value}\ni64.store ${identifier}\n",
+			value = expression_bytecode,
+			identifier = identifier_bytecode);
+			assignment_bytecode
+		     },
+		     _ => panic!()
+		}		
+	    }
             _ => panic!()
         };
 
@@ -56,7 +66,7 @@ impl ASTNode for Expr {
                 let template = operator.generate_bytecode();
                 let with_first = template.replace("first", left.generate_bytecode().as_str());
                 let full_expr = with_first.replace("second", right.generate_bytecode().as_str());
-                full_expr
+                return full_expr;
             },
             &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
@@ -80,6 +90,10 @@ impl BinaryOperator {
     fn generate_bytecode(&self) -> String {
         return match self {
             &BinaryOperator::Add => "first\nsecond\ni64.add\n".to_string(),
+            &BinaryOperator::Sub => "first\nsecond\ni64.sub\n".to_string(),
+            &BinaryOperator::Mult => "first\nsecond\ni64.mul\n".to_string(),
+            &BinaryOperator::Div => "first\nsecond\ni64.div_s\n".to_string(),
+            &BinaryOperator::Mod => "first\nsecond\ni64.rem_u\n".to_string(),
             _ => panic!()
         };
     }
@@ -87,7 +101,8 @@ impl BinaryOperator {
 
 impl ASTNode for Identifier {
     fn generate_bytecode(&self) -> String {
-        panic!()
+        let name = self.name.clone();
+	return name;
     }
 }
 impl ASTNode for IntegerLiteral {
@@ -138,8 +153,38 @@ mod tests {
     }
 
     #[test]
+    pub fn test_generate_subtract() {
+        let sub_expr = parser::expression("1 - 2".as_bytes());
+        assert_eq!(output(sub_expr).generate_bytecode(), "i64.const 1\ni64.const 2\ni64.sub\n".to_string());
+    }
+
+    #[test]
+    pub fn test_generate_multiply() {
+        let mult_expr = parser::expression("3 * 4".as_bytes());
+        assert_eq!(output(mult_expr).generate_bytecode(), "i64.const 3\ni64.const 4\ni64.mul\n".to_string());
+    }
+
+    #[test]
+    pub fn test_generate_divide() {
+        let div_expr = parser::expression("8 / 9".as_bytes());
+        assert_eq!(output(div_expr).generate_bytecode(), "i64.const 8\ni64.const 9\ni64.div_s\n".to_string());
+    }
+
+    #[test]
+    pub fn test_generate_rem() {
+        let rem_expr = parser::expression("5 % 6".as_bytes());
+        assert_eq!(output(rem_expr).generate_bytecode(), "i64.const 5\ni64.const 6\ni64.rem_u\n".to_string());
+    }
+
+    #[test]
     pub fn test_integer_literal_generation() {
         let int_lit = IntegerLiteral::from(5);
         assert_eq!(int_lit.generate_bytecode(), "i64.const 5".to_string());
+    }
+
+    #[test]
+    pub fn test_assignment_generation() {
+        let assignment_stmt = parser::assignment("foo = 3".as_bytes());
+        assert_eq!(output(assignment_stmt).generate_bytecode(), "i64.const 3\ni64.store $foo\n".to_string());
     }
 }

@@ -375,7 +375,7 @@ fn let_stmt(input: &[u8]) -> StmtRes {
     return fmap_iresult(parse_result, |x| Stmt::LetStmt {value_name: x.0, value: x.1});
 }
 
-fn assignment(input: &[u8]) -> StmtRes {
+pub fn assignment(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
             identifier,

@@ -1101,9 +1101,9 @@ fn string(input: &[u8]) -> ExprRes {
     return fmap_iresult(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
 }
 
-fn read_from_file(f_name: &str) -> String {
-    let filename= format!("./test_data/{}.gr", f_name);
-    let mut f = File::open(filename).expect("File not found");
+pub fn read_from_file(f_name: &str) -> String {
+    //let filename= format!("./test_data/{}.gr", f_name);
+    let mut f = File::open(f_name).expect("File not found");
     let mut contents = String::new();
     match f.read_to_string(&mut contents) {
         Ok(_) => return contents,

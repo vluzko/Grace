@@ -27,6 +27,7 @@ impl ASTNode for Block {
         return "".to_string();
     }
 }
+
 impl ASTNode for Stmt {
     fn generate_bytecode(&self) -> String {
         let bytecode = match self {
@@ -52,8 +53,8 @@ impl ASTNode for Stmt {
 		     },
 		     _ => panic!()
 		}		
-	    }
-            _ => panic!()
+	    },
+	    _ => panic!()
         };
 
         return bytecode;
@@ -115,6 +116,7 @@ impl ASTNode for FloatLiteral {
         panic!()
     }
 }
+
 
 pub fn node_to_file(file_name: String, node: Box<ASTNode>) {
 

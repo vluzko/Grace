@@ -13,3 +13,11 @@ describe("Simple WASM test.", function () {
   });
 
 });
+
+describe("Full tests", function () {
+  async_it("test.", () => {
+    return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr", "js_test/spec/outputs/small_grace.wat");
+  }, module => {
+    console.log(module);
+  });
+});

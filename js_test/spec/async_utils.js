@@ -2,7 +2,7 @@
 let child = require("child_process");
 let process = require("process");
 let util = require("util");
-
+let fs = require("fs");
 let exec = util.promisify(child.exec);
 
 /**
@@ -58,15 +58,22 @@ function compile_grace(input, output) {
   process.chdir("..");
   // Asynchronously compile the Grace code to WAST.
   let compile_to_wast = exec(`cargo run ${input} ${output}`);
-
+  let wasm_file;
   // Once that's finished, asynchronously compile the WAST to WASM.
   let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
-    const wasm_file = output.replace(".wat", ".wasm");
+    wasm_file = output.replace(".wat", ".wasm");
     return exec(`wat2wasm ${output} -o ${wasm_file}`);
   });
 
   // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
-  return compile_to_wasm;
+  let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
+    let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
+    // Go back to where we started now that we're done running stuff.
+    // This doesn't actually fully fix the possible error, but whatever.
+    process.chdir("js_test");
+    return WebAssembly.instantiate(module_as_bytes);
+  });
+  return loaded_module;
 
 }
 

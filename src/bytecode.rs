@@ -55,7 +55,7 @@ impl ASTNode for Stmt {
                     Assignment::Normal => {
                         let identifier_bytecode = identifier.generate_bytecode();
                         let expression_bytecode = expression.generate_bytecode();
-                        let assignment_bytecode = format!("{value}\ni64.store ${identifier}",
+                        let assignment_bytecode = format!("{value}\nset_local ${identifier}",
                         value = expression_bytecode,
                         identifier = identifier_bytecode);
                         assignment_bytecode
@@ -154,7 +154,7 @@ mod tests {
 i64.const 5
 i64.const 6
 i64.add
-i64.store $x
+set_local $x
 get_local $x
 )
 (export "a" (func $a))
@@ -170,7 +170,7 @@ get_local $x
 i64.const 5
 i64.const 6
 i64.add
-i64.store $x
+set_local $x
 get_local $x
 )
 (export "a" (func $a))"#;
@@ -216,6 +216,6 @@ get_local $x
     #[test]
     pub fn test_assignment_generation() {
         let assignment_stmt = parser::assignment("foo = 3".as_bytes());
-        assert_eq!(output(assignment_stmt).generate_bytecode(), "i64.const 3\ni64.store $foo".to_string());
+        assert_eq!(output(assignment_stmt).generate_bytecode(), "i64.const 3\nset_local $foo".to_string());
     }
 }

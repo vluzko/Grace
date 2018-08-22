@@ -1,5 +1,5 @@
 use bytecode::ASTNode;
-use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
@@ -481,21 +481,25 @@ impl <'a> From<&'a str> for TypeAnnotation {
 }
 
 pub trait ScopedNode: ASTNode {fn get_scopes (&self)
-    -> (HashSet<String>, HashSet<String>);}
+    -> (BTreeSet<String>, BTreeSet<String>);}
     
 /// ScopedNode for Module
 impl ScopedNode for Module {
-  fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
-    panic!()
-  }
+    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+        panic!()
+    }
 }
 
 /// ScopedNode for Stmt
+// TODO implement the rest of the kinds of stmt
 impl ScopedNode for Stmt {
-  fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
-    let mut declarations = HashSet::new();
-    let mut usages = HashSet::new();
+  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut declarations = BTreeSet::new();
+    let mut usages = BTreeSet::new();
     match &self {
+      &Stmt::LetStmt{ref value_name, ref value} => {
+        declarations.insert(value_name.name.to_string());
+      }
       &Stmt::AssignmentStmt{ref identifier, ref operator, ref expression} => {
         usages = expression.get_scopes().1;
         usages.insert(identifier.to_string());
@@ -520,9 +524,9 @@ impl ScopedNode for Stmt {
 
 /// ScopedNode for Block
 impl ScopedNode for Block {
-  fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
-    let mut declarations = HashSet::new();
-    let mut usages = HashSet::new();
+  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+    let mut declarations = BTreeSet::new();
+    let mut usages = BTreeSet::new();
     for statement in &self.statements {
       let statement_scope_info = statement.get_scopes();
       for declaration in statement_scope_info.0 {
@@ -537,15 +541,16 @@ impl ScopedNode for Block {
 }
 
 /// ScopedNode for Expr
+// TODO implement the rest of the kinds of expr
 impl ScopedNode for Expr {
-  fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
-    let declarations = HashSet::new();
-    let mut usages = HashSet::new();
+  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+    let declarations = BTreeSet::new();
+    let mut usages = BTreeSet::new();
     match &self {
       &Expr::IdentifierExpr {ref ident} => {
         usages.insert(ident.to_string());
       },
-      _ => panic!()
+      _ => {}
     }
     return (declarations, usages);
   }

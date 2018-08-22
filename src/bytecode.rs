@@ -1,4 +1,6 @@
+use std::collections::BTreeSet;
 use std::fmt::Display;
+use std::iter::FromIterator;
 use expression::*;
 use parser;
 use utils::*;
@@ -41,11 +43,19 @@ impl ASTNode for Stmt {
     fn generate_bytecode(&self) -> String {
         let bytecode = match self {
             &Stmt::FunctionDecStmt {ref name, ref args, ref keyword_args, ref vararg, ref varkwarg, ref body, ref return_type} => {
+	        // Scope check
+		let (declarations, usages) = self.get_scopes();
                 let body_bytecode = body.generate_bytecode();
                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i64)", x.name.to_string())), " ");
-                let func_dec = format!("(func ${func_name} {params} (result i64)\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+		
+		// get the declarations that are not args, i.e. the local variables
+		let args_set = BTreeSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
+		let local_var_declarations = declarations.difference(&args_set);
+                let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i64)", x)), " ");
+                let func_dec = format!("(func ${func_name} {params} {local_vars} (result i64)\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                     func_name = name.to_string(),
                     params = params,
+                    local_vars = local_vars,
                     body = body_bytecode
                 );
                 func_dec
@@ -63,6 +73,17 @@ impl ASTNode for Stmt {
                     _ => panic!()
                 }
 	        },
+            &Stmt::ReturnStmt {ref value} => {
+                value.generate_bytecode()
+            },
+            &Stmt::LetStmt {ref value_name, ref value} => {
+	        let identifier_bytecode = value_name.name.generate_bytecode();
+                let expression_bytecode = value.generate_bytecode();
+                let assignment_bytecode = format!("{value}\nset_local ${identifier}",
+                value = expression_bytecode,
+                identifier = identifier_bytecode);
+                assignment_bytecode
+            },
             &Stmt::ReturnStmt {ref value} => {
                 value.generate_bytecode()
             }
@@ -148,9 +169,9 @@ mod tests {
 
     #[test]
     pub fn test_generate_module() {
-        let module = parser::module("fn a(b):\n x = 5 + 6\n return x\n".as_bytes());
+        let module = parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
         let mod_bytecode = r#"(module
-(func $a (param $b i64) (result i64)
+(func $a (param $b i64) (local $x i64) (result i64)
 i64.const 5
 i64.const 6
 i64.add
@@ -165,8 +186,8 @@ get_local $x
 
     #[test]
     pub fn test_generate_function() {
-        let func_dec = parser::statement("fn a(b):\n x = 5 + 6\n return x\n".as_bytes(), 0);
-        let func_bytecode = r#"(func $a (param $b i64) (result i64)
+        let func_dec = parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0);
+        let func_bytecode = r#"(func $a (param $b i64) (local $x i64) (result i64)
 i64.const 5
 i64.const 6
 i64.add

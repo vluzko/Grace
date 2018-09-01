@@ -20,6 +20,10 @@ describe("Full tests", function () {
       return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr",
 				       "js_test/spec/outputs/small_grace.wat");
   }, module => {
-    console.log(module);
+    expect(module.instance.exports.add(2,3)).toBe(5);
+    expect(module.instance.exports.sub(2,3)).toBe(-1);
+    expect(module.instance.exports.mult(2,3)).toBe(6);
+    expect(module.instance.exports.div(2,3)).toBe(0);
+
   });
 });

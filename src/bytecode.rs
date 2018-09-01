@@ -43,16 +43,16 @@ impl ASTNode for Stmt {
     fn generate_bytecode(&self) -> String {
         let bytecode = match self {
             &Stmt::FunctionDecStmt {ref name, ref args, ref keyword_args, ref vararg, ref varkwarg, ref body, ref return_type} => {
-	        // Scope check
-		let (declarations, usages) = self.get_scopes();
+                // Scope check
+                let (declarations, usages) = self.get_scopes();
                 let body_bytecode = body.generate_bytecode();
-                let params = itertools::join(args.iter().map(|x| format!("(param ${} i64)", x.name.to_string())), " ");
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 		
-		// get the declarations that are not args, i.e. the local variables
-		let args_set = BTreeSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
-		let local_var_declarations = declarations.difference(&args_set);
-                let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i64)", x)), " ");
-                let func_dec = format!("(func ${func_name} {params} {local_vars} (result i64)\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                // get the declarations that are not args, i.e. the local variables
+                let args_set = BTreeSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
+                let local_var_declarations = declarations.difference(&args_set);
+                let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
+                let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                     func_name = name.to_string(),
                     params = params,
                     local_vars = local_vars,
@@ -84,9 +84,6 @@ impl ASTNode for Stmt {
                 identifier = identifier_bytecode);
                 assignment_bytecode
             },
-            &Stmt::ReturnStmt {ref value} => {
-                value.generate_bytecode()
-            }
 	    _ => panic!()
         };
 
@@ -123,11 +120,11 @@ impl ASTNode for Expr {
 impl BinaryOperator {
     fn generate_bytecode(&self) -> String {
         return match self {
-            &BinaryOperator::Add => "first\nsecond\ni64.add".to_string(),
-            &BinaryOperator::Sub => "first\nsecond\ni64.sub".to_string(),
-            &BinaryOperator::Mult => "first\nsecond\ni64.mul".to_string(),
-            &BinaryOperator::Div => "first\nsecond\ni64.div_s".to_string(),
-            &BinaryOperator::Mod => "first\nsecond\ni64.rem_u".to_string(),
+            &BinaryOperator::Add => "first\nsecond\ni32.add".to_string(),
+            &BinaryOperator::Sub => "first\nsecond\ni32.sub".to_string(),
+            &BinaryOperator::Mult => "first\nsecond\ni32.mul".to_string(),
+            &BinaryOperator::Div => "first\nsecond\ni32.div_s".to_string(),
+            &BinaryOperator::Mod => "first\nsecond\ni32.rem_u".to_string(),
             _ => panic!()
         };
     }
@@ -141,7 +138,7 @@ impl ASTNode for Identifier {
 }
 impl ASTNode for IntegerLiteral {
     fn generate_bytecode(&self) -> String {
-        return format!("i64.const {}", self.string_rep);
+        return format!("i32.const {}", self.string_rep);
     }
 }
 impl ASTNode for FloatLiteral {
@@ -171,10 +168,10 @@ mod tests {
     pub fn test_generate_module() {
         let module = parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
         let mod_bytecode = r#"(module
-(func $a (param $b i64) (local $x i64) (result i64)
-i64.const 5
-i64.const 6
-i64.add
+(func $a (param $b i32) (result i32) (local $x i32)
+i32.const 5
+i32.const 6
+i32.add
 set_local $x
 get_local $x
 )
@@ -187,10 +184,10 @@ get_local $x
     #[test]
     pub fn test_generate_function() {
         let func_dec = parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0);
-        let func_bytecode = r#"(func $a (param $b i64) (local $x i64) (result i64)
-i64.const 5
-i64.const 6
-i64.add
+        let func_bytecode = r#"(func $a (param $b i32) (result i32) (local $x i32)
+i32.const 5
+i32.const 6
+i32.add
 set_local $x
 get_local $x
 )
@@ -201,42 +198,42 @@ get_local $x
     #[test]
     pub fn test_generate_add() {
         let add_expr = parser::expression("5 + 6".as_bytes());
-        assert_eq!(output(add_expr).generate_bytecode(), "i64.const 5\ni64.const 6\ni64.add".to_string());
+        assert_eq!(output(add_expr).generate_bytecode(), "i32.const 5\ni32.const 6\ni32.add".to_string());
     }
 
     #[test]
     pub fn test_generate_subtract() {
         let sub_expr = parser::expression("1 - 2".as_bytes());
-        assert_eq!(output(sub_expr).generate_bytecode(), "i64.const 1\ni64.const 2\ni64.sub".to_string());
+        assert_eq!(output(sub_expr).generate_bytecode(), "i32.const 1\ni32.const 2\ni32.sub".to_string());
     }
 
     #[test]
     pub fn test_generate_multiply() {
         let mult_expr = parser::expression("3 * 4".as_bytes());
-        assert_eq!(output(mult_expr).generate_bytecode(), "i64.const 3\ni64.const 4\ni64.mul".to_string());
+        assert_eq!(output(mult_expr).generate_bytecode(), "i32.const 3\ni32.const 4\ni32.mul".to_string());
     }
 
     #[test]
     pub fn test_generate_divide() {
         let div_expr = parser::expression("8 / 9".as_bytes());
-        assert_eq!(output(div_expr).generate_bytecode(), "i64.const 8\ni64.const 9\ni64.div_s".to_string());
+        assert_eq!(output(div_expr).generate_bytecode(), "i32.const 8\ni32.const 9\ni32.div_s".to_string());
     }
 
     #[test]
     pub fn test_generate_rem() {
         let rem_expr = parser::expression("5 % 6".as_bytes());
-        assert_eq!(output(rem_expr).generate_bytecode(), "i64.const 5\ni64.const 6\ni64.rem_u".to_string());
+        assert_eq!(output(rem_expr).generate_bytecode(), "i32.const 5\ni32.const 6\ni32.rem_u".to_string());
     }
 
     #[test]
     pub fn test_integer_literal_generation() {
         let int_lit = IntegerLiteral::from(5);
-        assert_eq!(int_lit.generate_bytecode(), "i64.const 5".to_string());
+        assert_eq!(int_lit.generate_bytecode(), "i32.const 5".to_string());
     }
 
     #[test]
     pub fn test_assignment_generation() {
         let assignment_stmt = parser::assignment("foo = 3".as_bytes());
-        assert_eq!(output(assignment_stmt).generate_bytecode(), "i64.const 3\nset_local $foo".to_string());
+        assert_eq!(output(assignment_stmt).generate_bytecode(), "i32.const 3\nset_local $foo".to_string());
     }
 }

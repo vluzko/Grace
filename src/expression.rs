@@ -1,4 +1,4 @@
-use bytecode::ASTNode;
+use ast_node::ASTNode;
 use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
@@ -478,82 +478,6 @@ impl <'a> From<&'a str> for TypeAnnotation {
     fn from(input: &'a str) -> Self {
         return TypeAnnotation::Simple(Identifier::from(input));
     }
-}
-
-pub trait ScopedNode: ASTNode {fn get_scopes (&self)
-    -> (BTreeSet<String>, BTreeSet<String>);}
-    
-/// ScopedNode for Module
-impl ScopedNode for Module {
-    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-        panic!()
-    }
-}
-
-/// ScopedNode for Stmt
-// TODO implement the rest of the kinds of stmt
-impl ScopedNode for Stmt {
-  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-    let mut declarations = BTreeSet::new();
-    let mut usages = BTreeSet::new();
-    match &self {
-      &Stmt::LetStmt{ref value_name, ref value} => {
-        declarations.insert(value_name.name.to_string());
-      }
-      &Stmt::AssignmentStmt{ref identifier, ref operator, ref expression} => {
-        usages = expression.get_scopes().1;
-        usages.insert(identifier.to_string());
-      },
-      // Currently only handles args and body
-      &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, ref return_type} => {
-        let block_scope_info = body.get_scopes();
-	declarations = block_scope_info.0;
-	usages = block_scope_info.1;
-        for arg in args.iter() {
-	  declarations.insert(arg.name.to_string());
-	}
-      },
-      &Stmt::ReturnStmt {ref value} => {
-        usages = value.get_scopes().1;
-      },
-      _ =>  panic!()
-    }
-    return (declarations, usages);
-  }
-}
-
-/// ScopedNode for Block
-impl ScopedNode for Block {
-  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-    let mut declarations = BTreeSet::new();
-    let mut usages = BTreeSet::new();
-    for statement in &self.statements {
-      let statement_scope_info = statement.get_scopes();
-      for declaration in statement_scope_info.0 {
-        declarations.insert(declaration.to_string());
-      }
-      for usage in statement_scope_info.1 {
-        usages.insert(usage.to_string());
-      }
-    }
-    return (declarations, usages);
-  }
-}
-
-/// ScopedNode for Expr
-// TODO implement the rest of the kinds of expr
-impl ScopedNode for Expr {
-  fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-    let declarations = BTreeSet::new();
-    let mut usages = BTreeSet::new();
-    match &self {
-      &Expr::IdentifierExpr {ref ident} => {
-        usages.insert(ident.to_string());
-      },
-      _ => {}
-    }
-    return (declarations, usages);
-  }
 }
 
 #[test]

@@ -134,7 +134,23 @@ macro_rules! inline_keyword (
   );
 
   ($i:expr, $f:expr) => (
-    inline_wrapped!($i, tag!($f));
+    inline_keyword!($i, tag!($f));
+  );
+);
+
+/// Matches a keyword at the beginning of input.
+/// Used for "return", etc.
+macro_rules! initial_keyword (
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
+    {
+      terminated!($i,
+        $submac!($($args)*),
+        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
+    }
+  );
+
+  ($i:expr, $f:expr) => (
+    initial_keyword!($i, tag!($f));
   );
 );
 

@@ -1,4 +1,13 @@
 (module
+(func $conditional (param $a i32) (param $b i32) (result i32) 
+i32.const 0
+if (result i32)
+get_local $a
+else
+get_local $b
+end
+)
+(export "conditional" (func $conditional))
 (func $add (param $a i32) (param $b i32) (result i32) (local $x i32)
 get_local $a
 get_local $b

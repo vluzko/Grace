@@ -45,6 +45,30 @@ impl ScopedNode for Stmt {
             &Stmt::ReturnStmt {ref value} => {
                 usages = value.get_scopes().1;
             },
+            &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
+                for usage in condition.get_scopes().1 {
+                    usages.insert(usage);
+                }
+                let main_scopes = main_block.get_scopes();
+                for declaration in main_scopes.0 {
+                    declarations.insert(declaration);
+                }
+                for usage in main_scopes.1 {
+                    usages.insert(usage);
+                }
+                match else_block {
+                    Some(x) => {
+                        let else_scopes = x.get_scopes();
+                        for declaration in else_scopes.0 {
+                            declarations.insert(declaration);
+                        }
+                        for usage in else_scopes.1 {
+                            usages.insert(usage);
+                        }
+                    },
+                    None => {}
+                }
+            }
             _ =>  panic!()
         }
         return (declarations, usages);

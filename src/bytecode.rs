@@ -62,6 +62,19 @@ impl ASTNode for Stmt {
                     _ => panic!()
                 }
 	        },
+	        // Only handles if x {foo}, no elifs or else
+	        &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
+	            let condition_bytecode = condition.generate_bytecode();
+	            let main_block_bytecode = main_block.generate_bytecode();
+	            let else_block_bytecode = match else_block {
+	                Some(content) => content.generate_bytecode(),
+	                None => "".to_string()
+	            };
+	            let if_bytecode = format!("{condition_bytecode}\nif (result i32)\n{main_block_bytecode}\nelse\n{else_block_bytecode}\nend",
+	            condition_bytecode = condition_bytecode, main_block_bytecode = main_block_bytecode,
+	            else_block_bytecode = else_block_bytecode);
+	            if_bytecode
+	        },
             &Stmt::ReturnStmt {ref value} => {
                 value.generate_bytecode()
             },
@@ -222,7 +235,7 @@ get_local $x
 
     #[test]
     pub fn test_assignment_generation() {
-        let assignment_stmt = parser::assignment("foo = 3".as_bytes());
+        let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
         assert_eq!(output(assignment_stmt).generate_bytecode(), "i32.const 3\nset_local $foo".to_string());
     }
 }

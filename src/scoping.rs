@@ -68,7 +68,14 @@ impl ScopedNode for Stmt {
                     },
                     None => {}
                 }
-            }
+            },
+            &Stmt::WhileStmt {ref condition, ref block} => {
+                let mut condition_usages = condition.get_scopes().1;
+                let (mut block_decs, mut block_usages) = block.get_scopes();
+                declarations.append(&mut block_decs);
+                usages.append(&mut condition_usages);
+                usages.append(&mut block_usages);
+            },
             _ =>  panic!()
         }
         return (declarations, usages);

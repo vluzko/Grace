@@ -19,3 +19,9 @@ fn mult(a, b):
 fn div(a, b):
     let x = a / b
     return x
+
+fn loop():
+    let x = 2
+    while x:
+        x = x - 1
+    return x

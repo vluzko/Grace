@@ -86,7 +86,13 @@ impl ASTNode for Stmt {
                 identifier = identifier_bytecode);
                 assignment_bytecode
             },
-	    _ => panic!()
+            &Stmt::WhileStmt {ref condition, ref block} => {
+                let block_bytecode = block.generate_bytecode();
+                let condition_bytecode = condition.generate_bytecode();
+                let while_bytecode = format!("block $void1\nloop $void (result i32)\n{condition}\nbr_if 1\n\n{block}\nbr 0\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
+                while_bytecode
+            },
+	        _ => panic!()
         };
 
         return bytecode;

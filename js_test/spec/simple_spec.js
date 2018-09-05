@@ -25,6 +25,7 @@ describe("Full tests", function () {
     expect(module.instance.exports.mult(2,3)).toBe(6);
     expect(module.instance.exports.div(2,3)).toBe(0);
     expect(module.instance.exports.conditional(2,3)).toBe(3);
+    expect(module.instance.exports.loop()).toBe(0);
 
   });
 });

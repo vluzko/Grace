@@ -42,3 +42,6 @@ fn great(a, b):
 
 fn greate(a, b):
     return a >= b
+
+fn call_func(a, b):
+    return add(a, b)

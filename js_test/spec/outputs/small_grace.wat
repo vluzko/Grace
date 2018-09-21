@@ -103,4 +103,10 @@ i32.ge_s
 
 )
 (export "greate" (func $greate))
+(func $call_func (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+call $add
+)
+(export "call_func" (func $call_func))
 )

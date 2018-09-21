@@ -76,5 +76,8 @@ describe("Small grace tests.", function () {
     expect(module.instance.exports.lesse(0, 0)).toBe(1);
     expect(module.instance.exports.lesse(0, 1)).toBe(1);
     expect(module.instance.exports.lesse(1, 0)).toBe(0);
+  }], [
+    'function calls', module => {
+    expect(module.instance.exports.call_func(2, 3)).toBe(5);
   }]]);
 });

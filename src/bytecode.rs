@@ -109,10 +109,10 @@ impl ASTNode for Expr {
             },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
                 // TODO: Don't use string replace.
-                let template = operator.generate_bytecode();
-                let with_first = template.replace("first", left.generate_bytecode().as_str());
-                let full_expr = with_first.replace("second", right.generate_bytecode().as_str());
-                return full_expr;
+                let operator = operator.generate_bytecode();
+                let first = left.generate_bytecode();
+                let second= right.generate_bytecode();
+                format!("{}\n{}\n{}\n", first, second, operator)
             },
             &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
@@ -148,11 +148,17 @@ impl ASTNode for ComparisonOperator {
 impl ASTNode for BinaryOperator {
     fn generate_bytecode(&self) -> String {
         return match self {
-            &BinaryOperator::Add => "first\nsecond\ni32.add".to_string(),
-            &BinaryOperator::Sub => "first\nsecond\ni32.sub".to_string(),
-            &BinaryOperator::Mult => "first\nsecond\ni32.mul".to_string(),
-            &BinaryOperator::Div => "first\nsecond\ni32.div_s".to_string(),
-            &BinaryOperator::Mod => "first\nsecond\ni32.rem_u".to_string(),
+            &BinaryOperator::Add => "i32.add".to_string(),
+            &BinaryOperator::Sub => "i32.sub".to_string(),
+            &BinaryOperator::Mult => "i32.mul".to_string(),
+            &BinaryOperator::Div => "i32.div_s".to_string(),
+            &BinaryOperator::Mod => "i32.rem_u".to_string(),
+            &BinaryOperator::And => "i32.and".to_string(),
+            &BinaryOperator::Or => "i32.or".to_string(),
+            &BinaryOperator::Xor => "i32.xor".to_string(),
+            &BinaryOperator::BitAnd => "i32.and".to_string(),
+            &BinaryOperator::BitOr => "i32.or".to_string(),
+            &BinaryOperator::BitXor => "i32.xor".to_string(),
             _ => panic!()
         };
     }
@@ -172,6 +178,14 @@ impl ASTNode for IntegerLiteral {
 impl ASTNode for FloatLiteral {
     fn generate_bytecode(&self) -> String {
         panic!()
+    }
+}
+impl ASTNode for Boolean {
+    fn generate_bytecode(&self) -> String {
+        return match self {
+            &Boolean::True => "1".to_string(),
+            &Boolean::False => "0".to_string()
+        }
     }
 }
 

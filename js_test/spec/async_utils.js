@@ -49,6 +49,31 @@ function get_async_it(describe) {
   };
 }
 
+function get_async_desc(describe) {
+  return function async_describe(test_name, promiser, expectations) {
+    describe(test_name, function () {
+      let data;
+      beforeEach(function (done) {
+        let promise = promiser();
+        data = wrap_promise(promise, done);
+      });
+
+      for (let [name, expectation] of expectations) {
+        it(name, function (done) {
+          data.then(expectation)
+            .then(function () {
+              done();
+            }, function (err) {
+              console.log(err);
+              done();
+            });
+        });
+      }
+
+    });
+  };
+}
+
 /**
  *
  * @param {String} input
@@ -80,5 +105,6 @@ function compile_grace(input, output) {
 exports.utils = {
   get_async_it,
   wrap_promise,
-  compile_grace
+  compile_grace,
+  get_async_desc
 };

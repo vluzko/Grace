@@ -40,10 +40,13 @@ set_local $x
 get_local $x
 )
 (export "div" (func $div))
-(func $loop (param $x i32) (result i32) 
+(func $loop (param $x i32) (param $y i32) (result i32) 
 loop $void
 block $void1
-i32.const 0
+get_local $x
+get_local $y
+i32.gt_s
+
 i32.eqz
 br_if 0
 
@@ -58,4 +61,46 @@ end
 get_local $x
 )
 (export "loop" (func $loop))
+(func $equality (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.eq
+
+)
+(export "equality" (func $equality))
+(func $neq (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.ne
+
+)
+(export "neq" (func $neq))
+(func $less (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.lt_s
+
+)
+(export "less" (func $less))
+(func $lesse (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.le_s
+
+)
+(export "lesse" (func $lesse))
+(func $great (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.gt_s
+
+)
+(export "great" (func $great))
+(func $greate (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.ge_s
+
+)
+(export "greate" (func $greate))
 )

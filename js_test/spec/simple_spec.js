@@ -15,7 +15,7 @@ describe("Simple WASM test.", function () {
 
 });
 
-describe("Full tests", function () {
+describe("Small grace tests.", function () {
   async_it("test.", () => {
       return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr",
 				       "js_test/spec/outputs/small_grace.wat");
@@ -25,9 +25,22 @@ describe("Full tests", function () {
     expect(module.instance.exports.mult(2,3)).toBe(6);
     expect(module.instance.exports.div(2,3)).toBe(0);
     expect(module.instance.exports.conditional(2,3)).toBe(3);
-    expect(module.instance.exports.loop(2)).toBe(2);
-    expect(module.instance.exports.loop(3)).toBe(3);
+    expect(module.instance.exports.loop(2, 1)).toBe(1);
+    expect(module.instance.exports.loop(3, -2)).toBe(-2);
     expect(module.instance.exports.loop(0)).toBe(0);
+    expect(module.instance.exports.equality(0, 1)).toBe(0);
+    expect(module.instance.exports.equality(0, 0)).toBe(1);
+
+    expect(module.instance.exports.neq(0, 0)).toBe(0);
+    expect(module.instance.exports.neq(0, 1)).toBe(1);
+
+    expect(module.instance.exports.less(0, 0)).toBe(0);
+    expect(module.instance.exports.less(0, 1)).toBe(1);
+    expect(module.instance.exports.less(1, 0)).toBe(0);
+
+    expect(module.instance.exports.lesse(0, 0)).toBe(1);
+    expect(module.instance.exports.lesse(0, 1)).toBe(1);
+    expect(module.instance.exports.lesse(1, 0)).toBe(0);
 
   });
 });

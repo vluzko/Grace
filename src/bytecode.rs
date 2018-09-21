@@ -101,7 +101,14 @@ impl ASTNode for Stmt {
 impl ASTNode for Expr {
     fn generate_bytecode(&self) -> String {
         let bytecode_rep = match self {
+            &Expr::ComparisonExpr {ref operator, ref left, ref right} => {
+                let first = left.generate_bytecode();
+                let second = right.generate_bytecode();
+                let operator = operator.generate_bytecode();
+                format!("{}\n{}\n{}\n", first, second, operator)
+            },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
+                // TODO: Don't use string replace.
                 let template = operator.generate_bytecode();
                 let with_first = template.replace("first", left.generate_bytecode().as_str());
                 let full_expr = with_first.replace("second", right.generate_bytecode().as_str());
@@ -125,7 +132,20 @@ impl ASTNode for Expr {
     }
 }
 
-impl BinaryOperator {
+impl ASTNode for ComparisonOperator {
+    fn generate_bytecode(&self) -> String {
+        return match self {
+            &ComparisonOperator::Equal => "i32.eq".to_string(),
+            &ComparisonOperator::Unequal => "i32.ne".to_string(),
+            &ComparisonOperator::LessEqual => "i32.le_s".to_string(),
+            &ComparisonOperator::Less => "i32.lt_s".to_string(),
+            &ComparisonOperator::GreaterEqual => "i32.ge_s".to_string(),
+            &ComparisonOperator::Greater => "i32.gt_s".to_string()
+        }
+    }
+}
+
+impl ASTNode for BinaryOperator {
     fn generate_bytecode(&self) -> String {
         return match self {
             &BinaryOperator::Add => "first\nsecond\ni32.add".to_string(),

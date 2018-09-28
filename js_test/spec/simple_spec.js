@@ -16,36 +16,6 @@ describe("Simple WASM test.", function () {
 });
 
 describe("Small grace tests.", function () {
-  async_it("", () => {
-      return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr",
-				       "js_test/spec/outputs/small_grace.wat");
-  }, module => {
-    expect(module.instance.exports.add(2,3)).toBe(5);
-    expect(module.instance.exports.sub(2,3)).toBe(-1);
-    expect(module.instance.exports.mult(2,3)).toBe(6);
-    expect(module.instance.exports.div(2,3)).toBe(0);
-    expect(module.instance.exports.conditional(2,3)).toBe(3);
-    expect(module.instance.exports.loop(2, 1)).toBe(1);
-    expect(module.instance.exports.loop(3, -2)).toBe(-2);
-    expect(module.instance.exports.loop(0)).toBe(0);
-    expect(module.instance.exports.equality(0, 1)).toBe(0);
-    expect(module.instance.exports.equality(0, 0)).toBe(1);
-
-    expect(module.instance.exports.neq(0, 0)).toBe(0);
-    expect(module.instance.exports.neq(0, 1)).toBe(1);
-
-    expect(module.instance.exports.less(0, 0)).toBe(0);
-    expect(module.instance.exports.less(0, 1)).toBe(1);
-    expect(module.instance.exports.less(1, 0)).toBe(0);
-
-    expect(module.instance.exports.lesse(0, 0)).toBe(1);
-    expect(module.instance.exports.lesse(0, 1)).toBe(1);
-    expect(module.instance.exports.lesse(1, 0)).toBe(0);
-
-  });
-});
-
-describe("Small grace tests.", function () {
   async_desc("", () => {
     return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr",
       "js_test/spec/outputs/small_grace.wat");
@@ -85,4 +55,14 @@ describe("Small grace tests.", function () {
     expect(module.instance.exports.or_test(1, 1)).toBe(1);
     expect(module.instance.exports.xor_test(1, 0)).toBe(1);
   }]]);
+});
+
+describe("Wat tests.", function() {
+  async_desc("", () => {
+    return async_utils.compile_wat("js_test/spec/outputs/wat_test.wat");
+  }, [[
+    'memory tests', module => {
+    console.log("Memory size is", module.instance.exports.array());
+    console.log(module.instance.exports.loadstuff());
+    }]]);
 });

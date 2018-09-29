@@ -45,3 +45,12 @@ fn greate(a, b):
 
 fn call_func(a, b):
     return add(a, b)
+
+fn and_test(a, b):
+    return a and b
+
+fn or_test(a, b):
+    return a or b
+
+fn xor_test(a, b):
+    return a xor b

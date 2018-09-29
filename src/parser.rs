@@ -109,8 +109,8 @@ fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return separated_nonempty_list_complete!(input,
-        inline_wrapped!(tag!(",")),
-        inline_wrapped!(identifier)
+        w_followed!(tag!(",")),
+        w_followed!(identifier)
     );
 }
 
@@ -121,16 +121,14 @@ fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
 }
 
 pub fn module(input: &[u8]) -> IResult<&[u8], Module> {
-    let parse_result = delimited!(input,
+    let parse_result = preceded!(input,
         opt!(between_statement),
         many1!(complete!(
-            preceded!(
-                between_statement,
-                call!(function_declaration, 0)
+            terminated!(
+                call!(function_declaration, 0),
+                between_statement
             )
-        )),
-        between_statement
-
+        ))
     );
 
     return fmap_iresult(parse_result, |x| Module{declarations: x});
@@ -153,17 +151,16 @@ fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Stmt>> 
         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
         // vectors, which is much slower.
         // TODO: See if we can clean this up with a separated_list_complete.
-        let statements = delimited!(input,
+        let statements = preceded!(input,
             opt!(between_statement),
             many1!(
                 complete!(
-                    preceded!(
-                        between_statement,
-                        indented!(call!(statement, expected_indent), expected_indent)
+                    terminated!(
+                        indented!(call!(statement, expected_indent), expected_indent),
+                        between_statement
                     )
                 )
-            ),
-            between_statement
+            )
         );
 
         return statements;
@@ -218,10 +215,10 @@ fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
 /// Parse a for in loop.
 fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "for", tuple!(
-        inline_wrapped!(identifier),
+        w_followed!(identifier),
         preceded!(
             inline_keyword!("in"),
-            inline_wrapped!(expression)
+            w_followed!(expression)
         )
     ), indent);
 
@@ -242,7 +239,7 @@ fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
 fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<TypedIdent>> {
     inline_wrapped!(input,
         separated_list_complete!(
-            inline_wrapped!(tag!(",")),
+            w_followed!(tag!(",")),
             terminated!(
                 typed_identifier,
                 alt!(recognize!(many1!(inline_whitespace_char)) |
@@ -257,23 +254,23 @@ fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<TypedIdent>> {
 named!(vararg<&[u8], Option<Identifier>>,
     opt!(complete!(preceded!(
         tuple!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(tag!("*"))
+            w_followed!(tag!(",")),
+            w_followed!(tag!("*"))
         ),
-        inline_wrapped!(identifier)
+        w_followed!(identifier)
     )))
 );
 
 /// Match all default arguments
 fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>> {
     let parse_result = opt!(input, complete!(preceded!(
-        inline_wrapped!(tag!(",")),
-        inline_wrapped!(separated_list_complete!(inline_wrapped!(tag!(",")),
+        w_followed!(tag!(",")),
+        w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                inline_wrapped!(typed_identifier),
+                w_followed!(typed_identifier),
                 preceded!(
-                    inline_wrapped!(tag!("=")),
-                    inline_wrapped!(expression)
+                    w_followed!(tag!("=")),
+                    w_followed!(expression)
                 )
             )
         ))
@@ -286,10 +283,10 @@ fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>>
 named!(kwvararg<&[u8], Option<Identifier>>,
     opt!(complete!(preceded!(
         tuple!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(tag!("**"))
+            w_followed!(tag!(",")),
+            w_followed!(tag!("**"))
         ),
-        inline_wrapped!(identifier)
+        w_followed!(identifier)
     )))
 );
 
@@ -305,10 +302,10 @@ fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         keyword_args,
         terminated!(
             kwvararg,
-            close_paren)
-        ,
+            close_paren
+        ),
         opt!(complete!(preceded!(
-            inline_wrapped!(tag!("->")),
+            w_followed!(tag!("->")),
             type_annotation
         )))
     );
@@ -368,8 +365,8 @@ fn let_stmt(input: &[u8]) -> StmtRes {
             tuple!(tag!("let"), many1!(inline_whitespace_char)),
             typed_identifier
         ),
-        inline_wrapped!(tag!("=")),
-        inline_wrapped!(expression)
+        w_followed!(tag!("=")),
+        w_followed!(expression)
     );
 
     return fmap_iresult(parse_result, |x| Stmt::LetStmt {value_name: x.0, value: x.1});
@@ -379,8 +376,8 @@ pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
             identifier,
-            inline_wrapped!(assignments),
-            inline_wrapped!(expression)
+            w_followed!(assignments),
+            w_followed!(expression)
         ),
         alt_complete!(recognize!(newline)| custom_eof)
     );
@@ -428,7 +425,7 @@ fn continue_stmt(input: &[u8]) -> StmtRes {
 fn yield_stmt(input: &[u8]) -> StmtRes {
     let parse_result = preceded!(input,
         initial_keyword!("yield"),
-        inline_wrapped!(expression)
+        w_followed!(expression)
     );
 
     return fmap_iresult(parse_result, |x| Stmt::YieldStmt(x))
@@ -455,7 +452,7 @@ fn comparison(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         alt!(match_expr | boolean_op_expr),
         opt!(complete!(tuple!(
-            inline_wrapped!(comparisons),
+            w_followed!(comparisons),
             boolean_op_expr
         )))
     );
@@ -487,7 +484,7 @@ fn match_expr(input: &[u8]) -> ExprRes {
             tag!("match"),
             inline_wrapped!(expression),
             tuple!(
-                inline_wrapped!(tag!(":")),
+                w_followed!(tag!(":")),
                 between_statement
             )
         ),
@@ -540,9 +537,9 @@ fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u
 /// Match a binary expression whose operator is a symbol.
 fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        inline_wrapped!(next_expr),
+        w_followed!(next_expr),
         opt!(complete!(preceded!(
-            inline_wrapped!(tag!(symbol)),
+            w_followed!(tag!(symbol)),
             call!(binary_op_symbol, symbol, operator, next_expr)
         )))
     );
@@ -555,9 +552,9 @@ fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator,
 /// Currently only used for and, or, and xor.
 fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        inline_wrapped!(next_expr),
+        w_followed!(next_expr),
         opt!(tuple!(
-            inline_keyword!(call!(match_any, symbols)),
+            w_followed!(call!(match_any, symbols)),
             call!(binary_op_list, symbols, operators, next_expr)
         ))
     );
@@ -569,9 +566,9 @@ fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &Has
 /// Match a list of binary operations
 fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> IResult<&'a [u8], Expr> {
     let parse_result = tuple!(input,
-        inline_wrapped!(next_expr),
+        w_followed!(next_expr),
         opt!(tuple!(
-            inline_wrapped!(call!(match_any, symbols)),
+            w_followed!(call!(match_any, symbols)),
             call!(binary_op_list, symbols, operators, next_expr)
         ))
     );
@@ -620,7 +617,7 @@ fn mult_expr(input: &[u8]) -> ExprRes {
 fn unary_expr(input: & [u8]) -> IResult<& [u8], Expr> {
     let parse_result: IResult<&[u8], (Option<&[u8]>, Expr)> = alt!(input,
         tuple!(
-            map!(inline_wrapped!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
+            map!(w_followed!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
             unary_expr)
          |
         tuple!(
@@ -657,22 +654,14 @@ fn power_expr(input: &[u8]) -> ExprRes {
 /// e.g. ident1.ident2   .   ident3
 fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     let parse_result = separated_nonempty_list_complete!(input,
-        inline_wrapped!(tag!(".")),
+        w_followed!(tag!(".")),
         identifier
     );
-
-//    let map = |x: Vec<&[u8]>| {
-//        let attributes = x.iter().map(|y| match from_utf8(y) {
-//            Ok(i) => i.to_string(),
-//            _ => panic!()
-//        }).collect();
-//        return DottedIdentifier{attributes: attributes};
-//    };
 
     return fmap_iresult(parse_result, |x: Vec<Identifier>| DottedIdentifier{attributes: x});
 }
 
-//TODO get rid of all the  bits
+//TODO get rid of all the bits
 fn atomic_expr(input: &[u8]) -> ExprRes {
     let node = alt_complete!(input,
         bool_expr |
@@ -680,7 +669,7 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
         int |
         string |
         delimited!(
-            inline_wrapped!(tag!("{")),
+            w_followed!(tag!("{")),
             alt_complete!(
                 map_or_set_comprehension |
                 set_literal |
@@ -1024,21 +1013,15 @@ fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
-// TODO: Use Boolean::from
 fn bool_expr(input: &[u8]) -> ExprRes {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(not!(valid_identifier_char))) |
         terminated!(tag!("false"), peek!(not!(valid_identifier_char)))
     );
-    return fmap_iresult(parse_result, |x| match from_utf8(x) {
-        Ok("true") => Expr::Bool(Boolean::True),
-        Ok("false") => Expr::Bool(Boolean::False),
-        _ => panic!(),
-    });
+    return fmap_iresult(parse_result, |x| Expr::Bool(Boolean::from(x)));
 }
 
 // TODO: Hex encoded, byte encoded
-// TODO:
 fn int(input: &[u8]) -> ExprRes {
     let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
         tuple!(
@@ -1544,4 +1527,5 @@ mod tests {
             )
         })
     }
+
 }

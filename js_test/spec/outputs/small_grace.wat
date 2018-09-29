@@ -46,7 +46,6 @@ block $void1
 get_local $x
 get_local $y
 i32.gt_s
-
 i32.eqz
 br_if 0
 
@@ -65,42 +64,36 @@ get_local $x
 get_local $a
 get_local $b
 i32.eq
-
 )
 (export "equality" (func $equality))
 (func $neq (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.ne
-
 )
 (export "neq" (func $neq))
 (func $less (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.lt_s
-
 )
 (export "less" (func $less))
 (func $lesse (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.le_s
-
 )
 (export "lesse" (func $lesse))
 (func $great (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.gt_s
-
 )
 (export "great" (func $great))
 (func $greate (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.ge_s
-
 )
 (export "greate" (func $greate))
 (func $call_func (param $a i32) (param $b i32) (result i32) 
@@ -109,4 +102,22 @@ get_local $b
 call $add
 )
 (export "call_func" (func $call_func))
+(func $and_test (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.and
+)
+(export "and_test" (func $and_test))
+(func $or_test (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.or
+)
+(export "or_test" (func $or_test))
+(func $xor_test (param $a i32) (param $b i32) (result i32) 
+get_local $a
+get_local $b
+i32.xor
+)
+(export "xor_test" (func $xor_test))
 )

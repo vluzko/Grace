@@ -441,6 +441,16 @@ impl From<bool> for Boolean {
     }
 }
 
+impl <'a> From<&'a [u8]> for Boolean {
+    fn from(input: &'a [u8]) -> Self {
+        return match from_utf8(input) {
+            Ok("true") => Boolean::True,
+            Ok("false") => Boolean::False,
+            _ => panic!()
+        }
+    }
+}
+
 /// From for IntegerLiteral
 impl From<i64> for IntegerLiteral {
     fn from(input: i64) -> Self {

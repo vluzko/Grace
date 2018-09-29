@@ -13,4 +13,9 @@ rand = "*"
 itertools = "*"
 
 [lib]
+name = "grace_lib"
 doctest = false
+
+[[bin]]
+name = "grace_main"
+path = "src/bin.rs"

@@ -1,5 +1,5 @@
-emsdk/
-wasm_examples/
 .idea/
+node_modules
 target/
-node_modules/
+
+wasm_examples/

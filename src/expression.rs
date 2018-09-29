@@ -1,3 +1,5 @@
+use ast_node::ASTNode;
+use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
@@ -10,19 +12,19 @@ fn indent_block(block_str: String) -> String {
 }
 
 /// A top level module.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub declarations: Vec<Stmt>
 }
 
 /// A block of code. Just a series of statements.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
     pub statements: Vec<Stmt>,
 }
 
 /// A statement.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Stmt {
     AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
     LetStmt{value_name: TypedIdent, value: Expr},
@@ -40,14 +42,14 @@ pub enum Stmt {
     TryExceptStmt{main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypedIdent {
     pub name: Identifier,
     pub type_annotation: Option<TypeAnnotation>
 }
 
 /// An expression.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     MatchExpr{value: Box<Expr>, cases: Vec<(Expr, Expr)>},
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
@@ -71,12 +73,12 @@ pub enum Expr {
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeAnnotation {
     Simple(Identifier)
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ComprehensionIter {
     pub iter_vars: Vec<Identifier>,
     pub iterator: Box<Expr>,
@@ -84,7 +86,7 @@ pub struct ComprehensionIter {
 }
 
 /// A helper Enum for trailers.
-#[derive (Debug, Clone, PartialEq, Eq)]
+#[derive (Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PostIdent {
     Call{args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
     Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
@@ -92,7 +94,7 @@ pub enum PostIdent {
 }
 
 /// An assignment
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Assignment {
     Normal,
     Add,
@@ -109,7 +111,7 @@ pub enum Assignment {
 }
 
 /// Any comparator
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum ComparisonOperator {
     Greater,
     Less,
@@ -120,7 +122,7 @@ pub enum ComparisonOperator {
 }
 
 /// Any binary operator
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum BinaryOperator {
     Or,
     And,
@@ -139,7 +141,7 @@ pub enum BinaryOperator {
 }
 
 /// Any unary operator.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     Not,
     Positive,
@@ -148,32 +150,32 @@ pub enum UnaryOperator {
 }
 
 /// A dotted identifier. Only used with import statements.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct DottedIdentifier {
     pub attributes: Vec<Identifier>
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Identifier {
     pub name: String,
 }
 
 /// A boolean literal.
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Boolean {
     True,
     False
 }
 
 /// An integer literal.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct IntegerLiteral {
     pub string_rep: String
 }
 
 /// A floating point literal.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct FloatLiteral {
     pub string_rep: String
 }

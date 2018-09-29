@@ -38,7 +38,7 @@ macro_rules! line_then_block (
         tuple!($i,
             delimited!(
                 terminated!(
-                    indented!(tag!($keyword), $indent),
+                    tag!($keyword),
                     not!(valid_identifier_char)
                 ),
                 inline_wrapped!($submac!($($args)*)),
@@ -180,7 +180,7 @@ fn block(input: &[u8], indent: usize) -> IResult<&[u8], Block> {
 pub fn statement(input: &[u8], indent: usize) -> StmtRes {
     let node = alt_complete!(input,
         let_stmt |
-        assignment |
+        assignment_stmt |
         call!(while_stmt, indent) |
         call!(for_in, indent) |
         call!(if_stmt, indent) |
@@ -199,13 +199,13 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
 
 /// Match an import statement.
 fn import(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, inline_keyword!("import"), dotted_identifier);
+    let parse_result = tuple!(input, initial_keyword!("import"), dotted_identifier);
     return fmap_iresult(parse_result,|x| Stmt::ImportStmt {module: x.1});
 }
 
 /// Match a return statement.
 fn return_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, inline_keyword!("return"), expression);
+    let parse_result = tuple!(input, initial_keyword!("return"), expression);
     return fmap_iresult(parse_result,|x| Stmt::ReturnStmt {value: x.1});
 }
 
@@ -231,8 +231,8 @@ fn for_in(input: &[u8], indent: usize) -> StmtRes {
 fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         line_then_block!("if", expression, indent),
-        many0!(line_then_block!("elif", expression, indent)),
-        opt!(complete!(keyword_then_block!("else", indent)))
+        many0!(indented!(line_then_block!("elif", expression, indent), indent)),
+        opt!(complete!(indented!(keyword_then_block!("else", indent), indent)))
     );
 
     return fmap_iresult(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, main_block: (x.0).1, elifs: x.1, else_block: x.2});
@@ -375,7 +375,7 @@ fn let_stmt(input: &[u8]) -> StmtRes {
     return fmap_iresult(parse_result, |x| Stmt::LetStmt {value_name: x.0, value: x.1});
 }
 
-fn assignment(input: &[u8]) -> StmtRes {
+pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
             identifier,
@@ -427,7 +427,7 @@ fn continue_stmt(input: &[u8]) -> StmtRes {
 
 fn yield_stmt(input: &[u8]) -> StmtRes {
     let parse_result = preceded!(input,
-        tag!("yield"),
+        initial_keyword!("yield"),
         inline_wrapped!(expression)
     );
 
@@ -1101,9 +1101,9 @@ fn string(input: &[u8]) -> ExprRes {
     return fmap_iresult(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
 }
 
-fn read_from_file(f_name: &str) -> String {
-    let filename= format!("./test_data/{}.gr", f_name);
-    let mut f = File::open(filename).expect("File not found");
+pub fn read_from_file(f_name: &str) -> String {
+    //let filename= format!("./test_data/{}.gr", f_name);
+    let mut f = File::open(f_name).expect("File not found");
     let mut contents = String::new();
     match f.read_to_string(&mut contents) {
         Ok(_) => return contents,
@@ -1199,13 +1199,13 @@ mod tests {
 
         #[test]
         fn test_assignment() {
-            check_match("foo = true", assignment, Stmt::AssignmentStmt {
+            check_match("foo = true", assignment_stmt, Stmt::AssignmentStmt {
                 identifier: Identifier::from("foo"),
                 operator: Assignment::Normal,
                 expression: Expr::from(true)
             });
 
-            check_match("x = 0\n", assignment, Stmt::AssignmentStmt {
+            check_match("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
                 identifier: Identifier::from("x"),
                 operator: Assignment::Normal,
                 expression: Expr::Int(IntegerLiteral::from(0))
@@ -1214,7 +1214,7 @@ mod tests {
             let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
             for op in all_ops {
                 let input = format!("x {} y", op);
-                check_match(input.as_str(), assignment, Stmt::AssignmentStmt {
+                check_match(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
                     identifier: Identifier::from("x"),
                     operator: Assignment::from(op),
                     expression: Expr::from("y"),
@@ -1229,7 +1229,7 @@ mod tests {
 
             let good_output = Stmt::IfStmt{
                 condition: output(expression("a and b".as_bytes())),
-                main_block: Block{statements: vec!(output(assignment("x = true".as_bytes())))},
+                main_block: Block{statements: vec!(output(assignment_stmt("x = true".as_bytes())))},
                 elifs: vec!(),
                 else_block: None
             };
@@ -1238,7 +1238,7 @@ mod tests {
 
             check_failed("ifa and b:\n x = true", |x| statement(x, 0), nom::ErrorKind::Alt);
 
-            check_match("if    true   :     \n\n\n x = true\nelif    false   :   \n\n\n y = true\nelse     :  \n z = true", |x| if_stmt(x, 0), Stmt::IfStmt {
+            check_match("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
                 condition: Expr::from(true),
                 main_block: output(block("x = true".as_bytes(), 0)),
                 elifs: vec!((Expr::from(false), output(block("y = true".as_bytes(), 0)))),
@@ -1250,7 +1250,7 @@ mod tests {
         fn test_while_stmt() {
             check_match("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
                 condition: Expr::from(true),
-                block: Block{statements: vec!(output(assignment("x=true".as_bytes())))}
+                block: Block{statements: vec!(output(assignment_stmt("x=true".as_bytes())))}
             });
         }
 
@@ -1505,8 +1505,8 @@ mod tests {
     fn test_block() {
         check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Block{
             statements: vec![
-                output(assignment("x=0\n".as_bytes())),
-                output(assignment("y=true".as_bytes()))
+                output(assignment_stmt("x=0\n".as_bytes())),
+                output(assignment_stmt("y=true".as_bytes()))
             ]
         });
     }

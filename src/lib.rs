@@ -12,4 +12,6 @@ pub mod grace_error;
 pub mod parser;
 pub mod expression;
 pub mod bytecode;
+pub mod scoping;
+pub mod ast_node;
 

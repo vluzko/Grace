@@ -1,4 +1,4 @@
- [package]
+[package]
 name = "grace"
 version = "0.1.0"
 authors = ["Vincent Luczkow <vincent.luczkow@gmail.com>",
@@ -11,6 +11,7 @@ log = "0.4"
 cute = "*"
 rand = "*"
 itertools = "*"
+
 
 [lib]
 name = "grace_lib"

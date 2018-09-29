@@ -105,14 +105,14 @@ impl ASTNode for Expr {
                 let first = left.generate_bytecode();
                 let second = right.generate_bytecode();
                 let operator = operator.generate_bytecode();
-                format!("{}\n{}\n{}\n", first, second, operator)
+                format!("{}\n{}\n{}", first, second, operator)
             },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
                 // TODO: Don't use string replace.
                 let operator = operator.generate_bytecode();
                 let first = left.generate_bytecode();
                 let second= right.generate_bytecode();
-                format!("{}\n{}\n{}\n", first, second, operator)
+                format!("{}\n{}\n{}", first, second, operator)
             },
             &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
@@ -126,6 +126,7 @@ impl ASTNode for Expr {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
             &Expr::Int(ref int_lit) => int_lit.generate_bytecode(),
+            &Expr::Bool(ref bool) => bool.generate_bytecode(),
             _ => panic!()
         };
         return bytecode_rep;

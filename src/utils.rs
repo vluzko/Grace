@@ -100,21 +100,39 @@ named!(pub inline_whitespace<&[u8], Vec<&[u8]>>,
 /// A macro for wrapping a parser in inline whitespace.
 /// Similar to ws!, but doesn't allow for \n, \r, or \t.
 macro_rules! inline_wrapped (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
-        IResult::Error(a)      => IResult::Error(a),
-        IResult::Incomplete(i) => IResult::Incomplete(i),
-        IResult::Done(remaining, (_,o, _))    => {
-            IResult::Done(remaining, o)
+    ($i:expr, $submac:ident!( $($args:tt)* )) => (
+        {
+            match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
+                IResult::Error(a)      => IResult::Error(a),
+                IResult::Incomplete(i) => IResult::Incomplete(i),
+                IResult::Done(remaining, (_,o, _))    => {
+                    IResult::Done(remaining, o)
+                }
+            }
         }
-      }
-    }
-  );
+    );
 
-  ($i:expr, $f:expr) => (
-    inline_wrapped!($i, call!($f));
-  );
+    ($i:expr, $f:expr) => (
+        inline_wrapped!($i, call!($f));
+    );
+);
+
+macro_rules! w_followed (
+    ($i:expr, $submac:ident!( $($args:tt)* )) => (
+        {
+            match tuple!($i, $submac!($($args)*), inline_whitespace) {
+                IResult::Error(a)      => IResult::Error(a),
+                IResult::Incomplete(i) => IResult::Incomplete(i),
+                IResult::Done(remaining, (o, _))    => {
+                    IResult::Done(remaining, o)
+                }
+            }
+        }
+    );
+
+    ($i:expr, $f:expr) => (
+        w_followed!($i, call!($f));
+    );
 );
 
 named!(pub valid_identifier_char<&[u8], &[u8]>,
@@ -166,35 +184,35 @@ macro_rules! indented (
 );
 
 named!(pub comma <&[u8], &[u8]>,
-    inline_wrapped!(tag!(","))
+    w_followed!(tag!(","))
 );
 
 named!(pub open_paren <&[u8], &[u8]>,
-    inline_wrapped!(tag!("("))
+    w_followed!(tag!("("))
 );
 
 named!(pub close_paren <&[u8], &[u8]>,
-    inline_wrapped!(tag!(")"))
+    w_followed!(tag!(")"))
 );
 
 named!(pub open_brace <&[u8], &[u8]>,
-    inline_wrapped!(tag!("{"))
+    w_followed!(tag!("{"))
 );
 
 named!(pub close_brace <&[u8], &[u8]>,
-    inline_wrapped!(tag!("}"))
+    w_followed!(tag!("}"))
 );
 
 named!(pub open_bracket <&[u8], &[u8]>,
-    inline_wrapped!(tag!("["))
+    w_followed!(tag!("["))
 );
 
 named!(pub close_bracket <&[u8], &[u8]>,
-    inline_wrapped!(tag!("]"))
+    w_followed!(tag!("]"))
 );
 
 named!(pub colon <&[u8], &[u8]>,
-    inline_wrapped!(tag!(":"))
+    w_followed!(tag!(":"))
 );
 
 named!(pub ending_colon <&[u8], &[u8]>,

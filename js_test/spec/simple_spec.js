@@ -62,7 +62,11 @@ describe("Wat tests.", function() {
     return async_utils.compile_wat("js_test/spec/outputs/wat_test.wat");
   }, [[
     'memory tests', module => {
-    console.log("Memory size is", module.instance.exports.array());
-    console.log(module.instance.exports.loadstuff());
-    }]]);
+    expect(module.instance.exports.alloc2(1)).toBe(3);
+    expect(module.instance.exports.inspect(0)).toBe(3);
+    expect(module.instance.exports.alloc2(1)).toBe(15);
+    expect(module.instance.exports.inspect(0)).toBe(3);
+    expect(module.instance.exports.inspect(3)).toBe(15);
+    expect(module.instance.exports.inspect(15)).toBe(0);
+  }]]);
 });

@@ -49,10 +49,10 @@
     i32.eqz                                     ;; If the number of allocated chunks is 0, we assign the first chunk and return.
     if (result i32)
         i32.const 0
-        i32.const 3
+        i32.const 4
         i32.store                               ;; Set the first pointer to the first chunk
 
-        i32.const 3
+        i32.const 4
         i32.const 0
         get_local $size
         call $create_chunk                      ;; TODO: Figure out if the WASM compiler will inline function calls.
@@ -103,8 +103,8 @@
         i32.store                               ;; Store a pointer to new_chunk in next_chunk
 
         get_local $new_chunk
-        get_local $size
         i32.const 0
+        get_local $size
         call $create_chunk                      ;; Create the chunk and return its address
     end
 

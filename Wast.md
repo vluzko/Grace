@@ -56,3 +56,8 @@ Memory is accessed in *bytes*.
     i32.load
 
 Will get you the value stored at *bytes* n, n+1, n+2, n+3, interpreted as an integer.
+
+Note on weird error messages: if you get something like " error: type mismatch in function, expected [] but got [i32, i32]
+",
+that can mean there was more than one thing left on the stack at the end. If the function is supposed to return,
+there should be exactly one value of the right type on the stack at the end and nothing else.

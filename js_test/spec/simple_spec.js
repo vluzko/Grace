@@ -59,16 +59,18 @@ describe("Small grace tests.", function () {
 
 describe("Wat tests.", function() {
   async_desc("", () => {
-    return async_utils.compile_wat("js_test/spec/outputs/wat_test.wat");
+    return async_utils.compile_wat("js_test/spec/outputs/memory_management.wat");
   }, [[
     'memory tests', module => {
-    expect(module.instance.exports.alloc2(1)).toBe(4);
-    expect(module.instance.exports.inspect(4)).toBe(0);
-//    expect(module.instance.exports.inspect(0)).toBe(4);
-    expect(module.instance.exports.alloc2(1)).toBe(16);
-//    expect(module.instance.exports.inspect(0)).toBe(4);
-//    expect(module.instance.exports.inspect(4)).toBe(16);
-    expect(module.instance.exports.inspect(16)).toBe(0);
+    expect(module.instance.exports.alloc(1)).toBe(12);
+    expect(module.instance.exports.alloc(10)).toBe(24);
+    expect(module.instance.exports.alloc(10)).toBe(72);
+    expect(module.instance.exports.inspect(4)).toBe(16);
+    expect(module.instance.exports.inspect(16)).toBe(64);
+    expect(module.instance.exports.inspect(64)).toBe(0);
+    expect(module.instance.exports.free_chunk(24)).toBe(1);
+    expect(module.instance.exports.inspect(4)).toBe(64);
+    expect(module.instance.exports.alloc(10)).toBe(24);
   }]]);
 });
 

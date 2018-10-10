@@ -5,9 +5,6 @@
     i32.load
 )(export "inspect" (func $inspect))
 
-;;(func $set_mem (param $))
-
-
 ;; TODO: Inline
 ;; Create a chunk at the specified address with size $size and a pointer to $next_chunk.
 (func $create_chunk (param $address i32) (param $next_chunk i32) (param $size i32) (result i32)
@@ -38,9 +35,17 @@
     i32.add                     ;; The real end of next_chunk
 )(export "calc_end" (func $calc_end))
 
+;; Allocate a chunk of memory whose size is given in words
+(func $alloc_words (param $number_of_words i32) (result i32)
+    get_local $number_of_words
+    call $alloc
+)(export "alloc_words" (func $alloc_words))
+
 ;; Allocate a chunk of memory for use as an array.
 ;; It's easy to get confused here.
 ;; *next_chunk* is the *address* of the next chunk. However the *value at that address* is the address of *next_next_chunk*.
+;; Args:
+;;      size (i32): The size in words of the chunk to be allocated.
 (func $alloc (param $size i32) (result i32) (local $cur_chunk i32) (local $next_chunk i32) (local $new_chunk i32)
     i32.const 0
     i32.load

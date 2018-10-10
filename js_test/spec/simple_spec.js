@@ -74,3 +74,30 @@ describe("Wat tests.", function() {
   }]]);
 });
 
+describe("Array tests.", function () {
+  let mem_manage;
+  async_desc("", () => {
+    return async_utils.compile_wat("js_test/spec/outputs/memory_management.wat").then(module => {
+      let imports = {
+        "memory_management": module.instance.exports
+      };
+      mem_manage = module.instance.exports;
+      return async_utils.compile_wat("js_test/spec/outputs/arrays.wat", imports);
+    });
+
+  }, [[
+    "create arrays", module=> {
+    expect(module.instance.exports.create_array(10, 10)).toBe(12);
+    // console.log(module.instance.exports.create_array(0 , 0));
+  }], [
+    "set and get elements.", module => {
+    let array = module.instance.exports.create_array(10, 10);
+    expect(array).toBe(12);
+    // Set the third element of the array to 2.
+    module.instance.exports.set_value(-2, array, 3, 4);
+    expect(mem_manage.inspect(24)).toBe(-2);
+    expect(module.instance.exports.get_value(array, 3, 4)).toBe(-2);
+
+  }]])
+});
+

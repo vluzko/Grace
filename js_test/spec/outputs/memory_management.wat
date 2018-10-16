@@ -1,9 +1,93 @@
-(module (memory (export "mem") 2)
+(module (memory (export "mem") 1)
+
+(func $obliviate (result i32) (local $size i32) (local $counter i32)
+    memory.size
+    i32.const 655
+    i32.mul
+    set_local $size
+
+    i32.const 0
+    set_local $counter
+
+    loop
+        block
+            get_local $counter
+            get_local $size
+            i32.ge_u
+            br_if 0 ;; End the loop if all elements seen.
+
+            ;; Set the current element to 0.
+            get_local $counter
+            i32.const 0
+            i32.store
+
+            ;; Decrement the element counter.
+            get_local $counter
+            i32.const 1
+            i32.add
+            set_local $counter
+
+            br 1    ;; Loop
+        end
+    end
+    i32.const 1
+)(export "obliviate" (func $obliviate))
 
 (func $inspect (param $loc i32) (result i32)
     get_local $loc
     i32.load
 )(export "inspect" (func $inspect))
+
+;; Copy from a to b.
+(func $copy (param $a i32) (param $b i32)
+    get_local $b
+    get_local $a
+    i32.load
+    i32.store
+)(export "copy" (func $copy))
+
+;; Copy block of size s from a to b.
+;; Args:
+;;      a (i32): Pointer to the first element to copy
+;;      b (i32): First pointer to paste to
+;;      size (i32): Number of bytes to copy.
+;; Returns:
+;;      1 if successful, 0 otherwise
+(func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)
+    loop
+        block
+            get_local $size
+            i32.eqz
+            br_if 0     ;; Exit the loop if size has been decremented to 0.
+
+            ;; Copy a to b
+            get_local $a
+            get_local $b
+            call $copy
+
+            ;; Increment a
+            get_local $a
+            i32.const 1
+            i32.add
+            set_local $a
+
+            ;; Increment b
+            get_local $b
+            i32.const 1
+            i32.add
+            set_local $b
+
+            ;; Decrement size.
+            get_local $size
+            i32.const 1
+            i32.sub
+            set_local $size
+
+            br 1        ;; Loop
+        end
+    end
+    i32.const 1
+)(export "copy_many" (func $copy_many))
 
 ;; TODO: Inline
 ;; Create a chunk at the specified address with size $size and a pointer to $next_chunk.
@@ -36,6 +120,10 @@
 )(export "calc_end" (func $calc_end))
 
 ;; Allocate a chunk of memory whose size is given in words
+;; Args:
+;;      number_of_words (i32):
+;; Returns:
+;;      A pointer to the data segment of the new chunk.
 (func $alloc_words (param $number_of_words i32) (result i32)
     get_local $number_of_words
     call $alloc
@@ -46,6 +134,8 @@
 ;; *next_chunk* is the *address* of the next chunk. However the *value at that address* is the address of *next_next_chunk*.
 ;; Args:
 ;;      size (i32): The size in words of the chunk to be allocated.
+;; Returns:
+;;      A pointer to the data segment of the new chunk.
 (func $alloc (param $size i32) (result i32) (local $cur_chunk i32) (local $next_chunk i32) (local $new_chunk i32)
     i32.const 0
     i32.load
@@ -120,6 +210,8 @@
 (export "alloc" (func $alloc))
 
 ;; free a chunk of memory
+;; Args
+;;      chunk (i32):    A pointer to the *data* to be freed, *not* the metadata
 (func $free_chunk (param $chunk i32) (result i32) (local $current i32) (local $next i32)
     get_local $chunk
     i32.const 8

@@ -1,7 +1,8 @@
 (module
 (import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
-(import "memory_management" "free_chunk" (func $free (param $a i32) (result i32)))
-(import "memory_management" "mem" (memory (;0;) 2))
+(import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
+(import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import "memory_management" "mem" (memory (;0;) 1))
 
 (func $create_array (param $number_of_elements i32) (param $element_size i32) (result i32)
     get_local $number_of_elements
@@ -38,4 +39,106 @@
     i32.store
 
 )(export "set_value" (func $set_value))
+
+;; Delete an array.
+;; Args
+;;      array_index (i32): Pointer to the array (not the metadata of the chunk containing the array)
+(func $delete (param $array_index i32)(result i32)
+    get_local $array_index
+    call $free_chunk 
+)(export "delete" (func $delete))
+
+;; Resize an array.
+;; Args:
+;;      array_index (i32):  Pointer to the array to resize
+;;      number_of_elements (i32):   The number of elements in the new array
+;;      element_size (i32):         The size of a single element
+;;      new_size (i32):     The new size (in words)
+;;
+;; Returns:
+;;     Pointer to the resized array.
+(func $resize (param $array_index i32) (param $number_of_elements i32) (param $element_size i32) (result i32)
+(local $cur_size i32) (local $new_size i32) (local $ptr_to_size i32) (local $ptr_to_meta i32) (local $ptr_to_new i32) (local $ptr_to_next i32)
+    ;; Calculate the new size.
+    get_local $number_of_elements
+    get_local $element_size
+    i32.mul
+    set_local $new_size
+
+    ;; Get the current size of the array.
+    (i32.sub (get_local $array_index) (i32.const 4))
+    tee_local $ptr_to_size
+    i32.load
+    tee_local $cur_size
+
+
+    get_local $new_size
+    i32.gt_u
+    if (result i32)
+        ;; If new_size < cur_size, change the size and otherwise don't modify the array.
+        get_local $ptr_to_size
+        get_local $new_size
+        i32.store
+
+        get_local $array_index
+    else
+        get_local $cur_size
+        get_local $new_size
+        i32.eq
+
+        ;; If new_size == cur_size, stop
+        if (result i32)
+            get_local $array_index
+        else
+            get_local $ptr_to_size
+            i32.const 4
+            i32.sub
+            tee_local $ptr_to_meta
+            i32.load
+            tee_local $ptr_to_next
+
+            ;; Handle the case where the array being resized is in the last chunk.
+            i32.eqz
+            if
+                memory.size
+                i32.const 65536
+                i32.mul
+                set_local $ptr_to_next
+            end
+
+            get_local $ptr_to_next
+
+            ;; Calculate size of space between current chunk and next chunk
+            get_local $array_index
+            i32.sub
+
+            get_local $new_size
+            i32.ge_u
+            ;; If new_size > cur_size and there's room to expand
+            if (result i32)
+                get_local $ptr_to_size
+                get_local $new_size
+                i32.store
+
+                get_local $array_index
+            else
+                ;; If new_size > cur_size and there isn't enough room to expand, free the current array, create a new one, and copy
+
+                get_local $array_index
+                call $free_chunk        ;; Free the current chunk
+                drop
+
+                get_local $array_index  ;; Load onto the stack
+
+                get_local $new_size
+                call $alloc_words       ;; Create a new chunk
+                tee_local $ptr_to_new
+
+                get_local $new_size
+                call $copy_many
+
+            end
+        end
+    end
+)(export "resize" (func $resize))
 )

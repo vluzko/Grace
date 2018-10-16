@@ -112,8 +112,6 @@
         (get_local $address)
         (i32.const 4)
     ))
-    i32.const 4
-    i32.mul                     ;; Multiply the chunk size by 4 to keep everything in words instead of bytes
     i32.add                     ;; Compute the end of next_chunk, minus overhead
     i32.const 8                 ;; We have 8 bytes of overhead from storing the linked list and the size of the chunk.
     i32.add                     ;; The real end of next_chunk
@@ -125,7 +123,9 @@
 ;; Returns:
 ;;      A pointer to the data segment of the new chunk.
 (func $alloc_words (param $number_of_words i32) (result i32)
+    i32.const 4
     get_local $number_of_words
+    i32.mul
     call $alloc
 )(export "alloc_words" (func $alloc_words))
 
@@ -133,7 +133,7 @@
 ;; It's easy to get confused here.
 ;; *next_chunk* is the *address* of the next chunk. However the *value at that address* is the address of *next_next_chunk*.
 ;; Args:
-;;      size (i32): The size in words of the chunk to be allocated.
+;;      size (i32): The size in bytes of the chunk to be allocated.
 ;; Returns:
 ;;      A pointer to the data segment of the new chunk.
 (func $alloc (param $size i32) (result i32) (local $cur_chunk i32) (local $next_chunk i32) (local $new_chunk i32)

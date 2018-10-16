@@ -69,15 +69,15 @@ describe("Wat tests.", function() {
     });
   }, [[
     'memory tests', module => {
-    expect(module.instance.exports.alloc(1)).toBe(12);
-    expect(module.instance.exports.alloc(10)).toBe(24);
-    expect(module.instance.exports.alloc(10)).toBe(72);
+    expect(module.instance.exports.alloc(4)).toBe(12);
+    expect(module.instance.exports.alloc(40)).toBe(24);
+    expect(module.instance.exports.alloc(40)).toBe(72);
     expect(module.instance.exports.inspect(4)).toBe(16);
     expect(module.instance.exports.inspect(16)).toBe(64);
     expect(module.instance.exports.inspect(64)).toBe(0);
     expect(module.instance.exports.free_chunk(24)).toBe(1);
     expect(module.instance.exports.inspect(4)).toBe(64);
-    expect(module.instance.exports.alloc(10)).toBe(24);
+    expect(module.instance.exports.alloc(40)).toBe(24);
   }], [
     "copy_many", module => {
       expect(0).toBe(1);
@@ -126,12 +126,17 @@ describe("Array tests.", function () {
     }
   ], [
     "resize array in middle", module => {
-      module.create_array(5, 4);
-      let second = module.create_array(5, 4);
-      console.log(module.create_array(5, 4));
-      let resized = module.resize(second, 10, 4);
-      expect(resized).toBe(212)
+      module.create_array(5, 1);
+      let second = module.create_array(5, 1);
+      console.log(module.create_array(5, 1));
+      let resized = module.resize(second, 10, 1);
+      expect(mem_manage.inspect(0)).toBe(4);
+      expect(mem_manage.inspect(4)).toBe(60);
+      expect(mem_manage.inspect(60)).toBe(88);
+      expect(resized).toBe(96); // pointer to data segment of chunk that starts at 88
     }
   ]])
 });
 
+// before resize, chunks start at 4, 32, and 60
+// after resize, chunks start at 4, 60, and 88

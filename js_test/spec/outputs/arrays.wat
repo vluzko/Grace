@@ -4,6 +4,10 @@
 (import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
+;; Create an array
+;; Args
+;;      number_of_elements (i32)        - The length of the array in elements
+;;      element_size (i32)              - The size of each element in words
 (func $create_array (param $number_of_elements i32) (param $element_size i32) (result i32)
     get_local $number_of_elements
     get_local $element_size
@@ -50,19 +54,20 @@
 
 ;; Resize an array.
 ;; Args:
-;;      array_index (i32):  Pointer to the array to resize
+;;      array_index (i32):  Pointer to the data segment of the chunk containing the array to resize
 ;;      number_of_elements (i32):   The number of elements in the new array
-;;      element_size (i32):         The size of a single element
-;;      new_size (i32):     The new size (in words)
+;;      element_size (i32):         The size of a single element (in words)
 ;;
 ;; Returns:
-;;     Pointer to the resized array.
+;;     Pointer to the data segment of the resized array.
 (func $resize (param $array_index i32) (param $number_of_elements i32) (param $element_size i32) (result i32)
 (local $cur_size i32) (local $new_size i32) (local $ptr_to_size i32) (local $ptr_to_meta i32) (local $ptr_to_new i32) (local $ptr_to_next i32)
     ;; Calculate the new size.
     get_local $number_of_elements
     get_local $element_size
     i32.mul
+    i32.const 4
+    i32.mul                         ;; go from words to bytes
     set_local $new_size
 
     ;; Get the current size of the array.
@@ -136,7 +141,8 @@
 
                 get_local $new_size
                 call $copy_many
-
+                drop
+                get_local $ptr_to_new
             end
         end
     end

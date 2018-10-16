@@ -65,22 +65,29 @@ describe("Wat tests.", function() {
   async_desc("", () => {
     return async_utils.compile_wat("js_test/spec/outputs/memory_management.wat").then(module => {
       mem_manage = module.instance.exports;
-      return module;
+      return module.instance.exports;
     });
   }, [[
     'memory tests', module => {
-    expect(module.instance.exports.alloc(4)).toBe(12);
-    expect(module.instance.exports.alloc(40)).toBe(24);
-    expect(module.instance.exports.alloc(40)).toBe(72);
-    expect(module.instance.exports.inspect(4)).toBe(16);
-    expect(module.instance.exports.inspect(16)).toBe(64);
-    expect(module.instance.exports.inspect(64)).toBe(0);
-    expect(module.instance.exports.free_chunk(24)).toBe(1);
-    expect(module.instance.exports.inspect(4)).toBe(64);
-    expect(module.instance.exports.alloc(40)).toBe(24);
+    expect(module.alloc(4)).toBe(12);
+    expect(module.alloc(40)).toBe(24);
+    expect(module.alloc(40)).toBe(72);
+    expect(module.inspect(4)).toBe(16);
+    expect(module.inspect(16)).toBe(64);
+    expect(module.inspect(64)).toBe(0);
+    expect(module.free_chunk(24)).toBe(1);
+    expect(module.inspect(4)).toBe(64);
+    expect(module.alloc(40)).toBe(24);
   }], [
     "copy_many", module => {
-      expect(0).toBe(1);
+      expect(module.alloc(12)).toBe(12);
+      module.set(12, 20);
+      module.set(16, 30);
+      module.set(20, 40);
+      module.copy_many(12, 30, 12);
+      expect(module.inspect(30)).toBe(20);
+      expect(module.inspect(34)).toBe(30);
+      expect(module.inspect(38)).toBe(40);
     }
   ]]);
 });

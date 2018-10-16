@@ -38,6 +38,12 @@
     i32.load
 )(export "inspect" (func $inspect))
 
+(func $set (param $loc i32) (param $val i32)
+    get_local $loc
+    get_local $val
+    i32.store
+)(export "set" (func $set))
+
 ;; Copy from a to b.
 (func $copy (param $a i32) (param $b i32)
     get_local $b

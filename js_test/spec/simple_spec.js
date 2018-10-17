@@ -111,7 +111,6 @@ describe("Array tests.", function () {
   }, [[
     "create arrays", module=> {
     expect(module.create_array(10, 4)).toBe(12);
-    // console.log(module.instance.exports.create_array(0 , 0));
   }], [
     "set and get elements.", module => {
     let array = module.create_array(10, 4);
@@ -123,7 +122,12 @@ describe("Array tests.", function () {
 
   }], [
     "delete array.", module => {
-      expect(0).toBe(1);
+      module.create_array(5, 1);
+      let second = module.create_array(5, 1);
+      module.create_array(5, 1);
+      let resized = module.delete(second);
+      expect(mem_manage.inspect(0)).toBe(4);
+      expect(mem_manage.inspect(4)).toBe(60);
     }
   ], [
     "resize only array.", module => {
@@ -135,7 +139,7 @@ describe("Array tests.", function () {
     "resize array in middle", module => {
       module.create_array(5, 1);
       let second = module.create_array(5, 1);
-      console.log(module.create_array(5, 1));
+      module.create_array(5, 1);
       let resized = module.resize(second, 10, 1);
       expect(mem_manage.inspect(0)).toBe(4);
       expect(mem_manage.inspect(4)).toBe(60);

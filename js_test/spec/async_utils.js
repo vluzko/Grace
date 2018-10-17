@@ -106,7 +106,7 @@ function compile_grace(input, output) {
  * @param {String} input
  * @param {String} output
  */
-function compile_wat(input) {
+function compile_wat(input, imports) {
   process.chdir("..");
   let wasm_file = input.replace(".wat", ".wasm");
   // Asynchronously compile the WAST to WASM.
@@ -118,7 +118,7 @@ function compile_wat(input) {
     // Go back to where we started now that we're done running stuff.
     // This doesn't actually fully fix the possible error, but whatever.
     process.chdir("js_test");
-    return WebAssembly.instantiate(module_as_bytes);
+    return WebAssembly.instantiate(module_as_bytes, imports);
   });
   return loaded_module;
 

@@ -11,11 +11,17 @@ extern crate itertools;
 
 /// ASTNode implementations
 
+
 impl ASTNode for Module {
     fn generate_bytecode(&self) -> String {
         let decls = self.declarations.iter().map(|x| x.generate_bytecode());
         let joined = itertools::join(decls, "\n");
-        return format!("(module\n{}\n)\n", joined).to_string();
+        return format!("(module\n\
+(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
+(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
+(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import 'memory_management' 'mem' (memory (;0;) 1))
+{}\n)\n", joined).to_string();
     }
 }
 
@@ -211,6 +217,10 @@ mod tests {
     pub fn test_generate_module() {
         let module = parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
         let mod_bytecode = r#"(module
+(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
+(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
+(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import 'memory_management' 'mem' (memory (;0;) 1))
 (func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5
 i32.const 6

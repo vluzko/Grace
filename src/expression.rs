@@ -73,6 +73,46 @@ pub enum Expr {
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
+/// Types
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Type {
+    i32,
+    i64,
+    f32,
+    f64,
+    ui32,
+    ui64,
+    string,
+    boolean,
+    array
+}
+
+impl Type {
+    pub fn wast_name(&self) -> String {
+        match self {
+            i32 => "i32".to_string(),
+            i64 => "i64".to_string(),
+            f32 => "f32".to_string(),
+            f64 => "f64".to_string(),
+            ui32 => "i32".to_string(),
+            ui64 => "i64".to_string(),
+            _ => panic!()
+        }
+    }
+}
+
+impl Expr {
+    pub fn get_type(&self) -> Type {
+        match self {
+            Bool => Type::boolean,
+            Int => Type::i32,
+            Float => Type::f64,
+            String => Type::string,
+            _ => panic!()
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeAnnotation {
     Simple(Identifier)

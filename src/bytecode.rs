@@ -9,6 +9,7 @@ use ast_node::ASTNode;
 
 extern crate itertools;
 
+
 /// ASTNode implementations
 
 impl ASTNode for Module {
@@ -98,6 +99,48 @@ impl ASTNode for Stmt {
         return bytecode;
     }
 }
+
+/// Type map
+///       int32 int64 float32 float64 bool
+/// int32
+/// int64
+/// float32
+/// float64
+fn operator_add(left: Expr, right: Expr) -> String {
+    let left_type = &left.get_type();
+    let right_type = &right.get_type();
+    let return_type= &match (left_type, right_type) {
+        (Type::i64, Type::f32) | (Type::f32, Type::i64) => panic!(),
+        (Type::i64, Type::f64) | (Type::f64, Type::i64) => panic!(),
+        (Type::i64, _) | (_, Type::i64) => Type::i64,
+        (Type::f64, _) | (_, Type::f64) => Type::f64,
+        (Type::i32, Type::i32) => Type::i32,
+        (Type::f32, Type::f32) => Type::f32,
+        (Type::i32, Type::f32) | (Type::f32, Type::i32) => Type::f64,
+        _ => panic!()
+    };
+    let left_bytecode = left.generate_bytecode();
+    let left_conversion = convert_types(left_type, return_type);
+    let right_bytecode = right.generate_bytecode();
+    let right_conversion = convert_types(right_type, return_type);
+    let operator_bytecode = return_type.wast_name();
+    // left_bytecode left_conversion right_bytecode right_conversion operator
+    return format!("{}\n{}\n{}\n{}\n{}", left_bytecode, left_conversion,
+    right_bytecode, right_conversion, operator_bytecode);
+}
+
+fn convert_types(input_type: &Type, output_type: &Type) -> String {
+    if (input_type == output_type) {
+        return "".to_string();
+    }
+    match (input_type, output_type) {
+        (Type::f32, Type::f64) => "f64.promote".to_string(),
+        (Type::i32, Type::f64) => "f64.convert_s".to_string(),
+        (Type::i32, Type::i64) => "i32.wrap".to_string(),
+        _ => panic!()
+    }
+}
+
 impl ASTNode for Expr {
     fn generate_bytecode(&self) -> String {
         let bytecode_rep = match self {

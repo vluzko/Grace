@@ -90,12 +90,12 @@ pub enum Type {
 impl Type {
     pub fn wast_name(&self) -> String {
         match self {
-            i32 => "i32".to_string(),
-            i64 => "i64".to_string(),
-            f32 => "f32".to_string(),
-            f64 => "f64".to_string(),
-            ui32 => "i32".to_string(),
-            ui64 => "i64".to_string(),
+            &Type::i32 => "i32".to_string(),
+            &Type::i64 => "i64".to_string(),
+            &Type::f32 => "f32".to_string(),
+            &Type::f64 => "f64".to_string(),
+            &Type::ui32 => "i32".to_string(),
+            &Type::ui64 => "i64".to_string(),
             _ => panic!()
         }
     }
@@ -104,10 +104,10 @@ impl Type {
 impl Expr {
     pub fn get_type(&self) -> Type {
         match self {
-            Bool => Type::boolean,
-            Int => Type::i32,
-            Float => Type::f64,
-            String => Type::string,
+            &Expr::String (ref string) => Type::string,
+            &Expr::Bool (ref bool) => Type::boolean,
+            &Expr::Int (ref IntegerLiteral) => Type::i32,
+            &Expr::Float (ref FloatLiteral) => Type::f64,
             _ => panic!()
         }
     }

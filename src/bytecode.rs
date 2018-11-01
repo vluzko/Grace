@@ -112,7 +112,7 @@ impl ASTNode for Stmt {
 /// int64
 /// float32
 /// float64
-fn operator_add(left: Expr, right: Expr) -> String {
+fn operator_add(left: &Box<Expr>, right: &Box<Expr>) -> String {
     let left_type = &left.get_type();
     let right_type = &right.get_type();
     let return_type= &match (left_type, right_type) {
@@ -131,7 +131,7 @@ fn operator_add(left: Expr, right: Expr) -> String {
     let right_conversion = convert_types(right_type, return_type);
     let operator_bytecode = return_type.wast_name();
     // left_bytecode left_conversion right_bytecode right_conversion operator
-    return format!("{}\n{}\n{}\n{}\n{}", left_bytecode, left_conversion,
+    return format!("{}\n{}{}\n{}{}.add", left_bytecode, left_conversion,
     right_bytecode, right_conversion, operator_bytecode);
 }
 
@@ -140,9 +140,9 @@ fn convert_types(input_type: &Type, output_type: &Type) -> String {
         return "".to_string();
     }
     match (input_type, output_type) {
-        (Type::f32, Type::f64) => "f64.promote".to_string(),
-        (Type::i32, Type::f64) => "f64.convert_s".to_string(),
-        (Type::i32, Type::i64) => "i32.wrap".to_string(),
+        (Type::f32, Type::f64) => "f64.promote\n".to_string(),
+        (Type::i32, Type::f64) => "f64.convert_s\n".to_string(),
+        (Type::i32, Type::i64) => "i32.wrap\n".to_string(),
         _ => panic!()
     }
 }
@@ -158,10 +158,14 @@ impl ASTNode for Expr {
             },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
                 // TODO: Don't use string replace.
-                let operator = operator.generate_bytecode();
-                let first = left.generate_bytecode();
-                let second= right.generate_bytecode();
-                format!("{}\n{}\n{}", first, second, operator)
+                if operator == &BinaryOperator::Add {
+                    operator_add(left, right)
+                } else {
+                    let operator_bytecode = operator.generate_bytecode();
+                    let first = left.generate_bytecode();
+                    let second = right.generate_bytecode();
+                    format!("{}\n{}\n{}", first, second, operator_bytecode)
+                }
             },
             &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
@@ -175,6 +179,7 @@ impl ASTNode for Expr {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
             &Expr::Int(ref int_lit) => int_lit.generate_bytecode(),
+            &Expr::Float(ref float_lit) => float_lit.generate_bytecode(),
             &Expr::Bool(ref bool) => bool.generate_bytecode(),
             _ => panic!()
         };
@@ -227,7 +232,7 @@ impl ASTNode for IntegerLiteral {
 }
 impl ASTNode for FloatLiteral {
     fn generate_bytecode(&self) -> String {
-        panic!()
+        return format!("f64.const {}", self.string_rep);
     }
 }
 impl ASTNode for Boolean {
@@ -295,6 +300,10 @@ get_local $x
     pub fn test_generate_add() {
         let add_expr = parser::expression("5 + 6".as_bytes());
         assert_eq!(output(add_expr).generate_bytecode(), "i32.const 5\ni32.const 6\ni32.add".to_string());
+        let add_expr = parser::expression("5.0 + 6".as_bytes());
+        assert_eq!(output(add_expr).generate_bytecode(), "f64.const 5.0\ni32.const 6\nf64.convert_s\nf64.add".to_string());
+        let add_expr = parser::expression("5.0 + 6.0".as_bytes());
+        assert_eq!(output(add_expr).generate_bytecode(), "f64.const 5.0\nf64.const 6.0\nf64.add".to_string());
     }
 
     #[test]

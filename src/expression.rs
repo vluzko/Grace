@@ -88,6 +88,8 @@ pub enum Type {
 }
 
 impl Type {
+
+    /// Get the name of this type in WAST.
     pub fn wast_name(&self) -> String {
         match self {
             &Type::i32 => "i32".to_string(),
@@ -97,6 +99,15 @@ impl Type {
             &Type::ui32 => "i32".to_string(),
             &Type::ui64 => "i64".to_string(),
             _ => panic!()
+        }
+    }
+
+    /// Get _s or _u for signed values, otherwise an empty string.
+    pub fn sign(&self) -> String {
+        match &self {
+            &Type::i32 | &Type::i64 => "_s".to_string(),
+            &Type::ui32 | &Type::ui64 => "_u".to_string(),
+            _ => "".to_string()
         }
     }
 }
@@ -180,13 +191,71 @@ pub enum BinaryOperator {
     Exponent
 }
 
+impl BinaryOperator {
+
+    pub fn get_return_type(&self, left: &Type, right: &Type) -> Type {
+
+        let add_order = hashmap!{
+            Type::i32 => vec!{Type::i32, Type::i64, Type::f64},
+            Type::ui32 => vec!{Type::ui32, Type::i64, Type::ui64, Type::f64},
+            Type::f32 => vec!{Type::f32, Type::f64},
+            Type::i64 => vec!{Type::i64},
+            Type::f64 => vec!{Type::f64}
+        };
+
+        let div_order = hashmap!{
+            Type::i32 => vec!{Type::f32, Type::f64},
+            Type::f32 => vec!{Type::f32, Type::f64},
+            Type::f64 => vec!{Type::f64}
+        };
+
+        let order = match self {
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => add_order,
+            BinaryOperator::Div => div_order,
+            _ => panic!()
+        };
+
+        let left_upper = order.get(left).unwrap();
+        let right_upper = order.get(right).unwrap();
+        let mut intersection = c![*x, for x in left_upper, if right_upper.contains(x)];
+        // TODO: Check that 0 exists, throw a TypeError if it doesn't.
+        intersection.remove(0)
+    }
+
+    pub fn requires_sign(&self) -> bool {
+        match self {
+            BinaryOperator::Div | BinaryOperator::Mod => true,
+            _ => false
+        }
+    }
+}
+
 /// Any unary operator.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     Not,
     Positive,
     Negative,
-    BitNot
+    BitNot,
+    ToI32,
+    ToUi32,
+    ToI64,
+    ToUi64,
+    ToF32,
+    ToF64
+}
+
+impl From<Type> for UnaryOperator {
+    fn from(input: Type) -> Self {
+        match input {
+            Type::i32 => UnaryOperator::ToI32,
+            Type::ui32 => UnaryOperator::ToF32,
+            Type::i64 => UnaryOperator::ToI64,
+            Type::ui64 => UnaryOperator::ToUi64,
+            Type::f32 => UnaryOperator::ToF32,
+            Type::f64 => UnaryOperator::ToF64
+        }
+    }
 }
 
 /// A dotted identifier. Only used with import statements.

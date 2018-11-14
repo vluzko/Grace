@@ -119,6 +119,15 @@ impl Expr {
             &Expr::Bool (ref bool) => Type::boolean,
             &Expr::Int (ref IntegerLiteral) => Type::i32,
             &Expr::Float (ref FloatLiteral) => Type::f64,
+            &Expr::UnaryExpr {ref operator, ref operand} => {
+                match operator {
+                    &UnaryOperator::ToF32 => Type::f32,
+                    &UnaryOperator::ToF64 => Type::f64,
+                    &UnaryOperator::ToI32 => Type::i32,
+                    &UnaryOperator::ToI64 => Type::i64,
+                    _ => operand.get_type()
+                }
+            }
             _ => panic!()
         }
     }
@@ -204,13 +213,14 @@ impl BinaryOperator {
         };
 
         let div_order = hashmap!{
-            Type::i32 => vec!{Type::f32, Type::f64},
+            Type::i32 => vec!{Type::f64},
             Type::f32 => vec!{Type::f32, Type::f64},
             Type::f64 => vec!{Type::f64}
         };
 
         let order = match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => add_order,
+            BinaryOperator::Add | BinaryOperator::Sub |
+            BinaryOperator::Mult | BinaryOperator::Mod => add_order,
             BinaryOperator::Div => div_order,
             _ => panic!()
         };
@@ -224,7 +234,7 @@ impl BinaryOperator {
 
     pub fn requires_sign(&self) -> bool {
         match self {
-            BinaryOperator::Div | BinaryOperator::Mod => true,
+            BinaryOperator::Div => true,
             _ => false
         }
     }
@@ -245,15 +255,16 @@ pub enum UnaryOperator {
     ToF64
 }
 
-impl From<Type> for UnaryOperator {
-    fn from(input: Type) -> Self {
+impl <'a> From<&'a Type> for UnaryOperator {
+    fn from(input: &'a Type) -> Self {
         match input {
             Type::i32 => UnaryOperator::ToI32,
             Type::ui32 => UnaryOperator::ToF32,
             Type::i64 => UnaryOperator::ToI64,
             Type::ui64 => UnaryOperator::ToUi64,
             Type::f32 => UnaryOperator::ToF32,
-            Type::f64 => UnaryOperator::ToF64
+            Type::f64 => UnaryOperator::ToF64,
+            _ => panic!()
         }
     }
 }
@@ -396,6 +407,7 @@ impl Display for UnaryOperator{
             &UnaryOperator::Positive => "+",
             &UnaryOperator::Negative => "-",
             &UnaryOperator::BitNot => "~",
+            _ => panic!()
         })
     }
 }

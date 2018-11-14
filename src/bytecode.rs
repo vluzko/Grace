@@ -2,6 +2,7 @@ use std::collections::BTreeSet;
 use std::fmt::Display;
 use std::iter::FromIterator;
 use expression::*;
+use type_rewrites::*;
 use parser;
 use utils::*;
 use scoping::*;
@@ -232,7 +233,7 @@ impl BinaryOperator {
             &BinaryOperator::Sub => "sub",
             &BinaryOperator::Mult => "mul",
             &BinaryOperator::Div => "div",
-            &BinaryOperator::Mod => "rem",
+            &BinaryOperator::Mod => "rem_u",
             _ => panic!()
         };
         if self.requires_sign() {
@@ -359,8 +360,8 @@ get_local $x
 
     #[test]
     pub fn test_generate_divide() {
-        let div_expr = parser::expression("8 / 9".as_bytes());
-        assert_eq!(output(div_expr).generate_bytecode(), "i32.const 8\ni32.const 9\ni32.div_s".to_string());
+        let div_expr =output( parser::expression("8 / 9".as_bytes())).type_based_rewrite();
+        assert_eq!(div_expr.generate_bytecode(), "i32.const 8\nf64.convert_s\ni32.const 9\nf64.convert_s\nf64.div".to_string());
     }
 
     #[test]

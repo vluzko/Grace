@@ -64,10 +64,23 @@ impl TypeRewrite<Expr> for Expr {
                 let left_type = &left.get_type();
                 let right_type = &right.get_type();
                 let return_type = &operator.get_return_type(left_type, right_type);
-                panic!();
+                let new_left = if left_type != return_type {
+                    let conversion_op = UnaryOperator::from(return_type);
+                    Box::new(Expr::UnaryExpr {operator: conversion_op, operand: left})
+                } else {
+                    left
+                };
+                let new_right= if right_type != return_type {
+                    let conversion_op = UnaryOperator::from(return_type);
+                    Box::new(Expr::UnaryExpr {operator: conversion_op, operand: right})
+                } else {
+                    right
+                };
+                Expr::BinaryExpr {operator: operator, left: new_left,
+                    right: new_right}
             },
             Expr::FunctionCall { func_expr,  args,  kwargs} => {
-                panic!();
+                panic!()
             },
             _ => self
         };

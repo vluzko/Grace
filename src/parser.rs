@@ -3,8 +3,6 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
 use std::collections::HashMap;
-use std::fmt::Debug;
-use rand;
 
 extern crate cute;
 extern crate nom;
@@ -263,7 +261,7 @@ named!(vararg<&[u8], Option<Identifier>>,
 
 /// Match all default arguments
 fn keyword_args(input: &[u8]) -> IResult<&[u8], Option<Vec<(TypedIdent, Expr)>>> {
-    let parse_result = opt!(input, complete!(preceded!(
+    let parse_result = opt!(input, complete!( preceded!(
         w_followed!(tag!(",")),
         w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
@@ -885,18 +883,18 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
 }
 
 fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Expr>> {
-    let parse_result = separated_list_complete!(input,
+    let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(",")),
         terminated!(
-            boolean_op_expr,
-            peek!(inline_wrapped!(alt_complete!(tag!(")") | tag!(","))))
+            w_followed!(boolean_op_expr),
+            not!(equals)
         )
     );
     return parse_result;
 }
 
 fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Expr)>> {
-    let parse_result = separated_list_complete!(input,
+    let parse_result = separated_list!(input,
         inline_wrapped!(tag!(",")),
         tuple!(
             identifier,
@@ -906,24 +904,31 @@ fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Expr)>> {
             )
         )
     );
-
     return parse_result;
 }
 
-fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Expr>, Option<Vec<(Identifier, Expr)>>)> {
+fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Expr>, Vec<(Identifier, Expr)>)> {
     let parse_result = delimited!(input,
         open_paren,
-        tuple!(
-            inline_wrapped!(args_list),
-            opt!(complete!(preceded!(
-                comma,
-                inline_wrapped!(kwargs_list)
-            )))
+        alt_complete!(
+            tuple!(
+                inline_wrapped!(args_list),
+                opt!(preceded!(
+                    comma,
+                    inline_wrapped!(kwargs_list)
+                ))
+            ) |
+            map!(
+                w_followed!(kwargs_list), |x| (vec![], Some(x))
+            )
         ),
+
         close_paren
     );
-
-    return parse_result;
+    return fmap_iresult(parse_result, |(x, y)| (x, match y {
+        Some(z) => z,
+        None => vec![]
+    }));
 }
 
 fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
@@ -978,7 +983,7 @@ named!(post_access<&[u8], Vec<Identifier>>,
 );
 
 fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: (Vec<Expr>, Option<Vec<(Identifier, Expr)>>)| PostIdent::Call{args: x.0, kwargs: x.1};
+    let call_to_enum = |x: (Vec<Expr>, Vec<(Identifier, Expr)>)| PostIdent::Call{args: x.0, kwargs: x.1};
     let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
     let result = alt!(input,
         map!(post_call, call_to_enum) |
@@ -1098,6 +1103,8 @@ pub fn read_from_file(f_name: &str) -> String {
 mod tests {
 
     use super::*;
+    use rand;
+    use std::fmt::Debug;
 
     fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
         where T: Debug + PartialEq + Eq {
@@ -1112,6 +1119,14 @@ mod tests {
                 println!("Error: {}. Input was: {}", e, input);
                 panic!()
             },
+            _ => panic!()
+        }
+    }
+
+    fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
+        let res = parser(input.as_bytes());
+        match res {
+            IResult::Error(e) => {},
             _ => panic!()
         }
     }
@@ -1296,16 +1311,16 @@ mod tests {
         fn test_function_call() {
             let a = output(boolean_op_expr("true and false".as_bytes()));
             let b = output(expression("func()".as_bytes()));
-            let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b), kwargs: None};
+            let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b), kwargs: vec![]};
 //        check_match("ident(true and false, func())", expression, expected);
 
             check_match("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
                 func_expr: Box::new(Expr::from("func")),
                 args: c![Expr::from(x), for x in vec!("a", "b")],
-                kwargs: Some(vec!(
+                kwargs: vec!(
                     (Identifier::from("c"), Expr::from(true)),
                     (Identifier::from("d"), Expr::from(true))
-                ))
+                )
             });
         }
 
@@ -1377,16 +1392,16 @@ mod tests {
         #[test]
         fn test_repeated_func_calls() {
             let expected = Expr::FunctionCall{
-                func_expr: Box::new(Expr::FunctionCall{func_expr: Box::new(Expr::from("func")), args: vec!(Expr::from("a")), kwargs: None}),
+                func_expr: Box::new(Expr::FunctionCall{func_expr: Box::new(Expr::from("func")), args: vec!(Expr::from("a")), kwargs: vec![]}),
                 args: vec!(Expr::from("b"), Expr::from("c")),
-                kwargs: None
+                kwargs: vec![]
             };
             check_match("func(a)(b, c)", expression, expected);
 
             check_match("(a and b)(true)", expression, Expr::FunctionCall {
                 func_expr: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
                 args: vec!(Expr::from(true)),
-                kwargs: None
+                kwargs: vec![]
             });
         }
 
@@ -1511,21 +1526,35 @@ mod tests {
     #[test]
     fn test_post_ident() {
         let expected_args = vec!("a", "b", "c").iter().map(|x| Expr::from(*x)).collect();
-        check_match("(a, b, c)", trailer, PostIdent::Call{args: expected_args, kwargs: None});
-        check_match("(a, b=true)", trailer, PostIdent::Call {
+        check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
+        check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
             args: vec!(Expr::from("a")),
-            kwargs: Some(vec!((Identifier::from("b"), Expr::from(true))))
+            kwargs: vec!((Identifier::from("b"), Expr::from(true)))
         });
 
-        check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+        check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
+            args: vec![],
+            kwargs: vec![(Identifier::from("a"), Expr::from(true)), (Identifier::from("b"), Expr::from(true))]
+        });
 
-        check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
-            slices: vec!(
-                (Some(Expr::from("a")), Some(Expr::from("b")), Some(Expr::from("c"))),
-                (None, None, None),
-                (Some(Expr::from("d")), None, None)
-            )
-        })
+
+
+        simple_check_failed("(a | b=false)", trailer);
+        simple_check_failed("(a   b=false)", trailer);
+        simple_check_failed("(a,, b=false)", trailer);
+        simple_check_failed("(a,, b)", trailer);
+        simple_check_failed("(a, b =  true, c)", trailer);
+
+//
+//        check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+//
+//        check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+//            slices: vec!(
+//                (Some(Expr::from("a")), Some(Expr::from("b")), Some(Expr::from("c"))),
+//                (None, None, None),
+//                (Some(Expr::from("d")), None, None)
+//            )
+//        })
     }
 
 }

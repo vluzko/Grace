@@ -11,6 +11,7 @@ log = "0.4"
 cute = "*"
 rand = "*"
 itertools = "*"
+maplit = "*"
 
 
 [lib]

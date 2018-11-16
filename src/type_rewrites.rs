@@ -72,11 +72,16 @@ impl TypeRewrite<Expr> for Expr {
                 } else {
                     right
                 };
-                Expr::BinaryExpr {operator: operator, left: new_left,
-                    right: new_right}
+                Expr::BinaryExpr {operator: operator, left: new_left, right: new_right}
             },
-            Expr::FunctionCall { func_expr,  args,  kwargs} => {
-                panic!()
+            Expr::FunctionCall {func_expr, args, kwargs} => {
+                let new_func_expr = Box::new(func_expr.type_based_rewrite());
+                let new_args = args.into_iter().map(|x| x.type_based_rewrite()).collect();
+                let new_kwargs = match kwargs {
+                    Some(x) => Some(x.into_iter().map(|x| (x.0, x.1.type_based_rewrite())).collect()),
+                    None => None
+                };
+                Expr::FunctionCall {func_expr: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
             _ => self
         };

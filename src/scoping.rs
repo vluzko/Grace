@@ -50,7 +50,7 @@ impl ScopedNode for Stmt {
                 (HashSet::new(), temp)
             },
             // Currently only handles args and body
-            &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, return_type: _} => {
+            &Stmt::FunctionDecStmt{name: _, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, return_type: _} => {
                 let (mut td, mut tu) = body.get_scopes();
                 // Include function name
 //                td.insert(name.to_string());

@@ -3,8 +3,6 @@ use std::io::prelude::*;
 use std::fs::File;
 use std::str::from_utf8;
 use std::collections::HashMap;
-use std::fmt::Debug;
-use rand;
 
 extern crate cute;
 extern crate nom;
@@ -1098,6 +1096,8 @@ pub fn read_from_file(f_name: &str) -> String {
 mod tests {
 
     use super::*;
+    use rand;
+    use std::fmt::Debug;
 
     fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
         where T: Debug + PartialEq + Eq {

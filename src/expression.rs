@@ -1,5 +1,3 @@
-use ast_node::ASTNode;
-use std::collections::BTreeSet;
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
@@ -75,6 +73,7 @@ pub enum Expr {
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[allow(non_camel_case_types)]
 pub enum Type {
     i32,
     i64,
@@ -115,10 +114,10 @@ impl Type {
 impl Expr {
     pub fn get_type(&self) -> Type {
         match self {
-            &Expr::String (ref string) => Type::string,
-            &Expr::Bool (ref bool) => Type::boolean,
-            &Expr::Int (ref IntegerLiteral) => Type::i32,
-            &Expr::Float (ref FloatLiteral) => Type::f64,
+            &Expr::String (_) => Type::string,
+            &Expr::Bool (_) => Type::boolean,
+            &Expr::Int (_) => Type::i32,
+            &Expr::Float (_) => Type::f64,
             &Expr::UnaryExpr {ref operator, ref operand} => {
                 match operator {
                     &UnaryOperator::ToF32 => Type::f32,

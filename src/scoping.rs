@@ -1,6 +1,5 @@
-use std::collections::BTreeSet;
-use std::fmt::Display;
-use std::iter::FromIterator;
+//use std::collections::HashSet;
+use std::collections::HashSet;
 use expression::*;
 use utils::output;
 use ast_node::ASTNode;
@@ -9,12 +8,29 @@ extern crate cute;
 
 
 pub trait ScopedNode: ASTNode {
-    fn get_scopes (&self) -> (BTreeSet<String>, BTreeSet<String>);
-}
+    fn get_scopes (&self) -> (HashSet<String>, HashSet<String>);
+}//impl ASTNode for BinaryOperator {
+//    fn generate_bytecode(&self) -> String {
+//        return match self {
+//            &BinaryOperator::Add => "i32.add".to_string(),
+//            &BinaryOperator::Sub => "i32.sub".to_string(),
+//            &BinaryOperator::Mult => "i32.mul".to_string(),
+//            &BinaryOperator::Div => "i32.div_s".to_string(),
+//            &BinaryOperator::Mod => "i32.rem_u".to_string(),
+//            &BinaryOperator::And => "i32.and".to_string(),
+//            &BinaryOperator::Or => "i32.or".to_string(),
+//            &BinaryOperator::Xor => "i32.xor".to_string(),
+//            &BinaryOperator::BitAnd => "i32.and".to_string(),
+//            &BinaryOperator::BitOr => "i32.or".to_string(),
+//            &BinaryOperator::BitXor => "i32.xor".to_string(),
+//            _ => panic!()
+//        };
+//    }
+//}
 
 /// ScopedNode for Module
 impl ScopedNode for Module {
-    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+    fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         panic!()
     }
 }
@@ -22,71 +38,105 @@ impl ScopedNode for Module {
 /// ScopedNode for Stmt
 // TODO implement the rest of the kinds of stmt
 impl ScopedNode for Stmt {
-    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-        let mut declarations = BTreeSet::new();
-        let mut usages = BTreeSet::new();
-        match &self {
+    fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
+        let (declarations, usages) = match self {
             &Stmt::LetStmt{ref value_name, ref value} => {
-                declarations.insert(value_name.name.to_string());
+                let temp = value.get_scopes().1;
+                (hashset!{value_name.name.to_string()}, temp)
             }
-            &Stmt::AssignmentStmt{ref identifier, ref operator, ref expression} => {
-                usages = expression.get_scopes().1;
-                usages.insert(identifier.to_string());
+            &Stmt::AssignmentStmt{ref identifier, operator: _, ref expression} => {
+                let mut temp = expression.get_scopes().1;
+                temp.insert(identifier.to_string());
+                (HashSet::new(), temp)
             },
             // Currently only handles args and body
-            &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, ref return_type} => {
-                let block_scope_info = body.get_scopes();
-                declarations = block_scope_info.0;
-                usages = block_scope_info.1;
+            &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, return_type: _} => {
+                let (mut td, mut tu) = body.get_scopes();
+                // Include function name
+//                td.insert(name.to_string());
+
+                // Include args
                 for arg in args.iter() {
-                    declarations.insert(arg.name.to_string());
+                    td.insert(arg.name.to_string());
                 }
-            },
-            &Stmt::ReturnStmt {ref value} => {
-                usages = value.get_scopes().1;
-            },
-            &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
-                for usage in condition.get_scopes().1 {
-                    usages.insert(usage);
-                }
-                let main_scopes = main_block.get_scopes();
-                for declaration in main_scopes.0 {
-                    declarations.insert(declaration);
-                }
-                for usage in main_scopes.1 {
-                    usages.insert(usage);
-                }
-                match else_block {
+
+                // Include keyword_args
+                match keyword_args {
                     Some(x) => {
-                        let else_scopes = x.get_scopes();
-                        for declaration in else_scopes.0 {
-                            declarations.insert(declaration);
+                        for (ident, expr) in x {
+                            td = td.union(&expr.get_scopes().1).cloned().collect();
+                            tu.insert(ident.to_string());
                         }
-                        for usage in else_scopes.1 {
-                            usages.insert(usage);
-                        }
+                        {}
                     },
                     None => {}
                 }
+
+                // Include vararg
+                match vararg {
+                    Some(x) => {
+                        td.insert(x.to_string());
+                        {}
+                    },
+                    None => {}
+                }
+
+                // Include varkwargs
+                match varkwarg {
+                    Some(x) => {
+                        td.insert(x.to_string());
+                        {}
+                    },
+                    None => {}
+                }
+
+                (td, tu)
+            },
+            &Stmt::ReturnStmt {ref value} => {
+                (HashSet::new(), value.get_scopes().1)
+            },
+            &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
+                let (mut td, mut tu) = condition.get_scopes();
+
+                let (md, mu) = main_block.get_scopes();
+                td = td.union(&md).cloned().collect();
+                tu = tu.union(&mu).cloned().collect();
+
+                for (cond, block) in elifs {
+                    tu = tu.union(&cond.get_scopes().1).cloned().collect();
+                    let (bd, bu) = block.get_scopes();
+                    tu = tu.union(&bu).cloned().collect();
+                    td = td.union(&bd).cloned().collect();
+                }
+
+                match else_block {
+                    Some(x) => {
+                        let (ed, eu) = x.get_scopes();
+                        td = td.union(&ed).cloned().collect();
+                        tu = tu.union(&eu).cloned().collect();
+                        {}
+                    },
+                    None => {}
+                }
+                (td, tu)
             },
             &Stmt::WhileStmt {ref condition, ref block} => {
                 let mut condition_usages = condition.get_scopes().1;
-                let (mut block_decs, mut block_usages) = block.get_scopes();
-                declarations.append(&mut block_decs);
-                usages.append(&mut condition_usages);
-                usages.append(&mut block_usages);
+                let (block_decs, mut block_usages) = block.get_scopes();
+                let temp = condition_usages.union(&block_usages).cloned().collect();
+                (block_decs, temp)
             },
             _ =>  panic!()
-        }
+        };
         return (declarations, usages);
     }
 }
 
 /// ScopedNode for Block
 impl ScopedNode for Block {
-    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-        let mut declarations = BTreeSet::new();
-        let mut usages = BTreeSet::new();
+    fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
+        let mut declarations: HashSet<String> = HashSet::new();
+        let mut usages: HashSet<String> = HashSet::new();
         for statement in &self.statements {
             let statement_scope_info = statement.get_scopes();
             for declaration in statement_scope_info.0 {
@@ -103,41 +153,47 @@ impl ScopedNode for Block {
 /// ScopedNode for Expr
 // TODO implement the rest of the kinds of expr
 impl ScopedNode for Expr {
-    fn get_scopes(&self) -> (BTreeSet<String>, BTreeSet<String>) {
-        let declarations: BTreeSet<String> = BTreeSet::new();
-        let mut usages: BTreeSet<String> = BTreeSet::new();
-        match &self {
-            &Expr::ComparisonExpr {ref operator, ref left, ref right} => {
-                usages.append(&mut left.get_scopes().1);
-                usages.append(&mut right.get_scopes().1);
+    fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
+        let declarations = HashSet::new();
+        let usages= match self {
+            &Expr::ComparisonExpr {operator: _, ref left, ref right} => {
+                left.get_scopes().1.union(&right.get_scopes().1).cloned().collect()
             },
-            &Expr::BinaryExpr {ref operator, ref left, ref right} => {
-                usages.append(&mut left.get_scopes().1);
-                usages.append(&mut right.get_scopes().1);
+            &Expr::BinaryExpr {operator: _, ref left, ref right} => {
+                left.get_scopes().1.union(&right.get_scopes().1).cloned().collect()
             },
-            &Expr::UnaryExpr {ref operator, ref operand} => {
-                usages.append(&mut operand.get_scopes().1);
+            &Expr::UnaryExpr {operator: _, ref operand} => {
+                operand.get_scopes().1
             },
             &Expr::IdentifierExpr {ref ident} => {
-                usages.insert(ident.to_string());
+                hashset!{ident.to_string()}
             },
             &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
-                usages.append(&mut func_expr.get_scopes().1);
+
+                let func_expr_usages = func_expr.get_scopes().1;
+
+                let mut arg_usages = HashSet::new();
+//                usages.append(&mut func_expr.get_scopes().1);
                 for arg in args {
-                    usages.append(&mut arg.get_scopes().1);
+//                    usages.append(&mut arg.get_scopes().1);
+                    arg_usages = arg_usages.union(&arg.get_scopes().1).cloned().collect();
                 }
 
-                match kwargs {
+                let kwargs_usages = match kwargs {
                     Some(x) => {
+                        let mut temp = HashSet::new();
                         for (_, expr) in x {
-                            usages.append(&mut expr.get_scopes().1);
+                            temp = temp.union(&expr.get_scopes().1).cloned().collect();
                         }
+                        temp
                     },
-                    None => {}
-                }
+                    None => HashSet::new()
+                };
+                let temp: HashSet<String> = func_expr_usages.union(&arg_usages).cloned().collect();
+                temp.union(&kwargs_usages).cloned().collect()
             }
-            _ => {}
-        }
+            _ => HashSet::new()
+        };
         return (declarations, usages);
     }
 }
@@ -154,7 +210,7 @@ mod test {
 "#;
         let func_stmt = output(statement(func_str.as_bytes(), 0));
         let (decs, usgs) = func_stmt.get_scopes();
-        let mut real_usgs = BTreeSet::new();
+        let mut real_usgs = HashSet::new();
         real_usgs.insert("b".to_string());
         real_usgs.insert("c".to_string());
         assert_eq!(usgs, real_usgs);

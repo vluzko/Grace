@@ -53,7 +53,7 @@ pub enum Expr {
     ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
     BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
     UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
+    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
     AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
     Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
     IdentifierExpr{ident: Identifier},
@@ -147,7 +147,7 @@ pub struct ComprehensionIter {
 /// A helper Enum for trailers.
 #[derive (Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PostIdent {
-    Call{args: Vec<Expr>, kwargs: Option<Vec<(Identifier, Expr)>>},
+    Call{args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
     Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
     Access{attributes: Vec<Identifier>}
 }

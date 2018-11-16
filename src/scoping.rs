@@ -179,16 +179,10 @@ impl ScopedNode for Expr {
                     arg_usages = arg_usages.union(&arg.get_scopes().1).cloned().collect();
                 }
 
-                let kwargs_usages = match kwargs {
-                    Some(x) => {
-                        let mut temp = HashSet::new();
-                        for (_, expr) in x {
-                            temp = temp.union(&expr.get_scopes().1).cloned().collect();
-                        }
-                        temp
-                    },
-                    None => HashSet::new()
-                };
+                let mut kwargs_usages = HashSet::new();
+                for (_, expr) in kwargs {
+                    kwargs_usages = kwargs_usages.union(&expr.get_scopes().1).cloned().collect();
+                }
                 let temp: HashSet<String> = func_expr_usages.union(&arg_usages).cloned().collect();
                 temp.union(&kwargs_usages).cloned().collect()
             }

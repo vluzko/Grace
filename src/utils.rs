@@ -32,10 +32,9 @@ pub fn output<T>(res: IResult<&[u8], T>) -> T {
 }
 
 pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
-    println!("{} input was: {:?}", name, from_utf8(input));
     return match res {
         Done(i, o) => {
-            println!("{} leftover input is {:?}", name, from_utf8(i));
+            println!("{} leftover input is {:?}. Input was: {:?}", name, from_utf8(i), from_utf8(input));
             Done(i, func(o))
         },
         IResult::Error(e) => {
@@ -181,6 +180,10 @@ macro_rules! indented (
   ($i:expr, $f:expr, $ind: expr) => (
     indented!($i, call!($f), $ind);
   );
+);
+
+named!(pub equals <&[u8], &[u8]>,
+    w_followed!(tag!("="))
 );
 
 named!(pub comma <&[u8], &[u8]>,

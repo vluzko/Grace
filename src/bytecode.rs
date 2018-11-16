@@ -42,12 +42,13 @@ impl ASTNode for Stmt {
         let bytecode = match self {
             &Stmt::FunctionDecStmt {ref name, ref args, ref keyword_args, ref vararg, ref varkwarg, ref body, ref return_type} => {
                 // Scope check
-                let (declarations, usages) = self.get_scopes();
+                let (declarations, _) = self.get_scopes();
                 let body_bytecode = body.generate_bytecode();
                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
                 // get the declarations that are not args, i.e. the local variables
                 let args_set: HashSet<String> = HashSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
+//                let kwargs = HashSet::from_iter(keyword_args)
                 let local_var_declarations = declarations.difference(&args_set);
                 let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
                 let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",

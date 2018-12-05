@@ -287,10 +287,6 @@ impl ASTNode for Boolean {
 }
 
 
-pub fn node_to_file(file_name: String, node: Box<ASTNode>) {
-
-}
-
 #[cfg(test)]
 mod tests {
 

@@ -2,7 +2,7 @@
 use std::collections::HashSet;
 use expression::*;
 use utils::output;
-use ast_node::ASTNode;
+use ast_node::*;
 
 extern crate cute;
 
@@ -191,6 +191,33 @@ impl ScopedNode for Expr {
         return (declarations, usages);
     }
 }
+
+cached!{
+    ExprScopes;
+    fn get_scope_expr(expr: Expr, parent_scope: Scope) -> Scope = {
+        return Scope{parent_scope: Box::new(parent_scope), declarations: vec!()}
+    }
+}
+
+fn tempscope_expr(expr: Expr, parent_scope: Scope) -> Scope {
+    return Scope{parent_scope: Box::new(parent_scope), declarations: vec!()};
+}
+
+cached!{
+    FIB;
+    fn fib(n: u64) -> u64 = {
+        if n == 0 || n == 1 { return n }
+        fib(n-1) + fib(n-2)
+    }
+}
+
+impl Scoped for Expr {
+    fn get_scope(&self, parent_scope: Scope) -> Scope {
+        return get_scope_expr(self.clone(), parent_scope)
+    }
+}
+
+
 
 #[cfg(test)]
 mod test {

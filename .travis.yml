@@ -1,8 +1,23 @@
-language: rust
-rust:
-  - stable
-  - nightly
+notifications:
+  email: false
 matrix:
+  include:
+    - language: rust
+      rust:
+        - stable
+        - nightly
+    - language: node_js
+      node_js:
+        - "10"
+      before_install:
+        - cd js_test
+        - npm update
+      install:
+        - cd js_test
+        - npm install
+      script:
+        - cd js_test
+        - npm test
   allow_failures:
     - rust: nightly
   fast_finish: true

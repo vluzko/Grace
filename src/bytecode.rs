@@ -208,25 +208,6 @@ impl ASTNode for ComparisonOperator {
     }
 }
 
-//impl ASTNode for BinaryOperator {
-//    fn generate_bytecode(&self) -> String {
-//        return match self {
-//            &BinaryOperator::Add => "i32.add".to_string(),
-//            &BinaryOperator::Sub => "i32.sub".to_string(),
-//            &BinaryOperator::Mult => "i32.mul".to_string(),
-//            &BinaryOperator::Div => "i32.div_s".to_string(),
-//            &BinaryOperator::Mod => "i32.rem_u".to_string(),
-//            &BinaryOperator::And => "i32.and".to_string(),
-//            &BinaryOperator::Or => "i32.or".to_string(),
-//            &BinaryOperator::Xor => "i32.xor".to_string(),
-//            &BinaryOperator::BitAnd => "i32.and".to_string(),
-//            &BinaryOperator::BitOr => "i32.or".to_string(),
-//            &BinaryOperator::BitXor => "i32.xor".to_string(),
-//            _ => panic!()
-//        };
-//    }
-//}
-
 impl BinaryOperator {
     fn generate_typed_bytecode(&self, return_type: &Type) -> String {
         let type_bytecode = return_type.wast_name();

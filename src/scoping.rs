@@ -19,7 +19,6 @@ impl ScopedNode for Module {
 }
 
 /// ScopedNode for Stmt
-// TODO implement the rest of the kinds of stmt
 impl ScopedNode for Stmt {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let (declarations, usages) = match self {
@@ -134,7 +133,6 @@ impl ScopedNode for Block {
 }
 
 /// ScopedNode for Expr
-// TODO implement the rest of the kinds of expr
 impl ScopedNode for Expr {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let declarations = HashSet::new();

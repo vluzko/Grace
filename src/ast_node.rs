@@ -10,20 +10,7 @@ use expression::*;
 //    Expression(Expr)
 //}
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CanModifyScope {
-    Statement(Stmt),
-    Expression(Expr)
-}
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Scope {
-    pub parent_scope: Box<Scope>,
-    pub declarations: Vec<(Identifier, CanModifyScope)>
-}
 
-pub trait Scoped {
-    fn get_scope(&self, parent_scope: Scope) -> Scope;
-}
 
 pub trait ASTNode: Display {
     /// Generate WAST bytecode from an AST

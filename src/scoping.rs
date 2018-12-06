@@ -9,24 +9,7 @@ extern crate cute;
 
 pub trait ScopedNode: ASTNode {
     fn get_scopes (&self) -> (HashSet<String>, HashSet<String>);
-}//impl ASTNode for BinaryOperator {
-//    fn generate_bytecode(&self) -> String {
-//        return match self {
-//            &BinaryOperator::Add => "i32.add".to_string(),
-//            &BinaryOperator::Sub => "i32.sub".to_string(),
-//            &BinaryOperator::Mult => "i32.mul".to_string(),
-//            &BinaryOperator::Div => "i32.div_s".to_string(),
-//            &BinaryOperator::Mod => "i32.rem_u".to_string(),
-//            &BinaryOperator::And => "i32.and".to_string(),
-//            &BinaryOperator::Or => "i32.or".to_string(),
-//            &BinaryOperator::Xor => "i32.xor".to_string(),
-//            &BinaryOperator::BitAnd => "i32.and".to_string(),
-//            &BinaryOperator::BitOr => "i32.or".to_string(),
-//            &BinaryOperator::BitXor => "i32.xor".to_string(),
-//            _ => panic!()
-//        };
-//    }
-//}
+}
 
 /// ScopedNode for Module
 impl ScopedNode for Module {
@@ -192,22 +175,25 @@ impl ScopedNode for Expr {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CanModifyScope {
+    Statement(Stmt),
+    Expression(Expr)
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Scope {
+    pub parent_scope: Box<Scope>,
+    pub declarations: Vec<(Identifier, CanModifyScope)>
+}
+
+pub trait Scoped {
+    fn get_scope(&self, parent_scope: Scope) -> Scope;
+}
+
 cached!{
     ExprScopes;
     fn get_scope_expr(expr: Expr, parent_scope: Scope) -> Scope = {
         return Scope{parent_scope: Box::new(parent_scope), declarations: vec!()}
-    }
-}
-
-fn tempscope_expr(expr: Expr, parent_scope: Scope) -> Scope {
-    return Scope{parent_scope: Box::new(parent_scope), declarations: vec!()};
-}
-
-cached!{
-    FIB;
-    fn fib(n: u64) -> u64 = {
-        if n == 0 || n == 1 { return n }
-        fib(n-1) + fib(n-2)
     }
 }
 

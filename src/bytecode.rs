@@ -1,11 +1,6 @@
-use std::collections::BTreeSet;
 use std::collections::HashSet;
-use std::fmt::Display;
 use std::iter::FromIterator;
 use expression::*;
-use type_rewrites::TypeRewrite;
-use parser;
-use utils::*;
 use scoping::*;
 use ast_node::ASTNode;
 
@@ -139,7 +134,7 @@ fn operator_add(left: &Box<Expr>, right: &Box<Expr>) -> String {
 }
 
 fn convert_types(input_type: &Type, output_type: &Type) -> String {
-    if (input_type == output_type) {
+    if input_type == output_type {
         return "".to_string();
     }
     match (input_type, output_type) {
@@ -160,7 +155,6 @@ impl ASTNode for Expr {
                 format!("{}\n{}\n{}", first, second, operator)
             },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
-                // TODO: Don't use string replace.
                 if operator == &BinaryOperator::Add {
                     operator_add(left, right)
                 } else {
@@ -272,6 +266,9 @@ impl ASTNode for Boolean {
 mod tests {
 
     use super::*;
+    use parser;
+    use utils::*;
+    use type_rewrites::TypeRewrite;
 
     #[test]
     pub fn test_generate_function_call() {

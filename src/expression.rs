@@ -301,146 +301,15 @@ pub struct FloatLiteral {
 
 
 /// Display implementations
-impl Display for Module {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Block")
-    }
-}
-impl Display for Block {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let statement_iter = self.statements.iter();
-        let mapped =
-            statement_iter.map( |x| x.to_string());
-        let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
-        write!(f, "Block:\n{}", strings)
-    }
-}
-impl Display for Stmt {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let string_rep = match self {
-            &Stmt::AssignmentStmt{ref identifier, ref operator, ref expression} =>
-                format!("Assignment:\n Name: {} Operator {:?} Expression: {}", identifier, operator, expression),
-            &Stmt::WhileStmt {ref condition, ref block} => format!("While statement:\n  Condition: {}\n{}", condition, indent_block(block.to_string())),
-            &Stmt::IfStmt{ref condition, ref main_block, ref elifs, ref else_block} => {
-                let elifs_iter = elifs.iter();
-                let mapped = elifs_iter.map( |x| (*x).1.to_string());
-                let strings = indent_block(mapped.collect::<Vec<String>>().join("\n"));
-
-                let else_string = match else_block {
-                    &Some(ref x) => {
-                        (*x).to_string()
-                    },
-                    &None => {
-                        "".to_string()
-                    }
-                };
-                format!("If statement:\n  Condition: {}.\n{}\nelifs:\n{}\nelse:\n  {}", condition, indent_block(main_block.to_string()), strings, indent_block(else_string))
-            },
-            &Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, ref return_type} => {
-                let arg_iter = args.iter().map(|x| x.to_string());
-                let args_string = arg_iter.collect::<Vec<_>>().join(", ");
-
-                format!("Function declaration:\n  Name: {}\n  Args: {}\n{}", name, args_string, indent_block(body.to_string()))
-            },
-            &Stmt::ImportStmt {ref module} => {
-                format!("Import: module {}", module)
-            },
-            &Stmt::ReturnStmt {ref value} => {
-                format!("Return: value {}", value)
-            }
-            _ => "Not implemented".to_string()
-        };
-        write!(f, "{}", string_rep.as_str())
-    }
-}
-impl Display for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let string_rep = match self {
-            &Expr::ComparisonExpr{ref operator, ref left, ref right} => format!("Comparison:\n Left: {} Op:{} Right: {}", left, operator, right),
-            &Expr::BinaryExpr{ref operator, ref left, ref right} => format!("Binary:\n Left: {} Op:{} Right: {}", left, operator, right),
-            &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
-            &Expr::FunctionCall{ref func_expr, ref args, ref kwargs} => {
-                let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
-                format!("Function call. Func: {}. Args: {}", func_expr, joined_args)
-            },
-            &Expr::AttributeAccess{ref container, ref attributes} => {
-                format!("Attribute access. Container: {}. Attributes: {}", container,
-                        attributes.iter().map(|x| x.to_string()).collect::<Vec<String>>().join("."))
-            },
-            &Expr::IdentifierExpr{ref ident} => ident.name.clone(),
-            &Expr::Bool(b) => b.to_string(),
-            _ => "Not implemented".to_string()
-        };
-        write!(f, "{}", string_rep.as_str())
-    }
-}
-impl Display for ComparisonOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-impl Display for BinaryOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &BinaryOperator::Or => "or",
-            &BinaryOperator::And => "and",
-            &BinaryOperator::Xor => "xor",
-            &BinaryOperator::Add => "+",
-            &BinaryOperator::Sub => "-",
-            &BinaryOperator::Mult=> "*",
-            &BinaryOperator::Div => "/",
-            &BinaryOperator::Mod => "%",
-            &BinaryOperator::BitAnd => "&",
-            &BinaryOperator::BitOr => "|",
-            &BinaryOperator::BitXor => "^",
-            &BinaryOperator::BitShiftL => "<<",
-            &BinaryOperator::BitShiftR => ">>",
-            &BinaryOperator::Exponent => "**",
-        })
-    }
-}
-impl Display for UnaryOperator{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &UnaryOperator::Not => "not",
-            &UnaryOperator::Positive => "+",
-            &UnaryOperator::Negative => "-",
-            &UnaryOperator::BitNot => "~",
-            _ => panic!()
-        })
-    }
-}
 impl Display for TypedIdent {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{} (typed)", self.name)
     }
 }
-impl Display for DottedIdentifier {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Dotted Ident: {:?}", self.attributes)
-    }
-}
+
 impl Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
-    }
-}
-impl Display for Boolean {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", match self {
-            &Boolean::True => "true",
-            &Boolean::False => "false"
-        })
-    }
-}
-impl Display for IntegerLiteral {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.string_rep)
-    }
-}
-impl Display for FloatLiteral {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.string_rep)
     }
 }
 

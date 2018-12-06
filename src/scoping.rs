@@ -1,7 +1,6 @@
 //use std::collections::HashSet;
 use std::collections::HashSet;
 use expression::*;
-use utils::output;
 use ast_node::*;
 
 extern crate cute;
@@ -207,6 +206,7 @@ impl Scoped for Expr {
 mod test {
     use parser::*;
     use super::*;
+    use utils::output;
 
     #[test]
     fn test_function_locals() {
@@ -214,7 +214,7 @@ mod test {
     return b + c
 "#;
         let func_stmt = output(statement(func_str.as_bytes(), 0));
-        let (decs, usgs) = func_stmt.get_scopes();
+        let (_, usgs) = func_stmt.get_scopes();
         let mut real_usgs = HashSet::new();
         real_usgs.insert("b".to_string());
         real_usgs.insert("c".to_string());

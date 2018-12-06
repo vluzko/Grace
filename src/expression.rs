@@ -361,7 +361,8 @@ impl Display for Expr {
             &Expr::UnaryExpr{ref operator, ref operand} => format!("Unary expression. Operator: {}. Operand: {}", operator, operand),
             &Expr::FunctionCall{ref func_expr, ref args, ref kwargs} => {
                 let joined_args = args.iter().map(|x| x.to_string()).collect::<Vec<String>>().join(", ");
-                format!("Function call. Func: {}. Args: {}", func_expr, joined_args)
+                let joined_kwargs: String = kwargs.iter().map(|x| format!("{}={}", x.0.to_string(), x.1.to_string())).collect::<Vec<String>>().join(", ");
+                format!("Function call. Func: {}. Args: {}. Kwargs: {}", func_expr, joined_args, joined_kwargs)
             },
             &Expr::AttributeAccess{ref container, ref attributes} => {
                 format!("Attribute access. Container: {}. Attributes: {}", container,

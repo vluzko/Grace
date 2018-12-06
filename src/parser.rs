@@ -1126,7 +1126,7 @@ mod tests {
     fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
         let res = parser(input.as_bytes());
         match res {
-            IResult::Error(e) => {},
+            IResult::Error(_) => {},
             _ => panic!()
         }
     }
@@ -1312,7 +1312,7 @@ mod tests {
             let a = output(boolean_op_expr("true and false".as_bytes()));
             let b = output(expression("func()".as_bytes()));
             let expected = Expr::FunctionCall{func_expr: Box::new(Expr::IdentifierExpr{ident: Identifier{name: "ident".to_string()}}), args: vec!(a, b), kwargs: vec![]};
-//        check_match("ident(true and false, func())", expression, expected);
+            check_match("ident(true and false, func())", expression, expected);
 
             check_match("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
                 func_expr: Box::new(Expr::from("func")),

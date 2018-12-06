@@ -1,24 +1,8 @@
-notifications:
-  email: false
+language: rust
+rust:
+  - stable
+  - nightly
 matrix:
-  include:
-    - language: rust
-      name: "Rust"
-      rust:
-        - stable
-    - language: node_js
-      name: "WebAssembly"
-      node_js:
-        - "10"
-      before_install:
-        - cd js_test
-        - npm update
-      install:
-        - cd js_test
-        - npm install
-      script:
-        - cd js_test
-        - npm test
   allow_failures:
     - rust: nightly
   fast_finish: true

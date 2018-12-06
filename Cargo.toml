@@ -12,7 +12,7 @@ cute = "*"
 rand = "*"
 itertools = "*"
 maplit = "*"
-
+cached = "*"
 
 [lib]
 name = "grace_lib"

@@ -2,31 +2,14 @@
 use std::collections::HashSet;
 use expression::*;
 use utils::output;
-use ast_node::ASTNode;
+use ast_node::*;
 
 extern crate cute;
 
 
 pub trait ScopedNode: ASTNode {
     fn get_scopes (&self) -> (HashSet<String>, HashSet<String>);
-}//impl ASTNode for BinaryOperator {
-//    fn generate_bytecode(&self) -> String {
-//        return match self {
-//            &BinaryOperator::Add => "i32.add".to_string(),
-//            &BinaryOperator::Sub => "i32.sub".to_string(),
-//            &BinaryOperator::Mult => "i32.mul".to_string(),
-//            &BinaryOperator::Div => "i32.div_s".to_string(),
-//            &BinaryOperator::Mod => "i32.rem_u".to_string(),
-//            &BinaryOperator::And => "i32.and".to_string(),
-//            &BinaryOperator::Or => "i32.or".to_string(),
-//            &BinaryOperator::Xor => "i32.xor".to_string(),
-//            &BinaryOperator::BitAnd => "i32.and".to_string(),
-//            &BinaryOperator::BitOr => "i32.or".to_string(),
-//            &BinaryOperator::BitXor => "i32.xor".to_string(),
-//            _ => panic!()
-//        };
-//    }
-//}
+}
 
 /// ScopedNode for Module
 impl ScopedNode for Module {
@@ -36,7 +19,6 @@ impl ScopedNode for Module {
 }
 
 /// ScopedNode for Stmt
-// TODO implement the rest of the kinds of stmt
 impl ScopedNode for Stmt {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let (declarations, usages) = match self {
@@ -151,7 +133,6 @@ impl ScopedNode for Block {
 }
 
 /// ScopedNode for Expr
-// TODO implement the rest of the kinds of expr
 impl ScopedNode for Expr {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let declarations = HashSet::new();
@@ -191,6 +172,36 @@ impl ScopedNode for Expr {
         return (declarations, usages);
     }
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CanModifyScope {
+    Statement(Stmt),
+    Expression(Expr)
+}
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Scope {
+    pub parent_scope: Box<Scope>,
+    pub declarations: Vec<(Identifier, CanModifyScope)>
+}
+
+pub trait Scoped {
+    fn get_scope(&self, parent_scope: Scope) -> Scope;
+}
+
+cached!{
+    ExprScopes;
+    fn get_scope_expr(expr: Expr, parent_scope: Scope) -> Scope = {
+        return Scope{parent_scope: Box::new(parent_scope), declarations: vec!()}
+    }
+}
+
+impl Scoped for Expr {
+    fn get_scope(&self, parent_scope: Scope) -> Scope {
+        return get_scope_expr(self.clone(), parent_scope)
+    }
+}
+
+
 
 #[cfg(test)]
 mod test {

@@ -1,7 +1,6 @@
 //use std::collections::HashSet;
 use std::collections::HashSet;
 use expression::*;
-use utils::output;
 use ast_node::*;
 
 extern crate cute;
@@ -207,6 +206,7 @@ impl Scoped for Expr {
 mod test {
     use parser::*;
     use super::*;
+    use utils::output;
 
     #[test]
     fn test_function_locals() {

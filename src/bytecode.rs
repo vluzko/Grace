@@ -134,7 +134,7 @@ fn operator_add(left: &Box<Expr>, right: &Box<Expr>) -> String {
 }
 
 fn convert_types(input_type: &Type, output_type: &Type) -> String {
-    if (input_type == output_type) {
+    if input_type == output_type {
         return "".to_string();
     }
     match (input_type, output_type) {

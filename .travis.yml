@@ -3,10 +3,11 @@ notifications:
 matrix:
   include:
     - language: rust
+      name: "Rust"
       rust:
         - stable
-        - nightly
     - language: node_js
+      name: "WebAssembly"
       node_js:
         - "10"
       before_install:

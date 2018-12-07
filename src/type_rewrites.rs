@@ -7,13 +7,15 @@ pub trait TypeRewrite<T> {
 
 impl TypeRewrite<Module> for Module {
     fn type_based_rewrite(self) -> Module {
-        panic!()
+        let new_decs = c![x.type_based_rewrite(), for x in self.declarations];
+        return Module{declarations: new_decs};
     }
 }
 
 impl TypeRewrite<Block> for Block {
     fn type_based_rewrite(self) -> Block {
-        panic!()
+        let new_stmts = c![x.type_based_rewrite(), for x in self.statements];
+        return Block{statements: new_stmts};
     }
 }
 

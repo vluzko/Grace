@@ -155,14 +155,14 @@ impl ASTNode for Expr {
                 format!("{}\n{}\n{}", first, second, operator)
             },
             &Expr::BinaryExpr {ref operator, ref left, ref right} => {
-                if operator == &BinaryOperator::Add {
-                    operator_add(left, right)
-                } else {
+//                if operator == &BinaryOperator::Add {
+//                    operator_add(left, right)
+//                } else {
                     let operator_bytecode = operator.generate_typed_bytecode(&operator.get_return_type(&left.get_type(), &right.get_type()));
                     let first = left.generate_bytecode();
                     let second = right.generate_bytecode();
                     format!("{}\n{}\n{}", first, second, operator_bytecode)
-                }
+//                }
             },
             &Expr::UnaryExpr {ref operator, ref operand} => {
                 let operator_bytecode = operator.generate_typed_bytecode(&operand.get_type());

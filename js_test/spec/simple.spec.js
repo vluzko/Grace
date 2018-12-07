@@ -15,10 +15,10 @@ describe("Simple WASM test.", function () {
 
 });
 
-describe("Small grace tests.", function () {
+fdescribe("Small grace tests.", function () {
   async_desc("", () => {
-    return async_utils.compile_grace("js_test/spec/inputs/small_grace.gr",
-      "js_test/spec/outputs/small_grace.wat");
+    return async_utils.compile_grace("spec/inputs/small_grace.gr",
+      "spec/outputs/small_grace.wat");
   }, [[
     'arithmetic operators', module => {
     expect(module.instance.exports.add(2, 3)).toBe(5);
@@ -63,7 +63,7 @@ describe("Wat tests.", function() {
     mem_manage.obliviate();
   });
   async_desc("", () => {
-    return async_utils.compile_wat("js_test/spec/outputs/memory_management.wat").then(module => {
+    return async_utils.compile_wat("spec/outputs/memory_management.wat").then(module => {
       mem_manage = module.instance.exports;
       return module.instance.exports;
     });
@@ -100,12 +100,12 @@ describe("Array tests.", function () {
   });
 
   async_desc("", () => {
-    return async_utils.compile_wat("js_test/spec/outputs/memory_management.wat").then(module => {
+    return async_utils.compile_wat("spec/outputs/memory_management.wat").then(module => {
       let imports = {
         "memory_management": module.instance.exports
       };
       mem_manage = module.instance.exports;
-      return async_utils.compile_wat("js_test/spec/outputs/arrays.wat", imports).then(mod => mod.instance.exports);
+      return async_utils.compile_wat("spec/outputs/arrays.wat", imports).then(mod => mod.instance.exports);
     });
 
   }, [[

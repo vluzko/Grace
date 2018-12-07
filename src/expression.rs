@@ -2,13 +2,6 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
 
-fn indent_block(block_str: String) -> String {
-    let split = block_str.lines();
-    let mut ret: String = "  ".to_string();
-    ret.push_str(&split.collect::<Vec<&str>>().join("\n  "));
-    return ret;
-}
-
 /// A top level module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
@@ -126,8 +119,18 @@ impl Expr {
                     &UnaryOperator::ToI64 => Type::i64,
                     _ => operand.get_type()
                 }
+            },
+            &Expr::BinaryExpr {ref operator, ref left, ref right} => {
+                return operator.get_return_type(&left.get_type(), &right.get_type());
+            },
+            &Expr::IdentifierExpr{ref ident} => {
+                // Get declaration
+                panic!()
+            },
+            _ => {
+                println!("{:?}", self);
+                panic!()
             }
-            _ => panic!()
         }
     }
 }
@@ -477,10 +480,4 @@ impl <'a> From<&'a str> for TypeAnnotation {
     fn from(input: &'a str) -> Self {
         return TypeAnnotation::Simple(Identifier::from(input));
     }
-}
-
-#[test]
-fn test_indent() {
-    let block = "Block:\n  Assignment: test2 = true\n  Assignment: bar = false and true".to_string();
-    assert_eq!(indent_block(block), "  Block:\n    Assignment: test2 = true\n    Assignment: bar = false and true".to_string())
 }

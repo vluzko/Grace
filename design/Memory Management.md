@@ -19,6 +19,9 @@ There are two chunks, the first containing the array `[1, 2, 3]` and the second 
 
     4 | 24 | 12 | 1 | 2 | 3 | 0 | 12 | 3 | 4 | 5
 
+## Garbage Collection
+We haven't decided which garbage collection algorithm to use yet.
+
 
 ## Notes
 * Write a bunch of functions in wast that do memory-management-y things (like resizing arrays and moving them around in

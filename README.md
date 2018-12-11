@@ -15,12 +15,13 @@ Grace mostly draws inspiration from Python and Haskell.
     * Gradual typing
     * Dependent types
     * Substructural types (possibly)
-* The types of high-level niceties that Python has and Javascript decidedly lacks
+* The types of high-level niceties that Python has and Javascript decidedly lacks:
     * Operator overloading
     * Keyword arguments
     * Comprehensions
     * Arbitrary size integers by default
     * Decorators
+    * An equality operator that makes any sense at all.
 
 ## Roadmap to v 0.1
 Grace is *very much* in development. It's not remotely usable as a language yet. We're planning on declaring version 0.1 once Grace reaches roughly the same level of functionality as C, meaning:

@@ -3,21 +3,18 @@
 
 Grace is an attempt to provide a viable alternative to Javascript that *doesn't* compile to Javascript. Instead we target WebAssembly.
 
-The main design principle of Grace is "gradualness": providing tools that allow the programmer to work at the level of detail required by the task. Of course this involves making tradeoffs, and Grace will never be as fast as C or as correct as Idris.
+The main design principle of Grace is "gradualness": providing tools that allow the programmer to work at the level of detail required by the task. Of course this involves making tradeoffs, and Grace will never be as fast as C or as correct as Coq.
 
 Grace mostly draws inspiration from Python and Haskell.
 
 ## Core Planned Features
 * Garbage collection (this isn't a given for WebAssembly, but obviously any viable Javascript replacement needs it)
     * For now this means implementing our own garbage collector. It's possible that WebAssembly will support some form of gc in the future.
-* A rich typesystem (see the corresponding document)
-    * Subtyping
+* A rich typesystem based mostly on Haskell, with some modifications:
+    * Subtyping (possibly) and/or inheritance (probably)
     * Gradual typing
-    * Parametric polymorphism
-    * Typeclasses
-    * Kinds
-    * Algebraic data types
-    * Gradual dependent typing
+    * Dependent types
+    * Linear types (possibly)
 * The types of high-level niceties that Python has and Javascript decidedly lacks
     * Operator overloading
     * Keyword arguments

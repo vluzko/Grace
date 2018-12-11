@@ -14,7 +14,7 @@ Grace mostly draws inspiration from Python and Haskell.
     * Subtyping (possibly) and/or inheritance (probably)
     * Gradual typing
     * Dependent types
-    * Linear types (possibly)
+    * Substructural types (possibly)
 * The types of high-level niceties that Python has and Javascript decidedly lacks
     * Operator overloading
     * Keyword arguments

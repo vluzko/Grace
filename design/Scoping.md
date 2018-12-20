@@ -19,3 +19,19 @@ Return a name resolution function (this is trivial, just search for ident in the
 
 
 ### Name resolution
+
+
+
+## Things that modify scope
+* Let statements
+* for loops (the loop variables)
+* function declarations
+* comprehensions
+* import statements
+* match expressions (not implemented in the parser yet)
+* lambdas (ditto)
+
+## Things to do when rewriting the parser
+* Pass the scope, line number, and column number around along with the &[u8] input
+* return child scope along with ast node
+* Put a reference to the scope inside the ast node when it's made

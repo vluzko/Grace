@@ -21,6 +21,10 @@ impl ASTNode for Module {
 (import 'memory_management' 'mem' (memory (;0;) 1))
 {}\n)\n", joined).to_string();
     }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
 }
 
 impl ASTNode for Block {
@@ -30,12 +34,16 @@ impl ASTNode for Block {
         let bytecode = itertools::join(statement_bytecode, "\n");
         return bytecode;
     }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
 }
 
 impl ASTNode for Stmt {
     fn generate_bytecode(&self) -> String {
         let bytecode = match self {
-            &Stmt::FunctionDecStmt {ref name, ref args, ref keyword_args, ref vararg, ref varkwarg, ref body, ref return_type} => {
+            &Stmt::FunctionDecStmt {ref name, ref args, ref body, ..} => {
                 // Scope check
                 let (declarations, _) = self.get_scopes();
                 let body_bytecode = body.generate_bytecode();
@@ -68,7 +76,7 @@ impl ASTNode for Stmt {
                 }
 	        },
 	        // Only handles if x {foo}, no elifs or else
-	        &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
+	        &Stmt::IfStmt {ref condition, ref main_block, ref else_block, ..} => {
 	            let condition_bytecode = condition.generate_bytecode();
 	            let main_block_bytecode = main_block.generate_bytecode();
 	            let else_block_bytecode = match else_block {
@@ -91,7 +99,7 @@ impl ASTNode for Stmt {
                 identifier = identifier_bytecode);
                 assignment_bytecode
             },
-            &Stmt::WhileStmt {ref condition, ref block} => {
+            &Stmt::WhileStmt {ref condition, ref block, ..} => {
                 let block_bytecode = block.generate_bytecode();
                 let condition_bytecode = condition.generate_bytecode();
                 let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
@@ -102,46 +110,9 @@ impl ASTNode for Stmt {
 
         return bytecode;
     }
-}
 
-/// Type map
-///       int32 int64 float32 float64 bool
-/// int32
-/// int64
-/// float32
-/// float64
-fn operator_add(left: &Box<Expr>, right: &Box<Expr>) -> String {
-    let left_type = &left.get_type();
-    let right_type = &right.get_type();
-    let return_type= &match (left_type, right_type) {
-        (Type::i64, Type::f32) | (Type::f32, Type::i64) => panic!(),
-        (Type::i64, Type::f64) | (Type::f64, Type::i64) => panic!(),
-        (Type::i64, _) | (_, Type::i64) => Type::i64,
-        (Type::f64, _) | (_, Type::f64) => Type::f64,
-        (Type::i32, Type::i32) => Type::i32,
-        (Type::f32, Type::f32) => Type::f32,
-        (Type::i32, Type::f32) | (Type::f32, Type::i32) => Type::f64,
-        _ => panic!()
-    };
-    let left_bytecode = left.generate_bytecode();
-    let left_conversion = convert_types(left_type, return_type);
-    let right_bytecode = right.generate_bytecode();
-    let right_conversion = convert_types(right_type, return_type);
-    let operator_bytecode = return_type.wast_name();
-    // left_bytecode left_conversion right_bytecode right_conversion operator
-    return format!("{}\n{}{}\n{}{}.add", left_bytecode, left_conversion,
-    right_bytecode, right_conversion, operator_bytecode);
-}
-
-fn convert_types(input_type: &Type, output_type: &Type) -> String {
-    if input_type == output_type {
-        return "".to_string();
-    }
-    match (input_type, output_type) {
-        (Type::f32, Type::f64) => "f64.promote\n".to_string(),
-        (Type::i32, Type::f64) => "f64.convert_s\n".to_string(),
-        (Type::i32, Type::i64) => "i32.wrap\n".to_string(),
-        _ => panic!()
+    fn get_id(&self) -> i64 {
+        0
     }
 }
 
@@ -187,6 +158,10 @@ impl ASTNode for Expr {
         };
         return bytecode_rep;
     }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
 }
 
 impl ASTNode for ComparisonOperator {
@@ -199,6 +174,10 @@ impl ASTNode for ComparisonOperator {
             &ComparisonOperator::GreaterEqual => "i32.ge_s".to_string(),
             &ComparisonOperator::Greater => "i32.gt_s".to_string()
         }
+    }
+
+    fn get_id(&self) -> i64 {
+        0
     }
 }
 
@@ -241,15 +220,27 @@ impl ASTNode for Identifier {
         let name = self.name.clone();
 	return name;
     }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
 }
 impl ASTNode for IntegerLiteral {
     fn generate_bytecode(&self) -> String {
         return format!("i32.const {}", self.string_rep);
     }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
 }
 impl ASTNode for FloatLiteral {
     fn generate_bytecode(&self) -> String {
         return format!("f64.const {}", self.string_rep);
+    }
+
+    fn get_id(&self) -> i64 {
+        0
     }
 }
 impl ASTNode for Boolean {
@@ -258,6 +249,10 @@ impl ASTNode for Boolean {
             &Boolean::True => "1".to_string(),
             &Boolean::False => "0".to_string()
         }
+    }
+
+    fn get_id(&self) -> i64 {
+        0
     }
 }
 

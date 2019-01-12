@@ -2,6 +2,15 @@ use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
 
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum IDedNode {
+    M(Module),
+    B(Block),
+    S(Stmt),
+    E(Expr)
+}
+
 /// A top level module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
@@ -17,20 +26,20 @@ pub struct Block {
 /// A statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Stmt {
-    AssignmentStmt{identifier: Identifier, operator: Assignment, expression: Expr},
-    LetStmt{value_name: TypedIdent, value: Expr},
-    IfStmt{condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
-    WhileStmt{condition: Expr, block: Block},
-    ForInStmt{iter_var: Identifier, iterator: Expr, block: Block},
-    FunctionDecStmt{name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>, keyword_args: Option<Vec<(TypedIdent, Expr)>>, varkwarg: Option<Identifier>, body: Block, return_type: Option<TypeAnnotation>},
+    AssignmentStmt  {id: i64, identifier: Identifier, operator: Assignment, expression: Expr},
+    LetStmt         {id: i64, value_name: TypedIdent, value: Expr},
+    IfStmt          {id: i64, condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
+    WhileStmt       {id: i64, condition: Expr, block: Block},
+    ForInStmt       {id: i64, iter_var: Identifier, iterator: Expr, block: Block},
+    FunctionDecStmt {id: i64, name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>, keyword_args: Option<Vec<(TypedIdent, Expr)>>, varkwarg: Option<Identifier>, body: Block, return_type: Option<TypeAnnotation>},
     // TODO: Change to be values instead of records.
-    ImportStmt{module: DottedIdentifier},
-    ReturnStmt{value: Expr},
+    ImportStmt      {id: i64, module: DottedIdentifier},
+    ReturnStmt      {id: i64, value: Expr},
+    TryExceptStmt   {id: i64, main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>},
+    YieldStmt       (i64, Expr),
     BreakStmt,
     PassStmt,
     ContinueStmt,
-    YieldStmt(Expr),
-    TryExceptStmt{main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -42,22 +51,22 @@ pub struct TypedIdent {
 /// An expression.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    MatchExpr{value: Box<Expr>, cases: Vec<(Expr, Expr)>},
-    ComparisonExpr{operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
-    BinaryExpr{operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
-    UnaryExpr{operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall{func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
-    AttributeAccess{container: Box<Expr>, attributes: Vec<Identifier>},
-    Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
-    IdentifierExpr{ident: Identifier},
-    Bool(Boolean),
-    Int(IntegerLiteral),
-    Float(FloatLiteral),
-    String(String),
-    VecLiteral(Vec<Expr>),
-    SetLiteral(Vec<Expr>),
-    TupleLiteral(Vec<Expr>),
-    MapLiteral(Vec<(Identifier, Expr)>),
+    MatchExpr       {id: i64, value: Box<Expr>, cases: Vec<(Expr, Expr)>},
+    ComparisonExpr  {id: i64, operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
+    BinaryExpr      {id: i64, operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
+    UnaryExpr       {id: i64, operator: UnaryOperator, operand: Box<Expr>},
+    FunctionCall    {id: i64, func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
+    AttributeAccess {id: i64, container: Box<Expr>, attributes: Vec<Identifier>},
+    Index           {id: i64, slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
+    IdentifierExpr  {id: i64, ident: Identifier},
+    Bool            (i64, Boolean),
+    Int             (i64, IntegerLiteral),
+    Float           (i64, FloatLiteral),
+    String          (i64, String),
+    VecLiteral      (i64, Vec<Expr>),
+    SetLiteral      (i64, Vec<Expr>),
+    TupleLiteral    (i64, Vec<Expr>),
+    MapLiteral      (i64, Vec<(Identifier, Expr)>),
     VecComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
     MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},

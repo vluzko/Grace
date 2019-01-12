@@ -62,10 +62,12 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-pub fn assign_node_ids(input: &ASTNode) -> (HashMap<ASTNode, i64>, HashMap<i64, ASTNode>) {
-    let mut nodes_to_ids :HashMap<ASTNode, i64> = HashMap::new();
-    let mut ids_to_nodes :HashMap<i64, ASTNode> = HashMap::new();
-    let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    nodes_to_ids.insert(input, next_id);
-    ids_to_nodes.insert(next_id, input);
-}
+//
+//pub fn assign_node_ids(input: &ASTNode) -> (HashMap<ASTNode, i64>, HashMap<i64, ASTNode>) {
+//    let mut nodes_to_ids :HashMap<ASTNode, i64> = HashMap::new();
+//    let mut ids_to_nodes :HashMap<i64, ASTNode> = HashMap::new();
+//    let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+//    nodes_to_ids.insert(input, next_id);
+//    ids_to_nodes.insert(next_id, input);
+//    panic!()
+//}

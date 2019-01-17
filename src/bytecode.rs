@@ -151,9 +151,9 @@ impl ASTNode for Expr {
             &Expr::IdentifierExpr {ref ident, ..} => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
-            &Expr::Int(_, ref int_lit, ..) => int_lit.generate_bytecode(),
-            &Expr::Float(_, ref float_lit, ..) => float_lit.generate_bytecode(),
-            &Expr::Bool(_, ref bool, ..) => bool.generate_bytecode(),
+            &Expr::Int(ref int_lit, ..) => int_lit.generate_bytecode(),
+            &Expr::Float(ref float_lit, ..) => float_lit.generate_bytecode(),
+            &Expr::Bool(ref bool, ..) => bool.generate_bytecode(),
             _ => panic!()
         };
         return bytecode_rep;

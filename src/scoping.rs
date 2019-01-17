@@ -21,17 +21,17 @@ impl ScopedNode for Module {
 impl ScopedNode for Stmt {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let (declarations, usages) = match self {
-            &Stmt::LetStmt{ref value_name, ref value} => {
+            &Stmt::LetStmt{ref value_name, ref value, ..} => {
                 let temp = value.get_scopes().1;
                 (hashset!{value_name.name.to_string()}, temp)
             }
-            &Stmt::AssignmentStmt{ref identifier, operator: _, ref expression} => {
+            &Stmt::AssignmentStmt{ref identifier, ref expression, ..} => {
                 let mut temp = expression.get_scopes().1;
                 temp.insert(identifier.to_string());
                 (HashSet::new(), temp)
             },
             // Currently only handles args and body
-            &Stmt::FunctionDecStmt{name: _, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, return_type: _} => {
+            &Stmt::FunctionDecStmt{name: _, ref args, ref vararg, ref keyword_args, ref varkwarg, ref body, ..} => {
                 let (mut td, mut tu) = body.get_scopes();
                 // Include function name
 //                td.insert(name.to_string());
@@ -73,10 +73,10 @@ impl ScopedNode for Stmt {
 
                 (td, tu)
             },
-            &Stmt::ReturnStmt {ref value} => {
+            &Stmt::ReturnStmt {ref value, ..} => {
                 (HashSet::new(), value.get_scopes().1)
             },
-            &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block} => {
+            &Stmt::IfStmt {ref condition, ref main_block, ref elifs, ref else_block, ..} => {
                 let (mut td, mut tu) = condition.get_scopes();
 
                 let (md, mu) = main_block.get_scopes();
@@ -101,7 +101,7 @@ impl ScopedNode for Stmt {
                 }
                 (td, tu)
             },
-            &Stmt::WhileStmt {ref condition, ref block} => {
+            &Stmt::WhileStmt {ref condition, ref block, ..} => {
                 let mut condition_usages = condition.get_scopes().1;
                 let (block_decs, mut block_usages) = block.get_scopes();
                 let temp = condition_usages.union(&block_usages).cloned().collect();
@@ -136,19 +136,19 @@ impl ScopedNode for Expr {
     fn get_scopes(&self) -> (HashSet<String>, HashSet<String>) {
         let declarations = HashSet::new();
         let usages= match self {
-            &Expr::ComparisonExpr {operator: _, ref left, ref right} => {
+            &Expr::ComparisonExpr {ref left, ref right, ..} => {
                 left.get_scopes().1.union(&right.get_scopes().1).cloned().collect()
             },
-            &Expr::BinaryExpr {operator: _, ref left, ref right} => {
+            &Expr::BinaryExpr {ref left, ref right, ..} => {
                 left.get_scopes().1.union(&right.get_scopes().1).cloned().collect()
             },
-            &Expr::UnaryExpr {operator: _, ref operand} => {
+            &Expr::UnaryExpr {ref operand, ..} => {
                 operand.get_scopes().1
             },
-            &Expr::IdentifierExpr {ref ident} => {
+            &Expr::IdentifierExpr {ref ident, ..} => {
                 hashset!{ident.to_string()}
             },
-            &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
+            &Expr::FunctionCall {ref func_expr, ref args, ref kwargs, ..} => {
 
                 let func_expr_usages = func_expr.get_scopes().1;
 

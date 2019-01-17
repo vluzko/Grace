@@ -3,6 +3,9 @@ use std::fmt::Display;
 use std::str::from_utf8;
 
 
+pub struct
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IDedNode {
     M(Module),
@@ -11,32 +14,39 @@ pub enum IDedNode {
     E(Expr)
 }
 
+
+fn pas(x: IDedNode) {
+    x.0
+}
+
 /// A top level module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
+    pub id: i64,
     pub declarations: Vec<Stmt>
 }
 
 /// A block of code. Just a series of statements.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
+    pub id: i64,
     pub statements: Vec<Stmt>,
 }
 
 /// A statement.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Stmt {
-    AssignmentStmt  {id: i64, identifier: Identifier, operator: Assignment, expression: Expr},
-    LetStmt         {id: i64, value_name: TypedIdent, value: Expr},
-    IfStmt          {id: i64, condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
-    WhileStmt       {id: i64, condition: Expr, block: Block},
-    ForInStmt       {id: i64, iter_var: Identifier, iterator: Expr, block: Block},
-    FunctionDecStmt {id: i64, name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>, keyword_args: Option<Vec<(TypedIdent, Expr)>>, varkwarg: Option<Identifier>, body: Block, return_type: Option<TypeAnnotation>},
+    AssignmentStmt  {id: u64, identifier: Identifier, operator: Assignment, expression: Expr},
+    LetStmt         {id: u64, value_name: TypedIdent, value: Expr},
+    IfStmt          {id: u64, condition: Expr, main_block: Block, elifs: Vec<(Expr, Block)>, else_block: Option<Block>},
+    WhileStmt       {id: u64, condition: Expr, block: Block},
+    ForInStmt       {id: u64, iter_var: Identifier, iterator: Expr, block: Block},
+    FunctionDecStmt {id: u64, name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>, keyword_args: Option<Vec<(TypedIdent, Expr)>>, varkwarg: Option<Identifier>, body: Block, return_type: Option<TypeAnnotation>},
     // TODO: Change to be values instead of records.
-    ImportStmt      {id: i64, module: DottedIdentifier},
-    ReturnStmt      {id: i64, value: Expr},
-    TryExceptStmt   {id: i64, main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>},
-    YieldStmt       (i64, Expr),
+    ImportStmt      {id: u64, module: DottedIdentifier},
+    ReturnStmt      {id: u64, value: Expr},
+    TryExceptStmt   {id: u64, main: Block, exception: Vec<Block>, else_block: Option<Block>, finally: Option<Block>},
+    YieldStmt       (u64, Expr),
     BreakStmt,
     PassStmt,
     ContinueStmt,
@@ -51,26 +61,26 @@ pub struct TypedIdent {
 /// An expression.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    MatchExpr       {id: i64, value: Box<Expr>, cases: Vec<(Expr, Expr)>},
-    ComparisonExpr  {id: i64, operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
-    BinaryExpr      {id: i64, operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
-    UnaryExpr       {id: i64, operator: UnaryOperator, operand: Box<Expr>},
-    FunctionCall    {id: i64, func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
-    AttributeAccess {id: i64, container: Box<Expr>, attributes: Vec<Identifier>},
-    Index           {id: i64, slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
-    IdentifierExpr  {id: i64, ident: Identifier},
-    Bool            (i64, Boolean),
-    Int             (i64, IntegerLiteral),
-    Float           (i64, FloatLiteral),
-    String          (i64, String),
-    VecLiteral      (i64, Vec<Expr>),
-    SetLiteral      (i64, Vec<Expr>),
-    TupleLiteral    (i64, Vec<Expr>),
-    MapLiteral      (i64, Vec<(Identifier, Expr)>),
-    VecComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
-    GenComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>},
-    MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
-    SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
+    MatchExpr       {id: u64, value: Box<Expr>, cases: Vec<(Expr, Expr)>},
+    ComparisonExpr  {id: u64, operator: ComparisonOperator, left: Box<Expr>, right: Box<Expr>},
+    BinaryExpr      {id: u64, operator: BinaryOperator, left: Box<Expr>, right: Box<Expr>},
+    UnaryExpr       {id: u64, operator: UnaryOperator, operand: Box<Expr>},
+    FunctionCall    {id: u64, func_expr: Box<Expr>, args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
+    AttributeAccess {id: u64, container: Box<Expr>, attributes: Vec<Identifier>},
+    Index           {id: u64, slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
+    IdentifierExpr  {id: u64, ident: Identifier},
+    Bool            (u64, Boolean),
+    Int             (u64, IntegerLiteral),
+    Float           (u64, FloatLiteral),
+    String          (u64, String),
+    VecLiteral      (u64, Vec<Expr>),
+    SetLiteral      (u64, Vec<Expr>),
+    TupleLiteral    (u64, Vec<Expr>),
+    MapLiteral      (u64, Vec<(Identifier, Expr)>),
+    VecComprehension{id: u64, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    GenComprehension{id: u64, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    MapComprehension{id: u64, keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
+    SetComprehension{id: u64, values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
 /// Types
@@ -116,11 +126,11 @@ impl Type {
 impl Expr {
     pub fn get_type(&self) -> Type {
         match self {
-            &Expr::String (_) => Type::string,
-            &Expr::Bool (_) => Type::boolean,
-            &Expr::Int (_) => Type::i32,
-            &Expr::Float (_) => Type::f64,
-            &Expr::UnaryExpr {ref operator, ref operand} => {
+            &Expr::String (..) => Type::string,
+            &Expr::Bool (..) => Type::boolean,
+            &Expr::Int (..) => Type::i32,
+            &Expr::Float (..) => Type::f64,
+            &Expr::UnaryExpr {ref operator, ref operand, ..} => {
                 match operator {
                     &UnaryOperator::ToF32 => Type::f32,
                     &UnaryOperator::ToF64 => Type::f64,
@@ -129,10 +139,10 @@ impl Expr {
                     _ => operand.get_type()
                 }
             },
-            &Expr::BinaryExpr {ref operator, ref left, ref right} => {
+            &Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
                 return operator.get_return_type(&left.get_type(), &right.get_type());
             },
-            &Expr::IdentifierExpr{ref ident} => {
+            &Expr::IdentifierExpr{ref ident, ..} => {
                 // Get declaration
                 panic!()
             },
@@ -330,17 +340,17 @@ impl Display for Identifier {
 /// From for Expr
 impl <'a> From<&'a str> for Expr {
     fn from(input: &'a str) -> Self {
-        return Expr::IdentifierExpr{ident: Identifier::from(input)};
+        return Expr::IdentifierExpr{id: 0, ident: Identifier::from(input)};
     }
 }
 impl From<bool> for Expr {
     fn from(input: bool) -> Self {
-        return Expr::Bool(Boolean::from(input));
+        return Expr::Bool(0,Boolean::from(input));
     }
 }
 impl<'a> From<&'a [u8]> for Expr {
     fn from(input: &'a [u8]) -> Self {
-        return Expr::IdentifierExpr {ident: Identifier::from(input)};
+        return Expr::IdentifierExpr {id: 0, ident: Identifier::from(input)};
     }
 }
 

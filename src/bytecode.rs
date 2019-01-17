@@ -62,7 +62,7 @@ impl ASTNode for Stmt {
                 );
                 func_dec
             },
-            &Stmt::AssignmentStmt {ref identifier, ref operator, ref expression} => {
+            &Stmt::AssignmentStmt {ref identifier, ref operator, ref expression, ..} => {
                 match operator {
                     Assignment::Normal => {
                         let identifier_bytecode = identifier.generate_bytecode();
@@ -88,10 +88,10 @@ impl ASTNode for Stmt {
 	            else_block_bytecode = else_block_bytecode);
 	            if_bytecode
 	        },
-            &Stmt::ReturnStmt {ref value} => {
+            &Stmt::ReturnStmt {ref value, ..} => {
                 value.generate_bytecode()
             },
-            &Stmt::LetStmt {ref value_name, ref value} => {
+            &Stmt::LetStmt {ref value_name, ref value, ..} => {
 	        let identifier_bytecode = value_name.name.generate_bytecode();
                 let expression_bytecode = value.generate_bytecode();
                 let assignment_bytecode = format!("{value}\nset_local ${identifier}",
@@ -119,13 +119,13 @@ impl ASTNode for Stmt {
 impl ASTNode for Expr {
     fn generate_bytecode(&self) -> String {
         let bytecode_rep = match self {
-            &Expr::ComparisonExpr {ref operator, ref left, ref right} => {
+            &Expr::ComparisonExpr {ref operator, ref left, ref right, ..} => {
                 let first = left.generate_bytecode();
                 let second = right.generate_bytecode();
                 let operator = operator.generate_bytecode();
                 format!("{}\n{}\n{}", first, second, operator)
             },
-            &Expr::BinaryExpr {ref operator, ref left, ref right} => {
+            &Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
 //                if operator == &BinaryOperator::Add {
 //                    operator_add(left, right)
 //                } else {
@@ -135,25 +135,25 @@ impl ASTNode for Expr {
                     format!("{}\n{}\n{}", first, second, operator_bytecode)
 //                }
             },
-            &Expr::UnaryExpr {ref operator, ref operand} => {
+            &Expr::UnaryExpr {ref operator, ref operand, ..} => {
                 let operator_bytecode = operator.generate_typed_bytecode(&operand.get_type());
                 let operand_bytecode = operand.generate_bytecode();
                 format!("{}\n{}", operand_bytecode, operator_bytecode)
             },
-            &Expr::FunctionCall {ref func_expr, ref args, ref kwargs} => {
+            &Expr::FunctionCall {ref func_expr, ref args, ref kwargs, ..} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
                 let call = match &**func_expr {
-                    &Expr::IdentifierExpr {ref ident} => format!("call ${func_name}", func_name=ident.to_string()),
+                    &Expr::IdentifierExpr {ref ident, ..} => format!("call ${func_name}", func_name=ident.to_string()),
                     _ => panic!()
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
             },
-            &Expr::IdentifierExpr {ref ident} => {
+            &Expr::IdentifierExpr {ref ident, ..} => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
-            &Expr::Int(ref int_lit) => int_lit.generate_bytecode(),
-            &Expr::Float(ref float_lit) => float_lit.generate_bytecode(),
-            &Expr::Bool(ref bool) => bool.generate_bytecode(),
+            &Expr::Int(_, ref int_lit, ..) => int_lit.generate_bytecode(),
+            &Expr::Float(_, ref float_lit, ..) => float_lit.generate_bytecode(),
+            &Expr::Bool(_, ref bool, ..) => bool.generate_bytecode(),
             _ => panic!()
         };
         return bytecode_rep;

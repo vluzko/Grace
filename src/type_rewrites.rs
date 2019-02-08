@@ -5,6 +5,24 @@ pub trait TypeRewrite<T> {
     fn type_based_rewrite(self) -> T;
 }
 
+impl TypeRewrite<IDedNode> for IDedNode {
+    fn type_based_rewrite(self) -> IDedNode {
+        return IDedNode {node: self.node.type_based_rewrite(), ..self};
+    }
+}
+
+
+impl TypeRewrite<IDableNode> for IDableNode {
+    fn type_based_rewrite(self) -> IDableNode {
+        return match self {
+            IDableNode::M(x) => IDableNode::M(x.type_based_rewrite()),
+            IDableNode::B(x) => IDableNode::B(x.type_based_rewrite()),
+            IDableNode::S(x) => IDableNode::S(x.type_based_rewrite()),
+            IDableNode::E(x) => IDableNode::E(x.type_based_rewrite()),
+        };
+    }
+}
+
 impl TypeRewrite<Module> for Module {
     fn type_based_rewrite(self) -> Module {
         let new_decs = c![x.type_based_rewrite(), for x in self.declarations];

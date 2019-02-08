@@ -1,13 +1,19 @@
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
+use std::convert::From;
+use std::hash::Hash;
 use compiler_layers::get_next_id;
 
-pub struct IDedNode {
+pub struct IDedNode<'a> {
     pub id: u64,
-    pub node: IDableNode
+    pub node: &'a IDable
 }
 
+
+pub trait IDable: Hash {
+
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IDableNode {
@@ -17,29 +23,6 @@ pub enum IDableNode {
     E(Expr)
 }
 
-impl From<Module> for IDedNode {
-    fn from(input: Module) -> Self {
-        IDedNode {id: get_next_id(), node: IDableNode::M(input)}
-    }
-}
-
-impl From<Block> for IDedNode {
-    fn from(input: Block) -> Self {
-        IDedNode {id: get_next_id(), node: IDableNode::B(input)}
-    }
-}
-
-impl From<Stmt> for IDedNode {
-    fn from(input: Stmt) -> Self {
-        IDedNode {id: get_next_id(), node: IDableNode::S(input)}
-    }
-}
-
-impl From<Expr> for IDedNode {
-    fn from(input: Expr) -> Self {
-        IDedNode {id: get_next_id(), node: IDableNode::E(input)}
-    }
-}
 
 /// A top level module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -102,6 +85,8 @@ pub enum Expr {
     MapComprehension{keys: Box<Expr>, values: Box<Expr>, iterators: Vec<ComprehensionIter>},
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
+
+
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -352,6 +337,32 @@ impl Display for TypedIdent {
 impl Display for Identifier {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+/// Into implementations
+
+impl Into<IDedNode> for Module {
+    fn into(self) -> IDedNode {
+        return IDedNode {id: get_next_id(), node: IDableNode::M(self)}
+    }
+}
+
+impl Into<IDedNode> for Block {
+    fn into(self) -> IDedNode {
+        return IDedNode {id: get_next_id(), node: IDableNode::B(self)}
+    }
+}
+
+impl Into<IDedNode> for Stmt {
+    fn into(self) -> IDedNode {
+        return IDedNode {id: get_next_id(), node: IDableNode::S(self)}
+    }
+}
+
+impl Into<IDedNode> for Expr {
+    fn into(self) -> IDedNode {
+        return IDedNode {id: get_next_id(), node: IDableNode::E(self)}
     }
 }
 

@@ -16,21 +16,8 @@ use compiler_layers::get_next_id;
 
 type ExprRes<'a> = IResult<&'a [u8], Expr>;
 type StmtRes<'a> = IResult<&'a[u8], Stmt>;
+type NodeRes<'a> = IResult<&'a[u8], IDedNode>;
 
-//pub fn parse_grace(input: &str) -> IResult<&[u8], Block> {
-//    parse_grace_from_slice(input.as_bytes())
-//}
-
-// This is the important function
-//pub fn parse_grace_from_slice(input: &[u8]) -> IResult<&[u8], Block> {
-//
-//    let output = terminated!(input, call!(block, 0), custom_eof);
-//    return match output {
-//        Done(i, o) => Done(i, o),
-//        IResult::Incomplete(n) => IResult::Incomplete(n),
-//        IResult::Error(e) => IResult::Error(e)
-//    };
-//}
 
 /// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
 /// if, elif, except, fn are all rules of this form.
@@ -85,7 +72,7 @@ named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
 );
 
 impl Compilation {
-    pub fn module(self, input: &[u8]) -> IResult<&[u8], Module> {
+    pub fn module(self, input: &[u8]) -> NodeRes {
 //        let cb = |x, y| self.function_declaration(x, y);
         let parse_result = preceded!(input,
         opt!(between_statement),
@@ -97,7 +84,7 @@ impl Compilation {
         ))
     );
 
-    return fmap_iresult(parse_result, |x| Module{declarations: x});
+    return fmap_iresult(parse_result, |x| Module{declarations: x}.into());
     }
 
 
@@ -173,8 +160,6 @@ fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
 
     return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
 }
-
-
 
 // TODO: Merge block_rule with block
 fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<Stmt>> {

@@ -9,6 +9,15 @@ extern crate itertools;
 
 /// ASTNode implementations
 
+impl ASTNode for IDedNode {
+    fn generate_bytecode(&self) -> String {
+        panic!()
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
 
 impl ASTNode for Module {
     fn generate_bytecode(&self) -> String {

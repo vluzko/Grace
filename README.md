@@ -42,4 +42,5 @@ Grace is *very much* in development. It's not remotely usable as a language yet.
         * break
     * Imports
     * Structs
+* Simple type coercion (i32 -> i64, etc)
 * Basic type checking and inference

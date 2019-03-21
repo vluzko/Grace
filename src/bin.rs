@@ -20,8 +20,8 @@ fn main() {
 
     //let names_maps = call compiler layers assign_node_ids here;
     let parser_out = output(parse_result);
-    let type_rewrites = output(parse_result).type_based_rewrite();
-    let wast = type_rewrites.generate_bytecode();
-    let outfile = File::create(&args[2]);
-    outfile.unwrap().write_all(wast.as_bytes()).unwrap();
+    // let type_rewrites = output(parse_result).type_based_rewrite();
+    // let wast = type_rewrites.generate_bytecode();
+    // let outfile = File::create(&args[2]);
+    // outfile.unwrap().write_all(wast.as_bytes()).unwrap();
 }

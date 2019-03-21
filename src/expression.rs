@@ -3,13 +3,17 @@ use std::fmt::Display;
 use std::str::from_utf8;
 use std::convert::From;
 use std::hash::Hash;
+
+
 use compiler_layers::get_next_id;
+use scoping::*;
 
-pub struct IDedNode<'a> {
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IDedNode {
     pub id: u64,
-    pub node: &'a IDable
+    pub node: IDableNode,
+    pub scope: Scope
 }
-
 
 pub trait IDable: Hash {
 
@@ -23,6 +27,29 @@ pub enum IDableNode {
     E(Expr)
 }
 
+impl From<Module> for IDedNode {
+    fn from(input: Module) -> Self {
+        IDedNode {id: get_next_id(), node: IDableNode::M(input), scope: empty_scope()}
+    }
+}
+
+impl From<Block> for IDedNode {
+    fn from(input: Block) -> Self {
+        IDedNode {id: get_next_id(), node: IDableNode::B(input), scope: empty_scope()}
+    }
+}
+
+impl From<Stmt> for IDedNode {
+    fn from(input: Stmt) -> Self {
+        IDedNode {id: get_next_id(), node: IDableNode::S(input), scope: empty_scope()}
+    }
+}
+
+impl From<Expr> for IDedNode {
+    fn from(input: Expr) -> Self {
+        IDedNode {id: get_next_id(), node: IDableNode::E(input), scope: empty_scope()}
+    }
+}
 
 /// A top level module.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -86,7 +113,64 @@ pub enum Expr {
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct IdNode<T> {
+    pub id: u64,
+    pub data: T,
+    pub scope: Scope
+}
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Module2 {
+    pub declarations: Vec<Stmt>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Block2 {
+    pub statements: Vec<IdNode<Stmt2>>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Stmt2 {
+    AssignmentStmt  {name: Identifier, operator: Assignment, expression: IdNode<Expr2>},
+    LetStmt         {typed_name: TypedIdent, expression: IdNode<Expr2>},
+    IfStmt          {condition: IdNode<Expr2>, block: IdNode<Block2>, elifs: Vec<(IdNode<Expr2>, IdNode<Block2>)>, else_block: Option<IdNode<Block2>>},
+    WhileStmt       {condition: IdNode<Expr2>, block: IdNode<Block2>},
+    ForInStmt       {iter_vars: Identifier, iterator: IdNode<Expr2>, block: IdNode<Block2>},
+    FunctionDecStmt {name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>,
+        kwargs: Vec<(TypedIdent, IdNode<Expr2>)>, varkwarg: Option<Identifier>, block: IdNode<Block2>, return_type: Option<TypeAnnotation>},
+    TryExceptStmt   {block: IdNode<Block2>, exceptions: Vec<IdNode<Block2>>, else_block: Option<IdNode<Block2>>, final_block: Option<IdNode<Block2>>},
+    ImportStmt      (DottedIdentifier),
+    ReturnStmt      (IdNode<Expr2>),
+    YieldStmt       (IdNode<Expr2>),
+    BreakStmt,
+    PassStmt,
+    ContinueStmt,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Expr2 {
+    MatchExpr       {value: Box<IdNode<Expr2>>, cases: Vec<(IdNode<Expr2>, IdNode<Expr2>)>},
+    ComparisonExpr  {operator: ComparisonOperator, left: Box<IdNode<Expr2>>, right: Box<IdNode<Expr2>>},
+    BinaryExpr      {operator: BinaryOperator, left: Box<IdNode<Expr2>>, right: Box<IdNode<Expr2>>},
+    UnaryExpr       {operator: UnaryOperator, operand: Box<IdNode<Expr2>>},
+    FunctionCall    {function: Box<IdNode<Expr2>>, args: Vec<IdNode<Expr2>>, kwargs: Vec<(Identifier, IdNode<Expr2>)>},
+    AttributeAccess {container: Box<IdNode<Expr2>>, attributes: Vec<Identifier>},
+    Index           {slices: Vec<(Option<IdNode<Expr2>>, Option<IdNode<Expr2>>, Option<IdNode<Expr2>>)>},
+    VecComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
+    GenComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
+    MapComprehension{keys: Box<IdNode<Expr2>>, values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
+    SetComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
+    IdentifierExpr  (Identifier),
+    Bool            (Boolean),
+    Int             (IntegerLiteral),
+    Float           (FloatLiteral),
+    String          (String),
+    VecLiteral      (Vec<IdNode<Expr2>>),
+    SetLiteral      (Vec<IdNode<Expr2>>),
+    TupleLiteral    (Vec<IdNode<Expr2>>),
+    MapLiteral      (Vec<(Identifier, IdNode<Expr2>)>)
+}
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -302,7 +386,7 @@ pub struct DottedIdentifier {
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Identifier {
     pub name: String,
 }
@@ -342,31 +426,42 @@ impl Display for Identifier {
 
 /// Into implementations
 
-impl Into<IDedNode> for Module {
-    fn into(self) -> IDedNode {
-        return IDedNode {id: get_next_id(), node: IDableNode::M(self)}
-    }
-}
+// impl Into<IDedNode> for Module {
+//     fn into(self) -> IDedNode {
+//         return IDedNode {id: get_next_id(), node: IDableNode::M(self)}
+//     }
+// }
 
-impl Into<IDedNode> for Block {
-    fn into(self) -> IDedNode {
-        return IDedNode {id: get_next_id(), node: IDableNode::B(self)}
-    }
-}
+// impl Into<IDedNode> for Block {
+//     fn into(self) -> IDedNode {
+//         return IDedNode {id: get_next_id(), node: IDableNode::B(self)}
+//     }
+// }
 
-impl Into<IDedNode> for Stmt {
-    fn into(self) -> IDedNode {
-        return IDedNode {id: get_next_id(), node: IDableNode::S(self)}
-    }
-}
+// impl Into<IDedNode> for Stmt {
+//     fn into(self) -> IDedNode {
+//         return IDedNode {id: get_next_id(), node: IDableNode::S(self)}
+//     }
+// }
 
-impl Into<IDedNode> for Expr {
-    fn into(self) -> IDedNode {
-        return IDedNode {id: get_next_id(), node: IDableNode::E(self)}
-    }
-}
+// impl Into<IDedNode> for Expr {
+//     fn into(self) -> IDedNode {
+//         return IDedNode {id: get_next_id(), node: IDableNode::E(self)}
+//     }
+// }
 
 /// From implementations
+
+/// From for IdNode
+impl <T> From<T> for IdNode<T> {
+    fn from(input: T) -> Self {
+        return IdNode{
+            id: get_next_id(),
+            data: input,
+            scope: empty_scope()
+        };
+    }
+}
 
 /// From for Expr
 impl <'a> From<&'a str> for Expr {

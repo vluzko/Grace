@@ -5,6 +5,7 @@ use std::str::from_utf8;
 extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
+use expression::IdNode;
 
 /// Map the contents of an IResult.
 /// Rust functors plox
@@ -12,6 +13,23 @@ pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], 
     where F: Fn(X) -> T {
     return match res {
         Done(i, o) => Done(i, func(o)),
+        IResult::Error(e) => IResult::Error(e),
+        IResult::Incomplete(n) => IResult::Incomplete(n)
+    };
+}
+
+pub fn fmap_idnode<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], IdNode<T>>
+    where F: Fn(X) -> T {
+    return match res {
+        Done(i, o) => Done(i, IdNode::from(func(o))),
+        IResult::Error(e) => IResult::Error(e),
+        IResult::Incomplete(n) => IResult::Incomplete(n)
+    };
+}
+
+pub fn fmap_convert<X>(res: IResult<&[u8], X>) -> IResult<&[u8], IdNode<X>> {
+    return match res {
+        Done(i, o) => Done(i, IdNode::from(o)),
         IResult::Error(e) => IResult::Error(e),
         IResult::Incomplete(n) => IResult::Incomplete(n)
     };

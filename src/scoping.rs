@@ -464,10 +464,10 @@ mod test {
         // Block is:
         // let a = 5 + -1
         // let b = true and false
-        let l1 = IdNode::from(Expr2::Int(IntegerLiteral::from(5)));
-        let r1 = IdNode::from(Expr2::Int(IntegerLiteral::from(-1)));
-        let l2 = IdNode::from(Expr2::Bool(Boolean::from(true)));
-        let r2 = IdNode::from(Expr2::Bool(Boolean::from(false)));
+        let l1 = IdNode::from(Expr2::Int("5".to_string()));
+        let r1 = IdNode::from(Expr2::Int("-1".to_string()));
+        let l2 = IdNode::from(Expr2::Bool("true".to_string()));
+        let r2 = IdNode::from(Expr2::Bool("false".to_string()));
 
         let e1 = Expr2::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
         let e2 = Expr2::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};

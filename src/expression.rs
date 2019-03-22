@@ -151,20 +151,20 @@ pub enum Stmt2 {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr2 {
     MatchExpr       {value: Box<IdNode<Expr2>>, cases: Vec<(IdNode<Expr2>, IdNode<Expr2>)>},
-    ComparisonExpr  {operator: ComparisonOperator, left: Box<IdNode<Expr2>>, right: Box<IdNode<Expr2>>},
+    ComparisonExpr  {operator: ComparisonOperator, left: Box<IdNode<Expr2>>, right: Box<IdNode<Expr2>>},//TODO take this out
     BinaryExpr      {operator: BinaryOperator, left: Box<IdNode<Expr2>>, right: Box<IdNode<Expr2>>},
     UnaryExpr       {operator: UnaryOperator, operand: Box<IdNode<Expr2>>},
     FunctionCall    {function: Box<IdNode<Expr2>>, args: Vec<IdNode<Expr2>>, kwargs: Vec<(Identifier, IdNode<Expr2>)>},
-    AttributeAccess {container: Box<IdNode<Expr2>>, attributes: Vec<Identifier>},
+    AttributeAccess {base: Box<IdNode<Expr2>>, attributes: Vec<Identifier>},
     Index           {slices: Vec<(Option<IdNode<Expr2>>, Option<IdNode<Expr2>>, Option<IdNode<Expr2>>)>},
     VecComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
     MapComprehension{keys: Box<IdNode<Expr2>>, values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
     SetComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
     IdentifierExpr  (Identifier),
-    Bool            (Boolean),
-    Int             (IntegerLiteral),
-    Float           (FloatLiteral),
+    Bool            (String),
+    Int             (String),
+    Float           (String),
     String          (String),
     VecLiteral      (Vec<IdNode<Expr2>>),
     SetLiteral      (Vec<IdNode<Expr2>>),
@@ -260,6 +260,21 @@ pub struct ComprehensionIter {
 pub enum PostIdent {
     Call{args: Vec<Expr>, kwargs: Vec<(Identifier, Expr)>},
     Index{slices: Vec<(Option<Expr>, Option<Expr>, Option<Expr>)>},
+    Access{attributes: Vec<Identifier>}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ComprehensionIter2 {
+    pub iter_vars: Vec<Identifier>,
+    pub iterator: Box<IdNode<Expr2>>,
+    pub if_clauses: Vec<IdNode<Expr2>>
+}
+
+/// A helper Enum for trailers.
+#[derive (Debug, Clone, PartialEq, Eq, Hash)]
+pub enum PostIdent2 {
+    Call{args: Vec<IdNode<Expr2>>, kwargs: Vec<(Identifier, IdNode<Expr2>)>},
+    Index{slices: Vec<(Option<IdNode<Expr2>>, Option<IdNode<Expr2>>, Option<IdNode<Expr2>>)>},
     Access{attributes: Vec<Identifier>}
 }
 

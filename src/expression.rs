@@ -157,10 +157,10 @@ pub enum Expr2 {
     FunctionCall    {function: Box<IdNode<Expr2>>, args: Vec<IdNode<Expr2>>, kwargs: Vec<(Identifier, IdNode<Expr2>)>},
     AttributeAccess {base: Box<IdNode<Expr2>>, attributes: Vec<Identifier>},
     Index           {slices: Vec<(Option<IdNode<Expr2>>, Option<IdNode<Expr2>>, Option<IdNode<Expr2>>)>},
-    VecComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
-    GenComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
-    MapComprehension{keys: Box<IdNode<Expr2>>, values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
-    SetComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter>},
+    VecComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
+    GenComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
+    MapComprehension{keys: Box<IdNode<Expr2>>, values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
+    SetComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
     IdentifierExpr  (Identifier),
     Bool            (String),
     Int             (String),
@@ -475,6 +475,78 @@ impl <T> From<T> for IdNode<T> {
             data: input,
             scope: empty_scope()
         };
+    }
+}
+
+impl From<bool> for IdNode<Expr2> {
+    fn from(input: bool) -> Self {
+        let expr = Expr2::from(input);
+        return IdNode {
+            id: get_next_id(),
+            data: expr,
+            scope: empty_scope()
+        };
+    }
+}
+
+impl <'a> From<&'a str> for IdNode<Expr2> {
+    fn from(input: &'a str) -> Self {
+        let expr: Expr2 = Expr2::from(input);
+        return IdNode {
+            id: get_next_id(),
+            data: expr,
+            scope: empty_scope()
+        };
+    }
+}
+
+impl From<i64> for IdNode<Expr2> {
+    fn from(input: i64) -> Self {
+        let expr: Expr2 = Expr2::from(input);
+        return IdNode {
+            id: get_next_id(),
+            data: expr,
+            scope: empty_scope()
+        };
+    }
+}
+
+impl From<f64> for IdNode<Expr2> {
+    fn from(input: f64) -> Self {
+        let expr: Expr2 = Expr2::from(input);
+        return IdNode {
+            id: get_next_id(),
+            data: expr,
+            scope: empty_scope()
+        };
+    }
+}
+
+impl <'a> From<&'a str> for Expr2 {
+    fn from(input: &'a str) -> Self {
+        return Expr2::IdentifierExpr(Identifier::from(input));
+    }
+}
+impl From<bool> for Expr2 {
+    fn from(input: bool) -> Self {
+        return Expr2::Bool(input.to_string());
+    }
+}
+impl<'a> From<&'a [u8]> for Expr2 {
+    fn from(input: &'a [u8]) -> Self {
+        return Expr2::IdentifierExpr (Identifier::from(input));
+    }
+}
+
+impl From<i64> for Expr2 {
+    fn from(input: i64) -> Self {
+        return Expr2::Int(input.to_string());
+    }
+}
+
+impl From<f64> for Expr2 {
+    fn from(input: f64) -> Self {
+        return Expr2::Float(input.to_string());
     }
 }
 

@@ -11,6 +11,35 @@ impl TypeRewrite<IDedNode> for IDedNode {
     }
 }
 
+impl <T> TypeRewrite<IdNode<T>> for IdNode<T>
+    where T: TypeRewrite<T> {
+    fn type_based_rewrite(self) -> IdNode<T> {
+        let new_data = self.data.type_based_rewrite();
+        panic!();
+    }
+}
+
+impl TypeRewrite<Module2> for Module2 {
+    fn type_based_rewrite(self) -> Module2 {
+        panic!();
+    }
+}
+impl TypeRewrite<Block2> for Block2 {
+    fn type_based_rewrite(self) -> Block2 {
+        panic!();
+    }
+}
+impl TypeRewrite<Stmt2> for Stmt2 {
+    fn type_based_rewrite(self) -> Stmt2 {
+        panic!();
+    }
+}
+impl TypeRewrite<Expr2> for Expr2 {
+    fn type_based_rewrite(self) -> Expr2 {
+        panic!();
+    }
+}
+
 
 impl TypeRewrite<IDableNode> for IDableNode {
     fn type_based_rewrite(self) -> IDableNode {

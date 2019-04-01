@@ -15,7 +15,11 @@ impl <T> TypeRewrite<IdNode<T>> for IdNode<T>
     where T: TypeRewrite<T> {
     fn type_based_rewrite(self) -> IdNode<T> {
         let new_data = self.data.type_based_rewrite();
-        panic!();
+        return IdNode{
+            id: self.id,
+            data: new_data,
+            scope: self.scope
+        };
     }
 }
 

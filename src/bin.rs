@@ -16,7 +16,7 @@ fn main() {
     f.read_to_string(&mut file_contents).unwrap();
 
     let compiler = Compilation{file: args[1].clone(), counter: 0};
-    let parse_result = compiler.module(file_contents.as_bytes());
+    let parse_result = parser::module(file_contents.as_bytes());
 
     //let names_maps = call compiler layers assign_node_ids here;
     let parser_out = output(parse_result);

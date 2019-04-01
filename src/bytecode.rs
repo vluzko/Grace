@@ -218,9 +218,9 @@ impl ASTNode for Stmt2 {
         let bytecode = match self {
             &Stmt2::FunctionDecStmt {ref name, ref args, ref block, ..} => {
                 // Scope check
-                panic!()
-//                 let (declarations, _) = self.get_scopes();
-//                 let body_bytecode = body.generate_bytecode();
+                panic!();
+                // let (declarations, _) = self.get_scopes();
+//                 let body_bytecode = block.generate_bytecode();
 //                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
 //                 // get the declarations that are not args, i.e. the local variables
@@ -325,9 +325,18 @@ impl ASTNode for Expr2 {
             &Expr2::IdentifierExpr (ref ident) => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
-            &Expr2::Int(ref int_lit) => int_lit.clone(),
-            &Expr2::Float(ref float_lit) => float_lit.clone(),
-            &Expr2::Bool(ref bool_lit) => bool_lit.to_string(),
+            &Expr2::Int(ref int_lit) => {
+                format!("i32.const {}", int_lit)
+            },
+            &Expr2::Float(ref float_lit) => {
+                format!("f64.const {}", float_lit)
+            },
+            &Expr2::Bool(ref bool_lit) => {
+                match bool_lit {
+                    true => "1".to_string(),
+                    false => "0".to_string()
+                }
+            },
             _ => panic!()
         };
         return bytecode_rep;
@@ -337,6 +346,7 @@ impl ASTNode for Expr2 {
         0
     }
 }
+
 
 impl ASTNode for ComparisonOperator {
     fn generate_bytecode(&self) -> String {
@@ -505,7 +515,7 @@ get_local $x
 
     #[test]
     pub fn test_generate_divide() {
-        let div_expr =output( parser::expression("8 / 9".as_bytes())).type_based_rewrite();
+        let div_expr = output( parser::expression("8 / 9".as_bytes())).type_based_rewrite();
         assert_eq!(div_expr.generate_bytecode(), "i32.const 8\nf64.convert_s\ni32.const 9\nf64.convert_s\nf64.div".to_string());
     }
 

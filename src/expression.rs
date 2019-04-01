@@ -171,7 +171,7 @@ pub enum Expr2 {
     MapComprehension{keys: Box<IdNode<Expr2>>, values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
     SetComprehension{values: Box<IdNode<Expr2>>, iterators: Vec<ComprehensionIter2>},
     IdentifierExpr  (Identifier),
-    Bool            (String),
+    Bool            (bool),
     Int             (String),
     Float           (String),
     String          (String),
@@ -561,7 +561,7 @@ impl <'a> From<&'a str> for Expr2 {
 }
 impl From<bool> for Expr2 {
     fn from(input: bool) -> Self {
-        return Expr2::Bool(input.to_string());
+        return Expr2::Bool(input);
     }
 }
 impl<'a> From<&'a [u8]> for Expr2 {

@@ -11,7 +11,6 @@ extern crate cached;
 pub mod utils;
 pub mod grace_error;
 pub mod parser;
-pub mod parser_1;
 pub mod expression;
 pub mod bytecode;
 pub mod scoping;

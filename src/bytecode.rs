@@ -173,6 +173,171 @@ impl ASTNode for Expr {
     }
 }
 
+impl <T> ASTNode for IdNode<T> where T: ASTNode {
+    fn generate_bytecode(&self) -> String {
+        return self.data.generate_bytecode();
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
+
+impl ASTNode for Module2 {
+    fn generate_bytecode(&self) -> String {
+        let decls = self.declarations.iter().map(|x| x.generate_bytecode());
+        let joined = itertools::join(decls, "\n");
+        return format!("(module\n\
+(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
+(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
+(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import 'memory_management' 'mem' (memory (;0;) 1))
+{}\n)\n", joined).to_string();
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
+
+impl ASTNode for Block2 {
+    fn generate_bytecode(&self) -> String {
+        let statement_bytecode = self.statements.iter().map(
+            |x| x.generate_bytecode());
+        let bytecode = itertools::join(statement_bytecode, "\n");
+        return bytecode;
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
+
+impl ASTNode for Stmt2 {
+    fn generate_bytecode(&self) -> String {
+        let bytecode = match self {
+            &Stmt2::FunctionDecStmt {ref name, ref args, ref block, ..} => {
+                // Scope check
+                panic!()
+//                 let (declarations, _) = self.get_scopes();
+//                 let body_bytecode = body.generate_bytecode();
+//                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+
+//                 // get the declarations that are not args, i.e. the local variables
+//                 let args_set: HashSet<String> = HashSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
+// //                let kwargs = HashSet::from_iter(keyword_args)
+//                 let local_var_declarations = declarations.difference(&args_set);
+//                 let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
+//                 let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+//                     func_name = name.to_string(),
+//                     params = params,
+//                     local_vars = local_vars,
+//                     body = body_bytecode
+//                 );
+//                 func_dec
+            },
+            &Stmt2::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
+                match operator {
+                    Assignment::Normal => {
+                        let identifier_bytecode = name.generate_bytecode();
+                        let expression_bytecode = expression.generate_bytecode();
+                        let assignment_bytecode = format!("{value}\nset_local ${identifier}",
+                        value = expression_bytecode,
+                        identifier = identifier_bytecode);
+                        assignment_bytecode
+                    },
+                    _ => panic!()
+                }
+	        },
+	        // Only handles if x {foo}, no elifs or else
+	        &Stmt2::IfStmt {ref condition, ref block, ref else_block, ..} => {
+	            let condition_bytecode = condition.generate_bytecode();
+	            let main_block_bytecode = block.generate_bytecode();
+	            let else_block_bytecode = match else_block {
+	                Some(content) => content.generate_bytecode(),
+	                None => "".to_string()
+	            };
+	            let if_bytecode = format!("{condition_bytecode}\nif (result i32)\n{main_block_bytecode}\nelse\n{else_block_bytecode}\nend",
+	            condition_bytecode = condition_bytecode, main_block_bytecode = main_block_bytecode,
+	            else_block_bytecode = else_block_bytecode);
+	            if_bytecode
+	        },
+            &Stmt2::ReturnStmt (ref value) => {
+                value.generate_bytecode()
+            },
+            &Stmt2::LetStmt {ref typed_name, ref expression, ..} => {
+	        let identifier_bytecode = typed_name.name.generate_bytecode();
+                let expression_bytecode = expression.generate_bytecode();
+                let assignment_bytecode = format!("{value}\nset_local ${identifier}",
+                value = expression_bytecode,
+                identifier = identifier_bytecode);
+                assignment_bytecode
+            },
+            &Stmt2::WhileStmt {ref condition, ref block, ..} => {
+                let block_bytecode = block.generate_bytecode();
+                let condition_bytecode = condition.generate_bytecode();
+                let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
+                while_bytecode
+            },
+	        _ => panic!()
+        };
+
+        return bytecode;
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
+
+impl ASTNode for Expr2 {
+    fn generate_bytecode(&self) -> String {
+        let bytecode_rep = match self {
+            &Expr2::ComparisonExpr {ref operator, ref left, ref right, ..} => {
+                let first = left.generate_bytecode();
+                let second = right.generate_bytecode();
+                let operator = operator.generate_bytecode();
+                format!("{}\n{}\n{}", first, second, operator)
+            },
+            &Expr2::BinaryExpr {ref operator, ref left, ref right, ..} => {
+//                if operator == &BinaryOperator::Add {
+//                    operator_add(left, right)
+//                } else {
+                    let operator_bytecode = operator.generate_typed_bytecode(&operator.get_return_type(&left.get_type(), &right.get_type()));
+                    let first = left.generate_bytecode();
+                    let second = right.generate_bytecode();
+                    format!("{}\n{}\n{}", first, second, operator_bytecode)
+//                }
+            },
+            &Expr2::UnaryExpr {ref operator, ref operand, ..} => {
+                let operator_bytecode = operator.generate_typed_bytecode(&operand.get_type());
+                let operand_bytecode = operand.generate_bytecode();
+                format!("{}\n{}", operand_bytecode, operator_bytecode)
+            },
+            &Expr2::FunctionCall {ref function, ref args, ref kwargs, ..} => {
+                let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
+                let call = match &function.data {
+                    &Expr2::IdentifierExpr (ref ident) => format!("call ${func_name}", func_name=ident.to_string()),
+                    _ => panic!()
+                };
+                format!("{loads}\n{call}", loads=arg_load, call=call)
+            },
+            &Expr2::IdentifierExpr (ref ident) => {
+                format!("get_local ${ident}", ident=ident.to_string())
+            },
+            &Expr2::Int(ref int_lit) => int_lit.clone(),
+            &Expr2::Float(ref float_lit) => float_lit.clone(),
+            &Expr2::Bool(ref bool_lit) => bool_lit.to_string(),
+            _ => panic!()
+        };
+        return bytecode_rep;
+    }
+
+    fn get_id(&self) -> i64 {
+        0
+    }
+}
+
 impl ASTNode for ComparisonOperator {
     fn generate_bytecode(&self) -> String {
         return match self {

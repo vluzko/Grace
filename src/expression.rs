@@ -113,16 +113,25 @@ pub enum Expr {
     SetComprehension{values: Box<Expr>, iterators: Vec<ComprehensionIter>}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+
+
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct IdNode<T> {
     pub id: u64,
     pub data: T,
     pub scope: Scope
 }
 
+impl <T> PartialEq for IdNode<T> where T:PartialEq {
+    fn eq(&self, other: &IdNode<T>) -> bool {
+        return self.data == other.data && self.scope == other.scope;
+    }
+}
+
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module2 {
-    pub declarations: Vec<Stmt>
+    pub declarations: Vec<IdNode<Stmt2>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -438,32 +447,6 @@ impl Display for Identifier {
         write!(f, "{}", self.name)
     }
 }
-
-/// Into implementations
-
-// impl Into<IDedNode> for Module {
-//     fn into(self) -> IDedNode {
-//         return IDedNode {id: get_next_id(), node: IDableNode::M(self)}
-//     }
-// }
-
-// impl Into<IDedNode> for Block {
-//     fn into(self) -> IDedNode {
-//         return IDedNode {id: get_next_id(), node: IDableNode::B(self)}
-//     }
-// }
-
-// impl Into<IDedNode> for Stmt {
-//     fn into(self) -> IDedNode {
-//         return IDedNode {id: get_next_id(), node: IDableNode::S(self)}
-//     }
-// }
-
-// impl Into<IDedNode> for Expr {
-//     fn into(self) -> IDedNode {
-//         return IDedNode {id: get_next_id(), node: IDableNode::E(self)}
-//     }
-// }
 
 /// From implementations
 

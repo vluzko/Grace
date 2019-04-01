@@ -2,10 +2,8 @@ extern crate rand;
 extern crate log;
 #[macro_use(c)]
 extern crate cute;
-#[macro_use(hashmap, hashset)]
+#[macro_use(hashmap)]
 extern crate maplit;
-#[macro_use(cached)]
-extern crate cached;
 
 #[macro_use]
 pub mod utils;

@@ -5,7 +5,7 @@ pub trait Layer<T>{
 pub struct Bytecode{}
 
 impl Layer<String> for Bytecode {
-    fn run_from_start(input: &[u8]) -> String {
+    fn run_from_start(_input: &[u8]) -> String {
         panic!()
     }
 }
@@ -17,14 +17,6 @@ pub struct Compilation {
     pub file: String,
     /// Counter for uniquely identifying every ASTNode.
     pub counter: i64
-}
-
-
-impl Compilation {
-
-    fn parse(code: &[u8]) {
-
-    }
 }
 
 use std::sync::atomic::{AtomicUsize, Ordering};

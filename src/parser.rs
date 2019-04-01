@@ -387,7 +387,7 @@ fn break_stmt(input: &[u8]) -> StmtRes {
         )
     );
 
-    return fmap_idnode(parse_result, |x| Stmt::BreakStmt);
+    return fmap_idnode(parse_result, |_x| Stmt::BreakStmt);
 }
 
 fn pass_stmt(input: &[u8]) -> StmtRes {

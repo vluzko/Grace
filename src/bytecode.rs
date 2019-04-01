@@ -143,7 +143,7 @@ impl ASTNode for Expr {
                 let operand_bytecode = operand.generate_bytecode();
                 format!("{}\n{}", operand_bytecode, operator_bytecode)
             },
-            &Expr::FunctionCall {ref function, ref args, ref kwargs, ..} => {
+            &Expr::FunctionCall {ref function, ref args, ..} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode()), "\n");
                 let call = match &function.data {
                     &Expr::IdentifierExpr (ref ident) => format!("call ${func_name}", func_name=ident.to_string()),

@@ -20,8 +20,20 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn get_declaration(self, name: Identifier) -> Option<CanModifyScope> {
-        panic!();
+    pub fn get_declaration(&self, name: Identifier) -> Option<&CanModifyScope> {
+        let name_pointer = &name as *const Identifier;
+        if self.declarations.contains_key(&name_pointer) {
+            return self.declarations.get(&name_pointer);
+        } else {
+            return match self.parent_scope {
+                Some(parent) => {
+                    unsafe {
+                        (*parent).get_declaration(name)
+                    }
+                },
+                None => None
+            };
+        }
     }
 }
 
@@ -46,11 +58,11 @@ pub trait Scoped<T> {
 }
 
 impl Scoped<Expr>  for IdNode<Expr> {
-    fn get_scope(self, parent_scope: Scope) -> Scope {
+    fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
 
-    fn check_scope2(self, scope: Scope) -> bool {
+    fn check_scope2(self, _scope: Scope) -> bool {
         panic!();
     }
 
@@ -76,11 +88,11 @@ impl Scoped<Expr>  for IdNode<Expr> {
 }
 
 impl Scoped<Stmt> for IdNode<Stmt> {
-    fn get_scope(self, parent_scope: Scope) -> Scope {
+    fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
 
-    fn check_scope2(self, scope: Scope) -> bool {
+    fn check_scope2(self, _scope: Scope) -> bool {
         panic!();
     }
 
@@ -88,33 +100,20 @@ impl Scoped<Stmt> for IdNode<Stmt> {
     fn gen_scopes(self, parent_scope: &Scope) -> IdNode<Stmt> {
         let new_node = match self.data {
             Stmt::LetStmt{typed_name, expression} => {
-                
                 let new_value = expression.gen_scopes(parent_scope);
                 // Build new scope
-                // let mut declarations = BTreeSet::new();
-                // let mut declaration_order = BTreeMap:: new();
                 // TODO: Reference counted reference to value name.
-                // let new_scope = Scope{parent_scope: Some(Box::new(parent_scope.clone())), declarations, declaration_order};
 
                 // Build new statement
-                let identifier_pointer = &typed_name.name as *const Identifier;
                 let new_let = Stmt::LetStmt{typed_name, expression: new_value};
 
                 let new_node = IdNode{id: self.id, data: new_let, scope: parent_scope.clone()};
-                let raw_pointer = &new_node as *const IdNode<Stmt>;
-                // parent_scope.declarations.insert(identifier_pointer, CanModifyScope::Statement(raw_pointer));
-                // parent_scope.declaration_order.insert(identifier_pointer, parent_scope.declarations.len() - 1);
                 new_node
             },
             Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block, return_type} => {
                 // TODO: Handle keyword args expressions. They should receive just the parent scope.
                 let mut declarations = BTreeMap::new();
                 let mut declaration_order = BTreeMap::new();
-
-                // declarations.insert(&name as *const Identifier, &self as *const IdNode<Stmt>);
-                let raw_name = &name as *const Identifier;
-                // let k = parent_scope.declaration_order.len();
-                // parent_scope.declaration_order.insert(raw_name, k - 1);
 
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
@@ -162,29 +161,23 @@ impl Scoped<Stmt> for IdNode<Stmt> {
 }
 
 impl Scoped<Block> for IdNode<Block> {
-    fn get_scope(self, parent_scope: Scope) -> Scope {
+    fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
 
-    fn check_scope2(self, scope: Scope) -> bool {
+    fn check_scope2(self, _scope: Scope) -> bool {
         panic!();
     }
 
         /// Check scope and generate
     fn gen_scopes(self, parent_scope: &Scope) -> IdNode<Block> {
-        let mut declarations = BTreeMap::new();
-        let mut declaration_order = BTreeMap::new();
-
-        
+        let declarations = BTreeMap::new();
+        let declaration_order = BTreeMap::new();
 
         let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
 
-        let new_stmts: Vec<IdNode<Stmt>> = self.data.statements.into_iter().enumerate().map(|(i, stmt)| {
-            
+        let new_stmts: Vec<IdNode<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
             let new_stmt = stmt.gen_scopes(&new_scope);
-            // if !new_stmt.scope.declarations.is_empty() {
-            //     declarations.append(new_stmt.scope.declarations.)
-            // }
             return new_stmt;
         }).collect();
 

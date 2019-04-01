@@ -5,11 +5,11 @@ pub trait TypeRewrite<T> {
     fn type_based_rewrite(self) -> T;
 }
 
-impl <T> TypeRewrite<IdNode<T>> for IdNode<T>
+impl <T> TypeRewrite<Node<T>> for Node<T>
     where T: TypeRewrite<T> {
-    fn type_based_rewrite(self) -> IdNode<T> {
+    fn type_based_rewrite(self) -> Node<T> {
         let new_data = self.data.type_based_rewrite();
-        return IdNode{
+        return Node{
             id: self.id,
             data: new_data,
             scope: self.scope

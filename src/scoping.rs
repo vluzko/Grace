@@ -6,8 +6,8 @@ extern crate cute;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CanModifyScope {
-    Statement(*const IdNode<Stmt>),
-    Expression(*const IdNode<Expr>),
+    Statement(*const Node<Stmt>),
+    Expression(*const Node<Expr>),
     Argument
 }
 
@@ -54,10 +54,10 @@ pub trait Scoped<T> {
     fn check_scope2(self, scope: Scope) -> bool;
 
     /// Generate scopes recursively.
-    fn gen_scopes(self, parent_scope: &Scope) -> IdNode<T>;
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<T>;
 }
 
-impl Scoped<Expr>  for IdNode<Expr> {
+impl Scoped<Expr>  for Node<Expr> {
     fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
@@ -67,18 +67,18 @@ impl Scoped<Expr>  for IdNode<Expr> {
     }
 
         /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> IdNode<Expr> {
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Expr> {
         
-        let new_node: IdNode<Expr> = match self.data {
+        let new_node: Node<Expr> = match self.data {
             Expr::BinaryExpr{operator, left, right} => {
                 let new_left = left.gen_scopes(parent_scope);
                 let new_right = right.gen_scopes(parent_scope);
                 let new_expr = Expr::BinaryExpr{operator: operator, left: Box::new(new_left), right: Box::new(new_right)};
                 let new_id = self.id;
-                IdNode{id: new_id, data: new_expr, scope: parent_scope.clone()}
+                Node{id: new_id, data: new_expr, scope: parent_scope.clone()}
             },
             Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
-                IdNode{id: self.id, data: self.data, scope: parent_scope.clone()}
+                Node{id: self.id, data: self.data, scope: parent_scope.clone()}
             },
             _ => panic!()
         };
@@ -87,7 +87,7 @@ impl Scoped<Expr>  for IdNode<Expr> {
     }
 }
 
-impl Scoped<Stmt> for IdNode<Stmt> {
+impl Scoped<Stmt> for Node<Stmt> {
     fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
@@ -97,7 +97,7 @@ impl Scoped<Stmt> for IdNode<Stmt> {
     }
 
         /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> IdNode<Stmt> {
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Stmt> {
         let new_node = match self.data {
             Stmt::LetStmt{typed_name, expression} => {
                 let new_value = expression.gen_scopes(parent_scope);
@@ -107,7 +107,7 @@ impl Scoped<Stmt> for IdNode<Stmt> {
                 // Build new statement
                 let new_let = Stmt::LetStmt{typed_name, expression: new_value};
 
-                let new_node = IdNode{id: self.id, data: new_let, scope: parent_scope.clone()};
+                let new_node = Node{id: self.id, data: new_let, scope: parent_scope.clone()};
                 new_node
             },
             Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block, return_type} => {
@@ -148,8 +148,8 @@ impl Scoped<Stmt> for IdNode<Stmt> {
                 let new_body = block.gen_scopes(&new_scope);
                 let mut new_stmt = Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block: new_body, return_type};
 
-                let mut new_node = IdNode{id: self.id, data: new_stmt, scope: new_scope};
-                // parent_scope.declarations.insert(raw_name, CanModifyScope::Statement(&new_node as *const IdNode<Stmt>));
+                let mut new_node = Node{id: self.id, data: new_stmt, scope: new_scope};
+                // parent_scope.declarations.insert(raw_name, CanModifyScope::Statement(&new_node as *const Node<Stmt>));
 
                 new_node
             },
@@ -160,7 +160,7 @@ impl Scoped<Stmt> for IdNode<Stmt> {
     }
 }
 
-impl Scoped<Block> for IdNode<Block> {
+impl Scoped<Block> for Node<Block> {
     fn get_scope(self, _parent_scope: Scope) -> Scope {
         panic!()
     }
@@ -170,13 +170,13 @@ impl Scoped<Block> for IdNode<Block> {
     }
 
         /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> IdNode<Block> {
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Block> {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
 
         let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
 
-        let new_stmts: Vec<IdNode<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
+        let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
             let new_stmt = stmt.gen_scopes(&new_scope);
             return new_stmt;
         }).collect();
@@ -194,7 +194,7 @@ impl Scoped<Block> for IdNode<Block> {
                 Stmt::LetStmt{ref typed_name, ..} => {
                     let raw_name = &typed_name.name as *const Identifier;
                     new_scope.declaration_order.insert(raw_name, i);
-                    let scope_mod = CanModifyScope::Statement(stmt as *const IdNode<Stmt>);
+                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
                     new_scope.declarations.insert(raw_name, scope_mod);
                 },
                 _ => {}
@@ -202,7 +202,7 @@ impl Scoped<Block> for IdNode<Block> {
         }
 
         let new_block = Block{statements: new_stmts};
-        return IdNode{
+        return Node{
             id: self.id,
             data: new_block,
             scope: new_scope
@@ -235,19 +235,19 @@ mod test {
         // Block is:
         // let a = 5 + -1
         // let b = true and false
-        let l1 = IdNode::from(Expr::Int("5".to_string()));
-        let r1 = IdNode::from(Expr::Int("-1".to_string()));
-        let l2 = IdNode::from(true);
-        let r2 = IdNode::from(false);
+        let l1 = Node::from(Expr::Int("5".to_string()));
+        let r1 = Node::from(Expr::Int("-1".to_string()));
+        let l2 = Node::from(true);
+        let r2 = Node::from(false);
 
         let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
         let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
 
-        let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: IdNode::from(e1)};
-        let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: IdNode::from(e2)};
+        let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
+        let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
 
-        let block = IdNode::from(Block{
-            statements: vec!(IdNode::from(s1), IdNode::from(s2))
+        let block = Node::from(Block{
+            statements: vec!(Node::from(s1), Node::from(s2))
         });
 
         let scoped = block.gen_scopes(&mut empty_scope());

@@ -6,7 +6,7 @@ extern crate itertools;
 
 /// ASTNode implementations
 
-impl <T> ASTNode for IdNode<T> where T: ASTNode {
+impl <T> ASTNode for Node<T> where T: ASTNode {
     fn generate_bytecode(&self) -> String {
         return self.data.generate_bytecode();
     }

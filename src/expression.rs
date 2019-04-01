@@ -252,6 +252,55 @@ impl Expr {
     }
 }
 
+/// Impl for IdNodes
+impl <T> IdNode<T> {
+    pub fn replace(&self, new_data: T) -> IdNode<T> {
+        return IdNode {
+            id: self.id,
+            data: new_data,
+            scope: self.scope.clone()
+        };
+    }
+}
+
+impl IdNode<Expr2> {
+    pub fn get_type(&self) -> Type {
+        return self.data.get_type();
+    }
+}
+
+/// Impl for Expr
+impl Expr2 {
+    pub fn get_type(&self) -> Type {
+        match self {
+            &Expr2::String (..) => Type::string,
+            &Expr2::Bool (..) => Type::boolean,
+            &Expr2::Int (..) => Type::i32,
+            &Expr2::Float (..) => Type::f64,
+            &Expr2::UnaryExpr {ref operator, ref operand, ..} => {
+                match operator {
+                    &UnaryOperator::ToF32 => Type::f32,
+                    &UnaryOperator::ToF64 => Type::f64,
+                    &UnaryOperator::ToI32 => Type::i32,
+                    &UnaryOperator::ToI64 => Type::i64,
+                    _ => operand.get_type()
+                }
+            },
+            &Expr2::BinaryExpr {ref operator, ref left, ref right, ..} => {
+                return operator.get_return_type(&left.get_type(), &right.get_type());
+            },
+            &Expr2::IdentifierExpr(ref name) => {
+                // Get declaration
+                panic!()
+            },
+            _ => {
+                println!("{:?}", self);
+                panic!()
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum TypeAnnotation {
     Simple(Identifier)

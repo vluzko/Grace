@@ -21,22 +21,89 @@ impl <T> TypeRewrite<IdNode<T>> for IdNode<T>
 
 impl TypeRewrite<Module2> for Module2 {
     fn type_based_rewrite(self) -> Module2 {
-        panic!();
+        let new_decs = c![x.type_based_rewrite(), for x in self.declarations];
+        return Module2{ declarations: new_decs};
     }
 }
 impl TypeRewrite<Block2> for Block2 {
     fn type_based_rewrite(self) -> Block2 {
-        panic!();
+        let new_stmts = c![x.type_based_rewrite(), for x in self.statements];
+        return Block2{statements: new_stmts};
     }
 }
 impl TypeRewrite<Stmt2> for Stmt2 {
     fn type_based_rewrite(self) -> Stmt2 {
-        panic!();
+        
+        let new_stmt = match self {
+            Stmt2::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
+                Stmt2::FunctionDecStmt {block: block.type_based_rewrite(), name, args, vararg, kwargs, varkwarg, return_type}
+            },
+            Stmt2::AssignmentStmt {mut expression, name, operator} => {
+                expression = expression.type_based_rewrite();
+                Stmt2::AssignmentStmt {name, operator, expression: expression.type_based_rewrite()}
+            },
+            Stmt2::IfStmt {condition, block, elifs,  else_block} => {
+                let new_elifs =  c![(elif.0.type_based_rewrite(), elif.1.type_based_rewrite()), for elif in elifs];
+                let new_else_block = match else_block {
+                    None => None,
+                    Some(block) => Some(block.type_based_rewrite())
+                };
+                Stmt2::IfStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite(), elifs: new_elifs, else_block: new_else_block}
+            },
+            Stmt2::ReturnStmt (value) => {
+                Stmt2::ReturnStmt (value.type_based_rewrite())
+            },
+            Stmt2::LetStmt {typed_name, expression} => {
+                Stmt2::LetStmt {typed_name, expression: expression.type_based_rewrite()}
+            },
+            Stmt2::WhileStmt {condition, block} => {
+                Stmt2::WhileStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite()}
+            },
+            _ => self
+        };
+        return new_stmt;
     }
 }
 impl TypeRewrite<Expr2> for Expr2 {
     fn type_based_rewrite(self) -> Expr2 {
-        panic!();
+        let new_expr = match self {
+            Expr2::ComparisonExpr {mut left, mut right, operator} => {
+                let left = Box::new(left.type_based_rewrite());
+                let right = Box::new(right.type_based_rewrite());
+                Expr2::ComparisonExpr {left, right, operator}
+            },
+            Expr2::BinaryExpr {operator, left, right} => {
+                let left_type = &left.get_type();
+                let right_type = &right.get_type();
+                let return_type = &operator.get_return_type(left_type, right_type);
+                let new_left = if left_type != return_type {
+                    let conversion_op = UnaryOperator::from(return_type);
+                    let left_expr = Expr2::UnaryExpr { operator: conversion_op, operand: left.clone()};
+                    let node = left.replace(left_expr);
+                    Box::new(node)
+                } else {
+                    left
+                };
+                let new_right = if right_type != return_type {
+                    let conversion_op = UnaryOperator::from(return_type);
+                    let right_expr = Expr2::UnaryExpr { operator: conversion_op, operand: right.clone()};
+                    let node = right.replace(right_expr);
+                    Box::new(node)
+                } else {
+                    right
+                };
+                Expr2::BinaryExpr {operator: operator, left: new_left, right: new_right}
+            },
+            Expr2::FunctionCall {function, args, kwargs} => {
+                let new_func_expr = Box::new(function.type_based_rewrite());
+                let new_args = args.into_iter().map(|x| x.type_based_rewrite()).collect();
+                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite())).collect();
+                Expr2::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
+            },
+            _ => self
+        };
+
+        return new_expr;
     }
 }
 

@@ -6,7 +6,7 @@ extern crate cute;
 extern crate maplit;
 
 #[macro_use]
-pub mod utils;
+pub mod parser_utils;
 pub mod grace_error;
 pub mod parser;
 pub mod expression;

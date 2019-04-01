@@ -214,7 +214,7 @@ impl Scoped<Block> for Node<Block> {
 mod test {
     use parser::*;
     use super::*;
-    use utils::output;
+    use parser_utils::output;
 
     #[test]
     fn test_function_locals() {

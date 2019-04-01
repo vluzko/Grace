@@ -3,7 +3,7 @@ use std::fs::File;
 use std::io::prelude::*;
 extern crate grace_lib;
 use grace_lib::parser;
-use grace_lib::utils::*;
+use grace_lib::parser_utils::*;
 use grace_lib::ast_node::*;
 use grace_lib::type_rewrites::*;
 

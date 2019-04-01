@@ -244,7 +244,7 @@ mod tests {
 
     use super::*;
     use parser;
-    use utils::*;
+    use parser_utils::*;
     use type_rewrites::TypeRewrite;
 
     #[test]

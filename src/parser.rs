@@ -9,81 +9,12 @@ extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
 use expression::*;
-use utils::*;
+use parser_utils::*;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
 type StmtRes<'a> = IResult<&'a[u8], StmtNode>;
 type ExprRes<'a> = IResult<&'a [u8], ExprNode>;
-// type NodeRes<'a> = IResult<&'a[u8], Node>;
-
-
-/// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
-/// if, elif, except, fn are all rules of this form.
-macro_rules! line_then_block (
-    ($i:expr, $keyword: expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
-        tuple!($i,
-            delimited!(
-                terminated!(
-                    tag!($keyword),
-                    not!(valid_identifier_char)
-                ),
-                inline_wrapped!($submac!($($args)*)),
-                ending_colon
-            ),
-            call!(block, $indent + 1)
-        )
-    );
-
-    ($i:expr, $keyword: expr, $func: expr, $indent: expr) => (
-        line_then_block!($i, $keyword, call!($func), $indent)
-    );
-);
-
-/// Create a rule of the form: KEYWORD COLON BLOCK
-/// else and try are both rules of this form.
-macro_rules! keyword_then_block (
-    ($i:expr, $keyword: expr, $indent: expr) => (
-        match line_then_block!($i, $keyword, inline_whitespace, $indent) {
-            IResult::Error(a)      => IResult::Error(a),
-            IResult::Incomplete(i) => IResult::Incomplete(i),
-            IResult::Done(remaining, (_,o)) => IResult::Done(remaining, o)
-        }
-    );
-);
-
-named!(dec_seq<&[u8], &[u8]>,
-    recognize!(many1!(dec_digit))
-);
-
-named!(sign<&[u8], &[u8]>,
-    recognize!(alt!(tag!("+") | tag!("-")))
-);
-
-named!(exponent<&[u8], (Option<&[u8]>, &[u8])>,
-    preceded!(
-        alt!(tag!("e") | tag!("E")),
-        tuple!(
-            opt!(sign),
-            dec_seq
-        )
-    )
-);
-
-pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
-    let parse_result = preceded!(input,
-    opt!(between_statement),
-    many1!(complete!(
-        terminated!(
-            call!(function_declaration, 0),
-            between_statement
-        )
-    ))
-);
-
-return fmap_node(parse_result, |x| Module{declarations: x}.into());
-}
-
 
 pub fn reserved_list() -> Vec<&'static str>{
     let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield", "let");
@@ -109,37 +40,84 @@ fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     return final_result;
 }
 
-/// Parse a function declaration.
-fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
-    let arg_parser = |i: &'a [u8]| tuple!(i,
-        identifier,
-        preceded!(
-            open_paren,
-            args_dec_list
-        ),
-        vararg,
-        keyword_args,
-        terminated!(
-            kwvararg,
-            close_paren
-        ),
-        opt!(complete!(preceded!(
-            w_followed!(tag!("->")),
-            type_annotation
-        )))
+fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+    return separated_nonempty_list_complete!(input,
+        w_followed!(tag!(",")),
+        w_followed!(identifier)
+    );
+}
+
+fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
+    let parse_result = identifier(input);
+
+    return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
+}
+
+pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
+    let parse_result = preceded!(input,
+        opt!(between_statement),
+        many1!(complete!(
+            terminated!(
+                call!(function_declaration, 0),
+                between_statement
+            )
+        ))
     );
 
-    let parse_result = line_then_block!(input, "fn", arg_parser, indent);
+    return fmap_node(parse_result, |x| Module{declarations: x}.into());
+}
 
-    return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
-        name: name,
-        args: args,
-        vararg: vararg,
-        kwargs: keyword_args,
-        varkwarg: varkwarg,
-        block: body,
-        return_type: return_type
-    });
+fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
+    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
+    let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
+        Done(i, o) => (i, o),
+        _ => panic!()
+    };
+
+    // Break if the block is not indented enough.
+    let parse_result = if full_indent.1.len() < indent {
+        // TODO: This will happen if the indentation level is too low. Throw a proper error.
+        IResult::Error(ErrorKind::Count)
+    } else {
+        let expected_indent = full_indent.1.len();
+        // We end up reparsing the initial indent, but that's okay. The alternative is joining two
+        // vectors, which is much slower.
+        // TODO: See if we can clean this up with a separated_list_complete.
+        let statements = preceded!(input,
+            opt!(between_statement),
+            many1!(
+                complete!(
+                    terminated!(
+                        indented!(call!(statement, expected_indent), expected_indent),
+                        between_statement
+                    )
+                )
+            )
+        );
+        statements
+    };
+    return fmap_node(parse_result, |x| Block{statements: x});
+}
+
+/// Match any statement.
+pub fn statement(input: &[u8], indent: usize) -> StmtRes {
+    let node = alt_complete!(input,
+        let_stmt |
+        assignment_stmt |
+        call!(while_stmt, indent) |
+        call!(for_in, indent) |
+        call!(if_stmt, indent) |
+        call!(function_declaration, indent) |
+        call!(try_except, indent) |
+        import |
+        return_stmt |
+        break_stmt |
+        pass_stmt |
+        continue_stmt |
+        yield_stmt
+    );
+
+    return fmap_iresult(node, |x| x);
 }
 
 /// Match all normal arguments.
@@ -189,100 +167,49 @@ fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(TypedIdent, Node<Expr>)>> {
     });
 }
 
-/// Match the variable length keyword argument.
-named!(kwvararg<&[u8], Option<Identifier>>,
-    opt!(complete!(preceded!(
+/// Parse a variable length keyword argument
+/// e.g. "**varkwarg"
+fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
+    return opt!(input, complete!(preceded!(
         tuple!(
             w_followed!(tag!(",")),
             w_followed!(tag!("**"))
         ),
         w_followed!(identifier)
-    )))
-);
-
-fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    return separated_nonempty_list_complete!(input,
-        w_followed!(tag!(",")),
-        w_followed!(identifier)
-    );
+    )));
 }
 
-fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
-    let parse_result = identifier(input);
-
-    return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
-}
-
-// TODO: Merge block_rule with block
-fn block_rule(input: &[u8], minimum_indent: usize) -> IResult<&[u8], Vec<StmtNode>> {
-    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
-    let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
-        Done(i, o) => (i, o),
-        _ => panic!()
-    };
-
-    // Break if the block is not indented enough.
-    if full_indent.1.len() < minimum_indent {
-        // TODO: This will happen if the indentation level is too low. Throw a proper error.
-        return IResult::Error(ErrorKind::Count);
-    } else {
-        let expected_indent = full_indent.1.len();
-        // We end up reparsing the initial indent, but that's okay. The alternative is joining two
-        // vectors, which is much slower.
-        // TODO: See if we can clean this up with a separated_list_complete.
-        let statements = preceded!(input,
-            opt!(between_statement),
-            many1!(
-                complete!(
-                    terminated!(
-                        indented!(call!(statement, expected_indent), expected_indent),
-                        between_statement
-                    )
-                )
-            )
-        );
-
-        return statements;
-    }
-
-}
-
-fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
-    let parse_result = block_rule(input, indent);
-    return fmap_node(parse_result, |x| Block{statements: x});
-}
-
-/// Match any statement.
-pub fn statement(input: &[u8], indent: usize) -> StmtRes {
-    let node = alt_complete!(input,
-        let_stmt |
-        assignment_stmt |
-        call!(while_stmt, indent) |
-        call!(for_in, indent) |
-        call!(if_stmt, indent) |
-        call!(function_declaration, indent) |
-        call!(try_except, indent) |
-        import |
-        return_stmt |
-        break_stmt |
-        pass_stmt |
-        continue_stmt |
-        yield_stmt
+/// Parse a function declaration.
+fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
+    let arg_parser = |i: &'a [u8]| tuple!(i,
+        identifier,
+        preceded!(
+            open_paren,
+            args_dec_list
+        ),
+        vararg,
+        keyword_args,
+        terminated!(
+            varkwarg,
+            close_paren
+        ),
+        opt!(complete!(preceded!(
+            w_followed!(tag!("->")),
+            type_annotation
+        )))
     );
 
-    return fmap_iresult(node, |x| x);
-}
+    let parse_result = line_then_block!(input, "fn", arg_parser, indent);
 
-/// Match an import statement.
-fn import(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, initial_keyword!("import"), dotted_identifier);
-    return fmap_node(parse_result,|x| Stmt::ImportStmt (x.1));
-}
-
-/// Match a return statement.
-fn return_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, initial_keyword!("return"), expression);
-    return fmap_node(parse_result,|x| Stmt::ReturnStmt (x.1));
+    return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
+        name: name,
+        args: args,
+        vararg: vararg,
+        kwargs: keyword_args,
+        varkwarg: varkwarg,
+        block: body,
+        return_type: return_type
+    });
 }
 
 /// Parse a while loop.
@@ -292,7 +219,7 @@ fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Parse a for in loop.
-fn for_in(input: &[u8], indent: usize) -> StmtRes {
+pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "for", tuple!(
         w_followed!(identifier),
         preceded!(
@@ -304,7 +231,7 @@ fn for_in(input: &[u8], indent: usize) -> StmtRes {
     return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
 }
 
-fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
+pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         line_then_block!("if", expression, indent),
         many0!(indented!(line_then_block!("elif", expression, indent), indent)),
@@ -315,7 +242,7 @@ fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Match a try except statement.
-fn try_except(input: &[u8], indent: usize) -> StmtRes {
+pub fn try_except(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         keyword_then_block!("try", indent),
         many1!(keyword_then_block!("except", indent)),
@@ -333,8 +260,21 @@ fn try_except(input: &[u8], indent: usize) -> StmtRes {
     });
 }
 
-named!(assignments<&[u8], &[u8]>,
-    recognize!(alt!(
+pub fn let_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = separated_pair!(input,
+        preceded!(
+            tuple!(tag!("let"), many1!(inline_whitespace_char)),
+            typed_identifier
+        ),
+        w_followed!(tag!("=")),
+        w_followed!(expression)
+    );
+
+    return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
+}
+
+pub fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    return recognize!(input, alt!(
         tag!("=")   |
         tag!("+=")  |
         tag!("-=")  |
@@ -347,20 +287,7 @@ named!(assignments<&[u8], &[u8]>,
         tag!("|=")  |
         tag!("&=")  |
         tag!("^=")
-    ))
-);
-
-fn let_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = separated_pair!(input,
-        preceded!(
-            tuple!(tag!("let"), many1!(inline_whitespace_char)),
-            typed_identifier
-        ),
-        w_followed!(tag!("=")),
-        w_followed!(expression)
-    );
-
-    return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
+    ));
 }
 
 pub fn assignment_stmt(input: &[u8]) -> StmtRes {
@@ -378,7 +305,28 @@ pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     });
 }
 
-fn break_stmt(input: &[u8]) -> StmtRes {
+/// Match an import statement.
+pub fn import(input: &[u8]) -> StmtRes {
+    let parse_result = tuple!(input, initial_keyword!("import"), dotted_identifier);
+    return fmap_node(parse_result,|x| Stmt::ImportStmt (x.1));
+}
+
+/// Match a return statement.
+pub fn return_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = tuple!(input, initial_keyword!("return"), expression);
+    return fmap_node(parse_result,|x| Stmt::ReturnStmt (x.1));
+}
+
+pub fn yield_stmt(input: &[u8]) -> StmtRes {
+    let parse_result = preceded!(input,
+        initial_keyword!("yield"),
+        w_followed!(expression)
+    );
+
+    return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
+}
+
+pub fn break_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("break"),
         terminated!(
@@ -390,7 +338,7 @@ fn break_stmt(input: &[u8]) -> StmtRes {
     return fmap_node(parse_result, |_x| Stmt::BreakStmt);
 }
 
-fn pass_stmt(input: &[u8]) -> StmtRes {
+pub fn pass_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("pass"),
         terminated!(
@@ -402,7 +350,7 @@ fn pass_stmt(input: &[u8]) -> StmtRes {
     return fmap_node(parse_result, |_x| Stmt::PassStmt);
 }
 
-fn continue_stmt(input: &[u8]) -> StmtRes {
+pub fn continue_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("continue"),
         terminated!(
@@ -414,29 +362,20 @@ fn continue_stmt(input: &[u8]) -> StmtRes {
     return fmap_node(parse_result, |_x| Stmt::ContinueStmt);
 }
 
-fn yield_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = preceded!(input,
-        initial_keyword!("yield"),
-        w_followed!(expression)
-    );
-
-    return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
-}
-
 pub fn expression(input: &[u8]) -> ExprRes {
     return alt_complete!(input, comparison);
 }
 
-named!(comparisons<&[u8], &[u8]>,
-    recognize!(alt!(
+fn comparisons(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    return recognize!(input, alt!(
         tag!("==") |
         tag!("<=") |
         tag!(">=") |
         tag!("!=") |
         tag!("<")  |
         tag!(">")
-    ))
-);
+    ));
+}
 
 fn comparison(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
@@ -652,7 +591,7 @@ fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 }
 
 //TODO get rid of all the bits
-fn atomic_expr(input: &[u8]) -> ExprRes {
+pub fn atomic_expr(input: &[u8]) -> ExprRes {
     let node = alt_complete!(input,
         bool_expr |
         float |
@@ -665,12 +604,12 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
                 set_literal |
                 map_literal
             ),
-            inline_wrapped!(tag!("}"))
+            w_followed!(tag!("}"))
         ) |
         delimited!(
-            inline_wrapped!(tag!("[")),
+            w_followed!(tag!("[")),
             alt_complete!(vector_comprehension | vec_literal),
-            inline_wrapped!(tag!("]"))
+            w_followed!(tag!("]"))
         ) |
         expr_with_trailer
     );
@@ -678,7 +617,7 @@ fn atomic_expr(input: &[u8]) -> ExprRes {
 }
 
 /// Match the for part of a comprehension.
-fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter2> {
+pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter2> {
     let parse_result = tuple!(input,
         delimited!(
             inline_keyword!("for"),
@@ -697,7 +636,7 @@ fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter2> {
 }
 
 /// Match the if part of a comprehension.
-fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     return many0!(input,
         preceded!(
             inline_keyword!("if"),
@@ -706,7 +645,7 @@ fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     );
 }
 
-fn vec_literal(input: &[u8]) -> ExprRes {
+pub fn vec_literal(input: &[u8]) -> ExprRes {
 
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
@@ -719,7 +658,7 @@ fn vec_literal(input: &[u8]) -> ExprRes {
     return fmap_node(parse_result, |x| Expr::VecLiteral(x));
 }
 
-fn set_literal(input: &[u8]) -> ExprRes {
+pub fn set_literal(input: &[u8]) -> ExprRes {
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
             inline_wrapped!(tag!(",")),
@@ -732,7 +671,7 @@ fn set_literal(input: &[u8]) -> ExprRes {
 }
 
 /// Match a map literal.
-fn map_literal(input: &[u8]) -> ExprRes {
+pub fn map_literal(input: &[u8]) -> ExprRes {
 
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
@@ -751,7 +690,7 @@ fn map_literal(input: &[u8]) -> ExprRes {
 
 /// Match a tuple literal
 /// e.g. (), (1, ), (1,2,3), (1,2,3,)
-fn tuple_literal(input: &[u8]) -> ExprRes {
+pub fn tuple_literal(input: &[u8]) -> ExprRes {
     let parse_result = alt_complete!(input,
         map!(
             terminated!(
@@ -780,7 +719,7 @@ fn tuple_literal(input: &[u8]) -> ExprRes {
 }
 
 /// Match a vector comprehension.
-fn vector_comprehension(input: &[u8]) -> ExprRes {
+pub fn vector_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         inline_wrapped!(boolean_op_expr),
         many1!(comprehension_for)
@@ -793,7 +732,7 @@ fn vector_comprehension(input: &[u8]) -> ExprRes {
     });
 }
 
-fn generator_comprehension(input: &[u8]) -> ExprRes {
+pub fn generator_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         boolean_op_expr,
         many1!(comprehension_for)
@@ -806,7 +745,7 @@ fn generator_comprehension(input: &[u8]) -> ExprRes {
 }
 
 /// Match a map or a set.
-fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
             boolean_op_expr,
             opt!(complete!(preceded!(
@@ -830,7 +769,7 @@ fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
 }
 
 /// An expression wrapped in parentheses.
-fn wrapped_expr(input: &[u8]) -> ExprRes {
+pub fn wrapped_expr(input: &[u8]) -> ExprRes {
     let node = delimited!(input,
         open_paren,
         alt_complete!(generator_comprehension | tuple_literal | expression),
@@ -841,7 +780,7 @@ fn wrapped_expr(input: &[u8]) -> ExprRes {
 }
 
 /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
-fn expr_with_trailer(input: &[u8]) -> ExprRes {
+pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
     let ident = |x| fmap_iresult(
         identifier(x),
         |y: Identifier| Node::from(Expr::IdentifierExpr (y))
@@ -874,7 +813,7 @@ fn expr_with_trailer(input: &[u8]) -> ExprRes {
     return node;
 }
 
-fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(",")),
         terminated!(
@@ -885,7 +824,7 @@ fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     return parse_result;
 }
 
-fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
+pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
     let parse_result = separated_list!(input,
         inline_wrapped!(tag!(",")),
         tuple!(
@@ -899,7 +838,7 @@ fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
     return parse_result;
 }
 
-fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
+pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
     let parse_result = delimited!(input,
         open_paren,
         alt_complete!(
@@ -923,7 +862,7 @@ fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, 
     }));
 }
 
-fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent2> {
+pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent2> {
     let parse_result = delimited!(input,
         open_bracket,
         separated_nonempty_list_complete!(
@@ -965,7 +904,7 @@ fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent2> {
     });
 }
 
-fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return many1!(input, 
         preceded!(
             inline_wrapped!(tag!(".")),
@@ -974,7 +913,7 @@ fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     );
 }
 
-fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent2> {
+pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent2> {
     let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent2::Call{args: x.0, kwargs: x.1};
     let access_to_enum = |x: Vec<Identifier>| PostIdent2::Access{attributes: x};
     let result = alt!(input,
@@ -986,7 +925,7 @@ fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent2> {
 }
 
 /// Parser to return an Identifier AST.
-fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
+pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
     let parse_result = inline_wrapped!(input,
         recognize!(
             pair!(
@@ -1001,7 +940,7 @@ fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
     return fmap_iresult(parse_result,  Identifier::from);
 }
 
-fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
+pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         identifier,
         opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
@@ -1010,7 +949,7 @@ fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
-fn bool_expr(input: &[u8]) -> ExprRes {
+pub fn bool_expr(input: &[u8]) -> ExprRes {
     let parse_result= alt!(input,
         terminated!(tag!("true"), peek!(not!(valid_identifier_char))) |
         terminated!(tag!("false"), peek!(not!(valid_identifier_char)))
@@ -1023,7 +962,7 @@ fn bool_expr(input: &[u8]) -> ExprRes {
 }
 
 // TODO: Hex encoded, byte encoded
-fn int(input: &[u8]) -> ExprRes {
+pub fn int(input: &[u8]) -> ExprRes {
     let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
         tuple!(
             opt!(sign),
@@ -1036,7 +975,7 @@ fn int(input: &[u8]) -> ExprRes {
     return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
 }
 
-fn float<'a>(input: &'a[u8]) -> ExprRes {
+pub fn float<'a>(input: &'a[u8]) -> ExprRes {
 
     let with_dec = |x: &'a[u8]| tuple!(x,
         tag!("."),
@@ -1079,7 +1018,7 @@ named!(string_literal<&[u8],&[u8]>,
     )
 );
 
-fn string(input: &[u8]) -> ExprRes {
+pub fn string(input: &[u8]) -> ExprRes {
     let parse_result = string_literal(input);
 
     return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));

@@ -1,7 +1,6 @@
 use std::str;
 use std::str::from_utf8;
 
-
 extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
@@ -32,20 +31,6 @@ pub fn fmap_convert<X>(res: IResult<&[u8], X>) -> IResult<&[u8], Node<X>> {
         Done(i, o) => Done(i, Node::from(o)),
         IResult::Error(e) => IResult::Error(e),
         IResult::Incomplete(n) => IResult::Incomplete(n)
-    };
-}
-
-pub fn output<T>(res: IResult<&[u8], T>) -> T {
-    return match res {
-        Done(_, o) => o,
-        IResult::Error(e) => {
-            println!("Output error: {:?}.", e);
-            panic!()
-        },
-        IResult::Incomplete(n) => {
-            println!("Incomplete: {:?}", n);
-            panic!()
-        }
     };
 }
 
@@ -88,6 +73,20 @@ pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> I
 
 pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
     return fmap_and_log(res, |x| x, name, input);
+}
+
+pub fn output<T>(res: IResult<&[u8], T>) -> T {
+    return match res {
+        Done(_, o) => o,
+        IResult::Error(e) => {
+            println!("Output error: {:?}.", e);
+            panic!()
+        },
+        IResult::Incomplete(n) => {
+            println!("Incomplete: {:?}", n);
+            panic!()
+        }
+    };
 }
 
 pub fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {

@@ -1,6 +1,8 @@
 use expression::*;
 use ast_node::ASTNode;
 
+use std::collections::HashSet;
+
 extern crate itertools;
 
 
@@ -46,28 +48,27 @@ impl ASTNode for Block {
     }
 }
 
-impl ASTNode for Stmt {
+impl ASTNode for Node<Stmt> {
     fn generate_bytecode(&self) -> String {
-        let bytecode = match self {
+        let bytecode = match &self.data {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
                 // Scope check
-                panic!();
-                // let (declarations, _) = self.get_scopes();
-//                 let body_bytecode = block.generate_bytecode();
-//                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+                let declarations = HashSet::from_iter(self.scope.declarations.iter());
+                let body_bytecode = block.generate_bytecode();
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
-//                 // get the declarations that are not args, i.e. the local variables
-//                 let args_set: HashSet<String> = HashSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
-// //                let kwargs = HashSet::from_iter(keyword_args)
-//                 let local_var_declarations = declarations.difference(&args_set);
-//                 let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
-//                 let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
-//                     func_name = name.to_string(),
-//                     params = params,
-//                     local_vars = local_vars,
-//                     body = body_bytecode
-//                 );
-//                 func_dec
+                // get the declarations that are not args, i.e. the local variables
+                let args_set: HashSet<String> = HashSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
+//                let kwargs = HashSet::from_iter(keyword_args)
+                let local_var_declarations = declarations.difference(&args_set);
+                let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
+                let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                    func_name = name.to_string(),
+                    params = params,
+                    local_vars = local_vars,
+                    body = body_bytecode
+                );
+                func_dec
             },
             &Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
                 match operator {

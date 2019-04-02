@@ -1,9 +1,27 @@
 use std::collections::BTreeMap;
+use std::collections::hash_set::Union;
+use std::collections::hash_map::RandomState;
+use std::collections::HashSet;
+use std::hash::Hash;
 use expression::*;
 
 extern crate cute;
 
+/// Take the union of two hashsets, moving out of the second.
+fn m_union<T>(mut a: HashSet<T>,  b: HashSet<T>) -> HashSet<T>
+where T: Eq, T: Hash {
+    for element in b.into_iter() {
+        a.insert(element);
+    }
+    return a;
+}
 
+/// A sum type for things that can modify scope.
+/// Currently the only things that can do so are:
+/// * import statements
+/// * let statements
+/// * function declarations
+/// * comprehensions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>),
@@ -48,7 +66,8 @@ pub fn empty_scope() -> Scope {
 
 pub trait Scoped<T> {
     /// Get the scope of the object.
-    fn get_scope(self, parent_scope: Scope) -> Scope;
+
+    fn get_usages(&self) -> HashSet<Identifier>;
 
     /// Check that all of the objects references are valid.
     fn check_scope2(self, scope: Scope) -> bool;
@@ -57,9 +76,10 @@ pub trait Scoped<T> {
     fn gen_scopes(self, parent_scope: &Scope) -> Node<T>;
 }
 
-impl Scoped<Expr>  for Node<Expr> {
-    fn get_scope(self, _parent_scope: Scope) -> Scope {
-        panic!()
+impl Scoped<Module> for Node<Module> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        panic!();
     }
 
     fn check_scope2(self, _scope: Scope) -> bool {
@@ -67,6 +87,104 @@ impl Scoped<Expr>  for Node<Expr> {
     }
 
         /// Check scope and generate
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Module> {
+        panic!();
+    }
+}
+
+impl Scoped<Block> for Node<Block> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        let mut usages = HashSet::new();
+        for stmt in &self.data.statements {
+            usages = m_union(usages, stmt.get_usages());
+        }
+        return usages;
+    }
+
+    fn check_scope2(self, _scope: Scope) -> bool {
+        panic!();
+    }
+
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Block> {
+        let declarations = BTreeMap::new();
+        let declaration_order = BTreeMap::new();
+
+        let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+
+        let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
+            let new_stmt = stmt.gen_scopes(&new_scope);
+            return new_stmt;
+        }).collect();
+
+        // Update the parent scope with any changes caused by sub statements.
+        // Yes this does mean we loop through all the statements twice. If this
+        // proves to be a performance problem we can optimize it later.
+        // (The alternative is passing mutable data around recursively and that looks
+        // like several dozen migraines in the making.)
+        for (i, stmt) in new_stmts.iter().enumerate() {
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    new_scope.declaration_order.insert(name as *const Identifier, i);
+                },
+                Stmt::LetStmt{ref typed_name, ..} => {
+                    let raw_name = &typed_name.name as *const Identifier;
+                    new_scope.declaration_order.insert(raw_name, i);
+                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
+                    new_scope.declarations.insert(raw_name, scope_mod);
+                },
+                _ => {}
+            };
+        }
+
+        let new_block = Block{statements: new_stmts};
+        return Node{
+            id: self.id,
+            data: new_block,
+            scope: new_scope
+        };
+    }
+}
+
+impl Scoped<Expr> for Node<Expr> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        return match self.data {
+            Expr::BinaryExpr{ref left, ref right, ..} => {
+                m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::ComparisonExpr{ref left, ref right, ..} => {
+                m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::UnaryExpr{ref operand, ..} => {
+                operand.get_usages()
+            },
+            Expr::FunctionCall{ref args, ref kwargs, ..} => {
+                let mut usages = HashSet::new();
+                for expr in args {
+                    usages = m_union(usages, expr.get_usages());
+                }
+
+                for (_, expr) in kwargs {
+                    usages = m_union(usages, expr.get_usages());
+                }
+
+                usages
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let mut usages = HashSet::new();
+                usages.insert(name.clone());
+                usages
+            },
+            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
+            _ => panic!()
+        };
+    }
+
+    fn check_scope2(self, _scope: Scope) -> bool {
+        panic!();
+    }
+
     fn gen_scopes(self, parent_scope: &Scope) -> Node<Expr> {
         
         let new_node: Node<Expr> = match self.data {
@@ -88,8 +206,29 @@ impl Scoped<Expr>  for Node<Expr> {
 }
 
 impl Scoped<Stmt> for Node<Stmt> {
-    fn get_scope(self, _parent_scope: Scope) -> Scope {
-        panic!()
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        return match self.data {
+            Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+                let mut usages = m_union(condition.get_usages(), block.get_usages());
+                for (cond, blck) in elifs {
+                    usages = m_union(usages, cond.get_usages());
+                    usages = m_union(usages, blck.get_usages());
+                }
+                match else_block {
+                    Some(y) => m_union(usages, y.get_usages()),
+                    None => usages
+                }
+            },
+            Stmt::WhileStmt{ref condition, ref block} => m_union(condition.get_usages(), block.get_usages()),
+            Stmt::FunctionDecStmt{ref block, ..} => block.get_usages(),
+            Stmt::ReturnStmt(ref expression) | 
+            Stmt::YieldStmt(ref expression) | 
+            Stmt::LetStmt{ref expression, ..} |
+            Stmt::AssignmentStmt{ref expression, ..} => expression.get_usages(),
+            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::ContinueStmt => HashSet::new(),
+            _ => panic!()
+        };
     }
 
     fn check_scope2(self, _scope: Scope) -> bool {
@@ -157,56 +296,6 @@ impl Scoped<Stmt> for Node<Stmt> {
         };
 
         return new_node;
-    }
-}
-
-impl Scoped<Block> for Node<Block> {
-    fn get_scope(self, _parent_scope: Scope) -> Scope {
-        panic!()
-    }
-
-    fn check_scope2(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
-        /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Block> {
-        let declarations = BTreeMap::new();
-        let declaration_order = BTreeMap::new();
-
-        let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
-
-        let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
-            let new_stmt = stmt.gen_scopes(&new_scope);
-            return new_stmt;
-        }).collect();
-
-        // Update the parent scope with any changes caused by sub statements.
-        // Yes this does mean we loop through all the statements twice. If this
-        // proves to be a performance problem we can optimize it later.
-        // (The alternative is passing mutable data around recursively and that looks
-        // like several dozen migraines in the making.)
-        for (i, stmt) in new_stmts.iter().enumerate() {
-            match &stmt.data {
-                Stmt::FunctionDecStmt{ref name, ..} => {
-                    new_scope.declaration_order.insert(name as *const Identifier, i);
-                },
-                Stmt::LetStmt{ref typed_name, ..} => {
-                    let raw_name = &typed_name.name as *const Identifier;
-                    new_scope.declaration_order.insert(raw_name, i);
-                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
-                    new_scope.declarations.insert(raw_name, scope_mod);
-                },
-                _ => {}
-            };
-        }
-
-        let new_block = Block{statements: new_stmts};
-        return Node{
-            id: self.id,
-            data: new_block,
-            scope: new_scope
-        };
     }
 }
 

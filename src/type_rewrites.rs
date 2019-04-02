@@ -5,36 +5,32 @@ pub trait TypeRewrite<T> {
     fn type_based_rewrite(self) -> T;
 }
 
-impl <T> TypeRewrite<Node<T>> for Node<T>
-    where T: TypeRewrite<T> {
-    fn type_based_rewrite(self) -> Node<T> {
-        let new_data = self.data.type_based_rewrite();
+impl TypeRewrite<Node<Module>> for Node<Module> {
+    fn type_based_rewrite(self) -> Node<Module> {
+        let new_decs = c![x.type_based_rewrite(), for x in self.data.declarations];
         return Node{
             id: self.id,
-            data: new_data,
+            data: Module{ declarations: new_decs},
             scope: self.scope
         };
     }
 }
 
-impl TypeRewrite<Module> for Module {
-    fn type_based_rewrite(self) -> Module {
-        let new_decs = c![x.type_based_rewrite(), for x in self.declarations];
-        return Module{ declarations: new_decs};
+impl TypeRewrite<Node<Block>> for Node<Block> {
+    fn type_based_rewrite(self) -> Node<Block> {
+        let new_stmts = c![x.type_based_rewrite(), for x in self.data.statements];
+        return Node {
+            id: self.id,
+            data: Block{statements: new_stmts},
+            scope: self.scope
+        };
     }
 }
 
-impl TypeRewrite<Block> for Block {
-    fn type_based_rewrite(self) -> Block {
-        let new_stmts = c![x.type_based_rewrite(), for x in self.statements];
-        return Block{statements: new_stmts};
-    }
-}
-
-impl TypeRewrite<Stmt> for Stmt {
-    fn type_based_rewrite(self) -> Stmt {
+impl TypeRewrite<Node<Stmt>> for Node<Stmt> {
+    fn type_based_rewrite(self) -> Node<Stmt> {
         
-        let new_stmt = match self {
+        let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(), name, args, vararg, kwargs, varkwarg, return_type}
             },
@@ -59,14 +55,18 @@ impl TypeRewrite<Stmt> for Stmt {
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite()}
             },
-            _ => self
+            _ => self.data
         };
-        return new_stmt;
+        return Node {
+            id: self.id, 
+            data: new_stmt,
+            scope: self.scope 
+        };
     }
 }
-impl TypeRewrite<Expr> for Expr {
-    fn type_based_rewrite(self) -> Expr {
-        let new_expr = match self {
+impl TypeRewrite<Node<Expr>> for Node<Expr> {
+    fn type_based_rewrite(self) -> Node<Expr> {
+        let new_expr = match self.data {
             Expr::ComparisonExpr {mut left, mut right, operator} => {
                 let left = Box::new(left.type_based_rewrite());
                 let right = Box::new(right.type_based_rewrite());
@@ -100,10 +100,14 @@ impl TypeRewrite<Expr> for Expr {
                 let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite())).collect();
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
-            _ => self
+            _ => self.data
         };
 
-        return new_expr;
+        return Node {
+            id: self.id,
+            data: new_expr,
+            scope: self.scope
+        };
     }
 }
 

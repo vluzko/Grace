@@ -1,6 +1,4 @@
 use std::collections::BTreeMap;
-use std::collections::hash_set::Union;
-use std::collections::hash_map::RandomState;
 use std::collections::HashSet;
 use std::hash::Hash;
 use expression::*;

@@ -13,6 +13,7 @@ rand = "*"
 itertools = "*"
 maplit = "*"
 cached = "*"
+lazy_static = "1.3.0"
 
 [lib]
 name = "grace_lib"

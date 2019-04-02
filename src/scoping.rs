@@ -341,13 +341,10 @@ mod test {
         let func_str = r#"fn a(b, c):
     return b + c
 "#;
-        let func_stmt = output(parser::statement(func_str.as_bytes(), 0));
-        panic!();
-        // let (_, usgs) = func_stmt.get_scopes();
-        // let mut real_usgs = HashSet::new();
-        // real_usgs.insert("b".to_string());
-        // real_usgs.insert("c".to_string());
-        // assert_eq!(usgs, real_usgs);
+        let func_stmt = output(parser::statement(func_str.as_bytes(), 0)).gen_scopes(&empty_scope());
+        let usages = func_stmt.get_usages();
+        assert!(usages.contains(&Identifier::from("b")));
+        assert!(usages.contains(&Identifier::from("c")));
     }
 
     #[test]

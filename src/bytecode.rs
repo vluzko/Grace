@@ -61,7 +61,6 @@ impl ASTNode for Node<Stmt> {
                             local_var_declarations.insert((**key).to_string());
                         }
                     }
-                    println!("{:?}", local_var_declarations);
                     // let declarations: HashSet<Identifier> = self.scope.declarations.keys().map(|x| (**x).name).collect();
                 
                     let body_bytecode = block.generate_bytecode();
@@ -264,7 +263,7 @@ mod tests {
 
     #[test]
    pub fn test_generate_module() {
-       let module = parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
+       let module = output(parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes())).gen_scopes(&empty_scope());
        let mod_bytecode = r#"(module
 (import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
 (import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
@@ -280,7 +279,7 @@ get_local $x
 (export "a" (func $a))
 )
 "#;
-       assert_eq!(output(module).generate_bytecode(), mod_bytecode);
+       assert_eq!(module.generate_bytecode(), mod_bytecode);
    }
 
     #[test]

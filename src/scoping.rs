@@ -95,7 +95,36 @@ impl Scoped<Module> for Node<Module> {
 
         /// Check scope and generate
     fn gen_scopes(self, parent_scope: &Scope) -> Node<Module> {
-        panic!();
+        let declarations = BTreeMap::new();
+        let declaration_order = BTreeMap::new();
+
+        let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+
+        let new_stmts: Vec<Node<Stmt>> = self.data.declarations.into_iter().enumerate().map(|(_i, stmt)| {
+            let new_stmt = stmt.gen_scopes(&new_scope);
+            return new_stmt;
+        }).collect();
+
+        // Update the parent scope with any changes caused by sub statements.
+        // Yes this does mean we loop through all the statements twice. If this
+        // proves to be a performance problem we can optimize it later.
+        // (The alternative is passing mutable data around recursively and that looks
+        // like several dozen migraines in the making.)
+        for (i, stmt) in new_stmts.iter().enumerate() {
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    new_scope.declaration_order.insert(name as *const Identifier, i);
+                },
+                _ => {}
+            };
+        }
+
+        let new_block = Module{declarations: new_stmts};
+        return Node{
+            id: self.id,
+            data: new_block,
+            scope: new_scope
+        };
     }
 }
 

@@ -67,9 +67,7 @@ impl ASTNode for Node<Stmt> {
                     let body_bytecode = block.generate_bytecode();
                     let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
-                    // get the declarations that are not args, i.e. the local variables
-                    let args_set: HashSet<_> = args.iter().map(|x| &x.name).collect();
-                    let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
+                    let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
                     let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                         func_name = name.to_string(),
                         params = params,

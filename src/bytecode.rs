@@ -1,4 +1,5 @@
 use expression::*;
+use scoping::*;
 use ast_node::ASTNode;
 
 use std::collections::HashSet;
@@ -53,22 +54,30 @@ impl ASTNode for Node<Stmt> {
         let bytecode = match &self.data {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
                 // Scope check
-                let declarations = HashSet::from_iter(self.scope.declarations.iter());
-                let body_bytecode = block.generate_bytecode();
-                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+                // unsafe {
+                    let mut local_var_declarations = HashSet::new();
+                    for key in self.get_true_declarations() {
+                        unsafe {
+                            local_var_declarations.insert((**key).to_string());
+                        }
+                    }
+                    println!("{:?}", local_var_declarations);
+                    // let declarations: HashSet<Identifier> = self.scope.declarations.keys().map(|x| (**x).name).collect();
+                
+                    let body_bytecode = block.generate_bytecode();
+                    let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
-                // get the declarations that are not args, i.e. the local variables
-                let args_set: HashSet<String> = HashSet::from_iter(args.iter().cloned().map(|x| x.name.to_string()));
-//                let kwargs = HashSet::from_iter(keyword_args)
-                let local_var_declarations = declarations.difference(&args_set);
-                let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
-                let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
-                    func_name = name.to_string(),
-                    params = params,
-                    local_vars = local_vars,
-                    body = body_bytecode
-                );
-                func_dec
+                    // get the declarations that are not args, i.e. the local variables
+                    let args_set: HashSet<_> = args.iter().map(|x| &x.name).collect();
+                    let local_vars = itertools::join(local_var_declarations.into_iter().map(|x| format!("(local ${} i32)", x)), " ");
+                    let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                        func_name = name.to_string(),
+                        params = params,
+                        local_vars = local_vars,
+                        body = body_bytecode
+                    );
+                    func_dec
+                // }
             },
             &Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
                 match operator {
@@ -232,7 +241,7 @@ impl UnaryOperator {
 impl ASTNode for Identifier {
     fn generate_bytecode(&self) -> String {
         let name = self.name.clone();
-	return name;
+	    return name;
     }
 
     fn get_id(&self) -> i64 {
@@ -278,7 +287,7 @@ get_local $x
 
     #[test]
     pub fn test_generate_function() {
-        let func_dec = parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0);
+        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
         let func_bytecode = r#"(func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5
 i32.const 6
@@ -287,7 +296,7 @@ set_local $x
 get_local $x
 )
 (export "a" (func $a))"#;
-        assert_eq!(output(func_dec).generate_bytecode(), func_bytecode);
+        assert_eq!(func_dec.generate_bytecode(), func_bytecode);
     }
 
     #[test]

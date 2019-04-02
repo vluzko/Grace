@@ -69,8 +69,11 @@ pub trait Scoped<T> {
 
     fn get_usages(&self) -> HashSet<Identifier>;
 
+    /// Get all *non-Argument* declarations.
+    fn get_true_declarations(&self) -> HashSet<&*const Identifier>;
+
     /// Check that all of the objects references are valid.
-    fn check_scope2(self, scope: Scope) -> bool;
+    fn check_scope(self, scope: Scope) -> bool;
 
     /// Generate scopes recursively.
     fn gen_scopes(self, parent_scope: &Scope) -> Node<T>;
@@ -82,7 +85,11 @@ impl Scoped<Module> for Node<Module> {
         panic!();
     }
 
-    fn check_scope2(self, _scope: Scope) -> bool {
+    fn get_true_declarations(&self) -> HashSet<&*const Identifier> {
+        panic!()
+    }
+
+    fn check_scope(self, _scope: Scope) -> bool {
         panic!();
     }
 
@@ -102,7 +109,16 @@ impl Scoped<Block> for Node<Block> {
         return usages;
     }
 
-    fn check_scope2(self, _scope: Scope) -> bool {
+    fn get_true_declarations(&self) -> HashSet<&*const Identifier> {
+        let mut top_level = self.scope.declarations.keys().clone().collect();
+        for stmt in &self.data.statements {
+            top_level = m_union(top_level, stmt.get_true_declarations());
+        }
+        return top_level;
+    }
+
+
+    fn check_scope(self, _scope: Scope) -> bool {
         panic!();
     }
 
@@ -146,65 +162,6 @@ impl Scoped<Block> for Node<Block> {
     }
 }
 
-impl Scoped<Expr> for Node<Expr> {
-
-    fn get_usages(&self) -> HashSet<Identifier> {
-        return match self.data {
-            Expr::BinaryExpr{ref left, ref right, ..} => {
-                m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::ComparisonExpr{ref left, ref right, ..} => {
-                m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::UnaryExpr{ref operand, ..} => {
-                operand.get_usages()
-            },
-            Expr::FunctionCall{ref args, ref kwargs, ..} => {
-                let mut usages = HashSet::new();
-                for expr in args {
-                    usages = m_union(usages, expr.get_usages());
-                }
-
-                for (_, expr) in kwargs {
-                    usages = m_union(usages, expr.get_usages());
-                }
-
-                usages
-            },
-            Expr::IdentifierExpr(ref name) => {
-                let mut usages = HashSet::new();
-                usages.insert(name.clone());
-                usages
-            },
-            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
-            _ => panic!()
-        };
-    }
-
-    fn check_scope2(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Expr> {
-        
-        let new_node: Node<Expr> = match self.data {
-            Expr::BinaryExpr{operator, left, right} => {
-                let new_left = left.gen_scopes(parent_scope);
-                let new_right = right.gen_scopes(parent_scope);
-                let new_expr = Expr::BinaryExpr{operator: operator, left: Box::new(new_left), right: Box::new(new_right)};
-                let new_id = self.id;
-                Node{id: new_id, data: new_expr, scope: parent_scope.clone()}
-            },
-            Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
-                Node{id: self.id, data: self.data, scope: parent_scope.clone()}
-            },
-            _ => panic!()
-        };
-
-        return new_node;
-    }
-}
-
 impl Scoped<Stmt> for Node<Stmt> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
@@ -226,12 +183,21 @@ impl Scoped<Stmt> for Node<Stmt> {
             Stmt::YieldStmt(ref expression) | 
             Stmt::LetStmt{ref expression, ..} |
             Stmt::AssignmentStmt{ref expression, ..} => expression.get_usages(),
-            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::ContinueStmt => HashSet::new(),
+            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::PassStmt => HashSet::new(),
             _ => panic!()
         };
     }
 
-    fn check_scope2(self, _scope: Scope) -> bool {
+    fn get_true_declarations(&self) -> HashSet<&*const Identifier> {
+        return match self.data {
+            Stmt::FunctionDecStmt{ref block, ..} => {
+                block.get_true_declarations()
+            },
+            _ => HashSet::new()
+        };
+    }
+
+    fn check_scope(self, _scope: Scope) -> bool {
         panic!();
     }
 
@@ -292,6 +258,71 @@ impl Scoped<Stmt> for Node<Stmt> {
 
                 new_node
             },
+            Stmt::ReturnStmt(_) => self,
+            _ => panic!()
+        };
+
+        return new_node;
+    }
+}
+
+impl Scoped<Expr> for Node<Expr> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        return match self.data {
+            Expr::BinaryExpr{ref left, ref right, ..} => {
+                m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::ComparisonExpr{ref left, ref right, ..} => {
+                m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::UnaryExpr{ref operand, ..} => {
+                operand.get_usages()
+            },
+            Expr::FunctionCall{ref args, ref kwargs, ..} => {
+                let mut usages = HashSet::new();
+                for expr in args {
+                    usages = m_union(usages, expr.get_usages());
+                }
+
+                for (_, expr) in kwargs {
+                    usages = m_union(usages, expr.get_usages());
+                }
+
+                usages
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let mut usages = HashSet::new();
+                usages.insert(name.clone());
+                usages
+            },
+            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
+            _ => panic!()
+        };
+    }
+
+    fn get_true_declarations(&self) -> HashSet<&*const Identifier> {
+        panic!()
+    }
+
+
+    fn check_scope(self, _scope: Scope) -> bool {
+        panic!();
+    }
+
+    fn gen_scopes(self, parent_scope: &Scope) -> Node<Expr> {
+        
+        let new_node: Node<Expr> = match self.data {
+            Expr::BinaryExpr{operator, left, right} => {
+                let new_left = left.gen_scopes(parent_scope);
+                let new_right = right.gen_scopes(parent_scope);
+                let new_expr = Expr::BinaryExpr{operator: operator, left: Box::new(new_left), right: Box::new(new_right)};
+                let new_id = self.id;
+                Node{id: new_id, data: new_expr, scope: parent_scope.clone()}
+            },
+            Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
+                Node{id: self.id, data: self.data, scope: parent_scope.clone()}
+            },
             _ => panic!()
         };
 
@@ -301,7 +332,7 @@ impl Scoped<Stmt> for Node<Stmt> {
 
 #[cfg(test)]
 mod test {
-    use parser::*;
+    use parser;
     use super::*;
     use parser_utils::output;
 
@@ -310,7 +341,7 @@ mod test {
         let func_str = r#"fn a(b, c):
     return b + c
 "#;
-        let func_stmt = output(statement(func_str.as_bytes(), 0));
+        let func_stmt = output(parser::statement(func_str.as_bytes(), 0));
         panic!();
         // let (_, usgs) = func_stmt.get_scopes();
         // let mut real_usgs = HashSet::new();
@@ -364,5 +395,13 @@ mod test {
             };
             assert_eq!(ident1, actual_ident1);
         }
+    }
+
+    #[test]
+    fn test_get_declarations() {
+        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
+        let mut expected = HashSet::new();
+        expected.insert(&Identifier::from("x") as *const Identifier);
+        let actual = func_dec.get_true_declarations();
     }
 }

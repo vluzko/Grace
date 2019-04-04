@@ -2,6 +2,7 @@ use std::collections::HashSet;
 use std::iter::FromIterator;
 
 use expression::*;
+use scoping::*;
 use general_utils::*;
 
 /// Types
@@ -13,7 +14,6 @@ pub enum Type {
     f32,
     f64,
     ui32,
-    ui64,
     string,
     boolean,
     Tuple(Vec<Type>),
@@ -33,10 +33,7 @@ pub fn Signed<'a>() -> HashSet<&'a Type> {
 // The unsigned integral types.
 #[allow(non_snake_case)]
 pub fn Unsigned<'a>() -> HashSet<&'a Type> {
-    let mut set = HashSet::new();
-    set.insert(&Type::ui32);
-    set.insert(&Type::ui64);
-    set
+    hashset!{&Type::ui32}
 }
 
 // The floating point types.
@@ -54,6 +51,10 @@ pub fn FloatingPoint<'a>() -> HashSet<&'a Type> {
     set
 }
 
+pub fn Numeric<'a>() -> HashSet<&'a Type> {
+    c_union(&FloatingPoint(), &Integral())
+}
+
 impl Type {
 
     /// Get the name of this type in WAST.
@@ -64,7 +65,6 @@ impl Type {
             &Type::f32 => "f32".to_string(),
             &Type::f64 => "f64".to_string(),
             &Type::ui32 => "i64".to_string(),
-            &Type::ui64 => "i64".to_string(),
             _ => panic!()
         }
     }
@@ -73,7 +73,7 @@ impl Type {
     pub fn sign(&self) -> String {
         match &self {
             &Type::i32 | &Type::i64 => "_s".to_string(),
-            &Type::ui32 | &Type::ui64 => "_u".to_string(),
+            &Type::ui32 => "_u".to_string(),
             _ => "".to_string()
         }
     }
@@ -83,6 +83,30 @@ pub trait Typed<T> {
     fn type_based_rewrite(self) -> T;
 
     fn resolve_types(&self) -> HashSet<&Type>;
+}
+
+impl Typed<CanModifyScope> for CanModifyScope {
+    fn type_based_rewrite(self) -> CanModifyScope {
+        panic!()
+    }
+
+    fn resolve_types(&self) -> HashSet<&Type> {
+        return match self {
+            CanModifyScope::Statement(ref ptr) => {
+                unsafe {
+                    (**ptr).resolve_types() 
+                }
+            },
+            CanModifyScope::Expression(ref ptr) => {
+                unsafe {
+                    (**ptr).resolve_types()
+                }
+            },
+            CanModifyScope::Argument => {
+                panic!()
+            }
+        };
+    }
 }
 
 impl Typed<Node<Module>> for Node<Module> {
@@ -155,6 +179,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         panic!()
     }
 }
+
 impl Typed<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self) -> Node<Expr> {
         let new_expr = match self.data {
@@ -203,15 +228,82 @@ impl Typed<Node<Expr>> for Node<Expr> {
 
     fn resolve_types(&self) -> HashSet<&Type> {
         return match &self.data {
-            Expr::Identifier(ref name) => {
-                // TODO: Look up the name in scope.
+            Expr::BinaryExpr{ref operator, ref left, ref right} => {
+                operator.get_possible_return_types(left, right)
+            },
+            Expr::ComparisonExpr{ref left, ref right, ..} => {
+                hashset!{&Type::boolean}
+            },
+            Expr::UnaryExpr{ref operator, ref operand} => {
                 panic!()
+            }
+            Expr::IdentifierExpr(ref name) => {
+                // TODO: Look up the name in scope.
+                let creation = self.scope.get_declaration(name);
+                match creation {
+                    Some(y) => y.resolve_types(),
+                    None => panic!()
+                }
             }
             Expr::String(_) => hashset!{&Type::string},
             Expr::Float(_) => FloatingPoint(),
             Expr::Bool(_) => hashset!{&Type::i32},
-            Expr::Int(_) => Integral(),
+            Expr::Int(_) => Numeric(),
             _ => panic!()
+        }
+    }
+}
+
+impl BinaryOperator {
+
+    pub fn get_possible_return_types<'a>(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> HashSet<&'a Type> {
+        return match self {
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => {
+                c_int(&left.resolve_types(), &right.resolve_types())
+            },
+            BinaryOperator::Div => {
+                FloatingPoint()
+            },
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => hashset!{&Type::boolean},
+            _ => panic!()
+        }
+    }
+
+    // TODO: Rename to CHOOSE return type
+    pub fn get_return_type(&self, left: &Type, right: &Type) -> Type {
+
+        let add_order = hashmap!{
+            Type::i32 => vec!{Type::i32, Type::i64, Type::f64},
+            Type::ui32 => vec!{Type::ui32, Type::i64, Type::f64},
+            Type::f32 => vec!{Type::f32, Type::f64},
+            Type::i64 => vec!{Type::i64},
+            Type::f64 => vec!{Type::f64}
+        };
+
+        let div_order = hashmap!{
+            Type::i32 => vec!{Type::f64},
+            Type::f32 => vec!{Type::f32, Type::f64},
+            Type::f64 => vec!{Type::f64}
+        };
+
+        let order = match self {
+            BinaryOperator::Add | BinaryOperator::Sub |
+            BinaryOperator::Mult | BinaryOperator::Mod => add_order,
+            BinaryOperator::Div => div_order,
+            _ => panic!()
+        };
+
+        let left_upper = order.get(left).unwrap();
+        let right_upper = order.get(right).unwrap();
+        let mut intersection = c![*x, for x in left_upper, if right_upper.contains(x)];
+        // TODO: Check that 0 exists, throw a TypeError if it doesn't.
+        intersection.remove(0)
+    }
+
+    pub fn requires_sign(&self) -> bool {
+        match self {
+            BinaryOperator::Div => true,
+            _ => false
         }
     }
 }

@@ -36,8 +36,8 @@ pub struct Scope {
 }
 
 impl Scope {
-    pub fn get_declaration(&self, name: Identifier) -> Option<&CanModifyScope> {
-        let name_pointer = &name as *const Identifier;
+    pub fn get_declaration(&self, name: &Identifier) -> Option<&CanModifyScope> {
+        let name_pointer = name as *const Identifier;
         if self.declarations.contains_key(&name_pointer) {
             return self.declarations.get(&name_pointer);
         } else {
@@ -73,7 +73,7 @@ pub trait Scoped<T> {
     /// Check that all of the objects references are valid.
     fn check_scope(self, scope: Scope) -> bool;
 
-    /// Generate scopes recursively.
+    /// Generate scopes recursively. Returns a new node with the correct scope attached.
     fn gen_scopes(self, parent_scope: &Scope) -> Node<T>;
 }
 
@@ -424,8 +424,12 @@ mod test {
     #[test]
     fn test_get_declarations() {
         let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
-        let mut expected = HashSet::new();
-        expected.insert(&Identifier::from("x") as *const Identifier);
+        let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations();
+        for ptr in actual {
+            unsafe {
+                assert_eq!(**ptr, new_ident);
+            }
+        }
     }
 }

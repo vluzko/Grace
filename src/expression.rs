@@ -140,46 +140,6 @@ pub enum BinaryOperator {
     Exponent
 }
 
-impl BinaryOperator {
-
-    pub fn get_return_type(&self, left: &Type, right: &Type) -> Type {
-
-        let add_order = hashmap!{
-            Type::i32 => vec!{Type::i32, Type::i64, Type::f64},
-            Type::ui32 => vec!{Type::ui32, Type::i64, Type::ui64, Type::f64},
-            Type::f32 => vec!{Type::f32, Type::f64},
-            Type::i64 => vec!{Type::i64},
-            Type::f64 => vec!{Type::f64}
-        };
-
-        let div_order = hashmap!{
-            Type::i32 => vec!{Type::f64},
-            Type::f32 => vec!{Type::f32, Type::f64},
-            Type::f64 => vec!{Type::f64}
-        };
-
-        let order = match self {
-            BinaryOperator::Add | BinaryOperator::Sub |
-            BinaryOperator::Mult | BinaryOperator::Mod => add_order,
-            BinaryOperator::Div => div_order,
-            _ => panic!()
-        };
-
-        let left_upper = order.get(left).unwrap();
-        let right_upper = order.get(right).unwrap();
-        let mut intersection = c![*x, for x in left_upper, if right_upper.contains(x)];
-        // TODO: Check that 0 exists, throw a TypeError if it doesn't.
-        intersection.remove(0)
-    }
-
-    pub fn requires_sign(&self) -> bool {
-        match self {
-            BinaryOperator::Div => true,
-            _ => false
-        }
-    }
-}
-
 /// Any unary operator.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
@@ -341,7 +301,6 @@ pub mod trait_impls {
                 Type::i32 => UnaryOperator::ToI32,
                 Type::ui32 => UnaryOperator::ToF32,
                 Type::i64 => UnaryOperator::ToI64,
-                Type::ui64 => UnaryOperator::ToUi64,
                 Type::f32 => UnaryOperator::ToF32,
                 Type::f64 => UnaryOperator::ToF64,
                 _ => panic!()

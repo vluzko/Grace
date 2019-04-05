@@ -427,7 +427,7 @@ mod test {
         let mut expected = HashSet::new();
         expected.insert(&Identifier::from("x") as *const Identifier);
         let actual = func_dec.get_true_declarations();
-        panic!()
-        // assert_eq!(expected, actual);
+        //panic!()
+        assert_eq!(expected, actual);
     }
 }

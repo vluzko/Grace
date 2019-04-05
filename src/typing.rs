@@ -23,35 +23,35 @@ pub enum Type {
 
 // The signed integral types.
 #[allow(non_snake_case)]
-pub fn Signed<'a>() -> HashSet<&'a Type> {
+pub fn Signed<'a>() -> HashSet<Type> {
     let mut set = HashSet::new();
-    set.insert(&Type::i32);
-    set.insert(&Type::i64);
+    set.insert(Type::i32);
+    set.insert(Type::i64);
     set
 }
 
 // The unsigned integral types.
 #[allow(non_snake_case)]
-pub fn Unsigned<'a>() -> HashSet<&'a Type> {
-    hashset!{&Type::ui32}
+pub fn Unsigned<'a>() -> HashSet<Type> {
+    hashset!{Type::ui32}
 }
 
 // The floating point types.
 #[allow(non_snake_case)]
-pub fn Integral<'a>() -> HashSet<&'a Type> {
+pub fn Integral<'a>() -> HashSet<Type> {
     c_union(&Signed(), &Unsigned())
 }
 
 // The floating point types.
 #[allow(non_snake_case)]
-pub fn FloatingPoint<'a>() -> HashSet<&'a Type> {
+pub fn FloatingPoint<'a>() -> HashSet<Type> {
     let mut set = HashSet::new();
-    set.insert(&Type::f32);
-    set.insert(&Type::f64);
+    set.insert(Type::f32);
+    set.insert(Type::f64);
     set
 }
 
-pub fn Numeric<'a>() -> HashSet<&'a Type> {
+pub fn Numeric<'a>() -> HashSet<Type> {
     c_union(&FloatingPoint(), &Integral())
 }
 
@@ -82,7 +82,7 @@ impl Type {
 pub trait Typed<T> {
     fn type_based_rewrite(self) -> T;
 
-    fn resolve_types(&self) -> HashSet<&Type>;
+    fn resolve_types(&self) -> HashSet<Type>;
 }
 
 impl Typed<CanModifyScope> for CanModifyScope {
@@ -90,7 +90,7 @@ impl Typed<CanModifyScope> for CanModifyScope {
         panic!()
     }
 
-    fn resolve_types(&self) -> HashSet<&Type> {
+    fn resolve_types(&self) -> HashSet<Type> {
         return match self {
             CanModifyScope::Statement(ref ptr) => {
                 unsafe {
@@ -119,7 +119,7 @@ impl Typed<Node<Module>> for Node<Module> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<&Type> {
+    fn resolve_types(&self) -> HashSet<Type> {
         panic!()
     }
 }
@@ -134,7 +134,7 @@ impl Typed<Node<Block>> for Node<Block> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<&Type> {
+    fn resolve_types(&self) -> HashSet<Type> {
         panic!()
     }
 }
@@ -175,7 +175,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<&Type> {
+    fn resolve_types(&self) -> HashSet<Type> {
         panic!()
     }
 }
@@ -226,13 +226,13 @@ impl Typed<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<&Type> {
+    fn resolve_types(&self) -> HashSet<Type> {
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
                 operator.get_possible_return_types(left, right)
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
-                hashset!{&Type::boolean}
+                hashset!{Type::boolean}
             },
             Expr::UnaryExpr{ref operator, ref operand} => {
                 panic!()
@@ -245,9 +245,9 @@ impl Typed<Node<Expr>> for Node<Expr> {
                     None => panic!()
                 }
             }
-            Expr::String(_) => hashset!{&Type::string},
+            Expr::String(_) => hashset!{Type::string},
             Expr::Float(_) => FloatingPoint(),
-            Expr::Bool(_) => hashset!{&Type::i32},
+            Expr::Bool(_) => hashset!{Type::i32},
             Expr::Int(_) => Numeric(),
             _ => panic!()
         }
@@ -256,15 +256,25 @@ impl Typed<Node<Expr>> for Node<Expr> {
 
 impl BinaryOperator {
 
-    pub fn get_possible_return_types<'a>(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> HashSet<&'a Type> {
+    pub fn get_possible_return_types(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> HashSet<Type> {
+        //let mut intersection = HashSet::new();
         return match self {
             BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => {
+                /*let left_set = left.resolve_types();
+                let right_set = right.resolve_types();
+                for item in left_set {
+                    if right_set.contains(item) {
+                        let new_item = &(item.clone());
+                        intersection.insert(new_item);
+                    }
+                }
+                intersection*/
                 c_int(&left.resolve_types(), &right.resolve_types())
             },
             BinaryOperator::Div => {
                 FloatingPoint()
             },
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => hashset!{&Type::boolean},
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => hashset!{Type::boolean},
             _ => panic!()
         }
     }

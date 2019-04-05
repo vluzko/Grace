@@ -424,11 +424,12 @@ mod test {
     #[test]
     fn test_get_declarations() {
         let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
-        let mut expected:HashSet<&*const Identifier> = HashSet::new();
-        let new_ident = &Identifier::from("x") as *const Identifier;
-        expected.insert(&new_ident);
+        let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations();
-        //panic!()
-        assert_eq!(expected, actual);
+        for ptr in actual {
+            unsafe {
+                assert_eq!(**ptr, new_ident);
+            }
+        }
     }
 }

@@ -1115,44 +1115,44 @@ mod tests {
             let actual = output(keyword_args(", c=5, d=7".as_bytes()));
             assert_eq!(expected, actual);
         }
-
+       
         #[test]
-       fn test_func_dec() {
-           check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("x"),
-               args: c![TypedIdent::from(x), for x in vec!("a", "b")],
-               vararg: Some(Identifier::from("args")),
-               kwargs: vec!(
-                   (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                   (TypedIdent::from("d"), output(expression("7".as_bytes())))
-               ),
-               varkwarg: Some(Identifier::from("kwargs")),
-               block: output(block("x=5\n".as_bytes(), 0)),
-               return_type: None
-           });
+        fn test_func_dec() {
+            check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("x"),
+                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+                vararg: Some(Identifier::from("args")),
+                kwargs: vec!(
+                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
+                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                ),
+                varkwarg: Some(Identifier::from("kwargs")),
+                block: output(block("x=5\n".as_bytes(), 0)),
+                return_type: None
+            });
 
-           check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("x"),
-               args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
-               vararg: None,
-               kwargs: vec!(
-                   (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
-               ),
-               varkwarg: None,
-               block: output(block("x=5\n".as_bytes(), 0)),
-               return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
-           });
+            check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("x"),
+                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
+                vararg: None,
+                kwargs: vec!(
+                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
+                ),
+                varkwarg: None,
+                block: output(block("x=5\n".as_bytes(), 0)),
+                return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
+            });
 
-           check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("a"),
-               args: vec!(TypedIdent::from("b")),
-               vararg: None,
-               kwargs: vec!(),
-               varkwarg: None,
-               block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-               return_type: None
-           });
-       }
+            check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("a"),
+                args: vec!(TypedIdent::from("b")),
+                vararg: None,
+                kwargs: vec!(),
+                varkwarg: None,
+                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
+                return_type: None
+            });
+        }
 
         #[test]
         fn test_try_except() {

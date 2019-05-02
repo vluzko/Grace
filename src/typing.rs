@@ -16,43 +16,38 @@ pub enum Type {
     ui32,
     string,
     boolean,
-    Tuple(Vec<Type>),
+    Sum(Vec<Type>),
+    Product(Vec<Type>),
     Vector(Box<Type>),
     Function(Vec<Type>, Box<Type>)
 }
 
 // The signed integral types.
 #[allow(non_snake_case)]
-pub fn Signed<'a>() -> HashSet<Type> {
-    let mut set = HashSet::new();
-    set.insert(Type::i32);
-    set.insert(Type::i64);
-    set
+pub fn Signed<'a>() -> Type {
+    Type::Sum(vec!(Type::i32, Type::i64))
 }
 
 // The unsigned integral types.
 #[allow(non_snake_case)]
-pub fn Unsigned<'a>() -> HashSet<Type> {
-    hashset!{Type::ui32}
+pub fn Unsigned<'a>() -> Type {
+    Type::Sum(vec!(Type::ui32))
 }
 
 // The floating point types.
 #[allow(non_snake_case)]
-pub fn Integral<'a>() -> HashSet<Type> {
-    c_union(&Signed(), &Unsigned())
+pub fn Integral<'a>() -> Type {
+    return Signed().merge(&Unsigned());
 }
 
 // The floating point types.
 #[allow(non_snake_case)]
-pub fn FloatingPoint<'a>() -> HashSet<Type> {
-    let mut set = HashSet::new();
-    set.insert(Type::f32);
-    set.insert(Type::f64);
-    set
+pub fn FloatingPoint<'a>() -> Type {
+    Type::Sum(vec!(Type::f32, Type::f64))
 }
 
-pub fn Numeric<'a>() -> HashSet<Type> {
-    c_union(&FloatingPoint(), &Integral())
+pub fn Numeric<'a>() -> Type {
+    return FloatingPoint().merge(&Integral());
 }
 
 impl Type {
@@ -77,12 +72,31 @@ impl Type {
             _ => "".to_string()
         }
     }
+
+    /// Merge two types if they're compatible.
+    pub fn merge(&self, other: &Type) -> Type {
+        if self == other {
+            return self.clone()
+        } else {
+            return match self {
+                Type::Sum(ref types) => {
+                    match other {
+                        Type::Sum(ref other_types) => {
+                            return Type::Sum(vec_c_int(types, other_types))
+                        }, 
+                        _ => panic!()
+                    }
+                }, 
+                _ => panic!()
+            }
+        }
+    }
 }
 
 pub trait Typed<T> {
     fn type_based_rewrite(self) -> T;
 
-    fn resolve_types(&self) -> HashSet<Type>;
+    fn resolve_types(&self) -> Type;
 }
 
 impl Typed<CanModifyScope> for CanModifyScope {
@@ -90,7 +104,7 @@ impl Typed<CanModifyScope> for CanModifyScope {
         panic!()
     }
 
-    fn resolve_types(&self) -> HashSet<Type> {
+    fn resolve_types(&self) -> Type {
         return match self {
             CanModifyScope::Statement(ref ptr) => {
                 unsafe {
@@ -119,7 +133,7 @@ impl Typed<Node<Module>> for Node<Module> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<Type> {
+    fn resolve_types(&self) -> Type {
         panic!()
     }
 }
@@ -134,8 +148,11 @@ impl Typed<Node<Block>> for Node<Block> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<Type> {
-        panic!()
+    fn resolve_types(&self) -> Type {
+        for stmt in self.data.statements.iter() {
+            stmt.resolve_types();
+        }
+        return Type::i32;
     }
 }
 
@@ -157,14 +174,14 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 };
                 Stmt::IfStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite(), elifs: new_elifs, else_block: new_else_block}
             },
-            Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite())
-            },
             Stmt::LetStmt {typed_name, expression} => {
                 Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite()}
             },
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite()}
+            },
+            Stmt::ReturnStmt (value) => {
+                Stmt::ReturnStmt (value.type_based_rewrite())
             },
             _ => self.data
         };
@@ -175,8 +192,18 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<Type> {
-        panic!()
+    fn resolve_types(&self) -> Type {
+        return match self.data {
+            Stmt::LetStmt{ref typed_name, ref expression} => {
+                expression.resolve_types()
+            },
+            Stmt::AssignmentStmt{ref expression, ref name, ref operator} => {
+                let expr_types = expression.resolve_types();
+                panic!()
+            }
+            Stmt::ReturnStmt(ref value) => value.resolve_types(),
+            _ => panic!()
+        };
     }
 }
 
@@ -226,13 +253,13 @@ impl Typed<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn resolve_types(&self) -> HashSet<Type> {
+    fn resolve_types(&self) -> Type {
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
                 operator.get_possible_return_types(left, right)
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
-                hashset!{Type::boolean}
+                Type::boolean
             },
             Expr::UnaryExpr{ref operator, ref operand} => {
                 panic!()
@@ -240,41 +267,49 @@ impl Typed<Node<Expr>> for Node<Expr> {
             Expr::IdentifierExpr(ref name) => {
                 // TODO: Look up the name in scope.
                 let creation = self.scope.get_declaration(name);
+                println!("{:?}", self.scope);
                 match creation {
                     Some(y) => y.resolve_types(),
                     None => panic!()
                 }
             }
-            Expr::String(_) => hashset!{Type::string},
+            Expr::String(_) => Type::string,
             Expr::Float(_) => FloatingPoint(),
-            Expr::Bool(_) => hashset!{Type::i32},
+            Expr::Bool(_) => Type::i32,
             Expr::Int(_) => Numeric(),
             _ => panic!()
         }
     }
 }
 
+pub fn choose_return_type(possible: &Type) -> Type {
+    let preference = vec!(Type::i32, Type::i64, Type::f32, Type::f64);
+    return match possible {
+        Type::Sum(ref types) => {
+            for t in preference {
+                if types.contains(&t) {
+                    return t;
+                }
+            }
+            possible.clone()
+        },
+        _ => possible.clone()
+    }
+}
+
 impl BinaryOperator {
 
-    pub fn get_possible_return_types(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> HashSet<Type> {
+    pub fn get_possible_return_types(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
             BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => {
-                /*let left_set = left.resolve_types();
-                let right_set = right.resolve_types();
-                for item in left_set {
-                    if right_set.contains(item) {
-                        let new_item = &(item.clone());
-                        intersection.insert(new_item);
-                    }
-                }
-                intersection*/
-                c_int(&left.resolve_types(), &right.resolve_types())
+                // c_int(&left.resolve_types(), &right.resolve_types())
+                left.resolve_types().merge(&right.resolve_types())
             },
             BinaryOperator::Div => {
                 FloatingPoint()
             },
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => hashset!{Type::boolean},
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
             _ => panic!()
         }
     }
@@ -321,4 +356,18 @@ impl BinaryOperator {
 #[cfg(test)]
 mod test {
 
+    use super::*;
+    use parser;
+    use parser_utils;
+    use scoping;
+
+
+    #[test]
+    fn test_identifier_resolution() {
+        let block = "let a = 1\nlet b = a";
+        let parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
+        let scoped = parsed.gen_scopes(&scoping::empty_scope());
+        let types = scoped.resolve_types();
+        println!("{:?}", types);
+    }
 }

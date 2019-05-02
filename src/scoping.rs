@@ -44,6 +44,7 @@ impl Scope {
             return match self.parent_scope {
                 Some(parent) => {
                     unsafe {
+                        println!("parent: {:?}", *parent);
                         (*parent).get_declaration(name)
                     }
                 },

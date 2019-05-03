@@ -412,8 +412,11 @@ mod test {
         let scoped = block.gen_scopes(Some(&empty_scope() as *const Scope));
         let stmt_scope = &scoped.data.statements[0].scope;
         assert_eq!(scoped.scope.declarations.len(), 2);
-
         unsafe {
+            // Check that scope addresses match. 
+            assert_eq!(&scoped.scope as *const Scope, scoped.data.statements[0].scope.parent_scope.unwrap());
+
+            // Check that identifiers match.
             let ident1 = match scoped.data.statements[0].data {
                 Stmt::LetStmt{ref typed_name, ..} => {
                     &typed_name.name

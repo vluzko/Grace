@@ -75,7 +75,7 @@ pub trait Scoped<T> {
     fn check_scope(self, scope: Scope) -> bool;
 
     /// Generate scopes recursively. Returns a new node with the correct scope attached.
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<T>;
+    fn gen_scopes(self, parent_scope: Option<*const Scope>) -> Node<T>;
 }
 
 impl Scoped<Module> for Node<Module> {
@@ -93,14 +93,14 @@ impl Scoped<Module> for Node<Module> {
     }
 
         /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Module> {
+    fn gen_scopes(self, parent_scope: Option<*const Scope>) -> Node<Module> {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
 
-        let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+        let mut new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
 
         let new_stmts: Vec<Node<Stmt>> = self.data.declarations.into_iter().enumerate().map(|(_i, stmt)| {
-            let new_stmt = stmt.gen_scopes(&new_scope);
+            let new_stmt = stmt.gen_scopes(Some(&new_scope as *const Scope));
             return new_stmt;
         }).collect();
 
@@ -150,14 +150,15 @@ impl Scoped<Block> for Node<Block> {
         panic!();
     }
 
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Block> {
+    fn gen_scopes(self, parent_scope: Option<*const Scope>) -> Node<Block> {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
 
-        let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+        let mut new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
+        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
 
         let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
-            let new_stmt = stmt.gen_scopes(&new_scope);
+            let new_stmt = stmt.gen_scopes(Some(&new_scope as *const Scope));
             return new_stmt;
         }).collect();
 
@@ -180,7 +181,9 @@ impl Scoped<Block> for Node<Block> {
                 _ => {}
             };
         }
-
+        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
+        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
+        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
         let new_block = Block{statements: new_stmts};
         return Node{
             id: self.id,
@@ -230,7 +233,7 @@ impl Scoped<Stmt> for Node<Stmt> {
     }
 
         /// Check scope and generate
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Stmt> {
+    fn gen_scopes(self, parent_scope: Option<*const Scope>) -> Node<Stmt> {
         let new_node = match self.data {
             Stmt::LetStmt{typed_name, expression} => {
                 let new_value = expression.gen_scopes(parent_scope);
@@ -242,8 +245,9 @@ impl Scoped<Stmt> for Node<Stmt> {
 
                 let declarations = BTreeMap::new();
                 let declaration_order = BTreeMap::new();
-                println!("Parent scope in gen_scopes for Stmt: {:?}", parent_scope);
-                let new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+                // println!("stmt gen_scopes parent scope: {:?}\t\t{:?}", parent_scope, parent_scope as *const Scope);
+                let new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
+                println!("stmt gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
                 let new_node = Node{id: self.id, data: new_let, scope: new_scope};
                 new_node
             },
@@ -280,9 +284,9 @@ impl Scoped<Stmt> for Node<Stmt> {
                     None => {}
                 };
 
-                let mut new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+                let mut new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
 
-                let new_body = block.gen_scopes(&new_scope);
+                let new_body = block.gen_scopes(Some(&new_scope as *const Scope));
                 let mut new_stmt = Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block: new_body, return_type};
 
                 let mut new_node = Node{id: self.id, data: new_stmt, scope: new_scope};
@@ -342,18 +346,24 @@ impl Scoped<Expr> for Node<Expr> {
         panic!();
     }
 
-    fn gen_scopes(self, parent_scope: &Scope) -> Node<Expr> {
-        
+    fn gen_scopes(self, parent_scope: Option<*const Scope>) -> Node<Expr> {
         let new_node: Node<Expr> = match self.data {
             Expr::BinaryExpr{operator, left, right} => {
                 let new_left = left.gen_scopes(parent_scope);
                 let new_right = right.gen_scopes(parent_scope);
                 let new_expr = Expr::BinaryExpr{operator: operator, left: Box::new(new_left), right: Box::new(new_right)};
                 let new_id = self.id;
-                Node{id: new_id, data: new_expr, scope: parent_scope.clone()}
+                let declarations = BTreeMap::new();
+                let declaration_order = BTreeMap::new();
+                let new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
+                Node{id: new_id, data: new_expr, scope: new_scope}
             },
             Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
-                Node{id: self.id, data: self.data, scope: parent_scope.clone()}
+                let declarations = BTreeMap::new();
+                let declaration_order = BTreeMap::new();
+                let new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
+                println!("expr gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
+                Node{id: self.id, data: self.data, scope: new_scope}
             },
             _ => panic!()
         };
@@ -373,7 +383,7 @@ mod test {
         let func_str = r#"fn a(b, c):
     return b + c
 "#;
-        let func_stmt = output(parser::statement(func_str.as_bytes(), 0)).gen_scopes(&empty_scope());
+        let func_stmt = output(parser::statement(func_str.as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));
@@ -399,7 +409,7 @@ mod test {
             statements: vec!(Node::from(s1), Node::from(s2))
         });
 
-        let scoped = block.gen_scopes(&mut empty_scope());
+        let scoped = block.gen_scopes(Some(&empty_scope() as *const Scope));
         let stmt_scope = &scoped.data.statements[0].scope;
         assert_eq!(scoped.scope.declarations.len(), 2);
 
@@ -428,7 +438,7 @@ mod test {
 
     #[test]
     fn test_get_declarations() {
-        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
+        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations();
         for ptr in actual {

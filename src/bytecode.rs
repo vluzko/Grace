@@ -248,7 +248,7 @@ mod tests {
 
     #[test]
    pub fn test_generate_module() {
-       let module = output(parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes())).gen_scopes(&empty_scope());
+       let module = output(parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes())).gen_scopes(Some(&empty_scope() as *const Scope));
        let mod_bytecode = r#"(module
 (import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
 (import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
@@ -269,7 +269,7 @@ get_local $x
 
     #[test]
     pub fn test_generate_function() {
-        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(&empty_scope());
+        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
         let func_bytecode = r#"(func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5
 i32.const 6

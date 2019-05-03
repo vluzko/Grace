@@ -193,7 +193,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
     }
 
     fn resolve_types(&self) -> Type {
-        println!("resolve_types for stmt: {:?}", self.scope);
+        println!("stmt resolve_types scope: {:?}", self.scope);
         return match self.data {
             Stmt::LetStmt{ref typed_name, ref expression} => {
                 expression.resolve_types()
@@ -255,6 +255,7 @@ impl Typed<Node<Expr>> for Node<Expr> {
     }
 
     fn resolve_types(&self) -> Type {
+        println!("expr resolve_types scope: {:?}", self.scope);
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
                 operator.get_possible_return_types(left, right)
@@ -367,7 +368,13 @@ mod test {
     fn test_identifier_resolution() {
         let block = "let a = 1\nlet b = a";
         let parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        let scoped = parsed.gen_scopes(&scoping::empty_scope());
+        println!("parsed scope: {:?}\t\t{:?}", parsed.scope, &parsed.scope as *const Scope);
+        let empty = Some(&scoping::empty_scope() as *const Scope);
+        let scoped = parsed.gen_scopes(empty);
+
+        unsafe{
+            println!("Scoped parent_scope: {:?}, {:?}", *(scoped.scope.parent_scope.unwrap()), scoped.scope.parent_scope);
+        }
         println!("Scoped.scope: {:?}, {:?}", scoped.scope, &scoped.scope as * const Scope);
         let types = scoped.resolve_types();
         println!("{:?}", types);

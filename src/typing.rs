@@ -193,6 +193,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
     }
 
     fn resolve_types(&self) -> Type {
+        println!("resolve_types for stmt: {:?}", self.scope);
         return match self.data {
             Stmt::LetStmt{ref typed_name, ref expression} => {
                 expression.resolve_types()
@@ -367,6 +368,7 @@ mod test {
         let block = "let a = 1\nlet b = a";
         let parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
         let scoped = parsed.gen_scopes(&scoping::empty_scope());
+        println!("Scoped.scope: {:?}, {:?}", scoped.scope, &scoped.scope as * const Scope);
         let types = scoped.resolve_types();
         println!("{:?}", types);
     }

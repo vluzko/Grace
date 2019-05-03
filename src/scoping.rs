@@ -240,7 +240,11 @@ impl Scoped<Stmt> for Node<Stmt> {
                 // Build new statement
                 let new_let = Stmt::LetStmt{typed_name, expression: new_value};
 
-                let new_node = Node{id: self.id, data: new_let, scope: parent_scope.clone()};
+                let declarations = BTreeMap::new();
+                let declaration_order = BTreeMap::new();
+                println!("Parent scope in gen_scopes for Stmt: {:?}", parent_scope);
+                let new_scope = Scope{parent_scope: Some(parent_scope as *const Scope), declarations, declaration_order};
+                let new_node = Node{id: self.id, data: new_let, scope: new_scope};
                 new_node
             },
             Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block, return_type} => {

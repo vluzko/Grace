@@ -155,7 +155,7 @@ impl Scoped<Block> for Node<Block> {
         let declaration_order = BTreeMap::new();
 
         let mut new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
-        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
+        // println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
 
         let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
             let new_stmt = stmt.gen_scopes(Some(&new_scope as *const Scope));
@@ -181,9 +181,7 @@ impl Scoped<Block> for Node<Block> {
                 _ => {}
             };
         }
-        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
-        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
-        println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
+        // println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
         let new_block = Block{statements: new_stmts};
         return Node{
             id: self.id,
@@ -191,6 +189,46 @@ impl Scoped<Block> for Node<Block> {
             scope: new_scope
         };
     }
+}
+
+fn gen_scopes_block(block: Node<Block>, parent_scope: Option<*const Scope>) -> *const Node<Block> {
+    let declarations = BTreeMap::new();
+    let declaration_order = BTreeMap::new();
+
+    let mut new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
+    // println!("new_scope: {:?}, \t\t{:?}", new_scope, &new_scope as *const Scope);
+
+    let new_stmts: Vec<Node<Stmt>> = block.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
+        let new_stmt = stmt.gen_scopes(Some(&new_scope as *const Scope));
+        return new_stmt;
+    }).collect();
+
+    // Update the parent scope with any changes caused by sub statements.
+    // Yes this does mean we loop through all the statements twice. If this
+    // proves to be a performance problem we can optimize it later.
+    // (The alternative is passing mutable data around recursively and that looks
+    // like several dozen migraines in the making.)
+    for (i, stmt) in new_stmts.iter().enumerate() {
+        match &stmt.data {
+            Stmt::FunctionDecStmt{ref name, ..} => {
+                new_scope.declaration_order.insert(name as *const Identifier, i);
+            },
+            Stmt::LetStmt{ref typed_name, ..} => {
+                let raw_name = &typed_name.name as *const Identifier;
+                new_scope.declaration_order.insert(raw_name, i);
+                let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
+                new_scope.declarations.insert(raw_name, scope_mod);
+            },
+            _ => {}
+        };
+    }
+    println!("{:?}", &new_scope as *const Scope);
+    let new_block = Block{statements: new_stmts};
+    return &Node{
+        id: block.id,
+        data: new_block,
+        scope: new_scope
+    } as *const Node<Block>;
 }
 
 impl Scoped<Stmt> for Node<Stmt> {
@@ -247,7 +285,7 @@ impl Scoped<Stmt> for Node<Stmt> {
                 let declaration_order = BTreeMap::new();
                 // println!("stmt gen_scopes parent scope: {:?}\t\t{:?}", parent_scope, parent_scope as *const Scope);
                 let new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
-                println!("stmt gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
+                // println!("stmt gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
                 let new_node = Node{id: self.id, data: new_let, scope: new_scope};
                 new_node
             },
@@ -362,7 +400,7 @@ impl Scoped<Expr> for Node<Expr> {
                 let declarations = BTreeMap::new();
                 let declaration_order = BTreeMap::new();
                 let new_scope = Scope{parent_scope: parent_scope, declarations, declaration_order};
-                println!("expr gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
+                // println!("expr gen_scopes scope: {:?}\t\t{:?}", new_scope, &new_scope as *const Scope);
                 Node{id: self.id, data: self.data, scope: new_scope}
             },
             _ => panic!()
@@ -440,6 +478,32 @@ mod test {
     }
 
     #[test]
+    fn test_scopes() {
+        // Block is:
+        // let a = 5 + -1
+        // let b = true and false
+        let l1 = Node::from(Expr::Int("5".to_string()));
+        let r1 = Node::from(Expr::Int("-1".to_string()));
+        let l2 = Node::from(true);
+        let r2 = Node::from(false);
+
+        let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
+        let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
+
+        let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
+        let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
+
+        let block = Node::from(Block{
+            statements: vec!(Node::from(s1), Node::from(s2))
+        });
+
+        let scoped = gen_scopes_block(block, Some(&empty_scope() as *const Scope));
+        unsafe {
+            println!("{:?}", scoped)
+        }
+    }
+
+    #[test]
     fn test_get_declarations() {
         let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
         let new_ident = Identifier::from("x");
@@ -449,5 +513,27 @@ mod test {
                 assert_eq!(**ptr, new_ident);
             }
         }
+    }
+
+    struct TestStruct {
+        a: i64,
+        b: i64
+    }
+
+    struct Struct2 {
+        c: TestStruct
+    }
+
+    fn make_struct() -> Struct2 {
+        let x = TestStruct{a: 1, b: 2};
+        println!("x address: {:?}", &x as *const TestStruct);
+
+        return Struct2{c: x};
+    }
+
+    #[test]
+    fn test_make() {
+        let x = make_struct();
+        println!("new address: {:?}", &x as *const Struct2);
     }
 }

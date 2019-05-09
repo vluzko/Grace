@@ -1,6 +1,10 @@
 # Scoping
 
 ## Pointer architecture
+* Parent node to child node: Node -> Node (One to many)
+* Scope to parent scope: Scope -> Scope (One to one)
+* Node to scope: Node -> Scope (One to one)
+* Scope to modifier: Scope -> Node (One to many)
 
 ### Problems
 * The current architecture doesn't work because everything is stack allocated and addresses change

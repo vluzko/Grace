@@ -51,25 +51,26 @@ impl ToBytecode for Node<Stmt> {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
                 // Scope check
                 // unsafe {
-                    let mut local_var_declarations = HashSet::new();
-                    for key in self.get_true_declarations() {
-                        unsafe {
-                            local_var_declarations.insert((**key).to_string());
-                        }
-                    }
-                    // let declarations: HashSet<Identifier> = self.scope.declarations.keys().map(|x| (**x).name).collect();
+                    // let mut local_var_declarations = HashSet::new();
+                    panic!()
+                    // for key in self.get_true_declarations() {
+                    //     unsafe {
+                    //         local_var_declarations.insert((**key).to_string());
+                    //     }
+                    // }
+                    // // let declarations: HashSet<Identifier> = self.scope.declarations.keys().map(|x| (**x).name).collect();
                 
-                    let body_bytecode = block.generate_bytecode();
-                    let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+                    // let body_bytecode = block.generate_bytecode();
+                    // let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
-                    let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
-                    let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
-                        func_name = name.to_string(),
-                        params = params,
-                        local_vars = local_vars,
-                        body = body_bytecode
-                    );
-                    func_dec
+                    // let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
+                    // let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                    //     func_name = name.to_string(),
+                    //     params = params,
+                    //     local_vars = local_vars,
+                    //     body = body_bytecode
+                    // );
+                    // func_dec
                 // }
             },
             &Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
@@ -248,37 +249,39 @@ mod tests {
 
     #[test]
    pub fn test_generate_module() {
-       let module = output(parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes())).gen_scopes(Some(&empty_scope() as *const Scope));
-       let mod_bytecode = r#"(module
-(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
-(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
-(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
-(import 'memory_management' 'mem' (memory (;0;) 1))
-(func $a (param $b i32) (result i32) (local $x i32)
-i32.const 5
-i32.const 6
-i32.add
-set_local $x
-get_local $x
-)
-(export "a" (func $a))
-)
-"#;
-       assert_eq!(module.generate_bytecode(), mod_bytecode);
+       panic!();
+//        let module = output(parser::module("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes())).gen_scopes(Some(&empty_scope() as *const Scope));
+//        let mod_bytecode = r#"(module
+// (import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
+// (import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
+// (import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+// (import 'memory_management' 'mem' (memory (;0;) 1))
+// (func $a (param $b i32) (result i32) (local $x i32)
+// i32.const 5
+// i32.const 6
+// i32.add
+// set_local $x
+// get_local $x
+// )
+// (export "a" (func $a))
+// )
+// "#;
+//        assert_eq!(module.generate_bytecode(), mod_bytecode);
    }
 
     #[test]
     pub fn test_generate_function() {
-        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
-        let func_bytecode = r#"(func $a (param $b i32) (result i32) (local $x i32)
-i32.const 5
-i32.const 6
-i32.add
-set_local $x
-get_local $x
-)
-(export "a" (func $a))"#;
-        assert_eq!(func_dec.generate_bytecode(), func_bytecode);
+        panic!();
+//         let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
+//         let func_bytecode = r#"(func $a (param $b i32) (result i32) (local $x i32)
+// i32.const 5
+// i32.const 6
+// i32.add
+// set_local $x
+// get_local $x
+// )
+// (export "a" (func $a))"#;
+//         assert_eq!(func_dec.generate_bytecode(), func_bytecode);
     }
 
     #[test]
@@ -305,8 +308,9 @@ get_local $x
 
     #[test]
     pub fn test_generate_divide() {
-        let div_expr = output( parser::expression("8 / 9".as_bytes())).type_based_rewrite();
-        assert_eq!(div_expr.generate_bytecode(), "i32.const 8\nf64.convert_s\ni32.const 9\nf64.convert_s\nf64.div".to_string());
+        panic!();
+        // let div_expr = output( parser::expression("8 / 9".as_bytes())).type_based_rewrite();
+        // assert_eq!(div_expr.generate_bytecode(), "i32.const 8\nf64.convert_s\ni32.const 9\nf64.convert_s\nf64.div".to_string());
     }
 
     #[test]

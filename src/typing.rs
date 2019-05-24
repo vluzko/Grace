@@ -1,9 +1,11 @@
 use std::collections::HashSet;
+use std::collections::HashMap;
 use std::iter::FromIterator;
 
 use expression::*;
-use scoping::*;
+use scoping::Scoped;
 use general_utils::*;
+use scoping;
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -94,29 +96,29 @@ impl Type {
 }
 
 pub trait Typed<T> {
-    fn type_based_rewrite(self) -> T;
+    fn type_based_rewrite(self, context: &scoping::Context) -> T;
 
-    fn resolve_types(&self) -> Type;
+    fn resolve_types(&self, context: &scoping::Context) -> Type;
 }
 
-impl Typed<CanModifyScope> for CanModifyScope {
-    fn type_based_rewrite(self) -> CanModifyScope {
+impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
+    fn type_based_rewrite(self, context: &scoping::Context) -> scoping::CanModifyScope {
         panic!()
     }
 
-    fn resolve_types(&self) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> Type {
         return match self {
-            CanModifyScope::Statement(ref ptr) => {
+            scoping::CanModifyScope::Statement(ref ptr) => {
                 unsafe {
-                    (**ptr).resolve_types() 
+                    (**ptr).resolve_types(context) 
                 }
             },
-            CanModifyScope::Expression(ref ptr) => {
+            scoping::CanModifyScope::Expression(ref ptr) => {
                 unsafe {
-                    (**ptr).resolve_types()
+                    (**ptr).resolve_types(context)
                 }
             },
-            CanModifyScope::Argument => {
+            scoping::CanModifyScope::Argument => {
                 panic!()
             }
         };
@@ -124,8 +126,8 @@ impl Typed<CanModifyScope> for CanModifyScope {
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self) -> Node<Module> {
-        let new_decs = c![x.type_based_rewrite(), for x in self.data.declarations];
+    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Module> {
+        let new_decs = c![x.type_based_rewrite(context), for x in self.data.declarations];
         return Node{
             id: self.id,
             data: Module{ declarations: new_decs},
@@ -133,14 +135,14 @@ impl Typed<Node<Module>> for Node<Module> {
         };
     }
 
-    fn resolve_types(&self) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> Type {
         panic!()
     }
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self) -> Node<Block> {
-        let new_stmts = c![x.type_based_rewrite(), for x in self.data.statements];
+    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Block> {
+        let new_stmts = c![x.type_based_rewrite(context), for x in self.data.statements];
         return Node {
             id: self.id,
             data: Block{statements: new_stmts},
@@ -148,40 +150,40 @@ impl Typed<Node<Block>> for Node<Block> {
         };
     }
 
-    fn resolve_types(&self) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> Type {
         for stmt in self.data.statements.iter() {
-            stmt.resolve_types();
+            stmt.resolve_types(context);
         }
         return Type::i32;
     }
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self) -> Node<Stmt> {
+    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(), name, args, vararg, kwargs, varkwarg, return_type}
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, vararg, kwargs, varkwarg, return_type}
             },
             Stmt::AssignmentStmt {mut expression, name, operator} => {
-                expression = expression.type_based_rewrite();
-                Stmt::AssignmentStmt {name, operator, expression: expression.type_based_rewrite()}
+                expression = expression.type_based_rewrite(context);
+                Stmt::AssignmentStmt {name, operator, expression: expression.type_based_rewrite(context)}
             },
             Stmt::IfStmt {condition, block, elifs,  else_block} => {
-                let new_elifs =  c![(elif.0.type_based_rewrite(), elif.1.type_based_rewrite()), for elif in elifs];
+                let new_elifs =  c![(elif.0.type_based_rewrite(context), elif.1.type_based_rewrite(context)), for elif in elifs];
                 let new_else_block = match else_block {
                     None => None,
-                    Some(block) => Some(block.type_based_rewrite())
+                    Some(block) => Some(block.type_based_rewrite(context))
                 };
-                Stmt::IfStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite(), elifs: new_elifs, else_block: new_else_block}
+                Stmt::IfStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), elifs: new_elifs, else_block: new_else_block}
             },
             Stmt::LetStmt {typed_name, expression} => {
-                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite()}
+                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite(context)}
             },
             Stmt::WhileStmt {condition, block} => {
-                Stmt::WhileStmt {condition: condition.type_based_rewrite(), block: block.type_based_rewrite()}
+                Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
             },
             Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite())
+                Stmt::ReturnStmt (value.type_based_rewrite(context))
             },
             _ => self.data
         };
@@ -192,28 +194,28 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> Type {
         println!("stmt resolve_types scope: {:?}", self.scope);
         return match self.data {
             Stmt::LetStmt{ref typed_name, ref expression} => {
-                expression.resolve_types()
+                expression.resolve_types(context)
             },
             Stmt::AssignmentStmt{ref expression, ref name, ref operator} => {
-                let expr_types = expression.resolve_types();
+                let expr_types = expression.resolve_types(context);
                 panic!()
             }
-            Stmt::ReturnStmt(ref value) => value.resolve_types(),
+            Stmt::ReturnStmt(ref value) => value.resolve_types(context),
             _ => panic!()
         };
     }
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self) -> Node<Expr> {
+    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {mut left, mut right, operator} => {
-                let left = Box::new(left.type_based_rewrite());
-                let right = Box::new(right.type_based_rewrite());
+                let left = Box::new(left.type_based_rewrite(context));
+                let right = Box::new(right.type_based_rewrite(context));
                 Expr::ComparisonExpr {left, right, operator}
             },
             Expr::BinaryExpr {operator, left, right} => {
@@ -239,9 +241,9 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 Expr::BinaryExpr {operator: operator, left: new_left, right: new_right}
             },
             Expr::FunctionCall {function, args, kwargs} => {
-                let new_func_expr = Box::new(function.type_based_rewrite());
-                let new_args = args.into_iter().map(|x| x.type_based_rewrite()).collect();
-                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite())).collect();
+                let new_func_expr = Box::new(function.type_based_rewrite(context));
+                let new_args = args.into_iter().map(|x| x.type_based_rewrite(context)).collect();
+                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context))).collect();
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
             _ => self.data
@@ -254,11 +256,11 @@ impl Typed<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn resolve_types(&self) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> Type {
         println!("expr resolve_types scope: {:?}", self.scope);
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
-                operator.get_possible_return_types(left, right)
+                operator.get_possible_return_types(left, right, context)
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
                 Type::boolean
@@ -268,12 +270,12 @@ impl Typed<Node<Expr>> for Node<Expr> {
             }
             Expr::IdentifierExpr(ref name) => {
                 // TODO: Look up the name in scope.
-                let creation = self.scope.get_declaration(name);
-                println!("{:?}", self.scope);
-                match creation {
-                    Some(y) => y.resolve_types(),
-                    None => panic!()
-                }
+                let creation = context.get_declaration(self.scope, name);
+                panic!()
+                // match creation {
+                //     Some(y) => y.resolve_types(context),
+                //     None => panic!()
+                // }
             }
             Expr::String(_) => Type::string,
             Expr::Float(_) => FloatingPoint(),
@@ -301,12 +303,12 @@ pub fn choose_return_type(possible: &Type) -> Type {
 
 impl BinaryOperator {
 
-    pub fn get_possible_return_types(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>) -> Type {
+    pub fn get_possible_return_types(&self, left: &Box<Node<Expr>>, right: &Box<Node<Expr>>, context: &scoping::Context) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
             BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => {
                 // c_int(&left.resolve_types(), &right.resolve_types())
-                left.resolve_types().merge(&right.resolve_types())
+                left.resolve_types(context).merge(&right.resolve_types(context))
             },
             BinaryOperator::Div => {
                 FloatingPoint()
@@ -368,15 +370,11 @@ mod test {
     fn test_identifier_resolution() {
         let block = "let a = 1\nlet b = a";
         let parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        println!("parsed scope: {:?}\t\t{:?}", parsed.scope, &parsed.scope as *const Scope);
-        let empty = Some(&scoping::empty_scope() as *const Scope);
-        let scoped = parsed.gen_scopes(empty);
+        let context = scoping::initial_context();
+        let scoped = parsed.gen_scopes(Some(0), &context);
+        panic!()
 
-        unsafe{
-            println!("Scoped parent_scope: {:?}, {:?}", *(scoped.scope.parent_scope.unwrap()), scoped.scope.parent_scope);
-        }
-        println!("Scoped.scope: {:?}, {:?}", scoped.scope, &scoped.scope as * const Scope);
-        let types = scoped.resolve_types();
-        println!("{:?}", types);
+        // let types = scoped.resolve_types();
+        // println!("{:?}", types);
     }
 }

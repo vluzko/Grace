@@ -6,12 +6,13 @@ use std::convert::From;
 use compiler_layers::get_next_id;
 use scoping::*;
 use typing::*;
+use general_utils;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
     pub id: u64,
     pub data: T,
-    pub scope: Scope
+    pub scope: usize
 }
 
 impl <T> PartialEq for Node<T> where T:PartialEq {
@@ -245,7 +246,7 @@ pub mod trait_impls {
             return Node{
                 id: get_next_id(),
                 data: input,
-                scope: empty_scope()
+                scope: general_utils::get_next_scope_id()
             };
         }
     }
@@ -256,7 +257,7 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: empty_scope()
+                scope: general_utils::get_next_scope_id()
             };
         }
     }
@@ -267,7 +268,7 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: empty_scope()
+                scope: general_utils::get_next_scope_id()
             };
         }
     }
@@ -278,7 +279,7 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: empty_scope()
+                scope: general_utils::get_next_scope_id()
             };
         }
     }
@@ -289,7 +290,7 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: empty_scope()
+                scope: general_utils::get_next_scope_id()
             };
         }
     }

@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::hash::Hash;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 pub fn c_int<T>(a: &HashSet<T>, b: &HashSet<T>) -> HashSet<T>
 where T: Eq, T: Hash, T: Clone {
@@ -35,4 +36,18 @@ where T: Eq, T: Clone {
         }
     }
     return new_vec;
+}
+
+static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static SCOPE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+pub fn get_next_id() -> u64 {
+    let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    return next_id as u64;
+}
+
+/// Return a unique scope ID.
+pub fn get_next_scope_id() -> usize {
+    let next_id = SCOPE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    return next_id as usize;
 }

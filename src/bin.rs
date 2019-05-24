@@ -6,6 +6,7 @@ use grace_lib::parser;
 use grace_lib::parser_utils::*;
 use grace_lib::typing::*;
 use grace_lib::bytecode::*;
+use grace_lib::scoping;
 
 
 fn main() {
@@ -15,9 +16,9 @@ fn main() {
     f.read_to_string(&mut file_contents).unwrap();
 
     let parse_result = parser::module(file_contents.as_bytes());
-
+    let context = scoping::empty_context();
     //let names_maps = call compiler layers assign_node_ids here;
-    let type_rewrites = output(parse_result).type_based_rewrite();
+    let type_rewrites = output(parse_result).type_based_rewrite(&context);
     let wast = type_rewrites.generate_bytecode();
     let outfile = File::create(&args[2]);
     outfile.unwrap().write_all(wast.as_bytes()).unwrap();

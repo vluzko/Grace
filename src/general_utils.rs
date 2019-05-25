@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::hash::Hash;
@@ -36,6 +37,11 @@ where T: Eq, T: Clone {
         }
     }
     return new_vec;
+}
+
+pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
+where V: Eq, K: Hash {
+    panic!()
 }
 
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);

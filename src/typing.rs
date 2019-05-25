@@ -98,7 +98,7 @@ impl Type {
 pub trait Typed<T> {
     fn type_based_rewrite(self, context: &scoping::Context) -> T;
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type;
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type>;
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
@@ -106,7 +106,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
         panic!()
     }
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type> {
         return match self {
             scoping::CanModifyScope::Statement(ref ptr) => {
                 unsafe {
@@ -135,7 +135,7 @@ impl Typed<Node<Module>> for Node<Module> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type> {
         panic!()
     }
 }
@@ -150,11 +150,12 @@ impl Typed<Node<Block>> for Node<Block> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type> {
+        let mut type_map = HashMap::new();
         for stmt in self.data.statements.iter() {
-            stmt.resolve_types(context);
+            let additional = stmt.resolve_types(context);
         }
-        return Type::i32;
+        return type_map
     }
 }
 
@@ -194,7 +195,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type> {
         println!("stmt resolve_types scope: {:?}", self.scope);
         return match self.data {
             Stmt::LetStmt{ref typed_name, ref expression} => {
@@ -256,14 +257,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context) -> Type {
+    fn resolve_types(&self, context: &scoping::Context) -> HashMap<usize, Type> {
         println!("expr resolve_types scope: {:?}", self.scope);
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
-                operator.get_possible_return_types(left, right, context)
+                operator.get_possible_return_types(left, right, context);
+                panic!()
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
-                Type::boolean
+                panic!()
             },
             Expr::UnaryExpr{ref operator, ref operand} => {
                 panic!()
@@ -372,6 +374,6 @@ mod test {
         let context = parsed.gen_scopes2(0, &scoping::initial_context());
 
         let types = parsed.resolve_types(&context);
-        assert_eq!(types, Type::i32);
+        assert_eq!(types.get(parsed.id), Some(Type::i32));
     }
 }

@@ -44,7 +44,7 @@ pub trait Scoped<T> {
     fn get_usages(&self) -> HashSet<Identifier>;
 
     /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> HashSet<&*const Identifier>;
+    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier>;
 
     /// Check that all of the objects references are valid.
     fn check_scope(self, scope: Scope) -> bool;
@@ -120,6 +120,17 @@ impl Context {
     }
 }
 
+impl CanModifyScope {
+    pub fn extract_stmt(&self) -> Stmt {
+        return unsafe {
+            match self {
+                CanModifyScope::Statement(stmt_ptr) => (**stmt_ptr).data.clone(),
+                _ => panic!()
+            }
+        };
+    }
+}
+
 impl Scope {
 
     pub fn get_parent(&self, context: &Context) -> Option<&Scope> {
@@ -137,7 +148,7 @@ impl Scoped<Module> for Node<Module> {
         panic!();
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<&*const Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
         panic!()
     }
 
@@ -216,13 +227,12 @@ impl Scoped<Block> for Node<Block> {
         return usages;
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<&*const Identifier> {
-        panic!()
-        // let mut top_level = context.get_scope(self.scope).declarations.keys().clone().collect();
-        // for stmt in &self.data.statements {
-        //     top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
-        // }
-        // return top_level;
+    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
+        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        for stmt in &self.data.statements {
+            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+        }
+        return top_level;
     }
 
 
@@ -332,7 +342,7 @@ impl Scoped<Stmt> for Node<Stmt> {
         };
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<&*const Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
         return match self.data {
             Stmt::FunctionDecStmt{ref block, ..} => {
                 block.get_true_declarations(context)
@@ -506,7 +516,7 @@ impl Scoped<Expr> for Node<Expr> {
         };
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<&*const Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
         panic!()
     }
 
@@ -552,7 +562,7 @@ impl Scoped<Expr> for Node<Expr> {
                 self.scope = parent_id;
                 new_context
             },
-            Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::String(_) | Expr::IdentifierExpr(_) => {
                 self.scope = parent_id;
                 empty_context()
             },
@@ -572,77 +582,139 @@ mod test {
     #[test]
     fn test_function_locals() {
         let func_str = r#"fn a(b, c):
-    return b + c
-    "#;
-        panic!();
-        // let func_stmt = output(parser::statement(func_str.as_bytes(), 0)).gen_scopes(Some(&empty_scope() as *const Scope));
-        // let usages = func_stmt.get_usages();
-        // assert!(usages.contains(&Identifier::from("b")));
-        // assert!(usages.contains(&Identifier::from("c")));
+        return b + c
+        "#;
+        let mut func_stmt = output(parser::statement(func_str.as_bytes(), 0));
+        let context = func_stmt.gen_scopes2(0, &initial_context());
+        let usages = func_stmt.get_usages();
+        assert!(usages.contains(&Identifier::from("b")));
+        assert!(usages.contains(&Identifier::from("c")));
     }
 
-    #[test]
-    fn test_scope_generation() {
-        // Block is:
-        // let a = 5 + -1
-        // let b = true and false
-        let l1 = Node::from(Expr::Int("5".to_string()));
-        let r1 = Node::from(Expr::Int("-1".to_string()));
-        let l2 = Node::from(true);
-        let r2 = Node::from(false);
+    #[cfg(test)]
+    mod scope_generation {
+        use super::*;
 
-        let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
-        let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
+        #[cfg(test)]
+        mod exprs {
+            use super::*;
 
-        let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
-        let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
+            /// Test scope modifications from literals.
+            /// All should be empty.
+            #[test]
+            fn test_literal_scope() {
+                let mut literals: Vec<Node<Expr>> = vec![Node::from(1), Node::from(0.5), Node::from(Expr::String("asdf".to_string())), Node::from(true)];
+                let init_context = initial_context();
+                for literal in literals.iter_mut() {
+                    let context = literal.gen_scopes2(0, &init_context);
+                    assert_eq!(context, empty_context());
+                }
+            }
+        }
+        
+        #[cfg(test)]
+        mod stmts {
+            use super::*;
 
-        let mut block = Node::from(Block{
-            statements: vec!(Node::from(s1), Node::from(s2))
-        });
-
-        let context = block.gen_scopes2(0, &initial_context());
-        let scope = context.get_scope(block.scope);
-        assert_eq!(scope.declarations.len(), 2);
-        unsafe {
-            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
-            match stmt1_pointer {
-                CanModifyScope::Statement(x) => {
-                    match (**x).data {
-                        Stmt::LetStmt{ref typed_name, ..} => {
-                            assert_eq!(typed_name.clone(), TypedIdent::from("a"))
-                        },
-                        _ => panic!()
-                    }
-                },
-                _ => panic!()
+            #[test]
+            fn test_let_stmt() {
+                let mut stmt = output(parser::statement("let a = 1".as_bytes(), 0));
+                let context = stmt.gen_scopes2(0, &initial_context());
             }
 
-            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
-            match stmt1_pointer {
-                CanModifyScope::Statement(x) => {
-                    match (**x).data {
-                        Stmt::LetStmt{ref typed_name, ..} => {
-                            assert_eq!(typed_name.clone(), TypedIdent::from("b"))
+            fn test_function_decl() {
+                let block_str = r#"
+                fn a():
+                    return 0
+
+                fn b():
+                    return 1
+                "#;
+
+                let mut block = output(parser::block(block_str.as_bytes(),0 ));
+                let context = block.gen_scopes2(0, &initial_context());
+                let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
+                let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
+                unsafe {
+                    let fn_node1 = match fn1.extract_stmt() {
+                        Stmt::FunctionDecStmt{name, ..} => {
+                            assert_eq!(name, Identifier::from("a"))
                         },
                         _ => panic!()
-                    }
-                },
-                _ => panic!()
+                    };
+
+                    let fn_node1 = match fn1.extract_stmt() {
+                        Stmt::FunctionDecStmt{name, .. } => {
+                            assert_eq!(name, Identifier::from("b"))
+                        },
+                        _ => panic!()
+                    };
+                }
+            }
+        }
+
+        #[test]
+        fn test_block_scope() {
+            // Block is:
+            // let a = 5 + -1
+            // let b = true and false
+            let l1 = Node::from(Expr::Int("5".to_string()));
+            let r1 = Node::from(Expr::Int("-1".to_string()));
+            let l2 = Node::from(true);
+            let r2 = Node::from(false);
+
+            let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
+            let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
+
+            let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
+            let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
+
+            let mut block = Node::from(Block{
+                statements: vec!(Node::from(s1), Node::from(s2))
+            });
+
+            let context = block.gen_scopes2(0, &initial_context());
+            let scope = context.get_scope(block.scope);
+            assert_eq!(scope.declarations.len(), 2);
+            unsafe {
+                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
+                match stmt1_pointer {
+                    CanModifyScope::Statement(x) => {
+                        match (**x).data {
+                            Stmt::LetStmt{ref typed_name, ..} => {
+                                assert_eq!(typed_name.clone(), TypedIdent::from("a"))
+                            },
+                            _ => panic!()
+                        }
+                    },
+                    _ => panic!()
+                }
+
+                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
+                match stmt1_pointer {
+                    CanModifyScope::Statement(x) => {
+                        match (**x).data {
+                            Stmt::LetStmt{ref typed_name, ..} => {
+                                assert_eq!(typed_name.clone(), TypedIdent::from("b"))
+                            },
+                            _ => panic!()
+                        }
+                    },
+                    _ => panic!()
+                }
             }
         }
     }
 
+
     #[test]
     fn test_get_declarations() {
-        let context = empty_context();
-        let func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0)).gen_scopes(Some(0), &context);
+        let mut func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0));
+        let context = func_dec.gen_scopes2(0, &initial_context());
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         for ptr in actual {
-            unsafe {
-                assert_eq!(**ptr, new_ident);
-            }
+            assert_eq!(ptr, new_ident);
         }
     }
 }

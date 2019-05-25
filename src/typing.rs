@@ -271,11 +271,10 @@ impl Typed<Node<Expr>> for Node<Expr> {
             Expr::IdentifierExpr(ref name) => {
                 // TODO: Look up the name in scope.
                 let creation = context.get_declaration(self.scope, name);
-                panic!()
-                // match creation {
-                //     Some(y) => y.resolve_types(context),
-                //     None => panic!()
-                // }
+                match creation {
+                    Some(y) => y.resolve_types(context),
+                    None => panic!()
+                }
             }
             Expr::String(_) => Type::string,
             Expr::Float(_) => FloatingPoint(),
@@ -369,12 +368,10 @@ mod test {
     #[test]
     fn test_identifier_resolution() {
         let block = "let a = 1\nlet b = a";
-        let parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        let context = scoping::initial_context();
-        let scoped = parsed.gen_scopes(Some(0), &context);
-        panic!()
+        let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
+        let context = parsed.gen_scopes2(0, &scoping::initial_context());
 
-        // let types = scoped.resolve_types();
-        // println!("{:?}", types);
+        let types = parsed.resolve_types(&context);
+        assert_eq!(types, Type::i32);
     }
 }

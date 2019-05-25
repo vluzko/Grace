@@ -246,7 +246,7 @@ pub mod trait_impls {
             return Node{
                 id: get_next_id(),
                 data: input,
-                scope: general_utils::get_next_scope_id()
+                scope: 0
             };
         }
     }
@@ -257,8 +257,8 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: general_utils::get_next_scope_id()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -268,8 +268,8 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: general_utils::get_next_scope_id()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -279,8 +279,8 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: general_utils::get_next_scope_id()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -290,8 +290,8 @@ pub mod trait_impls {
             return Node {
                 id: get_next_id(),
                 data: expr,
-                scope: general_utils::get_next_scope_id()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -414,6 +414,7 @@ pub mod trait_impls {
             return Identifier{name: input.to_string()};
         }
     }
+
     impl <'a> From<&'a [u8]> for Identifier {
         fn from(input: &'a [u8]) -> Self {
             let val = match from_utf8(input) {

@@ -3,14 +3,13 @@ use std::fmt::Display;
 use std::str::from_utf8;
 use std::convert::From;
 
-use compiler_layers::get_next_id;
 use scoping::*;
 use typing::*;
 use general_utils;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
-    pub id: u64,
+    pub id: usize,
     pub data: T,
     pub scope: usize
 }
@@ -244,7 +243,7 @@ pub mod trait_impls {
     impl <T> From<T> for Node<T> {
         fn from(input: T) -> Self {
             return Node{
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: input,
                 scope: 0
             };
@@ -255,7 +254,7 @@ pub mod trait_impls {
         fn from(input: bool) -> Self {
             let expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
                 scope: 0
             }
@@ -266,7 +265,7 @@ pub mod trait_impls {
         fn from(input: &'a str) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
                 scope: 0
             }
@@ -277,7 +276,7 @@ pub mod trait_impls {
         fn from(input: i64) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
                 scope: 0
             }
@@ -288,7 +287,7 @@ pub mod trait_impls {
         fn from(input: f64) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
                 scope: 0
             }

@@ -3,6 +3,7 @@ use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::fmt::Debug;
 
 pub fn c_int<T>(a: &HashSet<T>, b: &HashSet<T>) -> HashSet<T>
 where T: Eq, T: Hash, T: Clone {
@@ -40,16 +41,24 @@ where T: Eq, T: Clone {
 }
 
 pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
-where V: Eq, K: Hash {
-    panic!()
+where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
+    println!("Merging maps: {:?}, {:?}",a, b );
+    for (k, v) in b.into_iter() {
+        if (a.contains_key(&k)) {
+            panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
+        } else {
+            a.insert(k, v);
+        }
+    }
+    return a;
 }
 
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static SCOPE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-pub fn get_next_id() -> u64 {
+pub fn get_next_id() -> usize {
     let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as u64;
+    return next_id as usize;
 }
 
 /// Return a unique scope ID.

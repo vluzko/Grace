@@ -1,3 +1,12 @@
+use std::collections::HashMap;
+use expression;
+use parser;
+use parser::Parseable;
+use scoping;
+use scoping::Scoped;
+use typing;
+use typing::Typed;
+
 pub trait Layer<T>{
     fn run_from_start(&[u8]) -> T;
 }
@@ -28,3 +37,23 @@ pub fn get_next_id() -> u64 {
     let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as u64;
 }
+
+pub fn parse(input: &[u8]) -> expression::Node<expression::Module>{
+    panic!()
+}
+
+pub fn to_scopes<T>(input: &[u8]) -> (T, scoping::Context)
+where T: Parseable, T: Scoped<T> {
+    let mut result = T::parse(input);
+    let context = result.gen_scopes2(0, &scoping::initial_context());
+    return (result, context);
+}
+
+pub fn to_types<T>(input: &[u8]) -> (T, scoping::Context, HashMap<usize, typing::Type>) 
+where T: Parseable, T: Scoped<T>, T: Typed<T> {
+    let (result, context): (T, scoping::Context) = to_scopes(input);
+    let (type_map, _) = result.resolve_types(&context, HashMap::new());
+    return (result, context, type_map);
+}
+
+

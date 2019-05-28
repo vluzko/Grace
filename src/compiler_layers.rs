@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::fmt::Debug;
+
 use expression;
 use parser;
 use parser::Parseable;
@@ -54,6 +56,13 @@ where T: Parseable, T: Scoped<T>, T: Typed<T> {
     let (result, context): (T, scoping::Context) = to_scopes(input);
     let (type_map, _) = result.resolve_types(&context, HashMap::new());
     return (result, context, type_map);
+}
+
+pub fn to_type_rewrites<T>(input: &[u8]) -> (T, scoping::Context, HashMap<usize, typing::Type>) 
+where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
+    let (result, mut context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
+    let rewritten = result.type_based_rewrite(&context, &mut type_map);
+    return (rewritten, context, type_map);
 }
 
 

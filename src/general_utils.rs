@@ -29,6 +29,17 @@ where T: Eq, T: Hash {
     return a;
 }
 
+pub fn vec_c_union<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T> 
+where T: Eq, T: Clone {
+    let mut new_vec: Vec<T> = a.clone();
+    for element in b.iter() {
+        if !new_vec.contains(element) {
+            new_vec.push((*element).clone());
+        }
+    }
+    return new_vec;
+}
+
 pub fn vec_c_int<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T> 
 where T: Eq, T: Clone {
     let mut new_vec: Vec<T> = vec!();
@@ -38,6 +49,16 @@ where T: Eq, T: Clone {
         }
     }
     return new_vec;
+}
+
+pub fn vec_subset<T>(a: &Vec<T>, b: &Vec<T>) -> bool 
+where T: Eq, T: Clone {
+    for element in a.iter() {
+        if !b.contains(element) {
+            return false;
+        }
+    }
+    return true;
 }
 
 pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
@@ -65,4 +86,16 @@ pub fn get_next_id() -> usize {
 pub fn get_next_scope_id() -> usize {
     let next_id = SCOPE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as usize;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn test_vec_c_int() {
+        let vec1 = vec![1, 2, 3];
+        let vec2 = vec![3, 4, 5];
+        let merged = vec_c_int(&vec1, &vec2);
+        println!("{:?}", merged);
+    }
 }

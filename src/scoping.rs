@@ -10,8 +10,11 @@ extern crate cute;
 /// The full scoping and typing context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
-    // nodes: Vector<Node>
-    scopes: HashMap<usize, Scope>
+    // A map from Scope ids to Scopes.
+    scopes: HashMap<usize, Scope>,
+    // A map from Node ids to Scope ids. Each node that modifies scope
+    // maps to the scope it's contained in.
+    containing_scopes: HashMap<usize, usize>
 }
 
 /// A sum type for things that can modify scope.
@@ -50,7 +53,7 @@ pub trait Scoped<T> {
     fn check_scope(self, scope: Scope) -> bool;
 
     /// Generate scopes recursively. Returns a new node with the correct scope attached.
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> Node<T>;
+    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> T;
     
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context;
 }
@@ -69,13 +72,13 @@ pub fn initial_context() -> Context {
     let empty = empty_scope();
     let mut init_scopes = HashMap::new();
     init_scopes.insert(0, empty);
-    let context = Context{scopes: init_scopes};
+    let context = Context{scopes: init_scopes, containing_scopes: HashMap::new()};
     return context;
 }
 
 pub fn empty_context() -> Context {
     let scopes = HashMap::new();
-    return Context{scopes};
+    return Context{scopes, containing_scopes: HashMap::new()};
 }
 
 impl Context {
@@ -142,7 +145,7 @@ impl Scope {
     }
 }
 
-impl Scoped<Module> for Node<Module> {
+impl Scoped<Node<Module>> for Node<Module> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         panic!();
@@ -217,7 +220,7 @@ impl Scoped<Module> for Node<Module> {
     }
 }
 
-impl Scoped<Block> for Node<Block> {
+impl Scoped<Node<Block>> for Node<Block> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         let mut usages = HashSet::new();
@@ -316,7 +319,7 @@ impl Scoped<Block> for Node<Block> {
     }
 }
 
-impl Scoped<Stmt> for Node<Stmt> {
+impl Scoped<Node<Stmt>> for Node<Stmt> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {
@@ -430,6 +433,10 @@ impl Scoped<Stmt> for Node<Stmt> {
                 self.scope = parent_id;
                 expression.gen_scopes2(parent_id, context)
             },
+            Stmt::AssignmentStmt{name, expression, ..} => {
+                self.scope = parent_id;
+                expression.gen_scopes2(parent_id, context)
+            },
             Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, ref mut block, return_type} => {
                 // TODO: Handle keyword args expressions. They should receive just the parent scope.
                 let mut declarations = BTreeMap::new();
@@ -481,7 +488,7 @@ impl Scoped<Stmt> for Node<Stmt> {
     }
 }
 
-impl Scoped<Expr> for Node<Expr> {
+impl Scoped<Node<Expr>> for Node<Expr> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {

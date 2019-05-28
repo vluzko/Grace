@@ -14,6 +14,34 @@ type ExprNode = Node<Expr>;
 type StmtRes<'a> = IResult<&'a[u8], StmtNode>;
 type ExprRes<'a> = IResult<&'a[u8], ExprNode>;
 
+pub trait Parseable {
+    fn parse(input: &[u8]) -> Self;
+}
+
+impl Parseable for Node<Module> {
+    fn parse(input: &[u8]) -> Node<Module> {
+        return  output(module(input));
+    }
+}
+
+impl Parseable for Node<Block> {
+    fn parse(input: &[u8]) -> Node<Block> {
+        return output(block(input, 0));
+    }
+}
+
+impl Parseable for Node<Stmt> {
+    fn parse(input: &[u8]) -> Node<Stmt> {
+        return output(statement(input, 0));
+    }
+}
+
+impl Parseable for Node<Expr> {
+    fn parse(input: &[u8]) -> Node<Expr> {
+        return output(expression(input));
+    }
+}
+
 pub fn reserved_list() -> Vec<&'static str>{
     let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield", "let");
     return list;

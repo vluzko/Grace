@@ -1,11 +1,14 @@
 use std::collections::HashSet;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::usize;
+use std::ops::Add;
 
 use expression::*;
-use scoping::Scoped;
 use general_utils;
 use scoping;
+use scoping::Scoped;
+use compiler_layers;
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -42,7 +45,7 @@ pub fn Unsigned<'a>() -> Type {
 // The floating point types.
 #[allow(non_snake_case)]
 pub fn Integral<'a>() -> Type {
-    return Signed().merge(&Unsigned());
+    return Signed() + Unsigned();
 }
 
 // The floating point types.
@@ -52,7 +55,7 @@ pub fn FloatingPoint<'a>() -> Type {
 }
 
 pub fn Numeric<'a>() -> Type {
-    return FloatingPoint().merge(&Integral());
+    return Integral() + FloatingPoint();
 }
 
 impl Type {
@@ -99,16 +102,82 @@ impl Type {
             }
         }
     }
+
+    pub fn size(&self) -> usize {
+        return match self {
+            Type::i32 => 32,
+            Type::i64 => 64,
+            Type::f32 => 32,
+            Type::f64 => 64,
+            Type::ui32 => 64,
+            Type::boolean => 32,
+            Type::string => 32,
+            Type::Sum(ref types) => types.iter().map(|x| x.size()).fold(usize::MIN, usize::max),
+            Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
+            _ => panic!()
+        }
+    }
+
+    /// Return true if other can be restricted to self.
+    pub fn super_type(&self, other: &Type) -> bool {
+        return match self {
+            Type::Sum(ref types) => {
+                match other {
+                    Type::Sum(ref type_vec) => general_utils::vec_subset(type_vec, types),
+                    x => types.contains(x)
+                }
+            },
+            _ => false
+        };
+    }
+}
+
+impl Add for Type {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        if (self == other) {
+            return self.clone();
+        } else {
+            return match self {
+                Type::Sum(ref types) => {
+                    match other {
+                        Type::Sum(ref other_types) => {
+                            Type::Sum(general_utils::vec_c_union(types, other_types))
+                        },
+                        x => {
+                            let mut new_vec = types.clone();
+                            new_vec.push(x.clone());
+                            Type::Sum(new_vec)
+                        }
+                    }
+                },
+                x => {
+                    match other {
+                        Type::Sum(ref other_types) => {
+                            let mut new_vec = other_types.clone();
+                            new_vec.push(x.clone());
+                            Type::Sum(new_vec)
+                        },
+                        y => {
+                            let new_vec = vec![x.clone(), y.clone()];
+                            Type::Sum(new_vec)
+                        }
+                    }
+                }
+            };
+        }
+    }
 }
 
 pub trait Typed<T> {
-    fn type_based_rewrite(self, context: &scoping::Context) -> T;
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
     fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, context: &scoping::Context) -> scoping::CanModifyScope {
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
         panic!()
     }
 
@@ -146,8 +215,8 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Module> {
-        let new_decs = c![x.type_based_rewrite(context), for x in self.data.declarations];
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
+        let new_decs = c![x.type_based_rewrite(context, type_map), for x in self.data.declarations];
         return Node{
             id: self.id,
             data: Module{ declarations: new_decs},
@@ -165,8 +234,9 @@ impl Typed<Node<Module>> for Node<Module> {
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Block> {
-        let new_stmts = c![x.type_based_rewrite(context), for x in self.data.statements];
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
+        // let mut new_stmts = vec![];
+        let new_stmts = c![x.type_based_rewrite(context, type_map), for x in self.data.statements];
         return Node {
             id: self.id,
             data: Block{statements: new_stmts},
@@ -196,31 +266,31 @@ impl Typed<Node<Block>> for Node<Block> {
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Stmt> {
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, vararg, kwargs, varkwarg, return_type}
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, vararg, kwargs, varkwarg, return_type}
             },
             Stmt::AssignmentStmt {mut expression, name, operator} => {
-                expression = expression.type_based_rewrite(context);
-                Stmt::AssignmentStmt {name, operator, expression: expression.type_based_rewrite(context)}
+                expression = expression.type_based_rewrite(context, type_map);
+                Stmt::AssignmentStmt {name, operator, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::IfStmt {condition, block, elifs,  else_block} => {
-                let new_elifs =  c![(elif.0.type_based_rewrite(context), elif.1.type_based_rewrite(context)), for elif in elifs];
+                let new_elifs =  c![(elif.0.type_based_rewrite(context, type_map), elif.1.type_based_rewrite(context, type_map)), for elif in elifs];
                 let new_else_block = match else_block {
                     None => None,
-                    Some(block) => Some(block.type_based_rewrite(context))
+                    Some(block) => Some(block.type_based_rewrite(context, type_map))
                 };
-                Stmt::IfStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), elifs: new_elifs, else_block: new_else_block}
+                Stmt::IfStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map), elifs: new_elifs, else_block: new_else_block}
             },
             Stmt::LetStmt {typed_name, expression} => {
-                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite(context)}
+                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::WhileStmt {condition, block} => {
-                Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
+                Stmt::WhileStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map)}
             },
             Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite(context))
+                Stmt::ReturnStmt (value.type_based_rewrite(context, type_map))
             },
             _ => self.data
         };
@@ -239,8 +309,10 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 (type_map, expr_type)
             },
             Stmt::AssignmentStmt{ref expression, ref name, ref operator} => {
-                let expr_types = expression.resolve_types(context, type_map);
-                panic!()
+                let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
+                type_map.insert(self.id, expr_type.clone());
+                (type_map, expr_type)
+                
             },
             Stmt::ReturnStmt(ref value) => value.resolve_types(context, type_map),
             _ => panic!()
@@ -249,40 +321,39 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self, context: &scoping::Context) -> Node<Expr> {
+    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {mut left, mut right, operator} => {
-                let left = Box::new(left.type_based_rewrite(context));
-                let right = Box::new(right.type_based_rewrite(context));
+                let left = Box::new(left.type_based_rewrite(context, type_map));
+                let right = Box::new(right.type_based_rewrite(context, type_map));
                 Expr::ComparisonExpr {left, right, operator}
             },
             Expr::BinaryExpr {operator, left, right} => {
-                let left_type = &left.get_type();
-                let right_type = &right.get_type();
-                let return_type = &operator.get_return_type(left_type, right_type);
-                let new_left = if left_type != return_type {
-                    let conversion_op = UnaryOperator::from(return_type);
-                    let left_expr = Expr::UnaryExpr { operator: conversion_op, operand: left.clone()};
-                    let node = left.replace(left_expr);
-                    Box::new(node)
-                } else {
-                    left
-                };
-                let new_right = if right_type != return_type {
-                    let conversion_op = UnaryOperator::from(return_type);
-                    let right_expr = Expr::UnaryExpr { operator: conversion_op, operand: right.clone()};
-                    let node = right.replace(right_expr);
-                    Box::new(node)
-                } else {
-                    right
-                };
-                Expr::BinaryExpr {operator: operator, left: new_left, right: new_right}
+                println!("left :{:?}, right: {:?}", left, right);
+                let left_type = type_map.get(&left.id).unwrap().clone();
+                let right_type = type_map.get(&right.id).unwrap().clone();
+                let merged_type = left_type.merge(&right_type);
+                let return_type = choose_return_type(&merged_type);
+                let converted_left = convert_expr(&*left, &return_type, type_map);
+                let converted_right = convert_expr(&*right, &return_type, type_map);
+                println!("converted_left: {:?}", converted_left);
+                let new_left = converted_left.type_based_rewrite(context, type_map);
+                let new_right = converted_right.type_based_rewrite(context, type_map);
+                type_map.insert(self.id, return_type);
+                Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
             },
             Expr::FunctionCall {function, args, kwargs} => {
-                let new_func_expr = Box::new(function.type_based_rewrite(context));
-                let new_args = args.into_iter().map(|x| x.type_based_rewrite(context)).collect();
-                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context))).collect();
+                let new_func_expr = Box::new(function.type_based_rewrite(context, type_map));
+                let new_args = args.into_iter().map(|x| x.type_based_rewrite(context, type_map)).collect();
+                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context, type_map))).collect();
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
+            },
+            Expr::Int(_) | Expr::Float(_) => {
+                let current_type = type_map.get(&self.id).unwrap().clone();
+                println!("current type: {:?}", current_type);
+                println!("should be: {:?}", choose_return_type(&current_type));
+                type_map.insert(self.id, choose_return_type(&current_type));
+                self.data
             },
             _ => self.data
         };
@@ -294,14 +365,14 @@ impl Typed<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        println!("expr: {:?}", self);
+    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match &self.data {
             Expr::BinaryExpr{ref operator, ref left, ref right} => {
                 let (left_map, left_type) = left.resolve_types(context, type_map);
-                let (right_map, right_type) = right.resolve_types(context, left_map);
-                // operator.get_possible_return_types(&left_type, &right_type);
-                panic!()
+                let (mut right_map, right_type) = right.resolve_types(context, left_map.clone());
+                let return_type = operator.get_return_types(&left_type, &right_type);
+                right_map.insert(self.id, return_type.clone());
+                (right_map, return_type)
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
                 panic!()
@@ -310,31 +381,83 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 panic!()
             }
             Expr::IdentifierExpr(ref name) => {
-                let creation = context.get_declaration(self.scope, name);
-                match creation {
-                    Some(y) => y.resolve_types(context, type_map),
-                    None => panic!()
+                let creation = context.get_declaration(self.scope, name).unwrap();
+                let (mut new_map, t) = creation.resolve_types(context, type_map);
+                new_map.insert(self.id, t.clone());
+                (new_map, t)
+            }
+            Expr::String(_) => {
+                type_map.insert(self.id, Type::string);
+                (type_map, Type::string)
+            },
+            Expr::Float(_) => {
+                type_map.insert(self.id, FloatingPoint());
+                (type_map, FloatingPoint())
+            },
+            Expr::Bool(_) => {
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
+            },
+            Expr::Int(_) => {
+                type_map.insert(self.id, Numeric());
+                (type_map, Numeric())
+            },
+            _ => panic!()
+        };
+    }
+}
+ 
+pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
+    let current_type = type_map.get(&expr.id).unwrap().clone();
+    if &current_type == new_type {
+        return expr.clone();
+    } else {
+        println!("current: {:?}. expected: {:?}", current_type, new_type);
+        return match &expr.data {
+            Expr::Int(ref x) => {
+                if new_type == &Type::f64 || new_type == &Type::f32 || new_type == &FloatingPoint() {
+                    type_map.insert(expr.id, new_type.clone());
+                    expr.replace(Expr::Float(x.clone()))
+                } else if Numeric().super_type(new_type) {
+                    expr.clone()
+                } else {
+                    panic!()
+                }
+            },
+            Expr::Float(ref x) => {
+                expr.clone()
+            },
+            x => {
+                if Numeric().super_type(new_type) && Numeric().super_type(&current_type) {
+                    let conversion_op = UnaryOperator::from(new_type);
+                    let operand = expr.clone();
+                    let new_expr = Expr::UnaryExpr{operator: conversion_op, operand: Box::new(operand)};
+                    let new_node = Node {
+                        id: general_utils::get_next_id(),
+                        data: new_expr,
+                        scope: expr.scope
+                    };
+                    new_node
+                } else {
+                    panic!()
                 }
             }
-            Expr::String(_) => (hashmap!{self.id => Type::string}, Type::string),
-            Expr::Float(_) => (hashmap!{self.id => FloatingPoint()}, FloatingPoint()),
-            Expr::Bool(_) => (hashmap!{self.id => Type::i32}, Type::i32),
-            Expr::Int(_) => (hashmap!{self.id => Numeric()}, Numeric()),
-            _ => panic!()
         };
     }
 }
 
 pub fn choose_return_type(possible: &Type) -> Type {
-    let preference = vec!(Type::i32, Type::i64, Type::f32, Type::f64);
     return match possible {
         Type::Sum(ref types) => {
-            for t in preference {
-                if types.contains(&t) {
-                    return t;
+            let mut i = 0;
+            let mut min_size = usize::MAX;
+            for (j, t) in types.iter().enumerate() {
+                if t.size() < min_size {
+                    i = j;
+                    min_size = t.size();
                 }
             }
-            possible.clone()
+            types[i].clone()
         },
         _ => possible.clone()
     }
@@ -342,7 +465,8 @@ pub fn choose_return_type(possible: &Type) -> Type {
 
 impl BinaryOperator {
 
-    pub fn get_possible_return_types(&self, left: &Type, right: &Type) -> Type {
+    // TODO: This should be rewritten to use type classes.
+    pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
             BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => left.merge(right),
@@ -353,7 +477,7 @@ impl BinaryOperator {
     }
 
     // TODO: Rename to CHOOSE return type
-    pub fn get_return_type(&self, left: &Type, right: &Type) -> Type {
+    pub fn choose_return_type(&self, left: &Type, right: &Type) -> Type {
 
         let add_order = hashmap!{
             Type::i32 => vec!{Type::i32, Type::i64, Type::f64},
@@ -399,6 +523,17 @@ mod test {
     use parser_utils;
     use scoping;
 
+    #[cfg(test)]
+    mod expressions {
+        use super::*;
+
+        #[test]
+        fn binary_expr_types() {
+            let (expr, context) = compiler_layers::to_scopes::<Node<Expr>>("5 + 6".as_bytes());
+            let (types, _) = expr.resolve_types(&context, HashMap::new());
+            assert_eq!(types.get(&expr.id).unwrap(), &Numeric());
+        }
+    }
 
     #[test]
     fn test_identifier_resolution() {
@@ -409,5 +544,13 @@ mod test {
         assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
         let id2 = parsed.data.statements[1].id;
         assert_eq!(types.get(&id2), Some(&Numeric()));
+    }
+
+    #[test]
+    fn test_get_return_types(){
+        let left_types = Numeric();
+        let right_types = FloatingPoint();
+        let operator = BinaryOperator::Add;
+        assert_eq!(FloatingPoint(), operator.get_return_types(&left_types, &right_types));
     }
 }

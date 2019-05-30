@@ -62,6 +62,7 @@ impl Type {
 
     /// Get the name of this type in WAST.
     pub fn wast_name(&self) -> String {
+        println!("input to wast_name is {:?}", self);
         match self {
             &Type::i32 => "i32".to_string(),
             &Type::i64 => "i64".to_string(),
@@ -329,16 +330,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 Expr::ComparisonExpr {left, right, operator}
             },
             Expr::BinaryExpr {operator, left, right} => {
-                println!("left :{:?}, right: {:?}", left, right);
                 let left_type = type_map.get(&left.id).unwrap().clone();
                 let right_type = type_map.get(&right.id).unwrap().clone();
                 let merged_type = left_type.merge(&right_type);
-                let return_type = choose_return_type(&merged_type);
+                let return_type = operator.choose_return_type(&merged_type);
                 let converted_left = convert_expr(&*left, &return_type, type_map);
                 let converted_right = convert_expr(&*right, &return_type, type_map);
-                println!("converted_left: {:?}", converted_left);
                 let new_left = converted_left.type_based_rewrite(context, type_map);
                 let new_right = converted_right.type_based_rewrite(context, type_map);
+                println!("return type is {:?}", return_type);
                 type_map.insert(self.id, return_type);
                 Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
             },
@@ -350,8 +350,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
             },
             Expr::Int(_) | Expr::Float(_) => {
                 let current_type = type_map.get(&self.id).unwrap().clone();
-                println!("current type: {:?}", current_type);
-                println!("should be: {:?}", choose_return_type(&current_type));
                 type_map.insert(self.id, choose_return_type(&current_type));
                 self.data
             },
@@ -465,8 +463,7 @@ pub fn choose_return_type(possible: &Type) -> Type {
 
 impl BinaryOperator {
 
-    // TODO: This should be rewritten to use type classes.
-    pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
+     pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
             BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => left.merge(right),
@@ -476,35 +473,14 @@ impl BinaryOperator {
         }
     }
 
-    // TODO: Rename to CHOOSE return type
-    pub fn choose_return_type(&self, left: &Type, right: &Type) -> Type {
+    pub fn choose_return_type(&self, merged_type: &Type) -> Type {
 
-        let add_order = hashmap!{
-            Type::i32 => vec!{Type::i32, Type::i64, Type::f64},
-            Type::ui32 => vec!{Type::ui32, Type::i64, Type::f64},
-            Type::f32 => vec!{Type::f32, Type::f64},
-            Type::i64 => vec!{Type::i64},
-            Type::f64 => vec!{Type::f64}
+        return match self {
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => 
+            choose_return_type(merged_type),
+            BinaryOperator::Div => Type::f32,
+            _ => panic!()   
         };
-
-        let div_order = hashmap!{
-            Type::i32 => vec!{Type::f64},
-            Type::f32 => vec!{Type::f32, Type::f64},
-            Type::f64 => vec!{Type::f64}
-        };
-
-        let order = match self {
-            BinaryOperator::Add | BinaryOperator::Sub |
-            BinaryOperator::Mult | BinaryOperator::Mod => add_order,
-            BinaryOperator::Div => div_order,
-            _ => panic!()
-        };
-
-        let left_upper = order.get(left).unwrap();
-        let right_upper = order.get(right).unwrap();
-        let mut intersection = c![*x, for x in left_upper, if right_upper.contains(x)];
-        // TODO: Check that 0 exists, throw a TypeError if it doesn't.
-        intersection.remove(0)
     }
 
     pub fn requires_sign(&self) -> bool {

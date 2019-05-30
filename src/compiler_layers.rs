@@ -30,16 +30,6 @@ pub struct Compilation {
     pub counter: i64
 }
 
-use std::sync::atomic::{AtomicUsize, Ordering};
-
-static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-
-
-pub fn get_next_id() -> u64 {
-    let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as u64;
-}
-
 pub fn parse(input: &[u8]) -> expression::Node<expression::Module>{
     panic!()
 }

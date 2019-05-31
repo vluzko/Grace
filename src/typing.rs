@@ -62,7 +62,6 @@ impl Type {
 
     /// Get the name of this type in WAST.
     pub fn wast_name(&self) -> String {
-        println!("input to wast_name is {:?}", self);
         match self {
             &Type::i32 => "i32".to_string(),
             &Type::i64 => "i64".to_string(),
@@ -332,15 +331,22 @@ impl Typed<Node<Expr>> for Node<Expr> {
             Expr::BinaryExpr {operator, left, right} => {
                 let left_type = type_map.get(&left.id).unwrap().clone();
                 let right_type = type_map.get(&right.id).unwrap().clone();
-                let merged_type = left_type.merge(&right_type);
-                let return_type = operator.choose_return_type(&merged_type);
-                let converted_left = convert_expr(&*left, &return_type, type_map);
-                let converted_right = convert_expr(&*right, &return_type, type_map);
-                let new_left = converted_left.type_based_rewrite(context, type_map);
-                let new_right = converted_right.type_based_rewrite(context, type_map);
-                println!("return type is {:?}", return_type);
-                type_map.insert(self.id, return_type);
-                Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
+                let new_left = left.type_based_rewrite(context, type_map);
+                let new_right = right.type_based_rewrite(context, type_map);
+
+                // TODO: Once typeclasses are implemented, call the typeclass method with
+                // the operator, the left type, and the right type to figure out what all
+                // the other types need to be.
+                if Numeric().super_type(&left_type) && Numeric().super_type(&right_type) {
+                    let merged_type = operator.get_return_types(&left_type, &right_type);
+                    let converted_left = convert_expr(&new_left, &merged_type, type_map);
+                    let converted_right = convert_expr(&new_right, &merged_type, type_map);
+                    Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
+                } else {
+                    // TODO: Update this once typeclasses are implemented
+                    assert_eq!(left_type, right_type);
+                    Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
+                }
             },
             Expr::FunctionCall {function, args, kwargs} => {
                 let new_func_expr = Box::new(function.type_based_rewrite(context, type_map));
@@ -389,58 +395,43 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 (type_map, Type::string)
             },
             Expr::Float(_) => {
-                type_map.insert(self.id, FloatingPoint());
-                (type_map, FloatingPoint())
+                type_map.insert(self.id, Type::f32);
+                (type_map, Type::f32)
             },
             Expr::Bool(_) => {
                 type_map.insert(self.id, Type::i32);
                 (type_map, Type::i32)
             },
             Expr::Int(_) => {
-                type_map.insert(self.id, Numeric());
-                (type_map, Numeric())
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
             },
             _ => panic!()
         };
     }
 }
- 
+
+pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
+    // Topological ordering of numeric types.
+    // i32, f32, i64, f64
+    let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
+    let indices = hashmap!{Type::i32 => 0, Type::f32 => 1, Type::i64 => 2, Type::f64 => 3};
+    let t1 = &order[*indices.get(left_type).unwrap()];
+    let t2 = &order[*indices.get(right_type).unwrap()];
+    let join = general_utils::vec_c_int(t1, t2);
+    return join[0].clone();
+}
+
+// TODO: Return an option.
 pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
     let current_type = type_map.get(&expr.id).unwrap().clone();
     if &current_type == new_type {
         return expr.clone();
     } else {
-        println!("current: {:?}. expected: {:?}", current_type, new_type);
-        return match &expr.data {
-            Expr::Int(ref x) => {
-                if new_type == &Type::f64 || new_type == &Type::f32 || new_type == &FloatingPoint() {
-                    type_map.insert(expr.id, new_type.clone());
-                    expr.replace(Expr::Float(x.clone()))
-                } else if Numeric().super_type(new_type) {
-                    expr.clone()
-                } else {
-                    panic!()
-                }
-            },
-            Expr::Float(ref x) => {
-                expr.clone()
-            },
-            x => {
-                if Numeric().super_type(new_type) && Numeric().super_type(&current_type) {
-                    let conversion_op = UnaryOperator::from(new_type);
-                    let operand = expr.clone();
-                    let new_expr = Expr::UnaryExpr{operator: conversion_op, operand: Box::new(operand)};
-                    let new_node = Node {
-                        id: general_utils::get_next_id(),
-                        data: new_expr,
-                        scope: expr.scope
-                    };
-                    new_node
-                } else {
-                    panic!()
-                }
-            }
-        };
+        let operator = UnaryOperator::from(new_type);
+        return expr.replace(Expr::UnaryExpr{
+            operator, operand: Box::new(expr.clone())
+        });
     }
 }
 
@@ -463,11 +454,11 @@ pub fn choose_return_type(possible: &Type) -> Type {
 
 impl BinaryOperator {
 
-     pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
+    pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => left.merge(right),
-            BinaryOperator::Div => FloatingPoint(),
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => numeric_join(left, right),
+            BinaryOperator::Div => Type::f64,
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
             _ => panic!()
         }

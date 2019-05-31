@@ -41,7 +41,15 @@ Just copy Haskell/Coq/Idris
 #### Cons
 * No subtypes.
 
+## Type conversions
+* Float +-*% Int -> Float +-*% Float
+* Int / Int -> Float / Float
+
+5.0 / (5 + 3)
+FloatingPoint() / (Numeric() + Numeric())
 
 ## Problems
 * We're pretty sure we can handle gradual dependent typing by inserting run time checks. Can this be done without an enormous performance hit?
 * How do we handle
+
+

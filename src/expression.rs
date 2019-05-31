@@ -186,44 +186,6 @@ pub mod trait_impls {
         }
     }
 
-    impl Node<Expr> {
-        // pub fn get_type(&self) -> Type {
-        //     return self.data.get_type();
-        // }
-    }
-
-    /// Impl for Expr
-    impl Expr {
-        // pub fn get_type(&self) -> Type {
-        //     match self {
-        //         &Expr::String (..) => Type::string,
-        //         &Expr::Bool (..) => Type::boolean,
-        //         &Expr::Int (..) => Type::i32,
-        //         &Expr::Float (..) => Type::f64,
-        //         &Expr::UnaryExpr {ref operator, ref operand, ..} => {
-        //             match operator {
-        //                 &UnaryOperator::ToF32 => Type::f32,
-        //                 &UnaryOperator::ToF64 => Type::f64,
-        //                 &UnaryOperator::ToI32 => Type::i32,
-        //                 &UnaryOperator::ToI64 => Type::i64,
-        //                 _ => operand.get_type()
-        //             }
-        //         },
-        //         &Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
-        //             return operator.choose_return_type(&left.get_type(), &right.get_type());
-        //         },
-        //         &Expr::IdentifierExpr(ref name) => {
-        //             // Get declaration
-        //             panic!()
-        //         },
-        //         _ => {
-        //             println!("{:?}", self);
-        //             panic!()
-        //         }
-        //     }
-        // }
-    }
-
     /// Display implementations
     impl Display for TypedIdent {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

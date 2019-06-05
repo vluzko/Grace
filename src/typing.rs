@@ -311,10 +311,15 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
             Stmt::AssignmentStmt{ref expression, ref name, ref operator} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
                 type_map.insert(self.id, expr_type.clone());
-                (type_map, expr_type)
-                
+                (type_map, expr_type)                
             },
             Stmt::ReturnStmt(ref value) => value.resolve_types(context, type_map),
+            Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref kwargs, ref varkwarg, ref block, ref return_type} => {
+                let (mut type_map, return_type) = block.resolve_types(context, type_map);
+                let function_type = Type::Function(vec!(), Box::new(return_type));
+                type_map.insert(self.id, function_type.clone());
+                (type_map, function_type)
+            },
             _ => panic!()
         };
     }
@@ -406,6 +411,11 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 type_map.insert(self.id, Type::i32);
                 (type_map, Type::i32)
             },
+            Expr::FunctionCall{ref function, ref args, ref kwargs} => {
+                let (mut new_map, t) = function.resolve_types(context, type_map);
+                new_map.insert(self.id, t.clone());
+                (new_map, t)
+            }
             _ => panic!()
         };
     }
@@ -498,7 +508,7 @@ mod test {
         fn binary_expr_types() {
             let (expr, context) = compiler_layers::to_scopes::<Node<Expr>>("5 + 6".as_bytes());
             let (types, _) = expr.resolve_types(&context, HashMap::new());
-            assert_eq!(types.get(&expr.id).unwrap(), &Numeric());
+            assert_eq!(types.get(&expr.id).unwrap(), &Type::i32);
         }
     }
 
@@ -510,14 +520,6 @@ mod test {
         let (types, _) = parsed.resolve_types(&context, HashMap::new());
         assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(types.get(&id2), Some(&Numeric()));
-    }
-
-    #[test]
-    fn test_get_return_types(){
-        let left_types = Numeric();
-        let right_types = FloatingPoint();
-        let operator = BinaryOperator::Add;
-        assert_eq!(FloatingPoint(), operator.get_return_types(&left_types, &right_types));
+        assert_eq!(types.get(&id2), Some(&Type::i32));
     }
 }

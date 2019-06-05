@@ -52,9 +52,7 @@ pub trait Scoped<T> {
     /// Check that all of the objects references are valid.
     fn check_scope(self, scope: Scope) -> bool;
 
-    /// Generate scopes recursively. Returns a new node with the correct scope attached.
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> T;
-    
+    /// Generate scopes recursively. Returns all scopes.
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context;
 }
 
@@ -97,6 +95,7 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
+        println!("name is {:?}", name);
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
@@ -159,41 +158,6 @@ impl Scoped<Node<Module>> for Node<Module> {
         panic!();
     }
 
-    /// Check scope and generate
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> Node<Module> {
-        panic!()
-        // let declarations = BTreeMap::new();
-        // let declaration_order = BTreeMap::new();
-
-        // let mut new_scope = Scope{parent_id, declarations, declaration_order};
-        // let scope_id = general_utils::get_next_scope_id();
-        // let new_stmts: Vec<Node<Stmt>> = self.data.declarations.into_iter().enumerate().map(|(_i, stmt)| {
-        //     let new_stmt = stmt.gen_scopes(Some(scope_id), context);
-        //     return new_stmt;
-        // }).collect();
-
-        // // Update the parent scope with any changes caused by sub statements.
-        // // Yes this does mean we loop through all the statements twice. If this
-        // // proves to be a performance problem we can optimize it later.
-        // // (The alternative is passing mutable data around recursively and that looks
-        // // like several dozen migraines in the making.)
-        // for (i, stmt) in new_stmts.iter().enumerate() {
-        //     match &stmt.data {
-        //         Stmt::FunctionDecStmt{ref name, ..} => {
-        //             new_scope.declaration_order.insert(name as *const Identifier, i);
-        //         },
-        //         _ => {}
-        //     };
-        // }
-        // context.add_scope(scope_id, new_scope);
-        // let new_block = Module{declarations: new_stmts};
-        // return Node{
-        //     id: self.id,
-        //     data: new_block,
-        //     scope: scope_id
-        // };
-    }
-
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
@@ -241,47 +205,6 @@ impl Scoped<Node<Block>> for Node<Block> {
 
     fn check_scope(self, _scope: Scope) -> bool {
         panic!();
-    }
-
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> Node<Block> {
-        panic!()
-        // let declarations = BTreeMap::new();
-        // let declaration_order = BTreeMap::new();
-
-        // let mut new_scope = Scope{parent_id, declarations, declaration_order};
-        // let new_id = general_utils::get_next_scope_id();
-
-        // let new_stmts: Vec<Node<Stmt>> = self.data.statements.into_iter().enumerate().map(|(_i, stmt)| {
-        //     let new_stmt = stmt.gen_scopes(Some(new_id), context);
-        //     return new_stmt;
-        // }).collect();
-
-        // // Update the parent scope with any changes caused by sub statements.
-        // // Yes this does mean we loop through all the statements twice. If this
-        // // proves to be a performance problem we can optimize it later.
-        // // (The alternative is passing mutable data around recursively and that looks
-        // // like several dozen migraines in the making.)
-        // for (i, stmt) in new_stmts.iter().enumerate() {
-        //     match &stmt.data {
-        //         Stmt::FunctionDecStmt{ref name, ..} => {
-        //             new_scope.declaration_order.insert(name as *const Identifier, i);
-        //         },
-        //         Stmt::LetStmt{ref typed_name, ..} => {
-        //             let raw_name = &typed_name.name as *const Identifier;
-        //             new_scope.declaration_order.insert(raw_name, i);
-        //             let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
-        //             new_scope.declarations.insert(raw_name, scope_mod);
-        //         },
-        //         _ => {}
-        //     };
-        // }
-        // context.add_scope(new_id, new_scope);
-        // let new_block = Block{statements: new_stmts};
-        // return Node{
-        //     id: self.id,
-        //     data: new_block,
-        //     scope: new_id
-        // };
     }
     
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context {
@@ -356,75 +279,6 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
 
     fn check_scope(self, _scope: Scope) -> bool {
         panic!();
-    }
-
-    /// Check scope and generate
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> Node<Stmt> {
-        panic!()
-        // let new_node = match self.data {
-        //     Stmt::LetStmt{typed_name, expression} => {
-        //         let new_value = expression.gen_scopes(parent_id, context);
-        //         // Build new scope
-        //         // TODO: Reference counted reference to value name.
-
-        //         // Build new statement
-        //         let new_let = Stmt::LetStmt{typed_name, expression: new_value};
-
-        //         let declarations = BTreeMap::new();
-        //         let declaration_order = BTreeMap::new();
-        //         let new_scope = Scope{parent_id, declarations, declaration_order};
-        //         let new_id = context.new_scope(new_scope);
-        //         let new_node = Node{id: self.id, data: new_let, scope: new_id};
-        //         new_node
-        //     },
-        //     Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block, return_type} => {
-        //         // TODO: Handle keyword args expressions. They should receive just the parent scope.
-        //         let mut declarations = BTreeMap::new();
-        //         let mut declaration_order = BTreeMap::new();
-
-        //         // Add arguments to declarations.
-        //         for (i, arg) in args.iter().enumerate() {
-        //             declaration_order.insert(&arg.name as *const Identifier, i+1);
-        //             declarations.insert(&arg.name as *const Identifier, CanModifyScope::Argument);
-        //         }
-
-        //         // Add the variable length arguments to declarations.
-        //         match vararg {
-        //             Some(ref x) => {
-        //                 let raw_vararg = x as *const Identifier;
-        //                 let index = declaration_order.len() - 1;
-        //                 declaration_order.insert(raw_vararg, index);
-        //                 declarations.insert(raw_vararg, CanModifyScope::Argument);
-        //             },
-        //             None => {}
-        //         };
-
-        //         // Add the variable length keyword arguments to declarations.
-        //         match varkwarg {
-        //             Some(ref x) => {
-        //                 let raw_vararg = x as *const Identifier;
-        //                 let index = declaration_order.len() - 1;
-        //                 declaration_order.insert(raw_vararg, index);
-        //                 declarations.insert(raw_vararg, CanModifyScope::Argument);
-        //             }, 
-        //             None => {}
-        //         };
-
-        //         let mut new_scope = Scope{parent_id, declarations, declaration_order};
-        //         let new_id = context.new_scope(new_scope);
-
-        //         let new_body = block.gen_scopes(Some(new_id), context);
-        //         let mut new_stmt = Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, block: new_body, return_type};
-
-        //         let mut new_node = Node{id: self.id, data: new_stmt, scope: new_id};
-
-        //         new_node
-        //     },
-        //     Stmt::ReturnStmt(_) => self,
-        //     _ => panic!()
-        // };
-
-        // return new_node;
     }
 
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context {
@@ -531,35 +385,6 @@ impl Scoped<Node<Expr>> for Node<Expr> {
         panic!();
     }
 
-    fn gen_scopes(self, parent_id: Option<usize>, context: &Context) -> Node<Expr> {
-        panic!()
-        // let new_node: Node<Expr> = match self.data {
-        //     Expr::BinaryExpr{operator, left, right} => {
-        //         let new_left = left.gen_scopes(parent_id, context);
-        //         let new_right = right.gen_scopes(parent_id, context);
-        //         let new_expr = Expr::BinaryExpr{operator: operator, left: Box::new(new_left), right: Box::new(new_right)};
-        //         let new_id = self.id;
-        //         let declarations = BTreeMap::new();
-        //         let declaration_order = BTreeMap::new();
-        //         let new_scope = Scope{parent_id, declarations, declaration_order};
-        //         let new_scope_id = general_utils::get_next_scope_id();
-        //         context.add_scope(new_scope_id, new_scope);
-        //         Node{id: new_id, data: new_expr, scope: new_scope_id}
-        //     },
-        //     Expr::Int(_) | Expr::Bool(_) | Expr::IdentifierExpr(_) => {
-        //         let declarations = BTreeMap::new();
-        //         let declaration_order = BTreeMap::new();
-        //         let new_scope = Scope{parent_id, declarations, declaration_order};
-        //         let new_scope_id = general_utils::get_next_scope_id();
-        //         context.add_scope(new_scope_id, new_scope);
-        //         Node{id: self.id, data: self.data, scope: new_scope_id}
-        //     },
-        //     _ => panic!()
-        // };
-
-        // return new_node;
-    }
-
     fn gen_scopes2(&mut self, parent_id: usize, context: &Context) -> Context {
         let new_context = match &mut self.data {
             Expr::BinaryExpr{ref mut operator, ref mut left, ref mut right} => {
@@ -573,6 +398,18 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 self.scope = parent_id;
                 empty_context()
             },
+            Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
+                let mut new_context = empty_context();
+                new_context.extend(function.gen_scopes2(parent_id, context));
+                for arg in args {
+                    new_context.extend(arg.gen_scopes2(parent_id, context));
+                }
+                for (_, kwarg) in kwargs {
+                    new_context.extend(kwarg.gen_scopes2(parent_id, context));
+                }
+                self.scope = parent_id;
+                new_context
+            }
             _ => panic!()
         };
 

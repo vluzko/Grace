@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use expression::*;
 use general_utils;
+use compiler_layers;
 
 extern crate cute;
 
@@ -466,10 +467,12 @@ mod test {
 
             #[test]
             fn test_let_stmt() {
-                let mut stmt = output(parser::statement("let a = 1".as_bytes(), 0));
-                let (id, init) = initial_context();
-                let context = stmt.gen_scopes2(id, &init);
-                panic!()
+                let (block, context) = compiler_layers::to_scopes::<Node<Block>>("let a = 1".as_bytes());
+                assert_eq!(context.scopes.len(), 1);
+                for (k, v) in &context.scopes {
+                    assert_eq!(v.declarations.len(), 1);
+                    assert!(v.declarations.contains_key(&Identifier::from("a")));
+                }
             }
 
             fn test_function_decl() {

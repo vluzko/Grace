@@ -17,7 +17,8 @@ fn main() {
     f.read_to_string(&mut file_contents).unwrap();
 
     let parse_result = parser::module(file_contents.as_bytes());
-    let context = output(parse_result).gen_scopes2(0, &scoping::initial_context());
+    let (id, init) = scoping::initial_context();
+    let context = output(parse_result).gen_scopes2(id, &init);
     //let names_maps = call compiler layers assign_node_ids here;
     // let type_rewrites = output(parse_result).type_based_rewrite(&context);
     // let wast = type_rewrites.generate_bytecode();

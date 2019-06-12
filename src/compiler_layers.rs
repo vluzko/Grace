@@ -37,7 +37,8 @@ pub fn parse(input: &[u8]) -> expression::Node<expression::Module>{
 pub fn to_scopes<T>(input: &[u8]) -> (T, scoping::Context)
 where T: Parseable, T: Scoped<T> {
     let mut result = T::parse(input);
-    let context = result.gen_scopes2(0, &scoping::initial_context());
+    let (id, init) = scoping::initial_context();
+    let context = result.gen_scopes2(id, &init);
     return (result, context);
 }
 

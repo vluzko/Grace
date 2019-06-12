@@ -313,12 +313,16 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)                
             },
-            Stmt::ReturnStmt(ref value) => value.resolve_types(context, type_map),
+            Stmt::ReturnStmt(ref value) => {
+                let (mut new_map, t) = value.resolve_types(context, type_map);
+                new_map.insert(self.id, t.clone());
+                (new_map, t)
+            },
             Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref kwargs, ref varkwarg, ref block, ref return_type} => {
-                let (mut type_map, return_type) = block.resolve_types(context, type_map);
+                let (mut new_map, return_type) = block.resolve_types(context, type_map);
                 let function_type = Type::Function(vec!(), Box::new(return_type));
-                type_map.insert(self.id, function_type.clone());
-                (type_map, function_type)
+                new_map.insert(self.id, function_type.clone());
+                (new_map, function_type)
             },
             _ => panic!()
         };
@@ -413,6 +417,9 @@ impl Typed<Node<Expr>> for Node<Expr> {
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
                 let (mut new_map, t) = function.resolve_types(context, type_map);
+                for arg in args {
+                    new_map = arg.resolve_types(context, new_map).0;
+                }
                 new_map.insert(self.id, t.clone());
                 (new_map, t)
             }
@@ -516,7 +523,8 @@ mod test {
     fn test_identifier_resolution() {
         let block = "let a = 1\nlet b = a";
         let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        let context = parsed.gen_scopes2(0, &scoping::initial_context());
+        let (id, init) = scoping::initial_context();
+        let context = parsed.gen_scopes2(id, &init);
         let (types, _) = parsed.resolve_types(&context, HashMap::new());
         assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
         let id2 = parsed.data.statements[1].id;

@@ -66,12 +66,13 @@ pub fn empty_scope() -> Scope {
 }
 
 /// Create a context containing only the empty scope.
-pub fn initial_context() -> Context {
+pub fn initial_context() -> (usize, Context) {
     let empty = empty_scope();
     let mut init_scopes = HashMap::new();
-    init_scopes.insert(0, empty);
+    let id = general_utils::get_next_scope_id();
+    init_scopes.insert(id, empty);
     let context = Context{scopes: init_scopes, containing_scopes: HashMap::new()};
-    return context;
+    return (id, context);
 }
 
 pub fn empty_context() -> Context {
@@ -95,9 +96,10 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
-        println!("name is {:?}", name);
         let initial_scope = self.scopes.get(&scope_id).unwrap();
-        if initial_scope.declarations.contains_key(name) {
+        if scope_id == 0 {
+            panic!()
+        } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
             return match initial_scope.parent_id {
@@ -202,7 +204,6 @@ impl Scoped<Node<Block>> for Node<Block> {
         return top_level;
     }
 
-
     fn check_scope(self, _scope: Scope) -> bool {
         panic!();
     }
@@ -227,6 +228,8 @@ impl Scoped<Node<Block>> for Node<Block> {
             match &stmt.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
                     new_scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
+                    new_scope.declarations.insert(name.clone(), scope_mod);
                 },
                 Stmt::LetStmt{ref typed_name, ..} => {
                     new_scope.declaration_order.insert(typed_name.name.clone(), i);
@@ -429,7 +432,8 @@ mod test {
         return b + c
         "#;
         let mut func_stmt = output(parser::statement(func_str.as_bytes(), 0));
-        let context = func_stmt.gen_scopes2(0, &initial_context());
+        let (id, init) = initial_context();
+        let context = func_stmt.gen_scopes2(id, &init);
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));
@@ -448,9 +452,9 @@ mod test {
             #[test]
             fn test_literal_scope() {
                 let mut literals: Vec<Node<Expr>> = vec![Node::from(1), Node::from(0.5), Node::from(Expr::String("asdf".to_string())), Node::from(true)];
-                let init_context = initial_context();
+                let (id, init) = initial_context();
                 for literal in literals.iter_mut() {
-                    let context = literal.gen_scopes2(0, &init_context);
+                    let context = literal.gen_scopes2(id, &init);
                     assert_eq!(context, empty_context());
                 }
             }
@@ -463,7 +467,9 @@ mod test {
             #[test]
             fn test_let_stmt() {
                 let mut stmt = output(parser::statement("let a = 1".as_bytes(), 0));
-                let context = stmt.gen_scopes2(0, &initial_context());
+                let (id, init) = initial_context();
+                let context = stmt.gen_scopes2(id, &init);
+                panic!()
             }
 
             fn test_function_decl() {
@@ -476,7 +482,8 @@ mod test {
                 "#;
 
                 let mut block = output(parser::block(block_str.as_bytes(),0 ));
-                let context = block.gen_scopes2(0, &initial_context());
+                let (id, init) = initial_context();
+                let context = block.gen_scopes2(id, &init);
                 let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
                 unsafe {
@@ -516,8 +523,8 @@ mod test {
             let mut block = Node::from(Block{
                 statements: vec!(Node::from(s1), Node::from(s2))
             });
-
-            let context = block.gen_scopes2(0, &initial_context());
+            let (id, init) = initial_context();
+            let context = block.gen_scopes2(id, &init);
             let scope = context.get_scope(block.scope);
             assert_eq!(scope.declarations.len(), 2);
             unsafe {
@@ -554,7 +561,8 @@ mod test {
     #[test]
     fn test_get_declarations() {
         let mut func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0));
-        let context = func_dec.gen_scopes2(0, &initial_context());
+        let (id, init) = initial_context();
+        let context = func_dec.gen_scopes2(id, &init);
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         for ptr in actual {

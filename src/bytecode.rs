@@ -250,8 +250,8 @@ mod tests {
     #[test]
     pub fn test_generate_function_call() {
         let (function_call, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Block>>(
-            "fn a(b):\n return 1\na(b)".as_bytes());
-        let bytecode = "get_local $b\ncall $a".to_string();
+            "fn a(b):\n return 1\nlet x = a(1)".as_bytes());
+        let bytecode = "(func $a (param $b i32) (result i32) \ni32.const 1\n)\n(export \"a\" (func $a))\ni32.const 1\ncall $a\nset_local $x".to_string();
         assert_eq!(function_call.generate_bytecode(&context, &mut type_map), bytecode);
     }
 

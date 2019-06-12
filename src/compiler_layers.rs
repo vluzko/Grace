@@ -57,4 +57,11 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
     return (rewritten, context, type_map);
 }
 
+pub fn to_bytecode<T>(input: &[u8]) -> String 
+where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
+    let (result, mut context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
+    let rewritten = result.type_based_rewrite(&context, &mut type_map);
+    return rewritten.generate_bytecode(&context, &mut type_map);
+}
+
 

@@ -278,7 +278,7 @@ get_local $x
    }
 
     #[test]
-    pub fn test_generate_function() {
+    pub fn test_generate_function1() {
         let (func_stmt, context, mut type_map) = 
         compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
         let bytecode = func_stmt.generate_bytecode(&context, &mut type_map);

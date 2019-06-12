@@ -59,7 +59,7 @@ pub trait Scoped<T> {
 /// Create an empty scope.
 pub fn empty_scope() -> Scope {
     return Scope{
-        parent_id: Some(0),
+        parent_id: None,
         declarations: BTreeMap::new(),
         declaration_order: BTreeMap::new()
     };
@@ -334,9 +334,9 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 new_context.extend(block_context);
                 new_context
             },
-            Stmt::ReturnStmt(_) => {
+            Stmt::ReturnStmt(expression) => {
                 self.scope = parent_id;
-                empty_context()
+                expression.gen_scopes2(parent_id, context)
             },
             _ => panic!()
         };

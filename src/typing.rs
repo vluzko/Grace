@@ -474,7 +474,7 @@ impl BinaryOperator {
     pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult => numeric_join(left, right),
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => numeric_join(left, right),
             BinaryOperator::Div => Type::f64,
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
             _ => panic!()

@@ -8,6 +8,8 @@ use scoping;
 use scoping::Scoped;
 use typing;
 use typing::Typed;
+use bytecode;
+use bytecode::ToBytecode;
 
 pub trait Layer<T>{
     fn run_from_start(&[u8]) -> T;
@@ -58,7 +60,7 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
 }
 
 pub fn to_bytecode<T>(input: &[u8]) -> String 
-where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
+where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
     let (result, mut context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
     let rewritten = result.type_based_rewrite(&context, &mut type_map);
     return rewritten.generate_bytecode(&context, &mut type_map);

@@ -331,9 +331,9 @@ get_local $x
 
     #[test]
     pub fn test_generate_rem() {
-        let rem_expr = parser::expression("5 % 6".as_bytes());
-        panic!()
-        // assert_eq!(output(rem_expr).generate_bytecode(context, type_map), "i32.const 5\ni32.const 6\ni32.rem_u".to_string());
+        let (rem_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 % 6".as_bytes());
+        let bytecode = rem_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.rem_u".to_string());
     }
 
     #[test]

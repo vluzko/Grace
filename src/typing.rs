@@ -324,6 +324,18 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 new_map.insert(self.id, function_type.clone());
                 (new_map, function_type)
             },
+            Stmt::WhileStmt{ref condition, ref block} => {
+                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (mut final_map, t) = block.resolve_types(context, new_map);
+                final_map.insert(self.id, t.clone());
+                (final_map, t)
+            }
+            Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (mut final_map, t) = block.resolve_types(context, new_map);
+                final_map.insert(self.id, t.clone());
+                (final_map, t)
+            }
             _ => panic!()
         };
     }
@@ -524,7 +536,7 @@ mod test {
         let block = "let a = 1\nlet b = a";
         let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
         let (id, init) = scoping::initial_context();
-        let context = parsed.gen_scopes2(id, &init);
+        let context = parsed.gen_scopes(id, &init);
         let (types, _) = parsed.resolve_types(&context, HashMap::new());
         assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
         let id2 = parsed.data.statements[1].id;

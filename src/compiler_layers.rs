@@ -40,7 +40,7 @@ pub fn to_scopes<T>(input: &[u8]) -> (T, scoping::Context)
 where T: Parseable, T: Scoped<T> {
     let mut result = T::parse(input);
     let (id, init) = scoping::initial_context();
-    let context = result.gen_scopes2(id, &init);
+    let context = result.gen_scopes(id, &init);
     // println!("\ninit context: {:?}.\nNew context: {:?}", init, context);
     return (result, context);
 }

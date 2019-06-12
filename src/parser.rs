@@ -14,6 +14,34 @@ type ExprNode = Node<Expr>;
 type StmtRes<'a> = IResult<&'a[u8], StmtNode>;
 type ExprRes<'a> = IResult<&'a[u8], ExprNode>;
 
+pub trait Parseable {
+    fn parse(input: &[u8]) -> Self;
+}
+
+impl Parseable for Node<Module> {
+    fn parse(input: &[u8]) -> Node<Module> {
+        return  output(module(input));
+    }
+}
+
+impl Parseable for Node<Block> {
+    fn parse(input: &[u8]) -> Node<Block> {
+        return output(block(input, 0));
+    }
+}
+
+impl Parseable for Node<Stmt> {
+    fn parse(input: &[u8]) -> Node<Stmt> {
+        return output(statement(input, 0));
+    }
+}
+
+impl Parseable for Node<Expr> {
+    fn parse(input: &[u8]) -> Node<Expr> {
+        return output(expression(input));
+    }
+}
+
 pub fn reserved_list() -> Vec<&'static str>{
     let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield", "let");
     return list;
@@ -642,6 +670,7 @@ pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     );
 }
 
+/// Match a vector literal.
 pub fn vec_literal(input: &[u8]) -> ExprRes {
 
     let parse_result = terminated!(input,
@@ -655,6 +684,7 @@ pub fn vec_literal(input: &[u8]) -> ExprRes {
     return fmap_node(parse_result, |x| Expr::VecLiteral(x));
 }
 
+/// Match a set literal.
 pub fn set_literal(input: &[u8]) -> ExprRes {
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
@@ -729,6 +759,7 @@ pub fn vector_comprehension(input: &[u8]) -> ExprRes {
     });
 }
 
+/// Match a generator comprehension.
 pub fn generator_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
         boolean_op_expr,
@@ -810,6 +841,7 @@ pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
     return node;
 }
 
+/// Match a list of arguments.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(",")),
@@ -821,6 +853,7 @@ pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     return parse_result;
 }
 
+/// Match a list of keyword arguments.
 pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
     let parse_result = separated_list!(input,
         inline_wrapped!(tag!(",")),
@@ -835,6 +868,7 @@ pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>
     return parse_result;
 }
 
+/// Match a function call following an expression.
 pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
     let parse_result = delimited!(input,
         open_paren,
@@ -859,6 +893,7 @@ pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifi
     }));
 }
 
+/// Match an indexing operation following an expression.
 pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
     let parse_result = delimited!(input,
         open_bracket,
@@ -901,6 +936,7 @@ pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
     });
 }
 
+/// Match an access operation following an expression.
 pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return many1!(input, 
         preceded!(
@@ -910,6 +946,8 @@ pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     );
 }
 
+/// Match a trailer behind an expression.
+/// A trailer is a function call, an attribute access, or an index.
 pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
     let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent::Call{args: x.0, kwargs: x.1};
     let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
@@ -959,6 +997,7 @@ pub fn bool_expr(input: &[u8]) -> ExprRes {
 }
 
 // TODO: Hex encoded, byte encoded
+/// Match an integer literal.
 pub fn int(input: &[u8]) -> ExprRes {
     let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
         tuple!(
@@ -972,6 +1011,7 @@ pub fn int(input: &[u8]) -> ExprRes {
     return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
 }
 
+/// Match a floating point literal.
 pub fn float<'a>(input: &'a[u8]) -> ExprRes {
 
     let with_dec = |x: &'a[u8]| tuple!(x,
@@ -1015,6 +1055,7 @@ named!(string_literal<&[u8],&[u8]>,
     )
 );
 
+/// Match a string literal.
 pub fn string(input: &[u8]) -> ExprRes {
     let parse_result = string_literal(input);
 
@@ -1115,44 +1156,44 @@ mod tests {
             let actual = output(keyword_args(", c=5, d=7".as_bytes()));
             assert_eq!(expected, actual);
         }
-
+       
         #[test]
-       fn test_func_dec() {
-           check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("x"),
-               args: c![TypedIdent::from(x), for x in vec!("a", "b")],
-               vararg: Some(Identifier::from("args")),
-               kwargs: vec!(
-                   (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                   (TypedIdent::from("d"), output(expression("7".as_bytes())))
-               ),
-               varkwarg: Some(Identifier::from("kwargs")),
-               block: output(block("x=5\n".as_bytes(), 0)),
-               return_type: None
-           });
+        fn test_func_dec() {
+            check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("x"),
+                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+                vararg: Some(Identifier::from("args")),
+                kwargs: vec!(
+                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
+                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                ),
+                varkwarg: Some(Identifier::from("kwargs")),
+                block: output(block("x=5\n".as_bytes(), 0)),
+                return_type: None
+            });
 
-           check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("x"),
-               args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
-               vararg: None,
-               kwargs: vec!(
-                   (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
-               ),
-               varkwarg: None,
-               block: output(block("x=5\n".as_bytes(), 0)),
-               return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
-           });
+            check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("x"),
+                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
+                vararg: None,
+                kwargs: vec!(
+                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
+                ),
+                varkwarg: None,
+                block: output(block("x=5\n".as_bytes(), 0)),
+                return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
+            });
 
-           check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-               name: Identifier::from("a"),
-               args: vec!(TypedIdent::from("b")),
-               vararg: None,
-               kwargs: vec!(),
-               varkwarg: None,
-               block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-               return_type: None
-           });
-       }
+            check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("a"),
+                args: vec!(TypedIdent::from("b")),
+                vararg: None,
+                kwargs: vec!(),
+                varkwarg: None,
+                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
+                return_type: None
+            });
+        }
 
         #[test]
         fn test_try_except() {

@@ -1,5 +1,34 @@
 # Scoping
 
+## Pointer architecture
+* Parent node to child node: Node -> Node (One to many)
+* Scope to parent scope: Scope -> Scope (One to one)
+* Node to scope: Node -> Scope (One to one)
+* Scope to modifier: Scope -> Node (One to many)
+
+### Problems
+* The current architecture doesn't work because everything is stack allocated and addresses change
+* Scope contains raw pointers. When we rewrite the tree, those addresses change and the scope is no longer valid.
+
+### Solution 1: Box everything
+* Might not actually work? Box *should* put stuff on the heap and give it a stable address though.
+* Then we can use raw pointers to the Box or the contents of the Box, we *think*
+
+#### Handling rewrites
+* When a scope is *rewritten*, *if* it is modifies a scope, we then... rewrite the scope????
+* Oh no, now every time we have to rewrite the entire thing!!!
+* Only workable if we make everything mutable. *hiss*
+
+### Solution 2: Rc pointers
+* Same problem as Box everything.
+
+### Solution 3: Big ass tables
+* Two arrays / hashmaps containing all the scopes and all the nodes, indexed/mapped to by their IDs
+* Maps between nodes/scopes are just the corresponding IDs
+
+#### Handling rewrites
+* Do the rewrite, update the table. Find the corresponding scope in its table, rewrite it. Preserve IDs.
+
 ## Information to Track
 * What things are in scope (at every node)
 * Where this name is declared (for all references)
@@ -35,19 +64,3 @@ Return a name resolution function (this is trivial, just search for ident in the
 * Pass the scope, line number, and column number around along with the &[u8] input
 * return child scope along with ast node
 * Put a reference to the scope inside the ast node when it's made
-
-
-## Name Resolution Options
-
-### Node IDs (Definitely do)
-Assign a unique ID to each node as it's created
-
-* Requires us to edit Expr and Stmt
-* IDs get stored but are invalidated when we load from a cache, have to be reassigned
-* Has the advantage of generalizing if we need to incorporate mode data in the future
-
-### Build scopes as we go
-Make parent scope an input to each parser. Return the child scope.
-
-* Tree node := (ASTNode, Scope). Edges are in ASTNode
-* Seems like it would be more elegant to just put the scope in the node

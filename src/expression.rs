@@ -3,15 +3,15 @@ use std::fmt::Display;
 use std::str::from_utf8;
 use std::convert::From;
 
-use compiler_layers::get_next_id;
 use scoping::*;
 use typing::*;
+use general_utils;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
-    pub id: u64,
+    pub id: usize,
     pub data: T,
-    pub scope: Scope
+    pub scope: usize
 }
 
 impl <T> PartialEq for Node<T> where T:PartialEq {
@@ -186,44 +186,6 @@ pub mod trait_impls {
         }
     }
 
-    impl Node<Expr> {
-        pub fn get_type(&self) -> Type {
-            return self.data.get_type();
-        }
-    }
-
-    /// Impl for Expr
-    impl Expr {
-        pub fn get_type(&self) -> Type {
-            match self {
-                &Expr::String (..) => Type::string,
-                &Expr::Bool (..) => Type::boolean,
-                &Expr::Int (..) => Type::i32,
-                &Expr::Float (..) => Type::f64,
-                &Expr::UnaryExpr {ref operator, ref operand, ..} => {
-                    match operator {
-                        &UnaryOperator::ToF32 => Type::f32,
-                        &UnaryOperator::ToF64 => Type::f64,
-                        &UnaryOperator::ToI32 => Type::i32,
-                        &UnaryOperator::ToI64 => Type::i64,
-                        _ => operand.get_type()
-                    }
-                },
-                &Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
-                    return operator.get_return_type(&left.get_type(), &right.get_type());
-                },
-                &Expr::IdentifierExpr(ref name) => {
-                    // Get declaration
-                    panic!()
-                },
-                _ => {
-                    println!("{:?}", self);
-                    panic!()
-                }
-            }
-        }
-    }
-
     /// Display implementations
     impl Display for TypedIdent {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -243,9 +205,9 @@ pub mod trait_impls {
     impl <T> From<T> for Node<T> {
         fn from(input: T) -> Self {
             return Node{
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: input,
-                scope: empty_scope()
+                scope: 0
             };
         }
     }
@@ -254,10 +216,10 @@ pub mod trait_impls {
         fn from(input: bool) -> Self {
             let expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
-                scope: empty_scope()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -265,10 +227,10 @@ pub mod trait_impls {
         fn from(input: &'a str) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
-                scope: empty_scope()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -276,10 +238,10 @@ pub mod trait_impls {
         fn from(input: i64) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
-                scope: empty_scope()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -287,10 +249,10 @@ pub mod trait_impls {
         fn from(input: f64) -> Self {
             let expr: Expr = Expr::from(input);
             return Node {
-                id: get_next_id(),
+                id: general_utils::get_next_id(),
                 data: expr,
-                scope: empty_scope()
-            };
+                scope: 0
+            }
         }
     }
 
@@ -413,6 +375,7 @@ pub mod trait_impls {
             return Identifier{name: input.to_string()};
         }
     }
+
     impl <'a> From<&'a [u8]> for Identifier {
         fn from(input: &'a [u8]) -> Self {
             let val = match from_utf8(input) {

@@ -1,6 +1,9 @@
 # Type System
 The most likely scenario is that we implement a type system very similar to Scala's, then extend it with dependent types
 
+## Implementation Details
+* Rewriting the scope during the type inference step may break the raw pointers. Switch to IDs.
+
 
 ## Subtyping
 Our most significant short term design decision is whether and how to support subtyping / inheritance. Since our goal is to *compete* with Javascript, we must also compete for Javascript *coders*.
@@ -38,7 +41,15 @@ Just copy Haskell/Coq/Idris
 #### Cons
 * No subtypes.
 
+## Type conversions
+* Float +-*% Int -> Float +-*% Float
+* Int / Int -> Float / Float
+
+5.0 / (5 + 3)
+FloatingPoint() / (Numeric() + Numeric())
 
 ## Problems
 * We're pretty sure we can handle gradual dependent typing by inserting run time checks. Can this be done without an enormous performance hit?
 * How do we handle
+
+

@@ -207,8 +207,19 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                     expr.resolve_types(context, type_map)
                 }
             },
-            scoping::CanModifyScope::Argument => {
-                panic!()
+            scoping::CanModifyScope::Argument(ref ptr, ref index) => {
+                // Hack: assume all arguments are i32s for now
+                return (type_map, Type::i32);
+                // let arg = unsafe {
+                //     &**ptr
+                // };
+                // // This can't be done in a match statement because Rust's borrow checker is wrong.
+                // if type_map.contains_key(&arg.id) {
+                //     let t = type_map.get(&arg.id).unwrap().clone();
+                //     (type_map, t)
+                // } else {
+                //     arg.resolve_types(context, type_map)
+                // }                
             }
         };
     }

@@ -28,7 +28,7 @@ pub struct Context {
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>),
     Expression(*const Node<Expr>),
-    Argument
+    Argument(*const Node<Stmt>, usize)
 }
 
 /// A single layer of scope.
@@ -303,7 +303,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
                     declaration_order.insert(arg.name.clone(), i+1);
-                    declarations.insert(arg.name.clone(), CanModifyScope::Argument);
+                    declarations.insert(arg.name.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, i));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -311,7 +311,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument);
+                        declarations.insert(x.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, args.len()+1));
                     },
                     None => {}
                 };
@@ -321,7 +321,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument);
+                        declarations.insert(x.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, args.len()+2));
                     }, 
                     None => {}
                 };

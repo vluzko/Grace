@@ -286,6 +286,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
     }
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
+        let raw_pointer = self as *const Node<Stmt>;
         let new_context = match &mut self.data {
             Stmt::LetStmt{typed_name, expression} => {
                 self.scope = parent_id;
@@ -303,7 +304,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
                     declaration_order.insert(arg.name.clone(), i+1);
-                    declarations.insert(arg.name.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, i));
+                    declarations.insert(arg.name.clone(), CanModifyScope::Argument(raw_pointer, i));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -311,7 +312,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, args.len()+1));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+1));
                     },
                     None => {}
                 };
@@ -321,7 +322,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(self as *const Node<Stmt>, args.len()+2));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+2));
                     }, 
                     None => {}
                 };

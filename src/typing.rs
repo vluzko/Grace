@@ -420,7 +420,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 panic!()
             }
             Expr::IdentifierExpr(ref name) => {
-                println!("self is {:?}", self);
                 let creation = context.get_declaration(self.scope, name).unwrap();
                 let (mut new_map, t) = creation.resolve_types(context, type_map);
                 new_map.insert(self.id, t.clone());

@@ -186,7 +186,6 @@ impl Scoped<Node<Module>> for Node<Module> {
         }
 
         new_context.add_scope(scope_id, new_scope);
-        println!("new_context is {:?}", new_context);
         return new_context;
     }
 }

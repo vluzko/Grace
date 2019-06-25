@@ -82,10 +82,11 @@ function get_async_desc(describe) {
 function compile_grace(input, output) {
   // process.chdir("..");
   // Asynchronously compile the Grace code to WAST.
-  let compile_to_wast = exec(`cargo run ${input} ${output}`);
+  let compile_to_wast = exec(`cargo run ${input} ${output} -- --nocapture`);
   let wasm_file;
   // Once that's finished, asynchronously compile the WAST to WASM.
   let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
+    console.log(stdout);
     wasm_file = output.replace(".wat", ".wasm");
     return exec(`wat2wasm ${output} -o ${wasm_file}`);
   });

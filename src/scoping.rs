@@ -174,8 +174,11 @@ impl Scoped<Node<Module>> for Node<Module> {
         for (i, stmt) in self.data.declarations.iter_mut().enumerate() {
             let child_context = stmt.gen_scopes(scope_id, context);
             new_context.extend(child_context);
+            let pointer = stmt as *const Node<Stmt>;
             match &stmt.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(pointer);
+                    new_scope.declarations.insert(name.clone(), scope_mod);
                     new_scope.declaration_order.insert(name.clone(), i);
                 },
                 _ => {}
@@ -183,6 +186,7 @@ impl Scoped<Node<Module>> for Node<Module> {
         }
 
         new_context.add_scope(scope_id, new_scope);
+        println!("new_context is {:?}", new_context);
         return new_context;
     }
 }

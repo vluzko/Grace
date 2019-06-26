@@ -152,7 +152,8 @@ pub enum UnaryOperator {
     ToI64,
     ToUi64,
     ToF32,
-    ToF64
+    ToF64,
+    ToBool
 }
 
 /// A dotted identifier. Only used with import statements.
@@ -265,6 +266,7 @@ pub mod trait_impls {
                 Type::i64 => UnaryOperator::ToI64,
                 Type::f32 => UnaryOperator::ToF32,
                 Type::f64 => UnaryOperator::ToF64,
+                Type::boolean => UnaryOperator::ToBool,
                 _ => panic!()
             }
         }

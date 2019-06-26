@@ -68,6 +68,7 @@ impl Type {
             &Type::f32 => "f32".to_string(),
             &Type::f64 => "f64".to_string(),
             &Type::ui32 => "i64".to_string(),
+            &Type::boolean => "i32".to_string(),
             _ => panic!()
         }
     }

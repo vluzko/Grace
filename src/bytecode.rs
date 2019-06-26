@@ -201,6 +201,9 @@ impl BinaryOperator {
             &BinaryOperator::Mult => "mul",
             &BinaryOperator::Div => "div",
             &BinaryOperator::Mod => "rem_u",
+            &BinaryOperator::And => "and",
+            &BinaryOperator::Or => "or",
+            &BinaryOperator::Xor => "xor",
             _ => panic!()
         };
         if self.requires_sign() {
@@ -223,6 +226,7 @@ impl UnaryOperator {
             (&UnaryOperator::ToF64, &typing::Type::f64) => "".to_string(),
             (&UnaryOperator::ToF32, &typing::Type::i32) => "f32.convert_i32_s".to_string(),
             (&UnaryOperator::ToF32, &typing::Type::f32) => "".to_string(),
+            (&UnaryOperator::ToBool, &typing::Type::i32) => "".to_string(),
             _ => {
                 println!("Unary operator not implemented: {:?}, {:?}", self, operand_type);
                 panic!()

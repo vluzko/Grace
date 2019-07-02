@@ -8,11 +8,13 @@ use self::nom::*;
 use self::nom::IResult::Done as Done;
 use expression::*;
 use parser_utils::*;
+use typing;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
 type StmtRes<'a> = IResult<&'a[u8], StmtNode>;
 type ExprRes<'a> = IResult<&'a[u8], ExprNode>;
+type TypeRes<'a> = IResult<&'a[u8], typing::Type>;
 
 pub trait Parseable {
     fn parse(input: &[u8]) -> Self;
@@ -1045,7 +1047,7 @@ named!(string_char<&[u8], &[u8]>,
     )
 );
 
-named!(string_literal<&[u8],&[u8]>,
+named!(string_literal<&[u8], &[u8]>,
     recognize!(
         tuple!(
             tag!("\""),
@@ -1061,6 +1063,61 @@ pub fn string(input: &[u8]) -> ExprRes {
 
     return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
 }
+
+pub mod type_parser {
+    use super::*;
+    /// Parse a type.
+    pub fn any_type(input: &[u8]) -> TypeRes {
+        return alt!(input, 
+            sum_type | product_type | parameterized_type | unparameterized_type
+        );  
+    }
+
+    pub fn sum_type(input: &[u8]) -> TypeRes {
+        let result = separated_nonempty_list!(input,
+            VBAR,
+            any_type
+        );
+
+        return fmap_iresult(result, |x| typing::Type::Sum(x));
+    }
+
+    pub fn product_type(input: &[u8]) -> TypeRes {
+        let result = delimited!(input,
+            open_paren,
+            separated_list!(
+                comma,
+                any_type
+            ),
+            close_paren
+        );
+
+        return fmap_iresult(result, |x| typing::Type::Product(x))
+    }
+
+    pub fn parameterized_type(input: &[u8]) -> TypeRes {
+        let result = tuple!(input, 
+            identifier,
+            delimited!(
+                LANGLE,
+                separated_nonempty_list!(
+                    comma,
+                    any_type
+                ),
+                RANGLE
+            )
+        );
+
+        return fmap_iresult(result, |x| typing::Type::Parameterized(x.0, x.1));
+    }
+
+    pub fn unparameterized_type(input: &[u8]) -> TypeRes {
+        let ident = identifier(input);
+        return fmap_iresult(ident, typing::Type::from);
+    }
+}
+
+
 
 #[cfg(test)]
 mod tests {

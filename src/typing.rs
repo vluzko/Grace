@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::usize;
 use std::ops::Add;
+use std::convert::From;
 
 use expression::*;
 use general_utils;
@@ -26,7 +27,8 @@ pub enum Type {
     Product(Vec<Type>),
     Vector(Box<Type>),
     Function(Vec<Type>, Box<Type>),
-    
+    Named(Identifier),
+    Parameterized(Identifier, Vec<Type>),
     Undetermined
 }
 
@@ -170,6 +172,37 @@ impl Add for Type {
         }
     }
 }
+
+impl From<&Identifier> for Type {
+    fn from(input: &Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "float32" => Type::f32,
+            "float64" => Type::f64,
+            "ui32" => Type::ui32,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            _ => Type::Named(input.clone())
+        };
+    }
+}
+
+impl From<Identifier> for Type {
+    fn from(input: Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "float32" => Type::f32,
+            "float64" => Type::f64,
+            "ui32" => Type::ui32,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            _ => Type::Named(input)
+        };
+    }
+}
+
 
 pub trait Typed<T> {
     fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;

@@ -432,7 +432,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 self.scope = parent_id;
                 new_context
             },
-            Expr::ComparisonExpr{ref mut operator, ref mut left, ref mut right} => {
+            Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
                 let mut new_context = empty_context();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
@@ -500,6 +500,7 @@ mod test {
                 }
             }
 
+            #[test]
             fn test_function_decl() {
                 let block_str = r#"
                 fn a():
@@ -514,21 +515,19 @@ mod test {
                 let context = block.gen_scopes(id, &init);
                 let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
-                unsafe {
-                    let fn_node1 = match fn1.extract_stmt() {
-                        Stmt::FunctionDecStmt{name, ..} => {
-                            assert_eq!(name, Identifier::from("a"))
-                        },
-                        _ => panic!()
-                    };
+                let fn_node1 = match fn1.extract_stmt() {
+                    Stmt::FunctionDecStmt{name, ..} => {
+                        assert_eq!(name, Identifier::from("a"))
+                    },
+                    _ => panic!()
+                };
 
-                    let fn_node1 = match fn1.extract_stmt() {
-                        Stmt::FunctionDecStmt{name, .. } => {
-                            assert_eq!(name, Identifier::from("b"))
-                        },
-                        _ => panic!()
-                    };
-                }
+                let fn_node2 = match fn2.extract_stmt() {
+                    Stmt::FunctionDecStmt{name, .. } => {
+                        assert_eq!(name, Identifier::from("b"))
+                    },
+                    _ => panic!()
+                };
             }
         }
 

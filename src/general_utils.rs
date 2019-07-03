@@ -92,6 +92,7 @@ pub fn get_next_scope_id() -> usize {
 mod tests {
     use super::*;
 
+    #[test]
     fn test_vec_c_int() {
         let vec1 = vec![1, 2, 3];
         let vec2 = vec![3, 4, 5];

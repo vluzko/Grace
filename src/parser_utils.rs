@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-
 use std::str;
 use std::str::from_utf8;
 

@@ -99,7 +99,7 @@ impl Context {
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
-            panic!()
+            panic!("Reached scope id 0");
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
@@ -354,6 +354,17 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 let mut condition_context = condition.gen_scopes(parent_id, context);
                 let block_context = block.gen_scopes(parent_id, context);
                 condition_context.extend(block_context);
+
+                for (elif_cond, elif_block) in elifs {
+                    condition_context.extend(elif_cond.gen_scopes(parent_id, context));
+                    condition_context.extend(elif_block.gen_scopes(parent_id, context));
+                }
+
+                match else_block {
+                    Some(b) => condition_context.extend(b.gen_scopes(parent_id, context)),
+                    None => {}
+                };
+
                 self.scope = parent_id;
                 condition_context
             }

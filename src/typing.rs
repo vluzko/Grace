@@ -175,8 +175,8 @@ impl Add for Type {
     }
 }
 
-impl From<&Identifier> for Type {
-    fn from(input: &Identifier) -> Self {
+impl <'a> From<&'a Identifier> for Type {
+    fn from(input: &'a Identifier) -> Self {
         return match input.name.as_ref() {
             "i32" => Type::i32,
             "i64" => Type::i64,

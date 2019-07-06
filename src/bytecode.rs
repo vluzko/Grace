@@ -64,7 +64,7 @@ impl ToBytecode for Node<Stmt> {
             
                 let body_bytecode = block.generate_bytecode(context, type_map);
                 
-                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.0.to_string())), " ");
 
                 let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
                 let func_dec = format!("(func ${func_name} {params} (result {return_type}) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
@@ -259,7 +259,7 @@ mod tests {
     #[test]
     pub fn test_generate_function_call() {
         let (function_call, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Block>>(
-            "fn a(b):\n return 1\nlet x = a(1)".as_bytes());
+            "fn a(b:i32) -> i32:\n return 1\nlet x = a(1)".as_bytes());
         let bytecode = "(func $a (param $b i32) (result i32) \ni32.const 1\n)\n(export \"a\" (func $a))\ni32.const 1\ncall $a\nset_local $x".to_string();
         assert_eq!(function_call.generate_bytecode(&context, &mut type_map), bytecode);
     }
@@ -267,7 +267,7 @@ mod tests {
     #[test]
    pub fn test_generate_module() {
        let (module, context, mut type_map) = 
-       compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
+       compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
        let mod_bytecode = r#"(module
 (import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
 (import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
@@ -289,7 +289,7 @@ get_local $x
     #[test]
     pub fn test_generate_function() {
         let (func_stmt, context, mut type_map) = 
-        compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
+        compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
         let bytecode = func_stmt.generate_bytecode(&context, &mut type_map);
         assert_eq!(bytecode, r#"(func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5

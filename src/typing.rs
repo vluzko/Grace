@@ -208,7 +208,6 @@ impl From<Identifier> for Type {
     }
 }
 
-
 pub trait Typed<T> {
     fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
@@ -371,13 +370,14 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
             Stmt::FunctionDecStmt{ref args, ref kwargs, ref block, ref return_type, ..} => {
                 let (mut new_map, t) = block.resolve_types(context, type_map);
 
-                let total_args = args.len() + kwargs.len();
-                let argument_type = vec![Type::Undetermined; total_args];
-                let function_type = Type::Function(argument_type, Box::new(t));
+                // let total_args = args.len() + kwargs.len();
+                // let argument_type = vec![Type::Undetermined; total_args];
+                let mut arg_types = c![x.1.clone(), for x in args];
+                arg_types.append(&mut c![x.1.clone(), for x in kwargs]);
 
-                // Type check
-                // TODO: Fix this once type parser is in use.
-                // assert_eq!(return_type.unwrap(), t);
+                // TODO: Type check
+                // assert_eq!(return_type.clone().unwrap(), t);
+                let function_type = Type::Function(arg_types, Box::new(t));
 
                 new_map.insert(self.id, function_type.clone());
                 (new_map, function_type)

@@ -9,6 +9,7 @@ use self::nom::IResult::Done as Done;
 use expression::*;
 use parser_utils::*;
 use typing;
+use typing::Type;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -142,12 +143,18 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Match all normal arguments.
-pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<TypedIdent>> {
+pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
     inline_wrapped!(input,
         separated_list_complete!(
             w_followed!(tag!(",")),
             terminated!(
-                typed_identifier,
+                tuple!(
+                    identifier,
+                    preceded!(
+                        colon,
+                        type_parser::any_type
+                    )
+                ),
                 alt!(recognize!(many1!(inline_whitespace_char)) |
                 peek!(tag!(",")) |
                 peek!(tag!(")")))
@@ -168,12 +175,16 @@ pub fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
 }
 
 /// Match all default arguments
-pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(TypedIdent, Node<Expr>)>> {
+pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<Expr>)>> {
     let parse_result = opt!(input, complete!(preceded!(
         w_followed!(tag!(",")),
         w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                w_followed!(typed_identifier),
+                identifier,
+                preceded!(
+                    colon,
+                    type_parser::any_type
+                ),
                 preceded!(
                     w_followed!(tag!("=")),
                     w_followed!(expression)
@@ -229,7 +240,10 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         kwargs: keyword_args,
         varkwarg: varkwarg,
         block: body,
-        return_type: return_type
+        return_type: match return_type {
+            Some(x) => x,
+            None => typing::Type::empty
+        }
     });
 }
 
@@ -1275,9 +1289,8 @@ mod tests {
         #[test]
         fn test_func_dec_parts() {
             // Args
-            let expected = vec!(TypedIdent::from("a"));
-            let actual = output(args_dec_list("a)".as_bytes()));
-            assert_eq!(expected, actual);
+            let actual = output(args_dec_list("a: i32)".as_bytes()));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
 
             // Vararg
             let expected = Some(Identifier::from("args"));
@@ -1286,48 +1299,48 @@ mod tests {
 
             // Kwargs.
             let expected = vec!(
-                   (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                   (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
+                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
             );
-            let actual = output(keyword_args(", c=5, d=7".as_bytes()));
+            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
             assert_eq!(expected, actual);
         }
        
         #[test]
         fn test_func_dec() {
-            check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("x"),
-                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wvars"),
+                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
                 vararg: Some(Identifier::from("args")),
                 kwargs: vec!(
-                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
                 ),
                 varkwarg: Some(Identifier::from("kwargs")),
-                block: output(block("x=5\n".as_bytes(), 0)),
-                return_type: None
+                block: output(block("let val =  5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
             });
 
-            check_data("fn x(a: i32, c: i32=5) -> i32:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("x"),
-                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(typing::Type::i32)}],
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wkwargs"),
+                args: vec![(Identifier::from("a"), typing::Type::i32)],
                 vararg: None,
                 kwargs: vec!(
-                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(typing::Type::i32)}, output(expression("5".as_bytes()))),
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
                 ),
                 varkwarg: None,
-                block: output(block("x=5\n".as_bytes(), 0)),
-                return_type: Some(typing::Type::i32)
+                block: output(block("let val=5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
             });
 
-            check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
-                args: vec!(TypedIdent::from("b")),
+                args: vec!((Identifier::from("b"), typing::Type::i32)),
                 vararg: None,
                 kwargs: vec!(),
                 varkwarg: None,
                 block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-                return_type: None
+                return_type: typing::Type::i32
             });
         }
 

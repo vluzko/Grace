@@ -306,8 +306,8 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
 
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
-                    declaration_order.insert(arg.name.clone(), i+1);
-                    declarations.insert(arg.name.clone(), CanModifyScope::Argument(raw_pointer, i));
+                    declaration_order.insert(arg.0.clone(), i+1);
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, i));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -465,7 +465,7 @@ mod test {
 
     #[test]
     fn test_function_locals() {
-        let func_str = r#"fn a(b, c):
+        let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
         let mut func_stmt = output(parser::statement(func_str.as_bytes(), 0));
@@ -598,7 +598,7 @@ mod test {
 
     #[test]
     fn test_get_declarations() {
-        let mut func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0));
+        let mut func_dec = output(parser::statement("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(), 0));
         let (id, init) = initial_context();
         let context = func_dec.gen_scopes(id, &init);
         let new_ident = Identifier::from("x");

@@ -6,6 +6,13 @@ use std::str::from_utf8;
 extern crate nom;
 use self::nom::*;
 use self::nom::IResult::Done as Done;
+// use self::nom::error::*;
+// use self::nom::error::ErrorKind;
+// use self::nom::error::ParseError;
+// use self::nom::internal::{Err, IResult, Needed};
+// use self::nom::lib::std::ops::RangeFrom;
+// use self::nom::lib::std::result::Result::*;
+// use self::nom::traits::{Compare, CompareResult, FindSubstring, FindToken, InputIter, InputLength, InputTake, InputTakeAtPosition, Slice, ToUsize};
 use expression::Node;
 
 /// Map the contents of an IResult.
@@ -114,6 +121,20 @@ named!(pub inline_whitespace_char<&[u8], &[u8]>,
 named!(pub inline_whitespace<&[u8], Vec<&[u8]>>,
     many0!(inline_whitespace_char)
 );
+
+macro_rules! ta(
+  ($i:expr, $tag: expr) => ({
+      match tag!($i, $tag) {
+            //   nom::ErrorKind(y) => panic!(),
+            IResult::Error(y) => panic!(),
+            x => {println!("{:?}", x); x}
+      }
+    // match nom::bytes::streaming::tag($tag)($i) {
+    //     x => {println!("{:?}", x); panic!()}
+    // }
+  });
+);
+
 
 /// Matches a keyword within a line.
 /// Used for "and", "or", "xor", "in", etc.

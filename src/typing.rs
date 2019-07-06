@@ -20,6 +20,7 @@ pub enum Type {
     f32,
     f64,
     ui32,
+    ui64,
     string,
     boolean,
     empty,
@@ -180,9 +181,10 @@ impl <'a> From<&'a Identifier> for Type {
         return match input.name.as_ref() {
             "i32" => Type::i32,
             "i64" => Type::i64,
-            "float32" => Type::f32,
-            "float64" => Type::f64,
+            "f32" => Type::f32,
+            "f64" => Type::f64,
             "ui32" => Type::ui32,
+            "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
             _ => Type::Named(input.clone())
@@ -195,9 +197,10 @@ impl From<Identifier> for Type {
         return match input.name.as_ref() {
             "i32" => Type::i32,
             "i64" => Type::i64,
-            "float32" => Type::f32,
-            "float64" => Type::f64,
+            "f32" => Type::f32,
+            "f64" => Type::f64,
             "ui32" => Type::ui32,
+            "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
             _ => Type::Named(input)

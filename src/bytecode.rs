@@ -29,10 +29,10 @@ impl ToBytecode for Node<Module> {
         let decls = self.data.declarations.iter().map(|x| x.generate_bytecode(context, type_map));
         let joined = itertools::join(decls, "\n");
         return format!("(module\n\
-(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
-(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
-(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
-(import 'memory_management' 'mem' (memory (;0;) 1))
+(import \"memory_management\" \"alloc_words\" (func $alloc_words (param $a i32) (result i32)))
+(import \"memory_management\" \"free_chunk\" (func $free_chunk (param $a i32) (result i32)))
+(import \"memory_management\" \"copy_many\" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import \"memory_management\" \"mem\" (memory (;0;) 1))
 {}\n)\n", joined).to_string();
     }
 }
@@ -51,21 +51,28 @@ impl ToBytecode for Node<Stmt> {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
         let bytecode = match &self.data {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
-                // Scope check
+
+                let (arg_types, ret) = match type_map.get(&self.id).unwrap() {
+                    typing::Type::Function(x, y) => (x.clone(), y.clone()),
+                    x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
+                };
+
                 let mut local_var_declarations = HashSet::new();
                 for key in self.get_true_declarations(context) {
                     local_var_declarations.insert(key.to_string());
                 }
             
                 let body_bytecode = block.generate_bytecode(context, type_map);
+                
                 let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
 
                 let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
-                let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                let func_dec = format!("(func ${func_name} {params} (result {return_type}) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                     func_name = name.to_string(),
                     params = params,
                     local_vars = local_vars,
-                    body = body_bytecode
+                    body = body_bytecode,
+                    return_type = ret.wast_name()
                 );
                 func_dec
             },
@@ -218,11 +225,11 @@ impl UnaryOperator {
     fn generate_typed_bytecode(&self, operand_type: &typing::Type) -> String {
         match (&self, operand_type) {
             (&UnaryOperator::ToI64, &typing::Type::i32) => "i64.extend_s".to_string(),
-            (&UnaryOperator::ToF64, &typing::Type::i32) => "f64.convert_s".to_string(),
-            (&UnaryOperator::ToF64, &typing::Type::f32) => "f64.promote".to_string(),
+            (&UnaryOperator::ToF64, &typing::Type::i32) => "f64.convert_s/i32".to_string(),
+            (&UnaryOperator::ToF64, &typing::Type::f32) => "f64.promote/f32".to_string(),
             (&UnaryOperator::ToI64, &typing::Type::i64) => "".to_string(),
             (&UnaryOperator::ToF64, &typing::Type::f64) => "".to_string(),
-            (&UnaryOperator::ToF32, &typing::Type::i32) => "f32.convert_i32_s".to_string(),
+            (&UnaryOperator::ToF32, &typing::Type::i32) => "f32.convert_s/i32".to_string(),
             (&UnaryOperator::ToF32, &typing::Type::f32) => "".to_string(),
             (&UnaryOperator::ToBool, &typing::Type::i32) => "".to_string(),
             _ => {
@@ -262,10 +269,10 @@ mod tests {
        let (module, context, mut type_map) = 
        compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
        let mod_bytecode = r#"(module
-(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
-(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
-(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
-(import 'memory_management' 'mem' (memory (;0;) 1))
+(import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
+(import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
+(import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import "memory_management" "mem" (memory (;0;) 1))
 (func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5
 i32.const 6
@@ -280,7 +287,7 @@ get_local $x
    }
 
     #[test]
-    pub fn test_generate_function1() {
+    pub fn test_generate_function() {
         let (func_stmt, context, mut type_map) = 
         compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes());
         let bytecode = func_stmt.generate_bytecode(&context, &mut type_map);
@@ -301,10 +308,10 @@ get_local $x
         assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.add".to_string());
         let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6".as_bytes());
         let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "f32.const 5.0\nf64.promote\ni32.const 6\nf64.convert_s\nf64.add".to_string());
+        assert_eq!(bytecode, "f32.const 5.0\nf64.promote/f32\ni32.const 6\nf64.convert_s/i32\nf64.add".to_string());
         let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 + 6.0".as_bytes());
         let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 5\nf64.convert_s\nf32.const 6.0\nf64.promote\nf64.add".to_string());
+        assert_eq!(bytecode, "i32.const 5\nf64.convert_s/i32\nf32.const 6.0\nf64.promote/f32\nf64.add".to_string());
         let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6.0".as_bytes());
         let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
         assert_eq!(bytecode, "f32.const 5.0\nf32.const 6.0\nf32.add".to_string());
@@ -328,7 +335,7 @@ get_local $x
     pub fn test_generate_divide() {
         let (div_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("8 / 9".as_bytes());
         let bytecode = div_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 8\nf64.convert_s\ni32.const 9\nf64.convert_s\nf64.div".to_string());
+        assert_eq!(bytecode, "i32.const 8\nf64.convert_s/i32\ni32.const 9\nf64.convert_s/i32\nf64.div".to_string());
     }
 
     #[test]

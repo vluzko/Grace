@@ -82,18 +82,18 @@
     get_global 23
     return)
   (func (;21;) (type 4) (param i32 i32) (result i32)
-    (local i32 i32 i32 i32 i32 i32 i32)
+    (local i32 i32 i32 i32 i32 i32 i32 i32 f32 f32 f32)
     get_global 10
-    set_local 8
+    set_local 9
     get_global 10
-    i32.const 16
+    i32.const 32
     i32.add
     set_global 10
     get_global 10
     get_global 11
     i32.ge_s
     if  ;; label = @1
-      i32.const 16
+      i32.const 32
       call 3
     end
     get_local 0
@@ -107,7 +107,18 @@
     set_local 6
     get_local 6
     set_local 5
-    get_local 8
+    get_local 4
+    set_local 7
+    get_local 7
+    f32.convert_s/i32
+    set_local 12
+    get_local 12
+    f32.const 0x1.0cap+13 (;=8596;)
+    f32.add
+    set_local 10
+    get_local 10
+    set_local 11
+    get_local 9
     set_global 10
     i32.const 0
     return)

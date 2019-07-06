@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::str;
 use std::str::from_utf8;
 
@@ -270,6 +272,7 @@ named!(pub valid_identifier_char<&[u8], &[u8]>,
     alt!(alpha | tag!("_") | digit)
 );
 
+// TODO: These should all be all caps.
 named!(pub equals <&[u8], &[u8]>,
     w_followed!(tag!("="))
 );
@@ -304,6 +307,22 @@ named!(pub close_bracket <&[u8], &[u8]>,
 
 named!(pub colon <&[u8], &[u8]>,
     w_followed!(tag!(":"))
+);
+
+named!(pub DOT <&[u8], &[u8]>,
+    w_followed!(tag!("."))
+);
+
+named!(pub LANGLE <&[u8], &[u8]>,
+    w_followed!(tag!("<"))
+);
+
+named!(pub RANGLE <&[u8], &[u8]>,
+    w_followed!(tag!(">"))
+);
+
+named!(pub VBAR <&[u8], &[u8]>,
+    w_followed!(tag!("|"))
 );
 
 named!(pub ending_colon <&[u8], &[u8]>,

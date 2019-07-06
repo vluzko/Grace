@@ -1,4 +1,8 @@
 (module
+(import 'memory_management' 'alloc_words' (func $alloc_words (param $a i32) (result i32)))
+(import 'memory_management' 'free_chunk' (func $free_chunk (param $a i32) (result i32)))
+(import 'memory_management' 'copy_many' (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import 'memory_management' 'mem' (memory (;0;) 1))
 (func $conditional (param $a i32) (param $b i32) (result i32) 
 i32.const 0
 if (result i32)
@@ -34,8 +38,10 @@ get_local $x
 (export "mult" (func $mult))
 (func $div (param $a i32) (param $b i32) (result i32) (local $x i32)
 get_local $a
+f64.convert_s
 get_local $b
-i32.div_s
+f64.convert_s
+f64.div
 set_local $x
 get_local $x
 )
@@ -104,19 +110,25 @@ call $add
 (export "call_func" (func $call_func))
 (func $and_test (param $a i32) (param $b i32) (result i32) 
 get_local $a
+
 get_local $b
+
 i32.and
 )
 (export "and_test" (func $and_test))
 (func $or_test (param $a i32) (param $b i32) (result i32) 
 get_local $a
+
 get_local $b
+
 i32.or
 )
 (export "or_test" (func $or_test))
 (func $xor_test (param $a i32) (param $b i32) (result i32) 
 get_local $a
+
 get_local $b
+
 i32.xor
 )
 (export "xor_test" (func $xor_test))

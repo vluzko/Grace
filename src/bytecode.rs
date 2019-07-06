@@ -52,24 +52,22 @@ impl ToBytecode for Node<Stmt> {
         let bytecode = match &self.data {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
                 // Scope check
-                unsafe {
-                    let mut local_var_declarations = HashSet::new();
-                    for key in self.get_true_declarations(context) {
-                        local_var_declarations.insert(key.to_string());
-                    }
-                
-                    let body_bytecode = block.generate_bytecode(context, type_map);
-                    let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
-
-                    let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
-                    let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
-                        func_name = name.to_string(),
-                        params = params,
-                        local_vars = local_vars,
-                        body = body_bytecode
-                    );
-                    func_dec
+                let mut local_var_declarations = HashSet::new();
+                for key in self.get_true_declarations(context) {
+                    local_var_declarations.insert(key.to_string());
                 }
+            
+                let body_bytecode = block.generate_bytecode(context, type_map);
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.name.to_string())), " ");
+
+                let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
+                let func_dec = format!("(func ${func_name} {params} (result i32) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                    func_name = name.to_string(),
+                    params = params,
+                    local_vars = local_vars,
+                    body = body_bytecode
+                );
+                func_dec
             },
             &Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
                 match operator {
@@ -201,6 +199,9 @@ impl BinaryOperator {
             &BinaryOperator::Mult => "mul",
             &BinaryOperator::Div => "div",
             &BinaryOperator::Mod => "rem_u",
+            &BinaryOperator::And => "and",
+            &BinaryOperator::Or => "or",
+            &BinaryOperator::Xor => "xor",
             _ => panic!()
         };
         if self.requires_sign() {
@@ -223,6 +224,7 @@ impl UnaryOperator {
             (&UnaryOperator::ToF64, &typing::Type::f64) => "".to_string(),
             (&UnaryOperator::ToF32, &typing::Type::i32) => "f32.convert_i32_s".to_string(),
             (&UnaryOperator::ToF32, &typing::Type::f32) => "".to_string(),
+            (&UnaryOperator::ToBool, &typing::Type::i32) => "".to_string(),
             _ => {
                 println!("Unary operator not implemented: {:?}, {:?}", self, operand_type);
                 panic!()

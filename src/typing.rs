@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use std::usize;
 use std::ops::Add;
+use std::convert::From;
 
 use expression::*;
 use general_utils;
@@ -26,34 +27,37 @@ pub enum Type {
     Product(Vec<Type>),
     Vector(Box<Type>),
     Function(Vec<Type>, Box<Type>),
-    
+    Named(Identifier),
+    Parameterized(Identifier, Vec<Type>),
     Undetermined
 }
 
-// The signed integral types.
 #[allow(non_snake_case)]
+/// The signed integral types.
 pub fn Signed<'a>() -> Type {
     Type::Sum(vec!(Type::i32, Type::i64))
 }
 
-// The unsigned integral types.
 #[allow(non_snake_case)]
+/// The unsigned integral types.
 pub fn Unsigned<'a>() -> Type {
     Type::Sum(vec!(Type::ui32))
 }
 
-// The floating point types.
 #[allow(non_snake_case)]
+/// The floating point types.
 pub fn Integral<'a>() -> Type {
     return Signed() + Unsigned();
 }
 
-// The floating point types.
 #[allow(non_snake_case)]
+/// The floating point types.
 pub fn FloatingPoint<'a>() -> Type {
     Type::Sum(vec!(Type::f32, Type::f64))
 }
 
+#[allow(non_snake_case)]
+/// All numeric types.
 pub fn Numeric<'a>() -> Type {
     return Integral() + FloatingPoint();
 }
@@ -68,6 +72,7 @@ impl Type {
             &Type::f32 => "f32".to_string(),
             &Type::f64 => "f64".to_string(),
             &Type::ui32 => "i64".to_string(),
+            &Type::boolean => "i32".to_string(),
             _ => panic!()
         }
     }
@@ -170,6 +175,37 @@ impl Add for Type {
     }
 }
 
+impl <'a> From<&'a Identifier> for Type {
+    fn from(input: &'a Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "float32" => Type::f32,
+            "float64" => Type::f64,
+            "ui32" => Type::ui32,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            _ => Type::Named(input.clone())
+        };
+    }
+}
+
+impl From<Identifier> for Type {
+    fn from(input: Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "float32" => Type::f32,
+            "float64" => Type::f64,
+            "ui32" => Type::ui32,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            _ => Type::Named(input)
+        };
+    }
+}
+
+
 pub trait Typed<T> {
     fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
@@ -177,11 +213,11 @@ pub trait Typed<T> {
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
-        panic!()
+    fn type_based_rewrite(self, _context: &scoping::Context, _type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
+        panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
     }
 
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
+    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self {
             scoping::CanModifyScope::Statement(ref ptr) => {
                 let stmt = unsafe {
@@ -207,15 +243,26 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                     expr.resolve_types(context, type_map)
                 }
             },
-            scoping::CanModifyScope::Argument => {
-                panic!()
+            scoping::CanModifyScope::Argument(ref ptr, ref index) => {
+                // Hack: assume all arguments are i32s for now
+                return (type_map, Type::i32);
+                // let arg = unsafe {
+                //     &**ptr
+                // };
+                // // This can't be done in a match statement because Rust's borrow checker is wrong.
+                // if type_map.contains_key(&arg.id) {
+                //     let t = type_map.get(&arg.id).unwrap().clone();
+                //     (type_map, t)
+                // } else {
+                //     arg.resolve_types(context, type_map)
+                // }                
             }
         };
     }
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
+    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
         let new_decs = c![x.type_based_rewrite(context, type_map), for x in self.data.declarations];
         return Node{
             id: self.id,
@@ -234,7 +281,7 @@ impl Typed<Node<Module>> for Node<Module> {
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
+    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
         // let mut new_stmts = vec![];
         let new_stmts = c![x.type_based_rewrite(context, type_map), for x in self.data.statements];
         return Node {
@@ -266,7 +313,7 @@ impl Typed<Node<Block>> for Node<Block> {
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
+    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, vararg, kwargs, varkwarg, return_type}
@@ -301,14 +348,14 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
+    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self.data {
-            Stmt::LetStmt{ref typed_name, ref expression} => {
+            Stmt::LetStmt{ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)
             },
-            Stmt::AssignmentStmt{ref expression, ref name, ref operator} => {
+            Stmt::AssignmentStmt{ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)                
@@ -318,19 +365,51 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 new_map.insert(self.id, t.clone());
                 (new_map, t)
             },
-            Stmt::FunctionDecStmt{ref name, ref args, ref vararg, ref kwargs, ref varkwarg, ref block, ref return_type} => {
-                let (mut new_map, return_type) = block.resolve_types(context, type_map);
-                let function_type = Type::Function(vec!(), Box::new(return_type));
+            Stmt::FunctionDecStmt{ref args, ref kwargs, ref block, ref return_type, ..} => {
+                let (mut new_map, t) = block.resolve_types(context, type_map);
+
+                let total_args = args.len() + kwargs.len();
+                let argument_type = vec![Type::Undetermined; total_args];
+                let function_type = Type::Function(argument_type, Box::new(t));
+
+                // Type check
+                // TODO: Fix this once type parser is in use.
+                // assert_eq!(return_type.unwrap(), t);
+
                 new_map.insert(self.id, function_type.clone());
                 (new_map, function_type)
             },
+            Stmt::WhileStmt{ref condition, ref block} => {
+                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (mut final_map, t) = block.resolve_types(context, new_map);
+                final_map.insert(self.id, t.clone());
+                (final_map, t)
+            }
+            Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (mut block_map, t) = block.resolve_types(context, new_map);
+                block_map.insert(self.id, t.clone());
+
+                // Elifs
+                for (expr, block) in elifs {
+                    let mut expr_map = expr.resolve_types(context, block_map).0;
+                    block_map = block.resolve_types(context, expr_map).0;
+                }
+
+                block_map = match else_block {
+                    Some(block) => block.resolve_types(context, block_map).0,
+                    None => block_map
+                };
+
+                (block_map, t)
+            }
             _ => panic!()
         };
     }
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
+    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {mut left, mut right, operator} => {
                 let left = Box::new(left.type_based_rewrite(context, type_map));
@@ -388,10 +467,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 (right_map, return_type)
             },
             Expr::ComparisonExpr{ref left, ref right, ..} => {
-                panic!()
+                let (left_map, _) = left.resolve_types(context, type_map);
+                let (mut right_map, _) = right.resolve_types(context, left_map);
+                right_map.insert(self.id, Type::boolean);
+                (right_map, Type::boolean)
             },
-            Expr::UnaryExpr{ref operator, ref operand} => {
-                panic!()
+            Expr::UnaryExpr{ref operand, ..} => {
+                let (mut new_map, new_type) = operand.resolve_types(context, type_map);
+                new_map.insert(self.id, new_type.clone());
+                (new_map, new_type)
             }
             Expr::IdentifierExpr(ref name) => {
                 let creation = context.get_declaration(self.scope, name).unwrap();
@@ -419,6 +503,10 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 let (mut new_map, t) = function.resolve_types(context, type_map);
                 for arg in args {
                     new_map = arg.resolve_types(context, new_map).0;
+                }
+
+                for (_, value) in kwargs {
+                    new_map = value.resolve_types(context, new_map).0;
                 }
                 new_map.insert(self.id, t.clone());
                 (new_map, t)
@@ -524,7 +612,7 @@ mod test {
         let block = "let a = 1\nlet b = a";
         let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
         let (id, init) = scoping::initial_context();
-        let context = parsed.gen_scopes2(id, &init);
+        let context = parsed.gen_scopes(id, &init);
         let (types, _) = parsed.resolve_types(&context, HashMap::new());
         assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
         let id2 = parsed.data.statements[1].id;

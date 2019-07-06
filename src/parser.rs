@@ -74,12 +74,6 @@ pub fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     );
 }
 
-pub fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
-    let parse_result = identifier(input);
-
-    return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
-}
-
 pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
@@ -222,7 +216,7 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         ),
         opt!(complete!(preceded!(
             w_followed!(tag!("->")),
-            type_annotation
+            type_parser::any_type
         )))
     );
 
@@ -984,7 +978,7 @@ pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         identifier,
-        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
+        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_parser::any_type)))
     );
 
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
@@ -1066,6 +1060,10 @@ pub fn string(input: &[u8]) -> ExprRes {
     let parse_result = string_literal(input);
 
     return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
+}
+
+pub mod expr_parsers {
+    use super::*;
 }
 
 pub mod type_parser {
@@ -1265,10 +1263,10 @@ mod tests {
 
         #[test]
         fn test_let() {
-            check_data("let x: int = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
                 typed_name: TypedIdent {
                     name: Identifier::from("x"),
-                    type_annotation: Some(TypeAnnotation::Simple(Identifier::from("int")))
+                    type_annotation: Some(typing::Type::f32)
                 },
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
@@ -1310,16 +1308,16 @@ mod tests {
                 return_type: None
             });
 
-            check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn x(a: i32, c: i32=5) -> i32:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("x"),
-                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
+                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(typing::Type::i32)}],
                 vararg: None,
                 kwargs: vec!(
-                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
+                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(typing::Type::i32)}, output(expression("5".as_bytes()))),
                 ),
                 varkwarg: None,
                 block: output(block("x=5\n".as_bytes(), 0)),
-                return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
+                return_type: Some(typing::Type::i32)
             });
 
             check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {

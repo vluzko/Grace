@@ -20,15 +20,14 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
-    pub declarations: Vec<Node<Stmt>>
+    pub declarations: Vec<Box<Node<Stmt>>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
-    pub statements: Vec<Node<Stmt>>,
+    pub statements: Vec<Box<Node<Stmt>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

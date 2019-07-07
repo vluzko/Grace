@@ -86,7 +86,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
         ))
     );
 
-    return fmap_node(parse_result, |x| Module{declarations: x}.into());
+    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect()});
 }
 
 pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
@@ -118,7 +118,7 @@ pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
         );
         statements
     };
-    return fmap_node(parse_result, |x| Block{statements: x});
+    return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
 /// Match any statement.
@@ -1204,8 +1204,8 @@ mod tests {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               output(function_declaration("fn a():\n return 0".as_bytes(), 0)),
-               output(function_declaration("fn b():\n return 1".as_bytes(), 0))
+               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
            )
        }))
     }
@@ -1214,8 +1214,8 @@ mod tests {
     fn test_block() {
         let exp_block = Block {
             statements: vec![
-                output(assignment_stmt("x=0\n".as_bytes())),
-                output(assignment_stmt("y=true".as_bytes()))
+                Box::new(output(assignment_stmt("x=0\n".as_bytes()))),
+                Box::new(output(assignment_stmt("y=true".as_bytes())))
             ]
         };
 
@@ -1387,7 +1387,7 @@ mod tests {
 
             let good_output = Stmt::IfStmt{
                 condition: output(expression("a and b".as_bytes())),
-                block: Node::from(Block{statements: vec!(output(assignment_stmt("x = true".as_bytes())))}),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
                 elifs: vec!(),
                 else_block: None
             };
@@ -1409,7 +1409,7 @@ mod tests {
         fn test_while_stmt() {
             check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
                 condition: Node::from(true),
-                block: Node::from(Block{statements: vec!(output(assignment_stmt("x=true".as_bytes())))})
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
             });
         }
 

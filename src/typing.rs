@@ -209,13 +209,13 @@ impl From<Identifier> for Type {
 }
 
 pub trait Typed<T> {
-    fn type_based_rewrite(self, mut context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
+    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
     fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, _context: &scoping::Context, _type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
+    fn type_based_rewrite(self, _context: &mut scoping::Context, _type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
         panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
     }
 
@@ -264,8 +264,8 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
-        let new_decs = c![x.type_based_rewrite(context, type_map), for x in self.data.declarations];
+    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
+        let new_decs = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.declarations];
         return Node{
             id: self.id,
             data: Module{ declarations: new_decs},
@@ -283,9 +283,9 @@ impl Typed<Node<Module>> for Node<Module> {
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
+    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
         // let mut new_stmts = vec![];
-        let new_stmts = c![x.type_based_rewrite(context, type_map), for x in self.data.statements];
+        let new_stmts = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.statements];
         return Node {
             id: self.id,
             data: Block{statements: new_stmts},
@@ -315,7 +315,7 @@ impl Typed<Node<Block>> for Node<Block> {
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
+    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, vararg, kwargs, varkwarg, return_type}
@@ -412,7 +412,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self, context: &scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
+    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {mut left, mut right, operator} => {
                 let left = Box::new(left.type_based_rewrite(context, type_map));

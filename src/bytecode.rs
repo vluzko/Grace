@@ -57,9 +57,6 @@ impl ToBytecode for Node<Stmt> {
                     typing::Type::Function(x, y) => (x.clone(), y.clone()),
                     x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
                 };
-                if ret == Box::new(Type::empty) {
-                    println!("Empty return: {:?}", self);
-                }
 
                 let mut local_var_declarations = HashSet::new();
                 for key in self.get_true_declarations(context) {
@@ -68,15 +65,20 @@ impl ToBytecode for Node<Stmt> {
             
                 let body_bytecode = block.generate_bytecode(context, type_map);
                 
-                let params = itertools::join(args.iter().map(|x| format!("(param ${} i32)", x.0.to_string())), " ");
+                let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");
+
+                let return_bytecode = match *ret {
+                    Type::empty => "".to_string(),
+                    x => format!("(result {})", x.wast_name())
+                };
 
                 let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
-                let func_dec = format!("(func ${func_name} {params} (result {return_type}) {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
+                let func_dec = format!("(func ${func_name} {params} {return_type} {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                     func_name = name.to_string(),
                     params = params,
                     local_vars = local_vars,
                     body = body_bytecode,
-                    return_type = ret.wast_name()
+                    return_type = return_bytecode
                 );
                 func_dec
             },

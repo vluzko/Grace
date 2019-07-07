@@ -20,15 +20,14 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
     }
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
-    pub declarations: Vec<Node<Stmt>>
+    pub declarations: Vec<Box<Node<Stmt>>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
-    pub statements: Vec<Node<Stmt>>,
+    pub statements: Vec<Box<Node<Stmt>>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -38,8 +37,8 @@ pub enum Stmt {
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
-    FunctionDecStmt {name: Identifier, args: Vec<TypedIdent>, vararg: Option<Identifier>,
-        kwargs: Vec<(TypedIdent, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Option<TypeAnnotation>},
+    FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, vararg: Option<Identifier>,
+        kwargs: Vec<(Identifier, Type, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Type},
     TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
     ImportStmt      (DottedIdentifier),
     ReturnStmt      (Node<Expr>),
@@ -71,11 +70,6 @@ pub enum Expr {
     SetLiteral      (Vec<Node<Expr>>),
     TupleLiteral    (Vec<Node<Expr>>),
     MapLiteral      (Vec<(Identifier, Node<Expr>)>)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TypeAnnotation {
-    Simple(Identifier)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -171,7 +165,7 @@ pub struct Identifier {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TypedIdent {
     pub name: Identifier,
-    pub type_annotation: Option<TypeAnnotation>
+    pub type_annotation: Option<Type>
 }
 
 pub mod trait_impls {
@@ -385,13 +379,6 @@ pub mod trait_impls {
                 _ => panic!()
             };
             return Identifier{name: val.to_string()};
-        }
-    }
-
-    /// From for TypeAnnotation
-    impl <'a> From<&'a str> for TypeAnnotation {
-        fn from(input: &'a str) -> Self {
-            return TypeAnnotation::Simple(Identifier::from(input));
         }
     }
 }

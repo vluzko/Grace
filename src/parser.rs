@@ -9,6 +9,7 @@ use self::nom::IResult::Done as Done;
 use expression::*;
 use parser_utils::*;
 use typing;
+use typing::Type;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -74,12 +75,6 @@ pub fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     );
 }
 
-pub fn type_annotation(input: &[u8]) -> IResult<&[u8], TypeAnnotation> {
-    let parse_result = identifier(input);
-
-    return fmap_iresult(parse_result, |x| TypeAnnotation::Simple(x));
-}
-
 pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
@@ -91,7 +86,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
         ))
     );
 
-    return fmap_node(parse_result, |x| Module{declarations: x}.into());
+    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect()});
 }
 
 pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
@@ -123,7 +118,7 @@ pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
         );
         statements
     };
-    return fmap_node(parse_result, |x| Block{statements: x});
+    return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
 /// Match any statement.
@@ -148,12 +143,18 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
 }
 
 /// Match all normal arguments.
-pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<TypedIdent>> {
+pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
     inline_wrapped!(input,
         separated_list_complete!(
             w_followed!(tag!(",")),
             terminated!(
-                typed_identifier,
+                tuple!(
+                    identifier,
+                    preceded!(
+                        colon,
+                        type_parser::any_type
+                    )
+                ),
                 alt!(recognize!(many1!(inline_whitespace_char)) |
                 peek!(tag!(",")) |
                 peek!(tag!(")")))
@@ -174,12 +175,16 @@ pub fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
 }
 
 /// Match all default arguments
-pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(TypedIdent, Node<Expr>)>> {
+pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<Expr>)>> {
     let parse_result = opt!(input, complete!(preceded!(
         w_followed!(tag!(",")),
         w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                w_followed!(typed_identifier),
+                identifier,
+                preceded!(
+                    colon,
+                    type_parser::any_type
+                ),
                 preceded!(
                     w_followed!(tag!("=")),
                     w_followed!(expression)
@@ -222,7 +227,7 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         ),
         opt!(complete!(preceded!(
             w_followed!(tag!("->")),
-            type_annotation
+            type_parser::any_type
         )))
     );
 
@@ -235,7 +240,10 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         kwargs: keyword_args,
         varkwarg: varkwarg,
         block: body,
-        return_type: return_type
+        return_type: match return_type {
+            Some(x) => x,
+            None => typing::Type::empty
+        }
     });
 }
 
@@ -963,6 +971,10 @@ pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
 
 /// Parser to return an Identifier AST.
 pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
+    let not_result: IResult<&[u8], (&[u8], Vec<&[u8]>)> = pair!(input, 
+                    alt!(alpha | tag!("_")),
+                    many0!(valid_identifier_char)
+                );
     let parse_result = inline_wrapped!(input,
         recognize!(
             pair!(
@@ -980,7 +992,7 @@ pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         identifier,
-        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_annotation)))
+        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_parser::any_type)))
     );
 
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
@@ -1064,22 +1076,15 @@ pub fn string(input: &[u8]) -> ExprRes {
     return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
 }
 
+pub mod expr_parsers {
+    use super::*;
+}
+
 pub mod type_parser {
     use super::*;
     /// Parse a type.
     pub fn any_type(input: &[u8]) -> TypeRes {
-        return alt!(input, 
-            sum_type | product_type | parameterized_type | unparameterized_type
-        );  
-    }
-
-    pub fn sum_type(input: &[u8]) -> TypeRes {
-        let result = separated_nonempty_list!(input,
-            VBAR,
-            any_type
-        );
-
-        return fmap_iresult(result, |x| typing::Type::Sum(x));
+        return alt_complete!(input, product_type | sum_type);
     }
 
     pub fn product_type(input: &[u8]) -> TypeRes {
@@ -1087,7 +1092,7 @@ pub mod type_parser {
             open_paren,
             separated_list!(
                 comma,
-                any_type
+                alt_complete!(product_type | sum_type)
             ),
             close_paren
         );
@@ -1095,29 +1100,45 @@ pub mod type_parser {
         return fmap_iresult(result, |x| typing::Type::Product(x))
     }
 
+    pub fn sum_type(input: &[u8]) -> TypeRes {
+        let result = tuple!(input, 
+            parameterized_type,
+            many0!(
+                preceded!(
+                    VBAR,
+                    parameterized_type
+                )
+            )
+        );
+
+        return fmap_iresult(result, |mut x| match x.1.len() {
+            0 => x.0,
+            _ => {
+                x.1.insert(0, x.0);
+                typing::Type::Sum(x.1)
+            }
+        });
+    }
+
     pub fn parameterized_type(input: &[u8]) -> TypeRes {
         let result = tuple!(input, 
             identifier,
-            delimited!(
+            opt!(complete!(delimited!(
                 LANGLE,
                 separated_nonempty_list!(
                     comma,
                     any_type
                 ),
                 RANGLE
-            )
+            )))
         );
-
-        return fmap_iresult(result, |x| typing::Type::Parameterized(x.0, x.1));
+        return fmap_iresult(result, |x| match x.1 {
+            Some(y) => typing::Type::Parameterized(x.0, y),
+            None => typing::Type::from(x.0)
+        });
     }
 
-    pub fn unparameterized_type(input: &[u8]) -> TypeRes {
-        let ident = identifier(input);
-        return fmap_iresult(ident, typing::Type::from);
-    }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -1178,16 +1199,88 @@ mod tests {
         }
     }
 
+        #[test]
+    fn test_module() {
+       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+           )
+       }))
+    }
+
+    #[test]
+    fn test_block() {
+        let exp_block = Block {
+            statements: vec![
+                Box::new(output(assignment_stmt("x=0\n".as_bytes()))),
+                Box::new(output(assignment_stmt("y=true".as_bytes())))
+            ]
+        };
+
+        check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
+    }
+
+    #[test]
+    fn test_reserved_words() {
+        for keyword in reserved_list() {
+            let result = identifier(keyword.as_bytes());
+            assert_eq!(result, IResult::Error(ErrorKind::Not));
+        }
+    }
+
+    #[test]
+    fn test_dotted_identifier() {
+        let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
+        check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
+    }
+
+    #[test]
+    fn test_post_ident() {
+        let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
+        check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
+        check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
+            args: vec!(Node::from("a")),
+            kwargs: vec!((Identifier::from("b"), Node::from(true)))
+        });
+
+        check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
+            args: vec![],
+            kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
+        });
+
+
+
+        simple_check_failed("(a | b=false)", trailer);
+        simple_check_failed("(a   b=false)", trailer);
+        simple_check_failed("(a,, b=false)", trailer);
+        simple_check_failed("(a,, b)", trailer);
+        simple_check_failed("(a, b =  true, c)", trailer);
+
+
+       check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+
+       check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+           slices: vec!(
+               (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
+               (None, None, None),
+               (Some(Node::from("d")), None, None)
+           )
+       })
+    }
+
+
     #[cfg(test)]
     mod statements {
         use super::*;
 
         #[test]
         fn test_let() {
-            check_data("let x: int = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
                 typed_name: TypedIdent {
                     name: Identifier::from("x"),
-                    type_annotation: Some(TypeAnnotation::Simple(Identifier::from("int")))
+                    type_annotation: Some(typing::Type::f32)
                 },
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
@@ -1196,9 +1289,8 @@ mod tests {
         #[test]
         fn test_func_dec_parts() {
             // Args
-            let expected = vec!(TypedIdent::from("a"));
-            let actual = output(args_dec_list("a)".as_bytes()));
-            assert_eq!(expected, actual);
+            let actual = output(args_dec_list("a: i32)".as_bytes()));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
 
             // Vararg
             let expected = Some(Identifier::from("args"));
@@ -1207,48 +1299,48 @@ mod tests {
 
             // Kwargs.
             let expected = vec!(
-                   (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                   (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
+                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
             );
-            let actual = output(keyword_args(", c=5, d=7".as_bytes()));
+            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
             assert_eq!(expected, actual);
         }
        
         #[test]
         fn test_func_dec() {
-            check_data("fn x(a, b, *args, c=5, d=7, **kwargs):\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("x"),
-                args: c![TypedIdent::from(x), for x in vec!("a", "b")],
+            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wvars"),
+                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
                 vararg: Some(Identifier::from("args")),
                 kwargs: vec!(
-                    (TypedIdent::from("c"), output(expression("5".as_bytes()))),
-                    (TypedIdent::from("d"), output(expression("7".as_bytes())))
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
                 ),
                 varkwarg: Some(Identifier::from("kwargs")),
-                block: output(block("x=5\n".as_bytes(), 0)),
-                return_type: None
+                block: output(block("let val =  5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
             });
 
-            check_data("fn x(a: int, c: int=5) -> int:\n x = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("x"),
-                args: vec![TypedIdent{name: Identifier::from("a"), type_annotation: Some(TypeAnnotation::from("int"))}],
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wkwargs"),
+                args: vec![(Identifier::from("a"), typing::Type::i32)],
                 vararg: None,
                 kwargs: vec!(
-                    (TypedIdent{name: Identifier::from("c"), type_annotation: Some(TypeAnnotation::from("int"))}, output(expression("5".as_bytes()))),
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
                 ),
                 varkwarg: None,
-                block: output(block("x=5\n".as_bytes(), 0)),
-                return_type: Some(TypeAnnotation::Simple(Identifier::from("int")))
+                block: output(block("let val=5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
             });
 
-            check_data("fn a(b):\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
-                args: vec!(TypedIdent::from("b")),
+                args: vec!((Identifier::from("b"), typing::Type::i32)),
                 vararg: None,
                 kwargs: vec!(),
                 varkwarg: None,
                 block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-                return_type: None
+                return_type: typing::Type::i32
             });
         }
 
@@ -1295,7 +1387,7 @@ mod tests {
 
             let good_output = Stmt::IfStmt{
                 condition: output(expression("a and b".as_bytes())),
-                block: Node::from(Block{statements: vec!(output(assignment_stmt("x = true".as_bytes())))}),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
                 elifs: vec!(),
                 else_block: None
             };
@@ -1317,7 +1409,7 @@ mod tests {
         fn test_while_stmt() {
             check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
                 condition: Node::from(true),
-                block: Node::from(Block{statements: vec!(output(assignment_stmt("x=true".as_bytes())))})
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
             });
         }
 
@@ -1574,75 +1666,45 @@ mod tests {
         }
     }
 
-    #[test]
-   fn test_module() {
-       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
-       check_match(module_str, module, Node::from(Module{
-           declarations: vec!(
-               output(function_declaration("fn a():\n return 0".as_bytes(), 0)),
-               output(function_declaration("fn b():\n return 1".as_bytes(), 0))
-           )
-       }))
-   }
+    #[cfg(test)]
+    mod types {
+        use super::*;
+        use self::type_parser::*; 
+        #[test]
+        fn test_simple_types() {
+            check_match("i32", any_type, typing::Type::i32);
+            check_match("i64", any_type, typing::Type::i64);
+            check_match("f32", any_type, typing::Type::f32);
+            check_match("f64", any_type, typing::Type::f64);
+            check_match("ui32", any_type, typing::Type::ui32);
+            check_match("ui64", any_type, typing::Type::ui64);
+            check_match("boolean", any_type, typing::Type::boolean);
+            check_match("string", any_type, typing::Type::string);
 
-    #[test]
-    fn test_block() {
-        let exp_block = Block {
-            statements: vec![
-                output(assignment_stmt("x=0\n".as_bytes())),
-                output(assignment_stmt("y=true".as_bytes()))
-            ]
-        };
-
-        check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
-    }
-
-    #[test]
-    fn test_reserved_words() {
-        for keyword in reserved_list() {
-            let result = identifier(keyword.as_bytes());
-            assert_eq!(result, IResult::Error(ErrorKind::Not));
+            // TODO: Random string test
         }
-    }
 
-    #[test]
-    fn test_dotted_identifier() {
-        let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
-        check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
-    }
+        #[test]
+        fn test_parameterized_types() {
+            check_match("Test<i32>", any_type, typing::Type::Parameterized(
+                Identifier::from("Test"), 
+                vec!(typing::Type::i32)
+            ));
+        }
 
-    #[test]
-    fn test_post_ident() {
-        let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
-        check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
-        check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
-            args: vec!(Node::from("a")),
-            kwargs: vec!((Identifier::from("b"), Node::from(true)))
-        });
+        #[test]
+        fn test_sum_types() {
+            check_match("i32 | i64", any_type, typing::Type::Sum(vec!(
+                typing::Type::i32, typing::Type::i64
+            )));
+        }
 
-        check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
-            args: vec![],
-            kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
-        });
-
-
-
-        simple_check_failed("(a | b=false)", trailer);
-        simple_check_failed("(a   b=false)", trailer);
-        simple_check_failed("(a,, b=false)", trailer);
-        simple_check_failed("(a,, b)", trailer);
-        simple_check_failed("(a, b =  true, c)", trailer);
-
-
-       check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
-
-       check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
-           slices: vec!(
-               (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
-               (None, None, None),
-               (Some(Node::from("d")), None, None)
-           )
-       })
+        #[test]
+        fn test_product_types() {
+            check_match("(i32, i64)", any_type, typing::Type::Product(vec!(
+                typing::Type::i32, typing::Type::i64
+            )));
+        }
     }
 
 }

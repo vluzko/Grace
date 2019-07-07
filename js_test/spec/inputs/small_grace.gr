@@ -1,56 +1,57 @@
-fn conditional(a, b):
+fn conditional(a: i32, b: i32) -> i32:
+    let x = a + b
     if 0:
         return a
     else:
         return b
 
-fn add(a, b):
+fn add(a: i32, b: i32) -> i32:
     let x = a + b
     return x
 
-fn sub(a, b):
+fn sub(a: i32, b: i32) -> i32:
     let x = a - b
     return x
 
-fn mult(a, b):
+fn mult(a: i32, b: i32) -> i32:
     let x = a * b
     return x
 
-fn div(a, b):
+fn div(a: i32, b: i32) -> f64:
     let x = a / b
     return x
 
-fn loop(x, y):
+fn loop(x: i32, y: i32) -> i32:
     while x > y:
         x = x - 1
     return x
 
-fn equality(a, b):
+fn equality(a: i32, b: i32) -> boolean:
     return a == b
 
-fn neq(a, b):
+fn neq(a: i32, b: i32) -> boolean:
     return a != b
 
-fn less(a, b):
+fn less(a: i32, b: i32) -> boolean:
     return a < b
 
-fn lesse(a, b):
+fn lesse(a: i32, b: i32) -> boolean:
     return a <= b
 
-fn great(a, b):
+fn great(a: i32, b: i32) -> boolean:
     return a > b
 
-fn greate(a, b):
+fn greate(a: i32, b: i32) -> boolean:
     return a >= b
 
-fn call_func(a, b):
+fn call_func(a: i32, b: i32) -> i32:
     return add(a, b)
 
-fn and_test(a, b):
+fn and_test(a: boolean, b: boolean) -> boolean:
     return a and b
 
-fn or_test(a, b):
+fn or_test(a: boolean, b: boolean) -> boolean:
     return a or b
 
-fn xor_test(a, b):
+fn xor_test(a: boolean, b: boolean) -> boolean:
     return a xor b

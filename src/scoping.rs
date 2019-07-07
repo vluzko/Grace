@@ -5,6 +5,7 @@ use std::hash::Hash;
 use expression::*;
 use general_utils;
 use compiler_layers;
+use typing::Type;
 
 extern crate cute;
 
@@ -86,6 +87,10 @@ impl Context {
         return self.scopes.get(&scope_id).unwrap();
     }
 
+    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
+        return self.scopes.get_mut(&scope_id).unwrap();
+    }
+
     pub fn add_scope(&mut self, scope_id: usize, scope: Scope) {
         self.scopes.insert(scope_id, scope);
     }
@@ -97,12 +102,14 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
+        // println!("Name: {:?}\nScope: {:?}\n", name, self.scopes.get(&scope_id));
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
             panic!("Reached scope id 0");
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
+            // println!("Scope reached: {:?}", initial_scope.parent_id);
             return match initial_scope.parent_id {
                 Some(id) => {
                     self.get_declaration(id, name)
@@ -110,6 +117,19 @@ impl Context {
                 None => None
             };
         }
+    }
+
+    pub fn get_type(&self, scope_id: usize, name: &Identifier, type_map: &HashMap<usize, Type>) -> Type {
+        let scope_mod = self.get_declaration(scope_id, name).unwrap();
+        let t = unsafe {
+            match scope_mod {
+                CanModifyScope::Statement(ptr) => {
+                    type_map.get(&(**ptr).id).unwrap().clone()
+                },
+                _ => panic!()
+            }
+        };
+        return t;
     }
 
     /// Extend this context with another one.
@@ -170,22 +190,24 @@ impl Scoped<Node<Module>> for Node<Module> {
         self.scope = scope_id;
 
         let mut new_context = empty_context();
+        new_context.add_scope(scope_id, new_scope);
 
         for (i, stmt) in self.data.declarations.iter_mut().enumerate() {
             let child_context = stmt.gen_scopes(scope_id, context);
             new_context.extend(child_context);
-            let pointer = stmt as *const Node<Stmt>;
-            match &stmt.data {
-                Stmt::FunctionDecStmt{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(pointer);
-                    new_scope.declarations.insert(name.clone(), scope_mod);
-                    new_scope.declaration_order.insert(name.clone(), i);
-                },
-                _ => {}
-            };
+            // match &stmt.data {
+            //     Stmt::FunctionDecStmt{ref name, ..} => {
+            //         let scope_mod = CanModifyScope::Statement(Box::into_raw(stmt.clone()));
+            //         new_scope.declarations.insert(name.clone(), scope_mod);
+            //         new_scope.declaration_order.insert(name.clone(), i);
+            //     },
+            //     Stmt::ReturnStmt(name) => {},
+            //     _ => {}
+            // };
         }
 
-        new_context.add_scope(scope_id, new_scope);
+        self.update_scope(&mut new_context);
+
         return new_context;
     }
 }
@@ -219,32 +241,16 @@ impl Scoped<Node<Block>> for Node<Block> {
         let mut new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
-
         let mut new_context = empty_context();
-
+        new_context.add_scope(scope_id, new_scope);
+        // Compute the child contexts.
         for (i, stmt) in self.data.statements.iter_mut().enumerate() {
-            // Compute the child contexts.
             let child_context = stmt.gen_scopes(scope_id, context);
             new_context.extend(child_context);
-
-            // Make updates to the current scope based on the child nodes. 
-            // Only function declarations and lets can modify scope.
-            match &stmt.data {
-                Stmt::FunctionDecStmt{ref name, ..} => {
-                    new_scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
-                    new_scope.declarations.insert(name.clone(), scope_mod);
-                },
-                Stmt::LetStmt{ref typed_name, ..} => {
-                    new_scope.declaration_order.insert(typed_name.name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt as *const Node<Stmt>);
-                    new_scope.declarations.insert(typed_name.name.clone(), scope_mod);
-                },
-                _ => {}
-            };
         }
 
-        new_context.add_scope(scope_id, new_scope);
+        self.update_scope(&mut new_context);
+
         return new_context;
     }
 }
@@ -306,8 +312,8 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
 
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
-                    declaration_order.insert(arg.name.clone(), i+1);
-                    declarations.insert(arg.name.clone(), CanModifyScope::Argument(raw_pointer, i));
+                    declaration_order.insert(arg.0.clone(), i+1);
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, i));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -457,6 +463,57 @@ impl Scoped<Node<Expr>> for Node<Expr> {
     }
 }
 
+impl Node<Block> {
+    /// Update a context with the declarations in this block.
+    /// All declarations will be either functions or let statements.
+    pub fn update_scope(&self, context: &mut Context) {
+
+        let scope = context.get_mut_scope(self.scope);
+        for (i, stmt) in self.data.statements.iter().enumerate() {
+            // Make updates to the current scope based on the child nodes. 
+            // Only function declarations and lets can modify scope.
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                },
+                Stmt::LetStmt{ref typed_name, ..} => {
+                    scope.declaration_order.insert(typed_name.name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    scope.declarations.insert(typed_name.name.clone(), scope_mod);
+                },
+                _ => {}
+            };
+        }
+
+    }
+}
+
+impl Node<Module> {
+    /// Update a context with the declarations in this module.
+    /// All declarations will be either functions or import statements.
+    pub fn update_scope(&self, context: &mut Context) {
+        let scope = context.get_mut_scope(self.scope);
+        for (i, dec) in self.data.declarations.iter().enumerate() {
+            match &dec.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                    scope.declaration_order.insert(name.clone(), i);
+                },
+                Stmt::ReturnStmt(name) => {
+                    // TODO: Add module
+                },
+                _ => {
+                    //TODO: panic
+                }
+            };
+        }
+        
+    }
+}
+
 #[cfg(test)]
 mod test {
     use parser;
@@ -465,7 +522,7 @@ mod test {
 
     #[test]
     fn test_function_locals() {
-        let func_str = r#"fn a(b, c):
+        let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
         let mut func_stmt = output(parser::statement(func_str.as_bytes(), 0));
@@ -504,11 +561,10 @@ mod test {
             #[test]
             fn test_let_stmt() {
                 let (block, context) = compiler_layers::to_scopes::<Node<Block>>("let a = 1".as_bytes());
-                assert_eq!(context.scopes.len(), 1);
-                for (k, v) in &context.scopes {
-                    assert_eq!(v.declarations.len(), 1);
-                    assert!(v.declarations.contains_key(&Identifier::from("a")));
-                }
+                assert_eq!(context.scopes.len(), 2);
+                let scope = context.get_scope(block.scope);
+                assert_eq!(scope.declarations.len(), 1);
+                assert!(scope.declarations.contains_key(&Identifier::from("a")));
             }
 
             #[test]
@@ -559,7 +615,7 @@ mod test {
             let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
 
             let mut block = Node::from(Block{
-                statements: vec!(Node::from(s1), Node::from(s2))
+                statements: vec!(Box::new(Node::from(s1)), Box::new(Node::from(s2)))
             });
             let (id, init) = initial_context();
             let context = block.gen_scopes(id, &init);
@@ -595,10 +651,9 @@ mod test {
         }
     }
 
-
     #[test]
     fn test_get_declarations() {
-        let mut func_dec = output(parser::statement("fn a(b):\n let x = 5 + 6\n return x\n".as_bytes(), 0));
+        let mut func_dec = output(parser::statement("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(), 0));
         let (id, init) = initial_context();
         let context = func_dec.gen_scopes(id, &init);
         let new_ident = Identifier::from("x");
@@ -606,5 +661,30 @@ mod test {
         for ptr in actual {
             assert_eq!(ptr, new_ident);
         }
+    }
+
+    struct Temp {
+        a: i32,
+        b: f64
+    }
+
+    fn make_box() -> Box<Temp> {
+        let val = Temp{a: 0, b: 1.5};
+        let b = Box::new(val);
+        println!("Address at start: {:?}", b.as_ref() as *const Temp);
+        return b;
+    }
+
+    fn proc_box(b: &mut Box<Temp>){
+        b.a = 1;
+        // return b;
+    }
+
+    #[test]
+    fn test_ptrs() {
+        let mut b = make_box();
+        println!("Address after return: {:?}", b.as_ref() as *const Temp);
+        proc_box(&mut b);
+        println!("Address after proc: {:?}", b.as_ref() as *const Temp);
     }
 }

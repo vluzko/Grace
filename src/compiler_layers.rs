@@ -39,10 +39,11 @@ pub fn parse(input: &[u8]) -> expression::Node<expression::Module>{
 pub fn to_scopes<T>(input: &[u8]) -> (T, scoping::Context)
 where T: Parseable, T: Scoped<T> {
     let mut result = T::parse(input);
-    let (id, init) = scoping::initial_context();
+    let (id, mut init) = scoping::initial_context();
     let context = result.gen_scopes(id, &init);
+    init.extend(context);
     // println!("\ninit context: {:?}.\nNew context: {:?}", init, context);
-    return (result, context);
+    return (result, init);
 }
 
 pub fn to_types<T>(input: &[u8]) -> (T, scoping::Context, HashMap<usize, typing::Type>) 
@@ -54,16 +55,15 @@ where T: Parseable, T: Scoped<T>, T: Typed<T> {
 
 pub fn to_type_rewrites<T>(input: &[u8]) -> (T, scoping::Context, HashMap<usize, typing::Type>) 
 where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
-    let (result, context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
-    let rewritten = result.type_based_rewrite(&context, &mut type_map);
+    let (result, mut context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
+    let rewritten = result.type_based_rewrite(&mut context, &mut type_map);
     return (rewritten, context, type_map);
 }
 
 pub fn to_bytecode<T>(input: &[u8]) -> String 
 where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
-    let (result, context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_types(input);
-    let rewritten = result.type_based_rewrite(&context, &mut type_map);
-    return rewritten.generate_bytecode(&context, &mut type_map);
+    let (result, context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_type_rewrites(input);
+    return result.generate_bytecode(&context, &mut type_map);
 }
 
 

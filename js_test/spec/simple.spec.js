@@ -15,12 +15,13 @@ describe("Simple WASM test.", function () {
 
 });
 
-describe("Small grace tests.", function () {
+fdescribe("Small grace tests.", function () {
   async_desc("", () => {
     return async_utils.compile_grace("spec/inputs/small_grace.gr",
       "spec/outputs/small_grace.wat");
   }, [[
     'arithmetic operators', module => {
+      console.log("HERE")
     expect(module.instance.exports.add(2, 3)).toBe(5);
     expect(module.instance.exports.sub(2, 3)).toBe(-1);
     expect(module.instance.exports.mult(2, 3)).toBe(6);

@@ -75,9 +75,9 @@ function get_async_desc(describe) {
 }
 
 /**
- *
- * @param {String} input
- * @param {String} output
+ * Compile a Grace file to WebAssembly.
+ * @param {String} input  - Path to the input file.
+ * @param {String} output - Path to the output file.
  */
 function compile_grace(input, output) {
   // process.chdir("..");
@@ -93,10 +93,12 @@ function compile_grace(input, output) {
 
   // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
   let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
+    console.log(process.cwd());
+    console.log(wasm_file);
     let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
     // Go back to where we started now that we're done running stuff.
     // This doesn't actually fully fix the possible error, but whatever.
-    process.chdir("js_test");
+    // process.chdir("js_test");
     return WebAssembly.instantiate(module_as_bytes);
   });
   return loaded_module;

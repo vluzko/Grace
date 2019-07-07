@@ -96,9 +96,6 @@ function compile_grace(input, output) {
     console.log(process.cwd());
     console.log(wasm_file);
     let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
-    // Go back to where we started now that we're done running stuff.
-    // This doesn't actually fully fix the possible error, but whatever.
-    // process.chdir("js_test");
     return WebAssembly.instantiate(module_as_bytes);
   });
   return loaded_module;
@@ -117,9 +114,6 @@ function compile_wat(input, imports) {
   // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
   let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
     let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
-    // Go back to where we started now that we're done running stuff.
-    // This doesn't actually fully fix the possible error, but whatever.
-    process.chdir("js_test");
     return WebAssembly.instantiate(module_as_bytes, imports);
   });
   return loaded_module;

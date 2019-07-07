@@ -15,7 +15,7 @@ describe("Simple WASM test.", function () {
 
 });
 
-fdescribe("Small grace tests.", function () {
+describe("Small grace tests.", function () {
   async_desc("", () => {
     return async_utils.compile_grace("spec/inputs/small_grace.gr",
       "spec/outputs/small_grace.wat");

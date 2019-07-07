@@ -6,6 +6,7 @@ extern crate itertools;
 use expression::*;
 use scoping::*;
 use typing;
+use typing::Type;
 use compiler_layers;
 
 pub trait ToBytecode: Hash  {
@@ -56,6 +57,9 @@ impl ToBytecode for Node<Stmt> {
                     typing::Type::Function(x, y) => (x.clone(), y.clone()),
                     x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
                 };
+                if ret == Box::new(Type::empty) {
+                    println!("Empty return: {:?}", self);
+                }
 
                 let mut local_var_declarations = HashSet::new();
                 for key in self.get_true_declarations(context) {

@@ -101,12 +101,14 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
+        // println!("Name: {:?}\nScope: {:?}\n", name, self.scopes.get(&scope_id));
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
             panic!("Reached scope id 0");
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
+            // println!("Scope reached: {:?}", initial_scope.parent_id);
             return match initial_scope.parent_id {
                 Some(id) => {
                     self.get_declaration(id, name)
@@ -227,7 +229,9 @@ impl Scoped<Node<Block>> for Node<Block> {
         self.scope = scope_id;
         let mut new_context = empty_context();
         new_context.add_scope(scope_id, new_scope);
-
+        if self.scope == 15 {
+            println!("scope before: {:?}", new_context.get_scope(15));
+        }
         // Compute the child contexts.
         for (i, stmt) in self.data.statements.iter_mut().enumerate() {
             let child_context = stmt.gen_scopes(scope_id, context);
@@ -235,6 +239,10 @@ impl Scoped<Node<Block>> for Node<Block> {
         }
 
         self.update_scope(&mut new_context);
+
+        if self.scope == 15{
+            println!("scope after: {:?}", new_context.get_scope(15));
+        }
         
         return new_context;
     }
@@ -452,8 +460,13 @@ impl Node<Block> {
     /// Update a context with the declarations in this block.
     /// All declarations will be either functions or let statements.
     fn update_scope(&self, context: &mut Context) {
+        // if self.scope == 15 {
+
+        // println!("Updating scope: {:?}. Self is {:?}", self.scope, self);
+        // }
         let scope = context.get_mut_scope(self.scope);
         for (i, stmt) in self.data.statements.iter().enumerate() {
+            // println!("Look at stmt: {:?}", stmt);
             // Make updates to the current scope based on the child nodes. 
             // Only function declarations and lets can modify scope.
             match &stmt.data {

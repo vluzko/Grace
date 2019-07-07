@@ -3,7 +3,11 @@
 (import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
 (import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
-(func $conditional (param $a i32) (param $b i32) (result i32) 
+(func $conditional (param $a i32) (param $b i32) (result i32) (local $x i32)
+get_local $a
+get_local $b
+i32.add
+set_local $x
 i32.const 0
 if (result i32)
 get_local $a
@@ -36,7 +40,7 @@ set_local $x
 get_local $x
 )
 (export "mult" (func $mult))
-(func $div (param $a i32) (param $b i32) (result i32) (local $x i32)
+(func $div (param $a i32) (param $b i32) (result f64) (local $x i32)
 get_local $a
 f64.convert_s/i32
 get_local $b

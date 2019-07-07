@@ -72,8 +72,10 @@ impl Type {
             &Type::i64 => "i64".to_string(),
             &Type::f32 => "f32".to_string(),
             &Type::f64 => "f64".to_string(),
-            &Type::ui32 => "i64".to_string(),
+            &Type::ui32 => "i32".to_string(),
+            &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
+            &Type::empty => "".to_string(),
             _ => panic!()
         }
     }
@@ -82,7 +84,7 @@ impl Type {
     pub fn sign(&self) -> String {
         match &self {
             &Type::i32 | &Type::i64 => "_s".to_string(),
-            &Type::ui32 => "_u".to_string(),
+            &Type::ui32 | &Type::ui64 => "_u".to_string(),
             _ => "".to_string()
         }
     }
@@ -308,6 +310,11 @@ impl Typed<Node<Block>> for Node<Block> {
             };
         }
 
+        // Blocks with no return statement have the empty type.
+        if block_type == Type::Undetermined {
+            block_type = Type::empty;
+        }
+
         type_map.insert(self.id, block_type.clone());
 
         return (type_map, block_type);
@@ -377,7 +384,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 
                 // TODO: Type check
                 // assert_eq!(return_type.clone().unwrap(), t);
-                let function_type = Type::Function(arg_types, Box::new(t));
+                let function_type = Type::Function(arg_types, Box::new(return_type.clone()));
 
                 new_map.insert(self.id, function_type.clone());
                 (new_map, function_type)
@@ -481,6 +488,8 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 (new_map, new_type)
             }
             Expr::IdentifierExpr(ref name) => {
+                // println!("scope id: {:?}.\t\tName: {:?}", self.scope, name);
+                // println!("scope: {:?}", context.get_scope(self.scope));
                 let creation = context.get_declaration(self.scope, name).unwrap();
                 let (mut new_map, t) = creation.resolve_types(context, type_map);
                 new_map.insert(self.id, t.clone());
@@ -610,6 +619,18 @@ mod test {
         }
     }
 
+    #[cfg(test)]
+    mod statements {
+        use super::*;
+        use compiler_layers;
+        #[test]
+        fn if_stmt_typing() {
+            let (block, _, type_map) = compiler_layers::to_types::<Node<Block>>(if_stmt_fixture());
+            let if_stmt = block.data.statements.get(2).unwrap();
+            assert_eq!(type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+        }
+    }
+
     #[test]
     fn test_identifier_resolution() {
         let block = "let a = 1\nlet b = a";
@@ -617,8 +638,19 @@ mod test {
         let (id, init) = scoping::initial_context();
         let context = parsed.gen_scopes(id, &init);
         let (types, _) = parsed.resolve_types(&context, HashMap::new());
-        assert_eq!(types.get(&parsed.id), Some(&Type::Undetermined));
+        assert_eq!(types.get(&parsed.id), Some(&Type::empty));
         let id2 = parsed.data.statements[1].id;
         assert_eq!(types.get(&id2), Some(&Type::i32));
+    }
+
+    fn if_stmt_fixture<'a>() -> &'a [u8] {
+        let if_stmt = r#"
+let a = 1
+let b = 1
+if 0:
+    return a
+else:
+    return b"#;
+        return if_stmt.as_bytes(); 
     }
 }

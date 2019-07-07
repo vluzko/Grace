@@ -58,10 +58,7 @@ impl ToBytecode for Node<Stmt> {
                     x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
                 };
 
-                let mut local_var_declarations = HashSet::new();
-                for key in self.get_true_declarations(context) {
-                    local_var_declarations.insert(key.to_string());
-                }
+                
             
                 let body_bytecode = block.generate_bytecode(context, type_map);
                 
@@ -72,7 +69,15 @@ impl ToBytecode for Node<Stmt> {
                     x => format!("(result {})", x.wast_name())
                 };
 
-                let local_vars = itertools::join(local_var_declarations.iter().map(|x| format!("(local ${} i32)", x)), " ");
+                // Handle local variables. They must be declared in the header.
+                let mut local_var_declarations: Vec<String> = vec!();
+                for name in self.get_true_declarations(context) {
+                    let local_var_type = context.get_type(block.scope, &name, type_map);
+                    local_var_declarations.push(format!("(local ${} {})", name.to_string(), local_var_type.wast_name()));
+                }
+                let local_vars = itertools::join(local_var_declarations.iter(), " ");
+
+
                 let func_dec = format!("(func ${func_name} {params} {return_type} {local_vars}\n{body}\n)\n(export \"{func_name}\" (func ${func_name}))",
                     func_name = name.to_string(),
                     params = params,

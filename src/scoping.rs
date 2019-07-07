@@ -5,6 +5,7 @@ use std::hash::Hash;
 use expression::*;
 use general_utils;
 use compiler_layers;
+use typing::Type;
 
 extern crate cute;
 
@@ -116,6 +117,19 @@ impl Context {
                 None => None
             };
         }
+    }
+
+    pub fn get_type(&self, scope_id: usize, name: &Identifier, type_map: &HashMap<usize, Type>) -> Type {
+        let scope_mod = self.get_declaration(scope_id, name).unwrap();
+        let t = unsafe {
+            match scope_mod {
+                CanModifyScope::Statement(ptr) => {
+                    type_map.get(&(**ptr).id).unwrap().clone()
+                },
+                _ => panic!()
+            }
+        };
+        return t;
     }
 
     /// Extend this context with another one.
@@ -452,7 +466,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
 impl Node<Block> {
     /// Update a context with the declarations in this block.
     /// All declarations will be either functions or let statements.
-    fn update_scope(&self, context: &mut Context) {
+    pub fn update_scope(&self, context: &mut Context) {
 
         let scope = context.get_mut_scope(self.scope);
         for (i, stmt) in self.data.statements.iter().enumerate() {
@@ -479,7 +493,7 @@ impl Node<Block> {
 impl Node<Module> {
     /// Update a context with the declarations in this module.
     /// All declarations will be either functions or import statements.
-    fn update_scope(&self, context: &mut Context) {
+    pub fn update_scope(&self, context: &mut Context) {
         let scope = context.get_mut_scope(self.scope);
         for (i, dec) in self.data.declarations.iter().enumerate() {
             match &dec.data {

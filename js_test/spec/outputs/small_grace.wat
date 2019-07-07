@@ -40,7 +40,7 @@ set_local $x
 get_local $x
 )
 (export "mult" (func $mult))
-(func $div (param $a i32) (param $b i32) (result f64) (local $x i32)
+(func $div (param $a i32) (param $b i32) (result f64) (local $x f64)
 get_local $a
 f64.convert_s/i32
 get_local $b

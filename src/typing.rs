@@ -288,11 +288,15 @@ impl Typed<Node<Block>> for Node<Block> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
         // let mut new_stmts = vec![];
         let new_stmts = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.statements];
-        return Node {
+
+        let new_block = Node{
             id: self.id,
             data: Block{statements: new_stmts},
             scope: self.scope
         };
+
+        new_block.update_scope(context);
+        return new_block;
     }
 
     fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {

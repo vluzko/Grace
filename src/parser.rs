@@ -80,7 +80,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
         opt!(between_statement),
         many1!(complete!(
             terminated!(
-                call!(function_declaration, 0),
+                alt!(complete!(call!(function_declaration, 0)) | complete!(import)),
                 between_statement
             )
         ))
@@ -1204,6 +1204,18 @@ mod tests {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
+               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+           )
+       }))
+    }
+
+        #[test]
+    fn test_module_with_import() {
+       let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(import("import foo".as_bytes()))),
                Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
                Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
            )

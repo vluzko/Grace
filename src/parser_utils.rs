@@ -2,9 +2,13 @@
 
 use std::str;
 use std::str::from_utf8;
+use std::fmt::Debug;
+use std::clone::Clone;
+use std::cmp::PartialEq;
 
 extern crate nom;
 use self::nom::*;
+use self::nom::Offset;
 use self::nom::IResult::Done as Done;
 // use self::nom::error::*;
 // use self::nom::error::ErrorKind;
@@ -14,6 +18,32 @@ use self::nom::IResult::Done as Done;
 // use self::nom::lib::std::result::Result::*;
 // use self::nom::traits::{Compare, CompareResult, FindSubstring, FindToken, InputIter, InputLength, InputTake, InputTakeAtPosition, Slice, ToUsize};
 use expression::Node;
+
+use std::ops::{
+    Range,
+    RangeFrom,
+    RangeFull,
+    RangeTo
+};
+
+pub trait Nommable<'a, T>: 
+Clone+
+PartialEq+
+Debug+
+Compare<T>+
+Compare<&'a str>+
+Compare<&'a [u8]>+
+FindSubstring<T>+
+InputIter+
+InputLength+
+Slice<RangeFrom<usize>>+
+Slice<RangeTo<usize>>+
+Slice<Range<usize>>+
+Slice<RangeFull>+
+Offset{}
+
+impl <'a, 'b> Nommable<'a, &'b[u8]> for &'a[u8] {}
+
 
 /// Map the contents of an IResult.
 /// Rust functors plox
@@ -380,6 +410,10 @@ named!(pub sign<&[u8], &[u8]>,
     recognize!(alt!(tag!("+") | tag!("-")))
 );
 
+// pub fn sign<'a, T: Nommable<'a, T>> (input: T) -> IResult<T, T> {
+//     return recognize!(input, alt!(tag!("+") | tag!("-")));
+// }
+
 named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
     preceded!(
         alt!(tag!("e") | tag!("E")),
@@ -390,3 +424,16 @@ named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
     )
 );
 
+
+
+// pub fn exponent<T> (input:T) -> IResult<T, (Option<T>, T)> 
+// where T: Nommable<T> {
+//     return 
+//     preceded!(input,
+//         alt!(tag!("e") | tag!("E")),
+//         tuple!(
+//             opt!(sign),
+//             dec_seq
+//         )
+//     );
+// }

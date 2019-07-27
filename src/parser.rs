@@ -11,6 +11,7 @@ use parser_utils::*;
 use parser_utils::tokens::*;
 use typing;
 use typing::Type;
+use self::expr_parsers::*;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -499,56 +500,6 @@ pub fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &
     return ret
 }
 
-/// Match a binary expression whose operator is a symbol.
-pub fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(complete!(preceded!(
-            w_followed!(tag!(symbol)),
-            call!(binary_op_symbol, symbol, operator, next_expr)
-        )))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
-    return node;
-}
-
-/// Match a binary expression whose operator is a keyword
-/// Currently only used for and, or, and xor.
-pub fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(tuple!(
-            w_followed!(call!(match_any, symbols)),
-            call!(binary_op_list, symbols, operators, next_expr)
-        ))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-    return node;
-}
-
-/// Match a list of binary operations
-pub fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(tuple!(
-            w_followed!(call!(match_any, symbols)),
-            call!(binary_op_list, symbols, operators, next_expr)
-        ))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-    return node;
-}
-
-/// Match boolean operators.
-pub fn boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["and", "or", "xor"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_keyword_list(input, &symbols, &operators, bit_boolean_op_expr);
-}
-
 /// Match bitwise boolean operations.
 pub fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["&", "|", "^"];
@@ -824,7 +775,6 @@ pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
         IDENTIFIER(x),
         |y: Identifier| Node::from(Expr::IdentifierExpr (y))
     );
-    println!("input: {:?}\nident: {:?}", input,  IDENTIFIER(input));
 
     let parse_result = tuple!(input,
         alt!(ident | wrapped_expr),
@@ -1080,6 +1030,57 @@ pub fn string(input: &[u8]) -> ExprRes {
 
 pub mod expr_parsers {
     use super::*;
+
+    /// Match a binary expression whose operator is a symbol.
+    pub fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+        let parse_result = tuple!(input,
+            w_followed!(next_expr),
+            opt!(complete!(preceded!(
+                w_followed!(tag!(symbol)),
+                call!(binary_op_symbol, symbol, operator, next_expr)
+            )))
+        );
+
+        let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
+        return node;
+    }
+
+    /// Match a binary expression whose operator is a keyword
+    /// Currently only used for and, or, and xor.
+    // pub fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+    //     let parse_result = tuple!(input,
+    //         w_followed!(next_expr),
+    //         opt!(tuple!(
+    //             w_followed!(call!(match_any, symbols)),
+    //             call!(binary_op_list, symbols, operators, next_expr)
+    //         ))
+    //     );
+
+    //     let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
+    //     return node;
+    // }
+
+    /// Match a list of binary operations
+    pub fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+        let parse_result = tuple!(input,
+            w_followed!(next_expr),
+            opt!(tuple!(
+                w_followed!(call!(match_any, symbols)),
+                call!(binary_op_list, symbols, operators, next_expr)
+            ))
+        );
+
+        let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
+        return node;
+    }
+
+    /// Match boolean operators.
+    pub fn boolean_op_expr(input: &[u8]) -> ExprRes {
+        let symbols = vec!["and", "or", "xor"];
+        let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+        return binary_op_list(input, &symbols, &operators, bit_boolean_op_expr);
+    }
+
 }
 
 pub mod type_parser {
@@ -1146,70 +1147,10 @@ pub mod type_parser {
 mod tests {
 
     use super::*;
+    use self::expr_parsers::*;
     use rand;
     use std::fmt::Debug;
-
-    fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o, expected);
-            },
-            Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
-            },
-            _ => panic!()
-        }
-    }
-
-    fn check_data<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T)
-    where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        return match res {
-            Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o.data, expected);
-            },
-            Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
-            },
-            _ => panic!()
-        };
-    }
-
-    fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
-        let res = parser(input.as_bytes());
-        match res {
-            Result::Err(_) => {},
-            _ => panic!()
-        }
-    }
-
-    fn unwrap_and_check_error<T>(result: IResult<&[u8], T>, expected: ErrorKind) {
-        match result {
-            Result::Err(e) => {
-                match e {
-                    Err::Error(actual_err) => match actual_err {
-                        Context::Code(i, actual_err) => assert_eq!(actual_err, expected),
-                        _ => panic!()
-                    }
-                    _ => panic!()
-                }
-            },
-            _ => panic!()
-        }
-    }
-
-    fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
-        let res = parser(input.as_bytes());
-        unwrap_and_check_error(res, expected);
-    }
+    use parser_utils::iresult_helpers::*;
 
     #[test]
     fn test_module() {
@@ -1527,7 +1468,20 @@ mod tests {
         }
 
         #[test]
-        fn test_binary_expr() {
+        fn parse_binary_expr() {
+
+            check_data("true and false", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
+            check_data("true or false", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Or,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
             check_data("true and false or true", expression, Expr::BinaryExpr{
                 
                 operator: BinaryOperator::And,
@@ -1540,16 +1494,16 @@ mod tests {
                 }))
             });
 
-            let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
-            for op in all_ops {
-                let input = format!("x {} y", op);
-                check_data(input.as_str(), expression, Expr::BinaryExpr {
+            // let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
+            // for op in all_ops {
+            //     let input = format!("x {} y", op);
+            //     check_data(input.as_str(), expression, Expr::BinaryExpr {
                     
-                    operator: BinaryOperator::from(op),
-                    left: Box::new(Node::from("x")),
-                    right: Box::new(Node::from("y")),
-                });
-            }
+            //         operator: BinaryOperator::from(op),
+            //         left: Box::new(Node::from("x")),
+            //         right: Box::new(Node::from("y")),
+            //     });
+            // }
         }
 
         #[test]
@@ -1692,7 +1646,7 @@ mod tests {
         }
 
         #[test]
-        fn test_literals() {
+        fn parse_literals() {
             let int = rand::random::<i64>().abs();
             check_match(&int.to_string(), expression, Node::from(int));
             let rand_float = rand::random::<f64>().abs();
@@ -1704,6 +1658,20 @@ mod tests {
             check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
+        }
+
+        #[cfg(test)]
+        mod specific_exprs {
+            use super::*;
+
+            #[test]
+            fn parse_boolean_op() {
+                check_match("true and false", boolean_op_expr, Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::And,
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false))
+                }));
+            }
         }
     }
 

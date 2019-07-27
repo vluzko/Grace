@@ -345,6 +345,32 @@ pub mod trait_impls {
         }
     }
 
+    impl<'a> From<&'a [u8]> for BinaryOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"or" => BinaryOperator::Or,
+                b"and" => BinaryOperator::And,
+                b"xor" => BinaryOperator::Xor,
+                b"+" => BinaryOperator::Add,
+                b"-" => BinaryOperator::Sub,
+                b"*" => BinaryOperator::Mult,
+                b"/" => BinaryOperator::Div,
+                b"%" => BinaryOperator::Mod,
+                b"&" => BinaryOperator::BitAnd,
+                b"|" => BinaryOperator::BitOr,
+                b"^" => BinaryOperator::BitXor,
+                b"<<" => BinaryOperator::BitShiftL,
+                b">>" => BinaryOperator::BitShiftR,
+                b"**" => BinaryOperator::Exponent,
+                _ => {
+                    // TODO: Log
+                    println!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input);
+                    panic!()
+                }
+            };
+        }
+    }
+
     /// From for UnaryOperator
     impl <'a> From<&'a str> for UnaryOperator {
         fn from(input: &'a str) -> Self {

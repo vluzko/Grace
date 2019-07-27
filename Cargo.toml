@@ -5,7 +5,7 @@ authors = ["Vincent Luczkow <vincent.luczkow@gmail.com>",
            "Miranda Gavrin <mirandagavrin@gmail.com"]
 
 [dependencies]
-nom = "~3"
+nom = "^4"
 libc = "*"
 log = "0.4"
 cute = "*"

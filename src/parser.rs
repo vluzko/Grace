@@ -5,9 +5,10 @@ use std::collections::HashMap;
 extern crate cute;
 extern crate nom;
 use self::nom::*;
-use self::nom::IResult::Done as Done;
+
 use expression::*;
 use parser_utils::*;
+use parser_utils::tokens::*;
 use typing;
 use typing::Type;
 
@@ -55,11 +56,11 @@ pub fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
     let list = reserved_list();
     let tag_iter = list.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut final_result: IResult<&[u8], &[u8]> = IResult::Error(ErrorKind::Tag);
+    let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
     for res in tag_iter {
         match res {
-            Done(i, o) => {
-                final_result = Done(i, o);
+            Ok((i, o)) => {
+                final_result = Ok((i, o));
                 break;
             },
             _ => continue
@@ -71,7 +72,7 @@ pub fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
 pub fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return separated_nonempty_list_complete!(input,
         w_followed!(tag!(",")),
-        w_followed!(identifier)
+        IDENTIFIER
     );
 }
 
@@ -90,16 +91,16 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
 }
 
 pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
-    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
+    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
-        Done(i, o) => (i, o),
+        Ok((i, o)) => (i, o),
         _ => panic!()
     };
 
     // Break if the block is not indented enough.
     let parse_result = if full_indent.1.len() < indent {
         // TODO: This will happen if the indentation level is too low. Throw a proper error.
-        IResult::Error(ErrorKind::Count)
+        Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
     } else {
         let expected_indent = full_indent.1.len();
         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
@@ -149,7 +150,7 @@ pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
             w_followed!(tag!(",")),
             terminated!(
                 tuple!(
-                    identifier,
+                    IDENTIFIER,
                     preceded!(
                         colon,
                         type_parser::any_type
@@ -170,7 +171,7 @@ pub fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
             w_followed!(tag!(",")),
             w_followed!(tag!("*"))
         ),
-        w_followed!(identifier)
+        IDENTIFIER
     )));
 }
 
@@ -180,7 +181,7 @@ pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<
         w_followed!(tag!(",")),
         w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                identifier,
+                IDENTIFIER,
                 preceded!(
                     colon,
                     type_parser::any_type
@@ -207,14 +208,14 @@ pub fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
             w_followed!(tag!(",")),
             w_followed!(tag!("**"))
         ),
-        w_followed!(identifier)
+        IDENTIFIER
     )));
 }
 
 /// Parse a function declaration.
 pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
     let arg_parser = |i: &'a [u8]| tuple!(i,
-        identifier,
+        IDENTIFIER,
         preceded!(
             open_paren,
             args_dec_list
@@ -256,7 +257,7 @@ pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
 /// Parse a for in loop.
 pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "for", tuple!(
-        w_followed!(identifier),
+        IDENTIFIER,
         preceded!(
             inline_keyword!("in"),
             w_followed!(expression)
@@ -269,7 +270,7 @@ pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
 pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         line_then_block!("if", expression, indent),
-        many0!(indented!(line_then_block!("elif", expression, indent), indent)),
+        many0c!(indented!(line_then_block!("elif", expression, indent), indent)),
         opt!(complete!(indented!(keyword_then_block!("else", indent), indent)))
     );
 
@@ -328,11 +329,11 @@ pub fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
 pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
-            identifier,
+            IDENTIFIER,
             w_followed!(assignments),
             w_followed!(expression)
         ),
-        alt_complete!(recognize!(newline)| custom_eof)
+        alt_complete!(recognize!(NEWLINE)| custom_eof)
     );
 
     return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
@@ -488,10 +489,10 @@ pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (N
 pub fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u8]> {
     let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
     let tag_iter = keywords.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut ret = IResult::Error(ErrorKind::Tag);
+    let mut ret = wrap_err(input, ErrorKind::Tag);
     for res in tag_iter {
         match res {
-            Done(i, o) => ret = Done(i, o),
+            Ok((i, o)) => ret = Ok((i, o)),
             _ => continue
         };
     }
@@ -619,7 +620,7 @@ pub fn power_expr(input: &[u8]) -> ExprRes {
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     let parse_result = separated_nonempty_list_complete!(input,
         w_followed!(tag!(".")),
-        identifier
+        IDENTIFIER
     );
 
     return fmap_iresult(parse_result, |x: Vec<Identifier>| DottedIdentifier{attributes: x});
@@ -672,7 +673,7 @@ pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
 
 /// Match the if part of a comprehension.
 pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
-    return many0!(input,
+    return many0c!(input,
         preceded!(
             inline_keyword!("if"),
             boolean_op_expr
@@ -714,7 +715,7 @@ pub fn map_literal(input: &[u8]) -> ExprRes {
         separated_nonempty_list_complete!(
             inline_wrapped!(tag!(",")),
             separated_pair!(
-                inline_wrapped!(identifier),
+                IDENTIFIER,
                 inline_wrapped!(tag!(":")),
                 inline_wrapped!(boolean_op_expr)
             )
@@ -820,13 +821,14 @@ pub fn wrapped_expr(input: &[u8]) -> ExprRes {
 /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
 pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
     let ident = |x| fmap_iresult(
-        identifier(x),
+        IDENTIFIER(x),
         |y: Identifier| Node::from(Expr::IdentifierExpr (y))
     );
+    println!("input: {:?}\nident: {:?}", input,  IDENTIFIER(input));
 
     let parse_result = tuple!(input,
         alt!(ident | wrapped_expr),
-        many0!(trailer)
+        many0c!(trailer)
     );
 
     let map = |x: (Node<Expr>, Vec<PostIdent>)| {
@@ -868,7 +870,7 @@ pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>
     let parse_result = separated_list!(input,
         inline_wrapped!(tag!(",")),
         tuple!(
-            identifier,
+            IDENTIFIER,
             preceded!(
                 inline_wrapped!(tag!("=")),
                 boolean_op_expr
@@ -951,7 +953,7 @@ pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return many1!(input, 
         preceded!(
             inline_wrapped!(tag!(".")),
-            identifier
+            IDENTIFIER
         )
     );
 }
@@ -971,17 +973,17 @@ pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
 
 /// Parser to return an Identifier AST.
 pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let not_result: IResult<&[u8], (&[u8], Vec<&[u8]>)> = pair!(input, 
-                    alt!(alpha | tag!("_")),
-                    many0!(valid_identifier_char)
-                );
+    // let not_result: IResult<&[u8], (&[u8], Vec<&[u8]>)> = pair!(input, 
+    //                 alt!(alpha | tag!("_")),
+    //                 many0c!(valid_identifier_char)
+    //             );
     let parse_result = inline_wrapped!(input,
         recognize!(
             pair!(
                 not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
                 pair!(
                     alt!(alpha | tag!("_")),
-                    many0!(valid_identifier_char)
+                    many0c!(valid_identifier_char)
                 )
             )
         )
@@ -991,7 +993,7 @@ pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
 
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
-        identifier,
+        IDENTIFIER,
         opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_parser::any_type)))
     );
 
@@ -1030,13 +1032,13 @@ pub fn float<'a>(input: &'a[u8]) -> ExprRes {
 
     let with_dec = |x: &'a[u8]| tuple!(x,
         tag!("."),
-        many0!(dec_digit),
+        many0c!(dec_digit),
         opt!(complete!(exponent))
     );
 
     let parse_result = recognize!(input, tuple!(
         opt!(sign),
-        many0!(dec_digit),
+        many0c!(dec_digit),
         alt!(
             value!((), with_dec) |
             value!((), complete!(exponent))
@@ -1063,7 +1065,7 @@ named!(string_literal<&[u8], &[u8]>,
     recognize!(
         tuple!(
             tag!("\""),
-            many0!(string_char),
+            many0c!(string_char),
             tag!("\"")
         )
     )
@@ -1103,7 +1105,7 @@ pub mod type_parser {
     pub fn sum_type(input: &[u8]) -> TypeRes {
         let result = tuple!(input, 
             parameterized_type,
-            many0!(
+            many0c!(
                 preceded!(
                     VBAR,
                     parameterized_type
@@ -1122,7 +1124,7 @@ pub mod type_parser {
 
     pub fn parameterized_type(input: &[u8]) -> TypeRes {
         let result = tuple!(input, 
-            identifier,
+            IDENTIFIER,
             opt!(complete!(delimited!(
                 LANGLE,
                 separated_nonempty_list!(
@@ -1151,13 +1153,13 @@ mod tests {
         where T: Debug + PartialEq + Eq {
         let res = parser(input.as_bytes());
         match res {
-            Done(i, o) => {
+            Ok((i, o)) => {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
                 assert_eq!(o, expected);
             },
-            IResult::Error(e) => {
-                println!("Error: {}. Input was: {}", e, input);
+            Result::Err(e) => {
+                println!("Error: {:?}. Input was: {}", e, input);
                 panic!()
             },
             _ => panic!()
@@ -1165,41 +1167,51 @@ mod tests {
     }
 
     fn check_data<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T)
-        where T: Debug + PartialEq + Eq {
+    where T: Debug + PartialEq + Eq {
         let res = parser(input.as_bytes());
-        match res {
-            Done(i, o) => {
+        return match res {
+            Ok((i, o)) => {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
                 assert_eq!(o.data, expected);
             },
-            IResult::Error(e) => {
-                println!("Error: {}. Input was: {}", e, input);
+            Result::Err(e) => {
+                println!("Error: {:?}. Input was: {}", e, input);
                 panic!()
             },
             _ => panic!()
-        }
+        };
     }
 
     fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
         let res = parser(input.as_bytes());
         match res {
-            IResult::Error(_) => {},
+            Result::Err(_) => {},
+            _ => panic!()
+        }
+    }
+
+    fn unwrap_and_check_error<T>(result: IResult<&[u8], T>, expected: ErrorKind) {
+        match result {
+            Result::Err(e) => {
+                match e {
+                    Err::Error(actual_err) => match actual_err {
+                        Context::Code(i, actual_err) => assert_eq!(actual_err, expected),
+                        _ => panic!()
+                    }
+                    _ => panic!()
+                }
+            },
             _ => panic!()
         }
     }
 
     fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
         let res = parser(input.as_bytes());
-        match res {
-            IResult::Error(e) => {
-                assert_eq!(e, expected);
-            },
-            _ => panic!()
-        }
+        unwrap_and_check_error(res, expected);
     }
 
-        #[test]
+    #[test]
     fn test_module() {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
@@ -1237,8 +1249,8 @@ mod tests {
     #[test]
     fn test_reserved_words() {
         for keyword in reserved_list() {
-            let result = identifier(keyword.as_bytes());
-            assert_eq!(result, IResult::Error(ErrorKind::Not));
+            let result = IDENTIFIER(keyword.as_bytes());
+            unwrap_and_check_error(result, ErrorKind::Not);
         }
     }
 
@@ -1282,6 +1294,12 @@ mod tests {
        })
     }
 
+    #[test]
+    fn test_identifiers() {
+        // check_match("(", open_paren, "(".as_bytes());
+        // check_match("a", identifier, Identifier::from("a"));
+        panic!()
+    }
 
     #[cfg(test)]
     mod statements {
@@ -1406,7 +1424,7 @@ mod tests {
 
             check_data(good_input, |x| statement(x, 0), good_output);
 
-            check_failed("ifa and b:\n x = true", |x| statement(x, 0), nom::ErrorKind::Alt);
+            check_failed("ifa and b:\n x = true", |x| statement(x, 0), ErrorKind::Alt);
 
             check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
                 
@@ -1482,17 +1500,23 @@ mod tests {
         }
 
         #[test]
-        fn test_function_call() {
+        fn parse_function_call() {
             let a = output(boolean_op_expr("true and false".as_bytes()));
+            let no_args = Node::from(Expr::FunctionCall{
+                function: Box::new(Node::from("func")),
+                args: vec!(),
+                kwargs: vec!()
+            });
+            iresult_helpers::check_match("func()", expr_with_trailer, no_args);
             let b = output(expression("func()".as_bytes()));
             let expected = Expr::FunctionCall{
                 function: Box::new(Node::from(Expr::IdentifierExpr(Identifier{name: "ident".to_string()}))), 
                 args: vec!(a, b), 
                 kwargs: vec!()
             };
-            check_data("ident(true and false, func())", expression, expected);
+            iresult_helpers::check_data("ident(true and false, func())", expression, expected);
 
-            check_data("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
+            iresult_helpers::check_data("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
                 function: Box::new(Node::from("func")),
                 args: c![Node::from(x), for x in vec!("a", "b")],
                 kwargs: vec!(
@@ -1547,10 +1571,15 @@ mod tests {
         }
 
         #[test]
-        fn test_identifier_expr() {
-            let identifier_expr = expression("words".as_bytes());
-            let expected = Expr::IdentifierExpr(Identifier{name: "words".to_string()});
-            assert_eq!(identifier_expr, Done("".as_bytes(), Node::from(expected)));
+        fn parse_identifier_expr() {
+            let expected: Node<Expr> = Node::from("words");
+            check_match("words", expr_with_trailer, expected);
+
+            let expected = Node::from("abc_123");
+            check_match("abc_123", expr_with_trailer, expected);
+
+            check_failed("123", expr_with_trailer, ErrorKind::Alt);
+            check_failed("(", expr_with_trailer, ErrorKind::Alt);
         }
 
         #[test]
@@ -1568,7 +1597,7 @@ mod tests {
                     operator: *comp_op
                 });
 
-                assert_eq!(expr, Done("".as_bytes(), expected));
+                assert_eq!(expr, Ok(("".as_bytes(), expected)));
             }
         }
 

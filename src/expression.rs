@@ -355,9 +355,7 @@ pub mod trait_impls {
                 b">>" => BinaryOperator::BitShiftR,
                 b"**" => BinaryOperator::Exponent,
                 _ => {
-                    // TODO: Log
-                    println!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input);
-                    panic!()
+                    panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
                 }
             };
         }
@@ -372,6 +370,18 @@ pub mod trait_impls {
                 "-" => UnaryOperator::Negative,
                 "~" => UnaryOperator::BitNot,
                 _ => panic!()
+            };
+        }
+    }
+
+    impl <'a> From<&'a [u8]> for UnaryOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"not" => UnaryOperator::Not,
+                b"+" => UnaryOperator::Positive,
+                b"-" => UnaryOperator::Negative,
+                b"~" => UnaryOperator::BitNot,
+                _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input)
             };
         }
     }

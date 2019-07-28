@@ -462,6 +462,24 @@ pub mod tokens {
 
     static reserved_words: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
 
+    macro_rules! token {
+        ($name:ident, $i: expr) => {
+            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+                return w_followed!(input, tag!($i));
+            }
+        };
+    }
+
+    /// Recognize an empty input.
+    pub fn EMPTY(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        if input.len() == 0 {
+            return Ok((input, b""));
+        } else {
+            return wrap_err(input, ErrorKind::NonEmpty);
+        }
+    }
+
+    /// Recognize a sequence of decimal digits.
     pub fn DIGIT<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
@@ -473,6 +491,7 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a sequence of (ASCII) alphabetic characters.
     pub fn ALPHA<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
         return match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
@@ -484,6 +503,7 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a sequence of alphanumeric characters.
     pub fn ALPHANUM<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
         return match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
@@ -554,21 +574,29 @@ pub mod tokens {
         }
     }
 
-    named!(pub AND <&[u8], &[u8]>,
-        w_followed!(tag!("and"))
-    );
+    // Syntax
+    token!(COMMA, ",");
+    token!(COLON, ":");
+    token!(DOT, ".");
+    token!(OPEN_PAREN, "(");
+    token!(CLOSE_PAREN, ")");
+    token!(OPEN_BRACKET, "[");
+    token!(CLOSE_BRACKET, "]");
+    token!(OPEN_BRACE, "{");
+    token!(CLOSE_BRACE, "}");
+    token!(LANGLE, "<");
+    token!(RANGLE, ">");
 
-    named!(pub OR <&[u8], &[u8]>,
-        w_followed!(tag!("or"))
-    );
+    // Logical binary operators
+    token!(AND, "and");
+    token!(OR, "or");
+    token!(XOR, "xor");
 
-    named!(pub XOR <&[u8], &[u8]>,
-        w_followed!(tag!("xor"))
-    );
-
-    named!(pub EXP <&[u8], &[u8]>,
-        w_followed!(tag!("**"))
-    );
+    token!(PLUS, "+");
+    token!(MINUS, "-");
+    token!(STAR, "*");
+    token!(MOD, "%");
+    token!(EXP, "**");
 }
 
 

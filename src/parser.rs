@@ -334,7 +334,7 @@ pub fn assignment_stmt(input: &[u8]) -> StmtRes {
             w_followed!(assignments),
             w_followed!(expression)
         ),
-        alt_complete!(recognize!(NEWLINE)| custom_eof)
+        alt_complete!(recognize!(NEWLINE)| custom_eof | EMPTY)
     );
 
     return fmap_node(parse_result, |x| Stmt::AssignmentStmt{

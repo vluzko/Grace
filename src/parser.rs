@@ -989,16 +989,13 @@ pub mod expr_parsers {
     /// Match a map literal.
     pub fn map_literal(input: &[u8]) -> ExprRes {
 
-        let parse_result = terminated!(input,
-            separated_nonempty_list_complete!(
-                COMMA,
-                separated_pair!(
-                    IDENTIFIER,
-                    COLON,
-                    logical_binary_expr
-                )
-            ),
-            peek!(close_brace)
+        let parse_result = separated_nonempty_list_complete!(input,
+            COMMA,
+            separated_pair!(
+                IDENTIFIER,
+                COLON,
+                logical_binary_expr
+            )
         );
 
         return fmap_node(parse_result, |x| Expr::MapLiteral (x));

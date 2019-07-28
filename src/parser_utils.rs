@@ -329,6 +329,26 @@ macro_rules! w_followed (
     );
 );
 
+/// Match any of a list of strings. Return the matched string.
+pub fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u8]> {
+    // println!("keywords: {:?}", keywords);
+    let tag_lam = |x: &[u8]| {
+        let val = w_followed!(input, recognize!(complete!(tag!(x))));
+        // println!("input: {:?}. val: {:?}", input, val);
+        val
+    };
+    let tag_iter = keywords.iter().map(|x| x.as_bytes()).map(tag_lam);
+    let mut ret = wrap_err(input, ErrorKind::Tag);
+    for res in tag_iter {
+        match res {
+            Ok((i, o)) => ret = Ok((i, o)),
+            _ => continue
+        };
+    }
+    // println!("Final val: {:?}", ret);
+    return ret
+}
+
 named!(pub valid_identifier_char<&[u8], &[u8]>,
     alt!(alpha | tag!("_") | digit)
 );
@@ -397,9 +417,7 @@ named!(pub ending_colon <&[u8], &[u8]>,
     )
 );
 
-named!(pub num_follow<&[u8], &[u8]> ,
-    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")))
-);
+
 
 named!(pub dec_digit<&[u8], &[u8]>,
     recognize!(alt!(
@@ -448,7 +466,10 @@ pub mod tokens {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
-            None => Ok(input.take_split(input.input_len()))
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
         };
     }
 
@@ -456,7 +477,10 @@ pub mod tokens {
         return match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
-            None => Ok(input.take_split(input.input_len()))
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
         };
     }
 
@@ -464,7 +488,10 @@ pub mod tokens {
         return match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
-            None => Ok(input.take_split(input.input_len()))
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
         };
     }
 
@@ -475,7 +502,10 @@ pub mod tokens {
                 println!("Failed at: {:?}", n);
                 Ok(input.take_split(n))
             },
-            None => Ok(input.take_split(input.input_len()))
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
         };
     }
 
@@ -515,6 +545,30 @@ pub mod tokens {
         };
         return return fmap_iresult(intermediate, Identifier::from);
     }
+
+    pub fn VALID_NUM_FOLLOW(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        if input.len() == 0 {
+            return Ok((input, b""));
+        } else {
+            return peek!(input, alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")));
+        }
+    }
+
+    named!(pub AND <&[u8], &[u8]>,
+        w_followed!(tag!("and"))
+    );
+
+    named!(pub OR <&[u8], &[u8]>,
+        w_followed!(tag!("or"))
+    );
+
+    named!(pub XOR <&[u8], &[u8]>,
+        w_followed!(tag!("xor"))
+    );
+
+    named!(pub EXP <&[u8], &[u8]>,
+        w_followed!(tag!("**"))
+    );
 }
 
 
@@ -530,6 +584,22 @@ pub mod iresult_helpers {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o, expected);
+            },
+            Result::Err(e) => {
+                println!("Error: {:?}. Input was: {}", e, input);
+                panic!()
+            }
+        }
+    }
+
+    pub fn check_data_and_leftover<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T, expected_leftover: &str)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(input.as_bytes());
+        match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i, expected_leftover.as_bytes());
+                assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
                 println!("Error: {:?}. Input was: {}", e, input);

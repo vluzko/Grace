@@ -390,18 +390,6 @@ named!(pub colon <&[u8], &[u8]>,
     w_followed!(tag!(":"))
 );
 
-named!(pub DOT <&[u8], &[u8]>,
-    w_followed!(tag!("."))
-);
-
-named!(pub LANGLE <&[u8], &[u8]>,
-    w_followed!(tag!("<"))
-);
-
-named!(pub RANGLE <&[u8], &[u8]>,
-    w_followed!(tag!(">"))
-);
-
 named!(pub VBAR <&[u8], &[u8]>,
     w_followed!(tag!("|"))
 );
@@ -618,6 +606,10 @@ pub mod tokens {
     token!(LANGLE, "<");
     token!(RANGLE, ">");
 
+    token!(IF, "if");
+    token!(FOR, "for");
+    token!(IN, "in");
+
     // Assignments
     token!(ADDASN, "+=");
     token!(SUBASN, "-=");
@@ -638,6 +630,8 @@ pub mod tokens {
     token!(XOR, "xor");
 
     // Bitwise operators
+    token!(BAND, "&");
+    token!(BXOR, "^");
 
     // Arithmetic operators
     token!(PLUS, "+");

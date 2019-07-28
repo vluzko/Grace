@@ -79,8 +79,6 @@ pub struct ComprehensionIter {
     pub if_clauses: Vec<Node<Expr>>
 }
 
-
-
 /// An assignment
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Assignment {

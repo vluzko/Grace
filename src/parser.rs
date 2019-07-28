@@ -483,13 +483,6 @@ pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (N
     };
 }
 
-/// Match bitwise boolean operations.
-pub fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["&", "|", "^"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, bit_shift);
-}
-
 /// Match the bit shift operators.
 pub fn bit_shift(input: &[u8]) -> ExprRes {
     let symbols = vec![">>", "<<"];
@@ -577,97 +570,6 @@ pub fn atomic_expr(input: &[u8]) -> ExprRes {
     return node;
 }
 
-/// Match the for part of a comprehension.
-pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
-    let parse_result = tuple!(input,
-        delimited!(
-            inline_keyword!("for"),
-            variable_unpacking,
-            inline_keyword!("in")
-        ),
-        logical_binary_expr,
-        comprehension_if
-    );
-
-    return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
-        iter_vars: iter_vars,
-        iterator: Box::new(iterator),
-        if_clauses: if_clauses
-    });
-}
-
-/// Match the if part of a comprehension.
-pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
-    return many0c!(input,
-        preceded!(
-            inline_keyword!("if"),
-            logical_binary_expr
-        )
-    );
-}
-
-/// Match a vector comprehension.
-pub fn vector_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        inline_wrapped!(logical_binary_expr),
-        many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |x| Expr::VecComprehension {
-        
-        values: Box::new(x.0),
-        iterators: x.1
-    });
-}
-
-/// Match a generator comprehension.
-pub fn generator_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        logical_binary_expr,
-        many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |x| Expr::GenComprehension {
-        values: Box::new(x.0),
-        iterators: x.1
-    });
-}
-
-/// Match a map or a set.
-pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-            logical_binary_expr,
-            opt!(complete!(preceded!(
-                inline_wrapped!(tag!(":")),
-                logical_binary_expr
-            ))),
-            many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |(keys_or_values, values, iters)| match values {
-        Some(y) => Expr::MapComprehension {
-            keys: Box::new(keys_or_values),
-            values: Box::new(y),
-            iterators: iters
-        },
-        None => Expr::SetComprehension {
-            values: Box::new(keys_or_values),
-            iterators: iters
-        }
-    });
-}
-
-/// An expression wrapped in parentheses.
-pub fn wrapped_expr(input: &[u8]) -> ExprRes {
-    let node = delimited!(input,
-        open_paren,
-        alt_complete!(generator_comprehension | tuple_literal | expression),
-        close_paren
-    );
-
-    return node;
-}
-
 /// Match a list of arguments.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
@@ -735,16 +637,40 @@ pub mod expr_parsers {
         return node;
     }
 
-    /// Match boolean operators.
-    pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
+    // Binary expressions
+
+    /// Flatten a possible binary expression into a single expression.
+    fn flatten_binary(result: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
+        return match result.1 {
+            Some(x) => {
+                let op = BinaryOperator::from(x.0);
+                Node::from(Expr::BinaryExpr {operator: op, left: Box::new(result.0), right: Box::new(x.1)})
+            },
+            None => result.0
+        };
+    }
+
+    /// Match a list of binary operations
+    pub fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
         let parse_result = tuple!(input,
-            w_followed!(bit_boolean_op_expr),
-            optc!(tuple!(
-                w_followed!(alt_complete!(AND | OR | XOR)),
-                logical_binary_expr
+            next_expr,
+            opt!(tuple!(
+                operator_parser,
+                call!(binary_expr, operator_parser, next_expr)
             ))
         );
+
         return fmap_iresult(parse_result, flatten_binary);
+    }
+
+    /// Match boolean operators.
+    pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
+    }
+
+    /// Match bitwise boolean operations.
+    pub fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), bit_shift);
     }
 
     /// An exponentiation.
@@ -759,18 +685,19 @@ pub mod expr_parsers {
         return fmap_iresult(parse_result, flatten_binary);
     }
 
-    /// Flatten a possible binary expression into a single expression.
-    pub fn flatten_binary(result: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
-        return match result.1 {
-            Some(x) => {
-                let op = BinaryOperator::from(x.0);
-                Node::from(Expr::BinaryExpr {operator: op, left: Box::new(result.0), right: Box::new(x.1)})
-            },
-            None => result.0
-        };
-    }
 
     // BEGIN ATOMIC EXPRESSIONS
+
+    /// An expression wrapped in parentheses.
+    pub fn wrapped_expr(input: &[u8]) -> ExprRes {
+        let node = delimited!(input,
+            OPEN_PAREN,
+            alt_complete!(generator_comprehension | tuple_literal | expression),
+            CLOSE_PAREN
+        );
+
+        return node;
+    }
 
     /// A helper Enum for trailers.
     #[derive (Debug, Clone, PartialEq, Eq, Hash)]
@@ -961,6 +888,8 @@ pub mod expr_parsers {
         return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
     }
 
+    // Collection literals
+
     /// Match a vector literal.
     pub fn vec_literal(input: &[u8]) -> ExprRes {
 
@@ -1025,6 +954,86 @@ pub mod expr_parsers {
         );
 
         return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
+    }
+
+    // Collection comprehensions
+    /// Match the for part of a comprehension.
+    pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
+        let parse_result = tuple!(input,
+            delimited!(
+                FOR,
+                variable_unpacking,
+                IN
+            ),
+            logical_binary_expr,
+            comprehension_if
+        );
+
+        return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
+            iter_vars: iter_vars,
+            iterator: Box::new(iterator),
+            if_clauses: if_clauses
+        });
+    }
+
+    /// Match the if part of a comprehension.
+    pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+        return many0c!(input,
+            preceded!(
+                IF,
+                logical_binary_expr
+            )
+        );
+    }
+
+    /// Match a vector comprehension.
+    pub fn vector_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+            logical_binary_expr,
+            many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |x| Expr::VecComprehension {
+            values: Box::new(x.0),
+            iterators: x.1
+        });
+    }
+
+    /// Match a generator comprehension.
+    pub fn generator_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+            logical_binary_expr,
+            many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |x| Expr::GenComprehension {
+            values: Box::new(x.0),
+            iterators: x.1
+        });
+    }
+
+    /// Match a map or a set.
+    pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+                logical_binary_expr,
+                opt!(complete!(preceded!(
+                    COLON,
+                    logical_binary_expr
+                ))),
+                many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |(keys_or_values, values, iters)| match values {
+            Some(y) => Expr::MapComprehension {
+                keys: Box::new(keys_or_values),
+                values: Box::new(y),
+                iterators: iters
+            },
+            None => Expr::SetComprehension {
+                values: Box::new(keys_or_values),
+                iterators: iters
+            }
+        });
     }
 
     // END ATOMIC EXPRESSIONS
@@ -1230,6 +1239,8 @@ pub mod expr_parsers {
             });
         }
 
+
+
         #[test]
         fn parse_comprehensions() {
             check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
@@ -1350,8 +1361,49 @@ pub mod expr_parsers {
                 vec!((Identifier::from("a"), Node::from(2)))
             ));
         }
-    }
 
+        #[test]
+        fn parse_wrapped() {
+            check_data("2 * (1 + (3))", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Mult,
+                left: Box::new(Node::from(2)),
+                right: Box::new(Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::Add,
+                    left: Box::new(Node::from(Expr::from(1))),
+                    right: Box::new(Node::from(Expr::from(3)))
+                }))
+            });
+        }
+
+        #[cfg(test)]
+        mod specific_exprs {
+            use super::*;
+
+            #[test]
+            fn parse_atomic() {
+                // check_data_and_leftover("1 ** 2", atomic_expr, Expr::from(1), "** 2");
+                check_data("false", bool_expr, Expr::from(false));
+                // check_data("false", atomic_expr, Expr::from(false));
+            }
+
+            #[test]
+            fn parse_spec_literals() {
+                check_match("123", int_expr, Node::from(123));
+                check_failed("e10", float_expr, ErrorKind::Digit);
+                check_failed(".e10", float_expr, ErrorKind::Digit);
+                check_failed(".0", float_expr, ErrorKind::Digit);
+            }
+
+            #[test]
+            fn parse_boolean_op() {
+                check_match("true and false", logical_binary_expr, Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::And,
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false))
+                }));
+            }
+        }
+    }
 }
 
 pub mod type_parser {
@@ -1642,42 +1694,6 @@ mod tests {
                 iterator: Node::from("y"),
                 block: output(block("a=true".as_bytes(), 0))
             });
-        }
-    }
-
-    #[cfg(test)]
-    mod expressions {
-        use super::*;
-
-
-
-        #[cfg(test)]
-        mod specific_exprs {
-            use super::*;
-
-            #[test]
-            fn parse_atomic() {
-                // check_data_and_leftover("1 ** 2", atomic_expr, Expr::from(1), "** 2");
-                check_data("false", bool_expr, Expr::from(false));
-                // check_data("false", atomic_expr, Expr::from(false));
-            }
-
-            #[test]
-            fn parse_spec_literals() {
-                check_match("123", int_expr, Node::from(123));
-                check_failed("e10", float_expr, ErrorKind::Digit);
-                check_failed(".e10", float_expr, ErrorKind::Digit);
-                check_failed(".0", float_expr, ErrorKind::Digit);
-            }
-
-            #[test]
-            fn parse_boolean_op() {
-                check_match("true and false", logical_binary_expr, Node::from(Expr::BinaryExpr{
-                    operator: BinaryOperator::And,
-                    left: Box::new(Node::from(true)),
-                    right: Box::new(Node::from(false))
-                }));
-            }
         }
     }
 

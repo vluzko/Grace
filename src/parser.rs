@@ -747,39 +747,7 @@ pub fn wrapped_expr(input: &[u8]) -> ExprRes {
     return node;
 }
 
-/// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
-pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
-    let ident = |x| fmap_iresult(
-        IDENTIFIER(x),
-        |y: Identifier| Node::from(Expr::IdentifierExpr (y))
-    );
 
-    let parse_result = tuple!(input,
-        alt!(ident | wrapped_expr),
-        many0c!(trailer)
-    );
-
-    let map = |x: (Node<Expr>, Vec<PostIdent>)| {
-        let mut tree_base = x.0.data;
-        for postval in x.1 {
-            match postval {
-                PostIdent::Call{args, kwargs} => {
-                    tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
-                },
-                PostIdent::Access{attributes} => {
-                    tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
-                }
-                PostIdent::Index{slices} => {
-                    tree_base = Expr::Index {slices: slices};
-                }
-            };
-        };
-        return Node::from(tree_base);
-    };
-
-    let node = fmap_iresult(parse_result, map);
-    return node;
-}
 
 /// Match a list of arguments.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
@@ -796,107 +764,16 @@ pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
 /// Match a list of keyword arguments.
 pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
     let parse_result = separated_list!(input,
-        inline_wrapped!(tag!(",")),
+        COMMA,
         tuple!(
             IDENTIFIER,
             preceded!(
-                inline_wrapped!(tag!("=")),
+                EQUALS,
                 logical_binary_expr
             )
         )
     );
     return parse_result;
-}
-
-/// Match a function call following an expression.
-pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
-    let parse_result = delimited!(input,
-        OPEN_PAREN,
-        alt_complete!(
-            tuple!(
-                inline_wrapped!(args_list),
-                opt!(preceded!(
-                    COMMA,
-                    inline_wrapped!(kwargs_list)
-                ))
-            ) |
-            map!(
-                w_followed!(kwargs_list), |x| (vec![], Some(x))
-            )
-        ),
-
-        close_paren
-    );
-    return fmap_iresult(parse_result, |(x, y)| (x, match y {
-        Some(z) => z,
-        None => vec![]
-    }));
-}
-
-/// Match an indexing operation following an expression.
-pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let parse_result = delimited!(input,
-        open_bracket,
-        separated_nonempty_list_complete!(
-            comma,
-            alt_complete!(
-                tuple!(
-                    map!(logical_binary_expr, |x| Some(x)),
-                    optc!(tuple!(
-                        preceded!(
-                            COLON,
-                            logical_binary_expr
-                        ),
-                        optc!(preceded!(
-                            COLON,
-                            logical_binary_expr
-                        ))
-                    ))
-                ) |
-                map!(colon, |_| (None, None))
-            )
-        ),
-        close_bracket
-    );
-
-    fn flatten((lower_or_upper, rest): (Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)) -> (Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>) {
-        match lower_or_upper {
-            Some(_) => {
-                match rest {
-                    Some((upper, step)) => (lower_or_upper, Some(upper), step),
-                    None => (lower_or_upper, None, None)
-                }
-            },
-            None => (None, None, None)
-        }
-    }
-
-    return fmap_iresult(parse_result, |x: Vec<(Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)>| PostIdent::Index {
-        slices: c![flatten(y), for y in x]
-    });
-}
-
-/// Match an access operation following an expression.
-pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    return many1c!(input, 
-        preceded!(
-            DOT,
-            IDENTIFIER
-        )
-    );
-}
-
-/// Match a trailer behind an expression.
-/// A trailer is a function call, an attribute access, or an index.
-pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent::Call{args: x.0, kwargs: x.1};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
-    let result = alt!(input,
-        map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum) |
-        post_index
-    );
-    return result;
 }
 
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
@@ -974,6 +851,136 @@ pub mod expr_parsers {
         };
     }
 
+    // BEGIN ATOMIC EXPRESSIONS
+
+    /// A helper Enum for trailers.
+    #[derive (Debug, Clone, PartialEq, Eq, Hash)]
+    pub enum PostIdent {
+        Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
+        Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
+        Access{attributes: Vec<Identifier>}
+    }
+
+    /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
+    pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
+        let ident = |x| fmap_iresult(
+            IDENTIFIER(x),
+            |y: Identifier| Node::from(Expr::IdentifierExpr (y))
+        );
+
+        let parse_result = tuple!(input,
+            alt!(ident | wrapped_expr),
+            many0c!(trailer)
+        );
+
+        let map = |x: (Node<Expr>, Vec<PostIdent>)| {
+            let mut tree_base = x.0.data;
+            for postval in x.1 {
+                match postval {
+                    PostIdent::Call{args, kwargs} => {
+                        tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
+                    },
+                    PostIdent::Access{attributes} => {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
+                    }
+                    PostIdent::Index{slices} => {
+                        tree_base = Expr::Index {slices: slices};
+                    }
+                };
+            };
+            return Node::from(tree_base);
+        };
+
+        let node = fmap_iresult(parse_result, map);
+        return node;
+    }
+
+    /// Match a function call following an expression.
+    fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
+        let parse_result = delimited!(input,
+            OPEN_PAREN,
+            alt_complete!(
+                tuple!(
+                    inline_wrapped!(args_list),
+                    opt!(preceded!(
+                        COMMA,
+                        kwargs_list
+                    ))
+                ) |
+                map!(kwargs_list, |x| (vec![], Some(x)))
+            ),
+            CLOSE_PAREN
+        );
+        return fmap_iresult(parse_result, |(x, y)| (x, match y {
+            Some(z) => z,
+            None => vec![]
+        }));
+    }
+
+    /// Match an indexing operation following an expression.
+    fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let parse_result = delimited!(input,
+            OPEN_BRACKET,
+            separated_nonempty_list_complete!(
+                COMMA,
+                alt_complete!(
+                    tuple!(
+                        map!(logical_binary_expr, |x| Some(x)),
+                        optc!(tuple!(
+                            preceded!(
+                                COLON,
+                                logical_binary_expr
+                            ),
+                            optc!(preceded!(
+                                COLON,
+                                logical_binary_expr
+                            ))
+                        ))
+                    ) |
+                    map!(colon, |_| (None, None))
+                )
+            ),
+            CLOSE_BRACKET
+        );
+
+        fn flatten((lower_or_upper, rest): (Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)) -> (Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>) {
+            match lower_or_upper {
+                Some(_) => {
+                    match rest {
+                        Some((upper, step)) => (lower_or_upper, Some(upper), step),
+                        None => (lower_or_upper, None, None)
+                    }
+                },
+                None => (None, None, None)
+            }
+        }
+
+        return fmap_iresult(parse_result, |x| PostIdent::Index { slices: c![flatten(y), for y in x] });
+    }
+
+    /// Match an access operation following an expression.
+    fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+        return many1c!(input, 
+            preceded!(
+                DOT,
+                IDENTIFIER
+            )
+        );
+    }
+
+    /// Match a trailer behind an expression.
+    /// A trailer is a function call, an attribute access, or an index.
+    pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent::Call{args: x.0, kwargs: x.1};
+        let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
+        let result = alt!(input,
+            map!(post_call, call_to_enum) |
+            map!(post_access, access_to_enum) |
+            post_index
+        );
+        return result;
+    }
+
     /// Match a boolean literal expression.
     pub fn bool_expr(input: &[u8]) -> ExprRes {
         let parse_result= alt!(input,
@@ -1034,7 +1041,47 @@ pub mod expr_parsers {
         return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
     }
 
+    // END ATOMIC EXPRESSIONS
 
+    #[cfg(test)]
+    mod tests {
+        use parser_utils::iresult_helpers::*;
+        use super::*;
+
+        #[test]
+        fn test_post_ident() {
+            let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
+            check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
+            check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
+                args: vec!(Node::from("a")),
+                kwargs: vec!((Identifier::from("b"), Node::from(true)))
+            });
+
+            check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
+                args: vec![],
+                kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
+            });
+
+
+
+            simple_check_failed("(a | b=false)", trailer);
+            simple_check_failed("(a   b=false)", trailer);
+            simple_check_failed("(a,, b=false)", trailer);
+            simple_check_failed("(a,, b)", trailer);
+            simple_check_failed("(a, b =  true, c)", trailer);
+
+
+        check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+
+        check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+            slices: vec!(
+                (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
+                (None, None, None),
+                (Some(Node::from("d")), None, None)
+            )
+        });
+        }
+    }
 
 }
 
@@ -1154,40 +1201,6 @@ mod tests {
     fn test_dotted_identifier() {
         let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
         check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
-    }
-
-    #[test]
-    fn test_post_ident() {
-        let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
-        check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
-        check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
-            args: vec!(Node::from("a")),
-            kwargs: vec!((Identifier::from("b"), Node::from(true)))
-        });
-
-        check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
-            args: vec![],
-            kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
-        });
-
-
-
-        simple_check_failed("(a | b=false)", trailer);
-        simple_check_failed("(a   b=false)", trailer);
-        simple_check_failed("(a,, b=false)", trailer);
-        simple_check_failed("(a,, b)", trailer);
-        simple_check_failed("(a, b =  true, c)", trailer);
-
-
-       check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
-
-       check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
-           slices: vec!(
-               (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
-               (None, None, None),
-               (Some(Node::from("d")), None, None)
-           )
-       });
     }
 
     #[cfg(test)]

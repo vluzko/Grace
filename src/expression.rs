@@ -79,13 +79,7 @@ pub struct ComprehensionIter {
     pub if_clauses: Vec<Node<Expr>>
 }
 
-/// A helper Enum for trailers.
-#[derive (Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PostIdent {
-    Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
-    Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-    Access{attributes: Vec<Identifier>}
-}
+
 
 /// An assignment
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]

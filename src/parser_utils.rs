@@ -578,6 +578,7 @@ pub mod tokens {
     token!(COMMA, ",");
     token!(COLON, ":");
     token!(DOT, ".");
+    token!(EQUALS, "=");
     token!(OPEN_PAREN, "(");
     token!(CLOSE_PAREN, ")");
     token!(OPEN_BRACKET, "[");
@@ -587,16 +588,34 @@ pub mod tokens {
     token!(LANGLE, "<");
     token!(RANGLE, ">");
 
-    // Logical binary operators
+    // Assignments
+    token!(ADDASN, "+=");
+    token!(SUBASN, "-=");
+    token!(MULASN, "*=");
+    token!(DIVASN, "/=");
+    token!(MODASN, "%=");
+    token!(EXPASN, "**=");
+
+    // Binary operators
+    // Logical operators
     token!(AND, "and");
     token!(OR, "or");
     token!(XOR, "xor");
 
+    // Bitwise operators
+
+    // Arithmetic operators
     token!(PLUS, "+");
     token!(MINUS, "-");
     token!(STAR, "*");
     token!(MOD, "%");
     token!(EXP, "**");
+
+    // Comparisons
+    token!(DEQUAL, "==");
+    token!(NEQUAL, "!=");
+    token!(LEQUAL, "<=");
+    token!(GEQUAL, ">=");
 }
 
 

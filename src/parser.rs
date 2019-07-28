@@ -959,13 +959,14 @@ pub mod expr_parsers {
     }
 
     /// Match an access operation following an expression.
-    fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-        return many1c!(input, 
+    fn post_access(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let result = many1c!(input, 
             preceded!(
                 DOT,
                 IDENTIFIER
             )
         );
+        return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
     }
 
     /// Match a trailer behind an expression.
@@ -975,7 +976,7 @@ pub mod expr_parsers {
         let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
         let result = alt!(input,
             map!(post_call, call_to_enum) |
-            map!(post_access, access_to_enum) |
+            post_access |
             post_index
         );
         return result;

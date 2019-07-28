@@ -580,7 +580,17 @@ pub mod tokens {
         if input.len() == 0 {
             return Ok((input, b""));
         } else {
-            return peek!(input, alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")));
+            return peek!(input, alt!(
+                custom_eof | 
+                tag!(" ") | 
+                tag!("(") | 
+                tag!(")") | 
+                tag!(":") | 
+                tag!("\n")| 
+                tag!(",") | 
+                tag!("]") | 
+                tag!("}")
+            ));
         }
     }
 
@@ -706,8 +716,7 @@ pub mod iresult_helpers {
                 assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         };
     }

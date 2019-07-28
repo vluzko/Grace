@@ -563,18 +563,14 @@ pub fn atomic_expr(input: &[u8]) -> ExprRes {
         int_expr |
         string_expr |
         delimited!(
-            open_brace,
-            alt_complete!(
-                map_or_set_comprehension |
-                set_literal |
-                map_literal
-            ),
-            close_brace
+            OPEN_BRACE,
+            alt_complete!( map_or_set_comprehension  | map_literal | set_literal),
+            CLOSE_BRACE
         ) |
         delimited!(
-            open_bracket,
+            OPEN_BRACKET,
             alt_complete!(vector_comprehension | vec_literal),
-            close_bracket
+            CLOSE_BRACKET
         ) |
         expr_with_trailer
     ));
@@ -608,81 +604,6 @@ pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
             logical_binary_expr
         )
     );
-}
-
-/// Match a vector literal.
-pub fn vec_literal(input: &[u8]) -> ExprRes {
-
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(logical_binary_expr)
-        ),
-        peek!(close_bracket)
-    );
-
-    return fmap_node(parse_result, |x| Expr::VecLiteral(x));
-}
-
-/// Match a set literal.
-pub fn set_literal(input: &[u8]) -> ExprRes {
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(logical_binary_expr)
-        ),
-        peek!(close_brace)
-    );
-
-    return fmap_node(parse_result, |x| Expr::SetLiteral(x));
-}
-
-/// Match a map literal.
-pub fn map_literal(input: &[u8]) -> ExprRes {
-
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            separated_pair!(
-                IDENTIFIER,
-                inline_wrapped!(tag!(":")),
-                inline_wrapped!(logical_binary_expr)
-            )
-        ),
-        peek!(close_brace)
-    );
-
-    return fmap_node(parse_result, |x| Expr::MapLiteral (x));
-}
-
-/// Match a tuple literal
-/// e.g. (), (1, ), (1,2,3), (1,2,3,)
-pub fn tuple_literal(input: &[u8]) -> ExprRes {
-    let parse_result = alt_complete!(input,
-        map!(
-            terminated!(
-                inline_whitespace,
-                peek!(close_paren)
-            ), |_| vec!()) |
-        map!(
-            terminated!(
-                inline_wrapped!(logical_binary_expr),
-                tuple!(
-                    comma,
-                    peek!(close_paren)
-                )
-            ), |x| vec!(x)
-        ) |
-        terminated!(
-            separated_at_least_m!(2, comma, logical_binary_expr),
-            terminated!(
-                opt!(complete!(comma)),
-                peek!(close_paren)
-            )
-        )
-    );
-
-    return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
 }
 
 /// Match a vector comprehension.
@@ -1040,6 +961,75 @@ pub mod expr_parsers {
         return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
     }
 
+    /// Match a vector literal.
+    pub fn vec_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = terminated!(input,
+            separated_nonempty_list_complete!(
+                COMMA,
+                logical_binary_expr
+            ),
+            peek!(CLOSE_BRACKET)
+        );
+
+        return fmap_node(parse_result, |x| Expr::VecLiteral(x));
+    }
+
+    /// Match a set literal.
+    pub fn set_literal(input: &[u8]) -> ExprRes {
+        let parse_result = 
+            separated_nonempty_list_complete!(input,
+                COMMA,
+                logical_binary_expr
+            );
+
+        return fmap_node(parse_result, |x| Expr::SetLiteral(x));
+    }
+
+    /// Match a map literal.
+    pub fn map_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = terminated!(input,
+            separated_nonempty_list_complete!(
+                COMMA,
+                separated_pair!(
+                    IDENTIFIER,
+                    COLON,
+                    logical_binary_expr
+                )
+            ),
+            peek!(close_brace)
+        );
+
+        return fmap_node(parse_result, |x| Expr::MapLiteral (x));
+    }
+
+    /// Match a tuple literal
+    /// e.g. (), (1, ), (1,2,3), (1,2,3,)
+    pub fn tuple_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = alt_complete!(input,
+            // Empty input
+            map!(peek!(CLOSE_PAREN), |_| vec!()) |
+            // Single element tuple.
+            map!(
+                terminated!(
+                    logical_binary_expr,
+                    tuple!(
+                        COMMA,
+                        peek!(CLOSE_PAREN)
+                    )
+                ), |x| vec!(x)
+            ) |
+            terminated!(
+                separated_at_least_m!(2, COMMA, logical_binary_expr),
+                optc!(COMMA)
+            )
+        );
+
+        return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
+    }
+
     // END ATOMIC EXPRESSIONS
 
     #[cfg(test)]
@@ -1175,7 +1165,7 @@ pub mod expr_parsers {
         }
 
         #[test]
-        fn test_unary_expr() {
+        fn parse_unary_expr() {
             let ops = vec!["not", "+", "-", "~"];
             for op in ops {
                 let input = format!("{} y", op);
@@ -1205,7 +1195,7 @@ pub mod expr_parsers {
         }
 
         #[test]
-        fn test_comparison_expr() {
+        fn parse_comparison_expr() {
             let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
             let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
                                 ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
@@ -1224,7 +1214,7 @@ pub mod expr_parsers {
         }
 
         #[test]
-        fn test_repeated_func_calls() {
+        fn parse_repeated_func_calls() {
             let expected = Expr::FunctionCall{
                 function: Box::new(Node::from(Expr::FunctionCall{
                     function: Box::new(Node::from("func")), 
@@ -1244,7 +1234,7 @@ pub mod expr_parsers {
         }
 
         #[test]
-        fn test_comprehensions() {
+        fn parse_comprehensions() {
             check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
                 
                 values: Box::new(Node::from("x")),
@@ -1306,7 +1296,7 @@ pub mod expr_parsers {
         }
 
         #[test]
-        fn test_match() {
+        fn parse_match() {
             check_match("match x:\n5 => 5", expression, Node::from(Expr::MatchExpr {
                 value: Box::new(Node::from("x")),
                 cases: vec![(output(expression("5".as_bytes())), output(expression("5".as_bytes())))]
@@ -1315,8 +1305,10 @@ pub mod expr_parsers {
 
         #[test]
         fn parse_literals() {
+            check_data_and_leftover("2]", expression, Expr::from(2), "]");
+
             let int = rand::random::<i64>().abs();
-            check_match(&int.to_string(), expression, Node::from(int));
+            check_match(&int.to_string(), int_expr, Node::from(int));
             let rand_float = rand::random::<f64>().abs();
             check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
             let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
@@ -1328,6 +1320,38 @@ pub mod expr_parsers {
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
 
             check_failed(".", expression, ErrorKind::Alt);
+        }
+
+        #[test]
+        fn parse_collection_literals() {
+            check_data("[1, 2]", expression, Expr::VecLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+            check_data("()", expression, Expr::TupleLiteral(
+                vec!()
+            ));
+
+            check_data("(  )", expression, Expr::TupleLiteral(
+                vec!()
+            ));
+
+            check_data("(1, )", expression, Expr::TupleLiteral(
+                vec!(Node::from(1))
+            ));
+
+            check_data("(1, 2)", expression, Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+            check_data("(1, 2,)", expression, Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+
+            check_data("{a: 2}", expression, Expr::MapLiteral(
+                vec!((Identifier::from("a"), Node::from(2)))
+            ));
         }
     }
 

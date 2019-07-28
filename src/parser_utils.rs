@@ -650,6 +650,10 @@ pub mod tokens {
     token!(NEQUAL, "!=");
     token!(LEQUAL, "<=");
     token!(GEQUAL, ">=");
+
+    // Unary operators
+    token!(NOT, "not");
+    token!(TILDE, "~");
 }
 
 

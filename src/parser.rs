@@ -440,6 +440,7 @@ pub fn comparison(input: &[u8]) -> ExprRes {
     return node;
 }
 
+/// Match a match expression.
 pub fn match_expr(input: &[u8]) -> ExprRes {
 
     let parse_result = tuple!(input,
@@ -462,58 +463,6 @@ pub fn match_expr(input: &[u8]) -> ExprRes {
     );
 
     return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-}
-
-/// Match a single binary expression.
-pub fn match_binary_expr(operator: BinaryOperator, output: (Node<Expr>, Option<Node<Expr>>)) -> Node<Expr> {
-    return match output.1 {
-        Some(x) => Node::from(Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)}),
-        None => output.0
-    };
-}
-
-/// Create a binary expression, where one of several operators is possible.
-pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
-    return match output.1 {
-        Some(x) => {
-            let op: BinaryOperator = *operators.get(x.0).unwrap();
-            Node::from(Expr::BinaryExpr {operator: op, left: Box::new(output.0), right: Box::new(x.1)})
-        },
-        None => output.0
-    };
-}
-
-/// Match any unary expression.
-/// Implemented as a single parser because all unary expressions have the same precedence.
-pub fn unary_expr(input: & [u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(w_followed!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
-            unary_expr)
-         |
-        tuple!(
-            value!(None, tag!("")),
-            power_expr
-        )
-    );
-
-    let node = fmap_iresult(parse_result, |x|
-        match x.0 {
-            Some(y) => {
-                let unary_op = match from_utf8(y).unwrap() {
-                    "+" => UnaryOperator::Positive,
-                    "-" => UnaryOperator::Negative,
-                    "~" => UnaryOperator::BitNot,
-                    "not" => UnaryOperator::Not,
-                    _ => panic!()
-
-                };
-                Node::from(Expr::UnaryExpr {operator: unary_op, operand: Box::new(x.1)})
-            },
-            None => x.1
-
-        });
-    return node;
 }
 
 /// Parse dot separated identifiers.
@@ -648,6 +597,29 @@ pub mod expr_parsers {
     }
 
     // END BINARY EXPRESSIONS
+
+    /// Match any unary expression.
+    /// Implemented as a single parser because all unary expressions have the same precedence.
+    pub fn unary_expr(input: & [u8]) -> ExprRes {
+        let parse_result = alt!(input,
+            tuple!(
+                map!(alt!(PLUS | MINUS | TILDE | NOT), Some),
+                unary_expr)
+            |
+            tuple!(
+                value!(None, tag!("")),
+                power_expr
+            )
+        );
+
+        let node = fmap_iresult(parse_result, |x|
+            match x.0 {
+                Some(y) => Node::from(Expr::UnaryExpr {operator: UnaryOperator::from(y), operand: Box::new(x.1)}),
+                None => x.1
+
+            });
+        return node;
+    }
 
     // BEGIN ATOMIC EXPRESSIONS
 

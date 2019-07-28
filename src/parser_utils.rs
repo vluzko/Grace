@@ -446,15 +446,7 @@ named!(pub sign<&[u8], &[u8]>,
 //     return recognize!(input, alt!(tag!("+") | tag!("-")));
 // }
 
-named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
-    preceded!(
-        alt!(tag!("e") | tag!("E")),
-        tuple!(
-            opt!(sign),
-            dec_seq
-        )
-    )
-);
+
 
 pub mod tokens {
     use super::*;
@@ -479,10 +471,21 @@ pub mod tokens {
         }
     }
 
-    /// Recognize a sequence of decimal digits.
+    /// Recognize a non-empty sequence of decimal digits.
     pub fn DIGIT<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
+
+    /// Recognize a sequence of decimal digits.
+    pub fn DIGIT0<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
+        return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input.clone(), ErrorKind::Digit),
@@ -524,6 +527,16 @@ pub mod tokens {
                 n => Ok(input.take_split(n))
             }
         };
+    }
+
+    pub fn STRING_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]>{
+        return alt!(input,
+            tag!("\\\"") |
+            tag!("\\\\") |
+            tag!("\\\n") |
+            tag!("\\\r") |
+            recognize!(none_of!("\n\""))
+        );
     }
 
     /// Return true if a key
@@ -570,6 +583,16 @@ pub mod tokens {
             return peek!(input, alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")));
         }
     }
+
+    named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
+        preceded!(
+            alt!(tag!("e") | tag!("E")),
+            tuple!(
+                opt!(sign),
+                dec_seq
+            )
+        )
+    );
 
     // Syntax
     token!(COMMA, ",");

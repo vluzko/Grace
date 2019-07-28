@@ -413,10 +413,10 @@ pub fn comparisons(input: &[u8]) -> IResult<&[u8], &[u8]> {
 
 pub fn comparison(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        alt!(match_expr | boolean_op_expr),
+        alt!(match_expr | logical_binary_expr),
         opt!(complete!(tuple!(
             w_followed!(comparisons),
-            boolean_op_expr
+            logical_binary_expr
         )))
     );
 
@@ -454,7 +454,7 @@ pub fn match_expr(input: &[u8]) -> ExprRes {
         separated_nonempty_list_complete!(
             between_statement,
             separated_pair!(
-                alt!(float | int | string),
+                alt!(float_expr | int | string),
                 inline_wrapped!(tag!("=>")),
                 expression
             )
@@ -559,7 +559,7 @@ pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
 pub fn atomic_expr(input: &[u8]) -> ExprRes {
     let node = w_followed!(input, alt_complete!(
         bool_expr |
-        float |
+        float_expr |
         int |
         string |
         delimited!(
@@ -589,7 +589,7 @@ pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
             variable_unpacking,
             inline_keyword!("in")
         ),
-        boolean_op_expr,
+        logical_binary_expr,
         comprehension_if
     );
 
@@ -605,7 +605,7 @@ pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     return many0c!(input,
         preceded!(
             inline_keyword!("if"),
-            boolean_op_expr
+            logical_binary_expr
         )
     );
 }
@@ -616,7 +616,7 @@ pub fn vec_literal(input: &[u8]) -> ExprRes {
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
             inline_wrapped!(tag!(",")),
-            inline_wrapped!(boolean_op_expr)
+            inline_wrapped!(logical_binary_expr)
         ),
         peek!(close_bracket)
     );
@@ -629,7 +629,7 @@ pub fn set_literal(input: &[u8]) -> ExprRes {
     let parse_result = terminated!(input,
         separated_nonempty_list_complete!(
             inline_wrapped!(tag!(",")),
-            inline_wrapped!(boolean_op_expr)
+            inline_wrapped!(logical_binary_expr)
         ),
         peek!(close_brace)
     );
@@ -646,7 +646,7 @@ pub fn map_literal(input: &[u8]) -> ExprRes {
             separated_pair!(
                 IDENTIFIER,
                 inline_wrapped!(tag!(":")),
-                inline_wrapped!(boolean_op_expr)
+                inline_wrapped!(logical_binary_expr)
             )
         ),
         peek!(close_brace)
@@ -666,7 +666,7 @@ pub fn tuple_literal(input: &[u8]) -> ExprRes {
             ), |_| vec!()) |
         map!(
             terminated!(
-                inline_wrapped!(boolean_op_expr),
+                inline_wrapped!(logical_binary_expr),
                 tuple!(
                     comma,
                     peek!(close_paren)
@@ -674,7 +674,7 @@ pub fn tuple_literal(input: &[u8]) -> ExprRes {
             ), |x| vec!(x)
         ) |
         terminated!(
-            separated_at_least_m!(2, comma, boolean_op_expr),
+            separated_at_least_m!(2, comma, logical_binary_expr),
             terminated!(
                 opt!(complete!(comma)),
                 peek!(close_paren)
@@ -688,7 +688,7 @@ pub fn tuple_literal(input: &[u8]) -> ExprRes {
 /// Match a vector comprehension.
 pub fn vector_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        inline_wrapped!(boolean_op_expr),
+        inline_wrapped!(logical_binary_expr),
         many1!(comprehension_for)
     );
 
@@ -702,7 +702,7 @@ pub fn vector_comprehension(input: &[u8]) -> ExprRes {
 /// Match a generator comprehension.
 pub fn generator_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-        boolean_op_expr,
+        logical_binary_expr,
         many1!(comprehension_for)
     );
 
@@ -715,10 +715,10 @@ pub fn generator_comprehension(input: &[u8]) -> ExprRes {
 /// Match a map or a set.
 pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
     let parse_result = tuple!(input,
-            boolean_op_expr,
+            logical_binary_expr,
             opt!(complete!(preceded!(
                 inline_wrapped!(tag!(":")),
-                boolean_op_expr
+                logical_binary_expr
             ))),
             many1!(comprehension_for)
     );
@@ -786,7 +786,7 @@ pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
         inline_wrapped!(tag!(",")),
         terminated!(
-            w_followed!(boolean_op_expr),
+            w_followed!(logical_binary_expr),
             not!(equals)
         )
     );
@@ -801,7 +801,7 @@ pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>
             IDENTIFIER,
             preceded!(
                 inline_wrapped!(tag!("=")),
-                boolean_op_expr
+                logical_binary_expr
             )
         )
     );
@@ -841,15 +841,15 @@ pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
             comma,
             alt_complete!(
                 tuple!(
-                    map!(boolean_op_expr, |x| Some(x)),
+                    map!(logical_binary_expr, |x| Some(x)),
                     optc!(tuple!(
                         preceded!(
                             COLON,
-                            boolean_op_expr
+                            logical_binary_expr
                         ),
                         optc!(preceded!(
                             COLON,
-                            boolean_op_expr
+                            logical_binary_expr
                         ))
                     ))
                 ) |
@@ -899,26 +899,6 @@ pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
     return result;
 }
 
-/// Parser to return an Identifier AST.
-pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
-    // let not_result: IResult<&[u8], (&[u8], Vec<&[u8]>)> = pair!(input, 
-    //                 alt!(alpha | tag!("_")),
-    //                 many0c!(valid_identifier_char)
-    //             );
-    let parse_result = inline_wrapped!(input,
-        recognize!(
-            pair!(
-                not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
-                pair!(
-                    alt!(alpha | tag!("_")),
-                    many0c!(valid_identifier_char)
-                )
-            )
-        )
-    );
-    return fmap_iresult(parse_result,  Identifier::from);
-}
-
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         IDENTIFIER,
@@ -940,64 +920,7 @@ pub fn bool_expr(input: &[u8]) -> ExprRes {
     }));
 }
 
-// TODO: Hex encoded, byte encoded
-/// Match an integer literal.
-pub fn int(input: &[u8]) -> ExprRes {
-    let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
-        tuple!(
-            optc!(sign),
-            terminated!(
-                DIGIT,
-                VALID_NUM_FOLLOW
-            )
-        )
-    );
-    return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
-}
 
-/// Match a floating point literal.
-pub fn float<'a>(input: &'a[u8]) -> ExprRes {
-
-    let with_dec = |x: &'a[u8]| tuple!(x,
-        tag!("."),
-        many0c!(dec_digit),
-        opt!(complete!(exponent))
-    );
-
-    let parse_result = recognize!(input, tuple!(
-        opt!(sign),
-        many0c!(dec_digit),
-        alt!(
-            value!((), with_dec) |
-            value!((), complete!(exponent))
-        ),
-        VALID_NUM_FOLLOW
-    ));
-
-    return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
-}
-
-named!(string_char<&[u8], &[u8]>,
-    recognize!(
-        alt!(
-            tag!("\\\"") |
-            tag!("\\\\") |
-            tag!("\\\n") |
-            tag!("\\\r") |
-            recognize!(none_of!("\n\""))
-        )
-    )
-);
-
-named!(string_literal<&[u8], &[u8]>,
-    recognize!(
-        tuple!(
-            tag!("\""),
-            many0c!(string_char),
-            tag!("\"")
-        )
-    )
-);
 
 /// Match a string literal.
 pub fn string(input: &[u8]) -> ExprRes {
@@ -1038,12 +961,12 @@ pub mod expr_parsers {
     }
 
     /// Match boolean operators.
-    pub fn boolean_op_expr(input: &[u8]) -> ExprRes {
+    pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
         let parse_result = tuple!(input,
             w_followed!(bit_boolean_op_expr),
             optc!(tuple!(
                 w_followed!(alt_complete!(AND | OR | XOR)),
-                boolean_op_expr
+                logical_binary_expr
             ))
         );
         return fmap_iresult(parse_result, flatten_binary);
@@ -1070,6 +993,51 @@ pub mod expr_parsers {
             },
             None => result.0
         };
+    }
+
+    /// Match an integer literal.
+    pub fn int(input: &[u8]) -> ExprRes {
+        let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
+            tuple!(
+                optc!(sign),
+                terminated!(
+                    DIGIT,
+                    VALID_NUM_FOLLOW
+                )
+            )
+        );
+        return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
+    }
+
+    /// Match a floating point literal.
+    pub fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
+        let with_dec = |x: &'a[u8]| tuple!(x,
+            tag!("."),
+            DIGIT0,
+            opt!(complete!(exponent))
+        );
+
+        let parse_result = recognize!(input, tuple!(
+            opt!(sign),
+            DIGIT,
+            alt!(
+                value!((), with_dec) |
+                value!((), complete!(exponent))
+            ),
+            VALID_NUM_FOLLOW
+        ));
+
+        return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
+    }
+
+    pub fn string_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        return recognize!(input, 
+            tuple!(
+                tag!("\""),
+                many0c!(STRING_CHAR),
+                tag!("\"")
+            )
+        );
     }
 
 }
@@ -1426,7 +1394,7 @@ mod tests {
 
         #[test]
         fn parse_function_call() {
-            let a = output(boolean_op_expr("true and false".as_bytes()));
+            let a = output(logical_binary_expr("true and false".as_bytes()));
             let no_args = Node::from(Expr::FunctionCall{
                 function: Box::new(Node::from("func")),
                 args: vec!(),
@@ -1460,7 +1428,7 @@ mod tests {
                 right: Box::new(Node::from(2))
             });
 
-            check_data("true and false", boolean_op_expr, Expr::BinaryExpr{
+            check_data("true and false", logical_binary_expr, Expr::BinaryExpr{
                 operator: BinaryOperator::And,
                 left: Box::new(Node::from(true)),
                 right: Box::new(Node::from(false))
@@ -1559,7 +1527,7 @@ mod tests {
             check_data("func(a)(b, c)", expression, expected);
 
             check_data("(a and b)(true)", expression, Expr::FunctionCall {
-                function: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
+                function: Box::new(output(logical_binary_expr("a and b".as_bytes()))),
                 args: vec!(Node::from(true)),
                 kwargs: vec!()
             });
@@ -1640,7 +1608,7 @@ mod tests {
             let int = rand::random::<i64>().abs();
             check_match(&int.to_string(), expression, Node::from(int));
             let rand_float = rand::random::<f64>().abs();
-            check_match(&rand_float.to_string(), float, Node::from(rand_float));
+            check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
             let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
             check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
 
@@ -1648,6 +1616,8 @@ mod tests {
             check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
+
+            check_failed(".", expression, ErrorKind::Alt);
         }
 
         #[cfg(test)]
@@ -1664,11 +1634,14 @@ mod tests {
             #[test]
             fn parse_spec_literals() {
                 check_match("123", int, Node::from(123));
+                check_failed("e10", float_expr, ErrorKind::Digit);
+                check_failed(".e10", float_expr, ErrorKind::Digit);
+                check_failed(".0", float_expr, ErrorKind::Digit);
             }
 
             #[test]
             fn parse_boolean_op() {
-                check_match("true and false", boolean_op_expr, Node::from(Expr::BinaryExpr{
+                check_match("true and false", logical_binary_expr, Node::from(Expr::BinaryExpr{
                     operator: BinaryOperator::And,
                     left: Box::new(Node::from(true)),
                     right: Box::new(Node::from(false))

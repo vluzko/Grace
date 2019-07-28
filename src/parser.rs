@@ -1480,45 +1480,46 @@ mod tests {
         #[test]
         fn parse_binary_expr() {
 
-            // check_data("1 ** 2", expression, Expr::BinaryExpr{
-            //     operator: BinaryOperator::Exponent,
-            //     left: Box::new(Node::from(1)),
-            //     right: Box::new(Node::from(2))
-            // });
+            check_data("1 ** 2", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Exponent,
+                left: Box::new(Node::from(1)),
+                right: Box::new(Node::from(2))
+            });
+
             check_data("true and false", boolean_op_expr, Expr::BinaryExpr{
                 operator: BinaryOperator::And,
                 left: Box::new(Node::from(true)),
                 right: Box::new(Node::from(false))
             });
 
-            // check_data("true or false", expression, Expr::BinaryExpr{
-            //     operator: BinaryOperator::Or,
-            //     left: Box::new(Node::from(true)),
-            //     right: Box::new(Node::from(false))
-            // });
+            check_data("true or false", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Or,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
 
-            // check_data("true and false or true", expression, Expr::BinaryExpr{
+            check_data("true and false or true", expression, Expr::BinaryExpr{
                 
-            //     operator: BinaryOperator::And,
-            //     left: Box::new(Node::from(true)),
-            //     right:Box::new(Node::from(Expr::BinaryExpr{
+                operator: BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right:Box::new(Node::from(Expr::BinaryExpr{
                     
-            //         operator: BinaryOperator::Or,
-            //         left: Box::new(Node::from(false)),
-            //         right: Box::new(Node::from(true))
-            //     }))
-            // });
+                    operator: BinaryOperator::Or,
+                    left: Box::new(Node::from(false)),
+                    right: Box::new(Node::from(true))
+                }))
+            });
 
-            // let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
-            // for op in all_ops {
-            //     let input = format!("x {} y", op);
-            //     check_data(input.as_str(), expression, Expr::BinaryExpr {
+            let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), expression, Expr::BinaryExpr {
                     
-            //         operator: BinaryOperator::from(op),
-            //         left: Box::new(Node::from("x")),
-            //         right: Box::new(Node::from("y")),
-            //     });
-            // }
+                    operator: BinaryOperator::from(op),
+                    left: Box::new(Node::from("x")),
+                    right: Box::new(Node::from("y")),
+                });
+            }
         }
 
         #[test]

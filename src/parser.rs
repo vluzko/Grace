@@ -454,7 +454,7 @@ pub fn match_expr(input: &[u8]) -> ExprRes {
         separated_nonempty_list_complete!(
             between_statement,
             separated_pair!(
-                alt!(float_expr | int | string),
+                alt!(float_expr | int_expr | string_expr),
                 inline_wrapped!(tag!("=>")),
                 expression
             )
@@ -560,8 +560,8 @@ pub fn atomic_expr(input: &[u8]) -> ExprRes {
     let node = w_followed!(input, alt_complete!(
         bool_expr |
         float_expr |
-        int |
-        string |
+        int_expr |
+        string_expr |
         delimited!(
             open_brace,
             alt_complete!(
@@ -908,27 +908,6 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
-pub fn bool_expr(input: &[u8]) -> ExprRes {
-    let parse_result= alt!(input,
-        terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
-        terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
-    );
-    return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x).unwrap() {
-        "true" => true,
-        "false" => false,
-        _ => panic!()
-    }));
-}
-
-
-
-/// Match a string literal.
-pub fn string(input: &[u8]) -> ExprRes {
-    let parse_result = string_literal(input);
-
-    return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
-}
-
 pub mod expr_parsers {
     use super::*;
 
@@ -995,8 +974,21 @@ pub mod expr_parsers {
         };
     }
 
-    /// Match an integer literal.
-    pub fn int(input: &[u8]) -> ExprRes {
+    /// Match a boolean literal expression.
+    pub fn bool_expr(input: &[u8]) -> ExprRes {
+        let parse_result= alt!(input,
+            terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
+            terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
+        );
+        return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x).unwrap() {
+            "true" => true,
+            "false" => false,
+            _ => panic!()
+        }));
+    }
+
+    /// Match an integer literal expression.
+    pub fn int_expr(input: &[u8]) -> ExprRes {
         let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
             tuple!(
                 optc!(sign),
@@ -1009,7 +1001,7 @@ pub mod expr_parsers {
         return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
     }
 
-    /// Match a floating point literal.
+    /// Match a floating point literal expression.
     pub fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
         let with_dec = |x: &'a[u8]| tuple!(x,
             tag!("."),
@@ -1030,15 +1022,19 @@ pub mod expr_parsers {
         return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
     }
 
-    pub fn string_literal(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        return recognize!(input, 
+    /// Match a string literal expression.
+    pub fn string_expr(input: &[u8]) -> ExprRes {
+        let result = recognize!(input, 
             tuple!(
                 tag!("\""),
                 many0c!(STRING_CHAR),
                 tag!("\"")
             )
         );
+        return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
     }
+
+
 
 }
 
@@ -1633,7 +1629,7 @@ mod tests {
 
             #[test]
             fn parse_spec_literals() {
-                check_match("123", int, Node::from(123));
+                check_match("123", int_expr, Node::from(123));
                 check_failed("e10", float_expr, ErrorKind::Digit);
                 check_failed(".e10", float_expr, ErrorKind::Digit);
                 check_failed(".0", float_expr, ErrorKind::Digit);

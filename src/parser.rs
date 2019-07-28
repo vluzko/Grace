@@ -483,13 +483,6 @@ pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (N
     };
 }
 
-/// Match the bit shift operators.
-pub fn bit_shift(input: &[u8]) -> ExprRes {
-    let symbols = vec![">>", "<<"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, additive_expr);
-}
-
 /// Match addition and subtraction.
 pub fn additive_expr(input: &[u8]) -> ExprRes {
     let symbols = vec!["+", "-"];
@@ -637,7 +630,7 @@ pub mod expr_parsers {
         return node;
     }
 
-    // Binary expressions
+    // BEGIN BINARY EXPRESSIONS
 
     /// Flatten a possible binary expression into a single expression.
     fn flatten_binary(result: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
@@ -663,14 +656,22 @@ pub mod expr_parsers {
         return fmap_iresult(parse_result, flatten_binary);
     }
 
-    /// Match boolean operators.
+    /// Parse logical operations.
     pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
     }
 
-    /// Match bitwise boolean operations.
+    /// Parse bitwise boolean operations.
     pub fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), bit_shift);
+    }
+
+    /// Match the bit shift operators.
+    pub fn bit_shift(input: &[u8]) -> ExprRes {
+        // let symbols = vec![">>", "<<"];
+        // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+        // return binary_op_list(input, &symbols, &operators, additive_expr);
+        return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), additive_expr);
     }
 
     /// An exponentiation.
@@ -685,6 +686,7 @@ pub mod expr_parsers {
         return fmap_iresult(parse_result, flatten_binary);
     }
 
+    // END BINARY EXPRESSIONS
 
     // BEGIN ATOMIC EXPRESSIONS
 
@@ -828,6 +830,8 @@ pub mod expr_parsers {
         return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
     }
 
+    // Literal expressions.
+
     /// Match a boolean literal expression.
     pub fn bool_expr(input: &[u8]) -> ExprRes {
         let parse_result= alt!(input,
@@ -888,7 +892,7 @@ pub mod expr_parsers {
         return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
     }
 
-    // Collection literals
+    // Collection literals.
 
     /// Match a vector literal.
     pub fn vec_literal(input: &[u8]) -> ExprRes {
@@ -957,6 +961,7 @@ pub mod expr_parsers {
     }
 
     // Collection comprehensions
+
     /// Match the for part of a comprehension.
     pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
         let parse_result = tuple!(input,

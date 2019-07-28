@@ -633,6 +633,10 @@ pub mod tokens {
     token!(BAND, "&");
     token!(BXOR, "^");
 
+    // Bitshift operators
+    token!(LSHIFT, "<<");
+    token!(RSHIFT, ">>");
+
     // Arithmetic operators
     token!(PLUS, "+");
     token!(MINUS, "-");

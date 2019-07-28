@@ -641,6 +641,7 @@ pub mod tokens {
     token!(PLUS, "+");
     token!(MINUS, "-");
     token!(STAR, "*");
+    token!(DIV, "/");
     token!(MOD, "%");
     token!(EXP, "**");
 

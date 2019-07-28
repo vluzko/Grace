@@ -483,20 +483,6 @@ pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (N
     };
 }
 
-/// Match addition and subtraction.
-pub fn additive_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["+", "-"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, mult_expr);
-}
-
-/// Match multiplication, division, and modulo.
-pub fn mult_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["*", "/", "%"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, unary_expr);
-}
-
 /// Match any unary expression.
 /// Implemented as a single parser because all unary expressions have the same precedence.
 pub fn unary_expr(input: & [u8]) -> ExprRes {
@@ -602,34 +588,6 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
 pub mod expr_parsers {
     use super::*;
 
-    /// Match a binary expression whose operator is a symbol.
-    pub fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-        let parse_result = tuple!(input,
-            w_followed!(next_expr),
-            opt!(complete!(preceded!(
-                w_followed!(tag!(symbol)),
-                call!(binary_op_symbol, symbol, operator, next_expr)
-            )))
-        );
-
-        let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
-        return node;
-    }
-
-    /// Match a list of binary operations
-    pub fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-        let parse_result = tuple!(input,
-            w_followed!(next_expr),
-            opt!(tuple!(
-                w_followed!(call!(match_any, symbols)),
-                call!(binary_op_list, symbols, operators, next_expr)
-            ))
-        );
-
-        let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-        return node;
-    }
-
     // BEGIN BINARY EXPRESSIONS
 
     /// Flatten a possible binary expression into a single expression.
@@ -647,7 +605,7 @@ pub mod expr_parsers {
     pub fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
         let parse_result = tuple!(input,
             next_expr,
-            opt!(tuple!(
+            optc!(tuple!(
                 operator_parser,
                 call!(binary_expr, operator_parser, next_expr)
             ))
@@ -656,34 +614,37 @@ pub mod expr_parsers {
         return fmap_iresult(parse_result, flatten_binary);
     }
 
-    /// Parse logical operations.
+    /// Match logical expressions.
     pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
     }
 
-    /// Parse bitwise boolean operations.
+    /// Match bitwise boolean expressions.
     pub fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
-        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), bit_shift);
+        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), shift_expr);
     }
 
-    /// Match the bit shift operators.
-    pub fn bit_shift(input: &[u8]) -> ExprRes {
-        // let symbols = vec![">>", "<<"];
-        // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-        // return binary_op_list(input, &symbols, &operators, additive_expr);
+    /// Match bit shift expressions.
+    pub fn shift_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), additive_expr);
     }
 
-    /// An exponentiation.
+    /// Match addition and subtraction expressions.
+    pub fn additive_expr(input: &[u8]) -> ExprRes {
+        // let symbols = vec!["+", "-"];
+        // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+        // return binary_op_list(input, &symbols, &operators, mult_expr);
+        return binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), mult_expr);
+    }
+
+    /// Match multiplication, division, and modulo expressions.
+    pub fn mult_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr);
+    }
+
+    /// Match an exponentiation expression.
     pub fn power_expr(input: &[u8]) -> ExprRes {
-        let parse_result = tuple!(input,
-            w_followed!(atomic_expr),
-            optc!(tuple!(
-                EXP,
-                power_expr
-            ))
-        );
-        return fmap_iresult(parse_result, flatten_binary);
+        return binary_expr(input, EXP, atomic_expr);
     }
 
     // END BINARY EXPRESSIONS

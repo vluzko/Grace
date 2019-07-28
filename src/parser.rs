@@ -747,15 +747,13 @@ pub fn wrapped_expr(input: &[u8]) -> ExprRes {
     return node;
 }
 
-
-
 /// Match a list of arguments.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
-        inline_wrapped!(tag!(",")),
+        COMMA,
         terminated!(
-            w_followed!(logical_binary_expr),
-            not!(equals)
+            logical_binary_expr,
+            not!(EQUALS)
         )
     );
     return parse_result;
@@ -855,7 +853,7 @@ pub mod expr_parsers {
 
     /// A helper Enum for trailers.
     #[derive (Debug, Clone, PartialEq, Eq, Hash)]
-    pub enum PostIdent {
+    enum PostIdent {
         Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
         Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
         Access{attributes: Vec<Identifier>}
@@ -863,16 +861,17 @@ pub mod expr_parsers {
 
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
     pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
-        let ident = |x| fmap_iresult(
+        let ident_as_expr = |x| fmap_iresult(
             IDENTIFIER(x),
             |y: Identifier| Node::from(Expr::IdentifierExpr (y))
         );
 
         let parse_result = tuple!(input,
-            alt!(ident | wrapped_expr),
+            alt!(ident_as_expr | wrapped_expr),
             many0c!(trailer)
         );
 
+        // Convert the vector of post identifiers into a single usable expression.
         let map = |x: (Node<Expr>, Vec<PostIdent>)| {
             let mut tree_base = x.0.data;
             for postval in x.1 {
@@ -893,6 +892,15 @@ pub mod expr_parsers {
 
         let node = fmap_iresult(parse_result, map);
         return node;
+    }
+
+    /// Parse an expression trailer.
+    fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        return alt_complete!(input,
+            post_call |
+            post_access |
+            post_index
+        );
     }
 
     /// Match a function call following an expression.
@@ -972,17 +980,6 @@ pub mod expr_parsers {
         return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
     }
 
-    /// Match a trailer behind an expression.
-    /// A trailer is a function call, an attribute access, or an index.
-    pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-        let result = alt!(input,
-            post_call |
-            post_access |
-            post_index
-        );
-        return result;
-    }
-
     /// Match a boolean literal expression.
     pub fn bool_expr(input: &[u8]) -> ExprRes {
         let parse_result= alt!(input,
@@ -1051,7 +1048,7 @@ pub mod expr_parsers {
         use super::*;
 
         #[test]
-        fn test_post_ident() {
+        fn parse_post_ident() {
             let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
             check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
             check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
@@ -1073,15 +1070,264 @@ pub mod expr_parsers {
             simple_check_failed("(a, b =  true, c)", trailer);
 
 
-        check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+            check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
 
-        check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
-            slices: vec!(
-                (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
-                (None, None, None),
-                (Some(Node::from("d")), None, None)
-            )
-        });
+            check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+                slices: vec!(
+                    (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
+                    (None, None, None),
+                    (Some(Node::from("d")), None, None)
+                )
+            });
+        }
+
+        #[test]
+        fn test_parenthetical_expressions() {
+            let expected = Expr::BinaryExpr {
+                operator: BinaryOperator::Or,
+                left: Box::new(Node::from(Expr::BinaryExpr {
+                    operator:BinaryOperator::And,
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false))
+                })),
+                right: Box::new(Node::from(true))
+            };
+            check_data("(true and false) or true", expression, expected);
+
+            check_data("(true and false)", expression, Expr::BinaryExpr {
+                
+                operator:BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+        }
+
+        #[test]
+        fn parse_function_call() {
+            let a = output(logical_binary_expr("true and false".as_bytes()));
+            let no_args = Node::from(Expr::FunctionCall{
+                function: Box::new(Node::from("func")),
+                args: vec!(),
+                kwargs: vec!()
+            });
+            iresult_helpers::check_match("func()", expr_with_trailer, no_args);
+            let b = output(expression("func()".as_bytes()));
+            let expected = Expr::FunctionCall{
+                function: Box::new(Node::from(Expr::IdentifierExpr(Identifier{name: "ident".to_string()}))), 
+                args: vec!(a, b), 
+                kwargs: vec!()
+            };
+            iresult_helpers::check_data("ident(true and false, func())", expression, expected);
+
+            iresult_helpers::check_data("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
+                function: Box::new(Node::from("func")),
+                args: c![Node::from(x), for x in vec!("a", "b")],
+                kwargs: vec!(
+                    (Identifier::from("c"), Node::from(true)),
+                    (Identifier::from("d"), Node::from(true))
+                )
+            });
+        }
+
+        #[test]
+        fn parse_binary_expr() {
+
+            check_data("1 ** 2", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Exponent,
+                left: Box::new(Node::from(1)),
+                right: Box::new(Node::from(2))
+            });
+
+            check_data("true and false", logical_binary_expr, Expr::BinaryExpr{
+                operator: BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
+            check_data("true or false", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Or,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
+            check_data("true and false or true", expression, Expr::BinaryExpr{
+                
+                operator: BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right:Box::new(Node::from(Expr::BinaryExpr{
+                    
+                    operator: BinaryOperator::Or,
+                    left: Box::new(Node::from(false)),
+                    right: Box::new(Node::from(true))
+                }))
+            });
+
+            let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), expression, Expr::BinaryExpr {
+                    
+                    operator: BinaryOperator::from(op),
+                    left: Box::new(Node::from("x")),
+                    right: Box::new(Node::from("y")),
+                });
+            }
+        }
+
+        #[test]
+        fn test_unary_expr() {
+            let ops = vec!["not", "+", "-", "~"];
+            for op in ops {
+                let input = format!("{} y", op);
+                check_data(input.as_str(), expression, Expr::UnaryExpr {
+                    
+                    operator: UnaryOperator::from(op),
+                    operand: Box::new(Node::from("y")),
+                });
+            }
+            check_data("~+y", expression, Expr::UnaryExpr {
+                operator: UnaryOperator::BitNot,
+                operand: Box::new(output(expression("+y".as_bytes()))),
+            });
+            check_data("not true", expression, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Node::from(true))});
+        }
+
+        #[test]
+        fn parse_identifier_expr() {
+            let expected: Node<Expr> = Node::from("words");
+            check_match("words", expr_with_trailer, expected);
+
+            let expected = Node::from("abc_123");
+            check_match("abc_123", expr_with_trailer, expected);
+
+            check_failed("123", expr_with_trailer, ErrorKind::Alt);
+            check_failed("(", expr_with_trailer, ErrorKind::Alt);
+        }
+
+        #[test]
+        fn test_comparison_expr() {
+            let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
+            let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
+                                ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
+            for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
+                let as_str = format!("true {} false", comp_str);
+                let expr = expression(as_str.as_bytes());
+                let expected = Node::from(Expr::ComparisonExpr{
+                    
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false)),
+                    operator: *comp_op
+                });
+
+                assert_eq!(expr, Ok(("".as_bytes(), expected)));
+            }
+        }
+
+        #[test]
+        fn test_repeated_func_calls() {
+            let expected = Expr::FunctionCall{
+                function: Box::new(Node::from(Expr::FunctionCall{
+                    function: Box::new(Node::from("func")), 
+                    args: vec!(Node::from("a")), 
+                    kwargs: vec!()
+                })),
+                args: vec!(Node::from("b"), Node::from("c")),
+                kwargs: vec!()
+            };
+            check_data("func(a)(b, c)", expression, expected);
+
+            check_data("(a and b)(true)", expression, Expr::FunctionCall {
+                function: Box::new(output(logical_binary_expr("a and b".as_bytes()))),
+                args: vec!(Node::from(true)),
+                kwargs: vec!()
+            });
+        }
+
+        #[test]
+        fn test_comprehensions() {
+            check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
+                
+                values: Box::new(Node::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                })
+            }));
+
+            check_match("{x:z for x in y}", expression, Node::from(Expr::MapComprehension {
+                
+                keys: Box::new(Node::from("x")),
+                values: Box::new(Node::from("z")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                })
+            }));
+
+            check_match("[x for x in y]", expression, Node::from(Expr::VecComprehension {
+                
+                values: Box::new(Node::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                })
+            }));
+
+            check_match("(x for x in y)", expression, Node::from(Expr::GenComprehension {
+                values: Box::new(Node::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                })
+            }));
+
+            check_match("[x for x in y for x in y]", expression, Node::from(Expr::VecComprehension {
+                values: Box::new(Node::from("x")),
+                iterators: vec!(ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                }, ComprehensionIter {
+                    iter_vars: vec![Identifier::from("x")],
+                    iterator: Box::new(Node::from("y")),
+                    if_clauses: vec!()
+                })
+            }));
+
+            check_match("for a, b in c if true if false", comprehension_for, ComprehensionIter{
+                iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
+                iterator: Box::new(Node::from("c")),
+                if_clauses: c![Node::from(x), for x in vec!(true, false)]
+            });
+        }
+
+        #[test]
+        fn test_match() {
+            check_match("match x:\n5 => 5", expression, Node::from(Expr::MatchExpr {
+                value: Box::new(Node::from("x")),
+                cases: vec![(output(expression("5".as_bytes())), output(expression("5".as_bytes())))]
+            }));
+        }
+
+        #[test]
+        fn parse_literals() {
+            let int = rand::random::<i64>().abs();
+            check_match(&int.to_string(), expression, Node::from(int));
+            let rand_float = rand::random::<f64>().abs();
+            check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
+            let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
+            check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
+
+            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Identifier::from("x"), Node::from("y"))))));
+            check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
+            check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
+            check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
+
+            check_failed(".", expression, ErrorKind::Alt);
         }
     }
 
@@ -1382,254 +1628,7 @@ mod tests {
     mod expressions {
         use super::*;
 
-        #[test]
-        fn test_parenthetical_expressions() {
-            let expected = Expr::BinaryExpr {
-                operator: BinaryOperator::Or,
-                left: Box::new(Node::from(Expr::BinaryExpr {
-                    operator:BinaryOperator::And,
-                    left: Box::new(Node::from(true)),
-                    right: Box::new(Node::from(false))
-                })),
-                right: Box::new(Node::from(true))
-            };
-            check_data("(true and false) or true", expression, expected);
 
-            check_data("(true and false)", expression, Expr::BinaryExpr {
-                
-                operator:BinaryOperator::And,
-                left: Box::new(Node::from(true)),
-                right: Box::new(Node::from(false))
-            });
-        }
-
-        #[test]
-        fn parse_function_call() {
-            let a = output(logical_binary_expr("true and false".as_bytes()));
-            let no_args = Node::from(Expr::FunctionCall{
-                function: Box::new(Node::from("func")),
-                args: vec!(),
-                kwargs: vec!()
-            });
-            iresult_helpers::check_match("func()", expr_with_trailer, no_args);
-            let b = output(expression("func()".as_bytes()));
-            let expected = Expr::FunctionCall{
-                function: Box::new(Node::from(Expr::IdentifierExpr(Identifier{name: "ident".to_string()}))), 
-                args: vec!(a, b), 
-                kwargs: vec!()
-            };
-            iresult_helpers::check_data("ident(true and false, func())", expression, expected);
-
-            iresult_helpers::check_data("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
-                function: Box::new(Node::from("func")),
-                args: c![Node::from(x), for x in vec!("a", "b")],
-                kwargs: vec!(
-                    (Identifier::from("c"), Node::from(true)),
-                    (Identifier::from("d"), Node::from(true))
-                )
-            });
-        }
-
-        #[test]
-        fn parse_binary_expr() {
-
-            check_data("1 ** 2", expression, Expr::BinaryExpr{
-                operator: BinaryOperator::Exponent,
-                left: Box::new(Node::from(1)),
-                right: Box::new(Node::from(2))
-            });
-
-            check_data("true and false", logical_binary_expr, Expr::BinaryExpr{
-                operator: BinaryOperator::And,
-                left: Box::new(Node::from(true)),
-                right: Box::new(Node::from(false))
-            });
-
-            check_data("true or false", expression, Expr::BinaryExpr{
-                operator: BinaryOperator::Or,
-                left: Box::new(Node::from(true)),
-                right: Box::new(Node::from(false))
-            });
-
-            check_data("true and false or true", expression, Expr::BinaryExpr{
-                
-                operator: BinaryOperator::And,
-                left: Box::new(Node::from(true)),
-                right:Box::new(Node::from(Expr::BinaryExpr{
-                    
-                    operator: BinaryOperator::Or,
-                    left: Box::new(Node::from(false)),
-                    right: Box::new(Node::from(true))
-                }))
-            });
-
-            let all_ops = vec!["and", "or", "xor", "&", "|", "^", "+", "-", "*", "/", "%", ">>", "<<", "**"];
-            for op in all_ops {
-                let input = format!("x {} y", op);
-                check_data(input.as_str(), expression, Expr::BinaryExpr {
-                    
-                    operator: BinaryOperator::from(op),
-                    left: Box::new(Node::from("x")),
-                    right: Box::new(Node::from("y")),
-                });
-            }
-        }
-
-        #[test]
-        fn test_unary_expr() {
-            let ops = vec!["not", "+", "-", "~"];
-            for op in ops {
-                let input = format!("{} y", op);
-                check_data(input.as_str(), expression, Expr::UnaryExpr {
-                    
-                    operator: UnaryOperator::from(op),
-                    operand: Box::new(Node::from("y")),
-                });
-            }
-            check_data("~+y", expression, Expr::UnaryExpr {
-                operator: UnaryOperator::BitNot,
-                operand: Box::new(output(expression("+y".as_bytes()))),
-            });
-            check_data("not true", expression, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Node::from(true))});
-        }
-
-        #[test]
-        fn parse_identifier_expr() {
-            let expected: Node<Expr> = Node::from("words");
-            check_match("words", expr_with_trailer, expected);
-
-            let expected = Node::from("abc_123");
-            check_match("abc_123", expr_with_trailer, expected);
-
-            check_failed("123", expr_with_trailer, ErrorKind::Alt);
-            check_failed("(", expr_with_trailer, ErrorKind::Alt);
-        }
-
-        #[test]
-        fn test_comparison_expr() {
-            let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-            let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
-                                ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
-            for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
-                let as_str = format!("true {} false", comp_str);
-                let expr = expression(as_str.as_bytes());
-                let expected = Node::from(Expr::ComparisonExpr{
-                    
-                    left: Box::new(Node::from(true)),
-                    right: Box::new(Node::from(false)),
-                    operator: *comp_op
-                });
-
-                assert_eq!(expr, Ok(("".as_bytes(), expected)));
-            }
-        }
-
-        #[test]
-        fn test_repeated_func_calls() {
-            let expected = Expr::FunctionCall{
-                function: Box::new(Node::from(Expr::FunctionCall{
-                    function: Box::new(Node::from("func")), 
-                    args: vec!(Node::from("a")), 
-                    kwargs: vec!()
-                })),
-                args: vec!(Node::from("b"), Node::from("c")),
-                kwargs: vec!()
-            };
-            check_data("func(a)(b, c)", expression, expected);
-
-            check_data("(a and b)(true)", expression, Expr::FunctionCall {
-                function: Box::new(output(logical_binary_expr("a and b".as_bytes()))),
-                args: vec!(Node::from(true)),
-                kwargs: vec!()
-            });
-        }
-
-        #[test]
-        fn test_comprehensions() {
-            check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
-                
-                values: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                })
-            }));
-
-            check_match("{x:z for x in y}", expression, Node::from(Expr::MapComprehension {
-                
-                keys: Box::new(Node::from("x")),
-                values: Box::new(Node::from("z")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                })
-            }));
-
-            check_match("[x for x in y]", expression, Node::from(Expr::VecComprehension {
-                
-                values: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                })
-            }));
-
-            check_match("(x for x in y)", expression, Node::from(Expr::GenComprehension {
-                values: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                })
-            }));
-
-            check_match("[x for x in y for x in y]", expression, Node::from(Expr::VecComprehension {
-                values: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                }, ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
-                })
-            }));
-
-            check_match("for a, b in c if true if false", comprehension_for, ComprehensionIter{
-                iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
-                iterator: Box::new(Node::from("c")),
-                if_clauses: c![Node::from(x), for x in vec!(true, false)]
-            });
-        }
-
-        #[test]
-        fn test_match() {
-            check_match("match x:\n5 => 5", expression, Node::from(Expr::MatchExpr {
-                value: Box::new(Node::from("x")),
-                cases: vec![(output(expression("5".as_bytes())), output(expression("5".as_bytes())))]
-            }));
-        }
-
-        #[test]
-        fn parse_literals() {
-            let int = rand::random::<i64>().abs();
-            check_match(&int.to_string(), expression, Node::from(int));
-            let rand_float = rand::random::<f64>().abs();
-            check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
-            let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
-            check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
-
-            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Identifier::from("x"), Node::from("y"))))));
-            check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
-            check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
-            check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
-
-            check_failed(".", expression, ErrorKind::Alt);
-        }
 
         #[cfg(test)]
         mod specific_exprs {

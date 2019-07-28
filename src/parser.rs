@@ -896,7 +896,7 @@ pub mod expr_parsers {
     }
 
     /// Match a function call following an expression.
-    fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
+    fn post_call(input: &[u8]) -> IResult<&[u8], PostIdent> {
         let parse_result = delimited!(input,
             OPEN_PAREN,
             alt_complete!(
@@ -911,10 +911,13 @@ pub mod expr_parsers {
             ),
             CLOSE_PAREN
         );
-        return fmap_iresult(parse_result, |(x, y)| (x, match y {
-            Some(z) => z,
-            None => vec![]
-        }));
+        return fmap_iresult(parse_result, |(x, y)| PostIdent::Call{
+            args: x, 
+            kwargs: match y {
+                Some(z) => z,
+                None => vec![]
+            }
+        });
     }
 
     /// Match an indexing operation following an expression.
@@ -972,10 +975,8 @@ pub mod expr_parsers {
     /// Match a trailer behind an expression.
     /// A trailer is a function call, an attribute access, or an index.
     pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-        let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent::Call{args: x.0, kwargs: x.1};
-        let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
         let result = alt!(input,
-            map!(post_call, call_to_enum) |
+            post_call |
             post_access |
             post_index
         );

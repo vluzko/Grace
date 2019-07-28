@@ -518,10 +518,7 @@ pub mod tokens {
     pub fn IDENT_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]> {
         return match input.position(|x: u8| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
-            Some(n) => {
-                println!("Failed at: {:?}", n);
-                Ok(input.take_split(n))
-            },
+            Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input.clone(), ErrorKind::Digit),
                 n => Ok(input.take_split(n))
@@ -595,6 +592,11 @@ pub mod tokens {
     token!(DIVASN, "/=");
     token!(MODASN, "%=");
     token!(EXPASN, "**=");
+    token!(RSHASN, ">>=");
+    token!(LSHASN, "<<=");
+    token!(BORASN, "|=");
+    token!(BANDASN, "&=");
+    token!(BXORASN, "^=");
 
     // Binary operators
     // Logical operators

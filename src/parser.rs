@@ -311,20 +311,20 @@ pub fn let_stmt(input: &[u8]) -> StmtRes {
 }
 
 pub fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return recognize!(input, alt!(
-        tag!("=")   |
-        tag!("+=")  |
-        tag!("-=")  |
-        tag!("*=")  |
-        tag!("/=")  |
-        tag!("**=") |
-        tag!("%=")  |
-        tag!(">>=") |
-        tag!("<<=") |
-        tag!("|=")  |
-        tag!("&=")  |
-        tag!("^=")
-    ));
+    return alt_complete!(input, 
+        EQUALS | 
+        ADDASN |
+        SUBASN |
+        MULASN |
+        DIVASN |
+        MODASN |
+        EXPASN |
+        RSHASN |
+        LSHASN |
+        BORASN |
+        BANDASN |
+        BXORASN
+    );
 }
 
 pub fn assignment_stmt(input: &[u8]) -> StmtRes {
@@ -366,10 +366,9 @@ pub fn yield_stmt(input: &[u8]) -> StmtRes {
 pub fn break_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("break"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::BreakStmt);
@@ -378,10 +377,9 @@ pub fn break_stmt(input: &[u8]) -> StmtRes {
 pub fn pass_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("pass"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::PassStmt);
@@ -390,10 +388,9 @@ pub fn pass_stmt(input: &[u8]) -> StmtRes {
 pub fn continue_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("continue"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::ContinueStmt);
@@ -814,12 +811,12 @@ pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>
 /// Match a function call following an expression.
 pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
     let parse_result = delimited!(input,
-        open_paren,
+        OPEN_PAREN,
         alt_complete!(
             tuple!(
                 inline_wrapped!(args_list),
                 opt!(preceded!(
-                    comma,
+                    COMMA,
                     inline_wrapped!(kwargs_list)
                 ))
             ) |
@@ -847,11 +844,11 @@ pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
                     map!(boolean_op_expr, |x| Some(x)),
                     optc!(tuple!(
                         preceded!(
-                            colon,
+                            COLON,
                             boolean_op_expr
                         ),
                         optc!(preceded!(
-                            colon,
+                            COLON,
                             boolean_op_expr
                         ))
                     ))
@@ -881,9 +878,9 @@ pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
 
 /// Match an access operation following an expression.
 pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    return many1!(input, 
+    return many1c!(input, 
         preceded!(
-            inline_wrapped!(tag!(".")),
+            DOT,
             IDENTIFIER
         )
     );
@@ -1026,21 +1023,6 @@ pub mod expr_parsers {
         return node;
     }
 
-    /// Match a binary expression whose operator is a keyword
-    /// Currently only used for and, or, and xor.
-    // pub fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    //     let parse_result = tuple!(input,
-    //         w_followed!(next_expr),
-    //         opt!(tuple!(
-    //             w_followed!(call!(match_any, symbols)),
-    //             call!(binary_op_list, symbols, operators, next_expr)
-    //         ))
-    //     );
-
-    //     let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-    //     return node;
-    // }
-
     /// Match a list of binary operations
     pub fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
         let parse_result = tuple!(input,
@@ -1064,7 +1046,6 @@ pub mod expr_parsers {
                 boolean_op_expr
             ))
         );
-        // println!("second match: {:?}", optc!("and false".as_bytes(), w_followed!(alt_complete!(AND | OR | XOR))));
         return fmap_iresult(parse_result, flatten_binary);
     }
 
@@ -1201,7 +1182,7 @@ mod tests {
     fn test_reserved_words() {
         for keyword in reserved_list() {
             let result = IDENTIFIER(keyword.as_bytes());
-            unwrap_and_check_error(result, ErrorKind::Not);
+            unwrap_and_check_error(result, ErrorKind::Alt);
         }
     }
 
@@ -1242,14 +1223,7 @@ mod tests {
                (None, None, None),
                (Some(Node::from("d")), None, None)
            )
-       })
-    }
-
-    #[test]
-    fn test_identifiers() {
-        // check_match("(", open_paren, "(".as_bytes());
-        // check_match("a", identifier, Identifier::from("a"));
-        panic!()
+       });
     }
 
     #[cfg(test)]
@@ -1257,7 +1231,7 @@ mod tests {
         use super::*;
 
         #[test]
-        fn test_let() {
+        fn parse_let() {
             check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
                 typed_name: TypedIdent {
                     name: Identifier::from("x"),
@@ -1268,7 +1242,7 @@ mod tests {
         }
 
         #[test]
-        fn test_func_dec_parts() {
+        fn parse_func_dec_parts() {
             // Args
             let actual = output(args_dec_list("a: i32)".as_bytes()));
             assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
@@ -1288,7 +1262,7 @@ mod tests {
         }
        
         #[test]
-        fn test_func_dec() {
+        fn parse_func_dec() {
             check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wvars"),
                 args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
@@ -1326,7 +1300,7 @@ mod tests {
         }
 
         #[test]
-        fn test_try_except() {
+        fn parse_try_except() {
             let blk = output(block("x=0".as_bytes(), 0));
             check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
                 block: blk.clone(),
@@ -1337,7 +1311,7 @@ mod tests {
         }
 
         #[test]
-        fn test_assignment() {
+        fn parse_assignment() {
             check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
                 name: Identifier::from("foo"),
                 operator: Assignment::Normal,
@@ -1363,7 +1337,7 @@ mod tests {
         }
 
         #[test]
-        fn test_if_stmt() {
+        fn parse_if() {
             let good_input = "if (a and b):\n x = true";
 
             let good_output = Stmt::IfStmt{
@@ -1387,7 +1361,7 @@ mod tests {
         }
 
         #[test]
-        fn test_while_stmt() {
+        fn parse_while() {
             check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
                 condition: Node::from(true),
                 block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
@@ -1395,28 +1369,28 @@ mod tests {
         }
 
         #[test]
-        fn test_simple_statements() {
+        fn parse_simple_statements() {
             check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
             check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
             check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
         }
 
         #[test]
-        fn test_import() {
+        fn parse_import() {
             check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
                 attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
             }));
         }
 
         #[test]
-        fn test_returns() {
+        fn parse_return() {
             check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
 
             check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
         }
 
         #[test]
-        fn test_for_in() {
+        fn parse_for() {
             check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
                 iter_vars: Identifier::from("x"),
                 iterator: Node::from("y"),

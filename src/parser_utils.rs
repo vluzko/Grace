@@ -587,7 +587,7 @@ pub mod tokens {
             },
             Err(x) => Err(x)
         };
-        return return fmap_iresult(intermediate, Identifier::from);
+        return fmap_iresult(intermediate, Identifier::from);
     }
 
     pub fn VALID_NUM_FOLLOW(input: &[u8]) -> IResult<&[u8], &[u8]> {

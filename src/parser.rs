@@ -82,7 +82,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
         opt!(between_statement),
         many1!(complete!(
             terminated!(
-                alt!(complete!(call!(function_declaration, 0)) | complete!(import)),
+                alt!(complete!(call!(function_declaration_stmt, 0)) | complete!(import)),
                 between_statement
             )
         ))
@@ -131,7 +131,7 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
         call!(while_stmt, indent) |
         call!(for_in, indent) |
         call!(if_stmt, indent) |
-        call!(function_declaration, indent) |
+        call!(function_declaration_stmt, indent) |
         call!(try_except, indent) |
         import |
         return_stmt |
@@ -142,111 +142,6 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
     );
 
     return fmap_iresult(node, |x| x);
-}
-
-/// Match all normal arguments.
-pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
-    inline_wrapped!(input,
-        separated_list_complete!(
-            w_followed!(tag!(",")),
-            terminated!(
-                tuple!(
-                    IDENTIFIER,
-                    preceded!(
-                        colon,
-                        type_parser::any_type
-                    )
-                ),
-                alt!(recognize!(many1!(inline_whitespace_char)) |
-                peek!(tag!(",")) |
-                peek!(tag!(")")))
-            )
-        )
-    )
-}
-
-/// Match the variable length argument.
-pub fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
-    return opt!(input, complete!(preceded!(
-        tuple!(
-            w_followed!(tag!(",")),
-            w_followed!(tag!("*"))
-        ),
-        IDENTIFIER
-    )));
-}
-
-/// Match all default arguments
-pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<Expr>)>> {
-    let parse_result = opt!(input, complete!(preceded!(
-        w_followed!(tag!(",")),
-        w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
-            tuple!(
-                IDENTIFIER,
-                preceded!(
-                    colon,
-                    type_parser::any_type
-                ),
-                preceded!(
-                    w_followed!(tag!("=")),
-                    w_followed!(expression)
-                )
-            )
-        ))
-    )));
-
-    return fmap_iresult(parse_result, |x| match x {
-        Some(y) => y,
-        None => vec!()
-    });
-}
-
-/// Parse a variable length keyword argument
-/// e.g. "**varkwarg"
-pub fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
-    return opt!(input, complete!(preceded!(
-        tuple!(
-            w_followed!(tag!(",")),
-            w_followed!(tag!("**"))
-        ),
-        IDENTIFIER
-    )));
-}
-
-/// Parse a function declaration.
-pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
-    let arg_parser = |i: &'a [u8]| tuple!(i,
-        IDENTIFIER,
-        preceded!(
-            open_paren,
-            args_dec_list
-        ),
-        vararg,
-        keyword_args,
-        terminated!(
-            varkwarg,
-            close_paren
-        ),
-        opt!(complete!(preceded!(
-            w_followed!(tag!("->")),
-            type_parser::any_type
-        )))
-    );
-
-    let parse_result = line_then_block!(input, "fn", arg_parser, indent);
-
-    return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
-        name: name,
-        args: args,
-        vararg: vararg,
-        kwargs: keyword_args,
-        varkwarg: varkwarg,
-        block: body,
-        return_type: match return_type {
-            Some(x) => x,
-            None => typing::Type::empty
-        }
-    });
 }
 
 /// Parse dot separated identifiers.
@@ -348,6 +243,108 @@ pub mod stmt_parsers {
 
         return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
             name: x.0, operator: Assignment::from(x.1), expression: x.2
+        });
+    }
+
+    /// Match all normal arguments.
+    fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
+        inline_wrapped!(input,
+            separated_list_complete!(
+                COMMA,
+                terminated!(
+                    tuple!(
+                        IDENTIFIER,
+                        preceded!(
+                            COLON,
+                            type_parser::any_type
+                        )
+                    ),
+                    alt!(
+                        recognize!(many1!(inline_whitespace_char)) |
+                        peek!(tag!(",")) |
+                        peek!(tag!(")"))
+                    )
+                )
+            )
+        )
+    }
+
+    /// Match the variable length argument.
+    fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
+        return optc!(input, preceded!(
+            tuple!(
+                COMMA,
+                STAR
+            ),
+            IDENTIFIER
+        ));
+    }
+
+    /// Match all default arguments
+    fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<Expr>)>> {
+        let parse_result = optc!(input, preceded!(
+            COMMA,
+            separated_list_complete!(
+                COMMA,
+                tuple!(
+                    IDENTIFIER,
+                    preceded!(COLON, type_parser::any_type),
+                    preceded!(EQUALS, expression)
+                )
+            )
+        ));
+
+        return fmap_iresult(parse_result, |x| match x {
+            Some(y) => y,
+            None => vec!()
+        });
+    }
+
+    /// Parse a variable length keyword argument
+    /// e.g. "**varkwarg"
+    fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
+        return optc!(input, preceded!(
+            tuple!(
+                COMMA,
+                EXP
+            ),
+            IDENTIFIER
+        ));
+    }
+
+    /// Parse a function declaration.
+    pub fn function_declaration_stmt<'a>(input: &'a [u8], indent: usize) -> StmtRes {
+        let arg_parser = |i: &'a [u8]| tuple!(i,
+            IDENTIFIER,
+            preceded!(
+                OPEN_PAREN,
+                args_dec_list
+            ),
+            vararg,
+            keyword_args,
+            terminated!(
+                varkwarg,
+                CLOSE_PAREN
+            ),
+            optc!(preceded!(
+                TARROW,
+                type_parser::any_type
+            ))
+        );
+
+        let parse_result = line_and_block!(input, preceded!(FN, arg_parser), indent);
+
+        return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
+            name: name,
+            args: args,
+            vararg: vararg,
+            kwargs: keyword_args,
+            varkwarg: varkwarg,
+            block: body,
+            return_type: match return_type {
+                Some(x) => x,
+                None => typing::Type::empty
+            }
         });
     }
 
@@ -527,7 +524,7 @@ pub mod stmt_parsers {
        
         #[test]
         fn parse_func_dec() {
-            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wvars"),
                 args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
                 vararg: Some(Identifier::from("args")),
@@ -540,7 +537,7 @@ pub mod stmt_parsers {
                 return_type: typing::Type::empty
             });
 
-            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wkwargs"),
                 args: vec![(Identifier::from("a"), typing::Type::i32)],
                 vararg: None,
@@ -552,7 +549,7 @@ pub mod stmt_parsers {
                 return_type: typing::Type::empty
             });
 
-            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
                 args: vec!((Identifier::from("b"), typing::Type::i32)),
                 vararg: None,
@@ -1545,12 +1542,12 @@ pub mod type_parser {
 
     pub fn product_type(input: &[u8]) -> TypeRes {
         let result = delimited!(input,
-            open_paren,
+            OPEN_PAREN,
             separated_list!(
                 comma,
                 alt_complete!(product_type | sum_type)
             ),
-            close_paren
+            CLOSE_PAREN
         );
 
         return fmap_iresult(result, |x| typing::Type::Product(x))
@@ -1579,14 +1576,14 @@ pub mod type_parser {
     pub fn parameterized_type(input: &[u8]) -> TypeRes {
         let result = tuple!(input, 
             IDENTIFIER,
-            opt!(complete!(delimited!(
+            optc!(delimited!(
                 LANGLE,
                 separated_nonempty_list!(
-                    comma,
+                    COMMA,
                     any_type
                 ),
                 RANGLE
-            )))
+            ))
         );
         return fmap_iresult(result, |x| match x.1 {
             Some(y) => typing::Type::Parameterized(x.0, y),
@@ -1652,8 +1649,8 @@ mod tests {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
-               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+               Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
            )
        }))
     }
@@ -1664,8 +1661,8 @@ mod tests {
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
                Box::new(output(import("import foo".as_bytes()))),
-               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
-               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+               Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
            )
        }))
     }

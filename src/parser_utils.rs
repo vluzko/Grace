@@ -620,6 +620,7 @@ pub mod tokens {
     );
 
     // Keywords
+    keyword!(FN, "fn");
     keyword!(IF, "if");
     keyword!(ELIF, "elif");
     keyword!(ELSE, "else");
@@ -653,6 +654,7 @@ pub mod tokens {
     token!(LANGLE, "<");
     token!(RANGLE, ">");
     token!(ARROW, "=>");
+    token!(TARROW, "->");
 
     // Assignments
     token!(ADDASN, "+=");

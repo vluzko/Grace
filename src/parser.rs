@@ -268,16 +268,6 @@ pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
     return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
 }
 
-pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = tuple!(input,
-        line_then_block!("if", expression, indent),
-        many0c!(indented!(line_then_block!("elif", expression, indent), indent)),
-        opt!(complete!(indented!(keyword_then_block!("else", indent), indent)))
-    );
-
-    return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
-}
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -378,6 +368,17 @@ pub mod stmt_parsers {
         return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
             name: x.0, operator: Assignment::from(x.1), expression: x.2
         });
+    }
+
+    /// Match an if statement.
+    pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
+        let parse_result = tuple!(input,
+            line_and_block!(preceded!(IF, expression), indent),
+            many0c!(indented!(line_and_block!(preceded!(ELIF, expression), indent), indent)),
+            opt!(complete!(indented!(keyword_and_block!(ELSE, indent), indent)))
+        );
+
+        return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
     }
 
     /// Match an import statement.

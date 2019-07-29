@@ -278,25 +278,6 @@ pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
 }
 
-/// Match a try except statement.
-pub fn try_except(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = tuple!(input,
-        keyword_then_block!("try", indent),
-        many1!(keyword_then_block!("except", indent)),
-        opt!(complete!(
-            keyword_then_block!("else", indent)
-        )),
-        opt!(complete!(keyword_then_block!("finally", indent)))
-    );
-
-    return fmap_node(parse_result, |x| Stmt::TryExceptStmt {
-        block: x.0,
-        exceptions: x.1,
-        else_block: x.2,
-        final_block: x.3
-    });
-}
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -451,6 +432,23 @@ pub mod stmt_parsers {
         );
 
         return fmap_node(parse_result, |_| Stmt::ContinueStmt);
+    }
+
+    /// Match a try except statement.
+    pub fn try_except(input: &[u8], indent: usize) -> StmtRes {
+        let parse_result = tuple!(input,
+            keyword_and_block!(TRY, indent),
+            many1c!(keyword_and_block!(EXCEPT, indent)),
+            optc!(keyword_and_block!(ELSE, indent)),
+            optc!(keyword_and_block!(FINALLY, indent))
+        );
+
+        return fmap_node(parse_result, |x| Stmt::TryExceptStmt {
+            block: x.0,
+            exceptions: x.1,
+            else_block: x.2,
+            final_block: x.3
+        });
     }
 
     #[cfg(test)]

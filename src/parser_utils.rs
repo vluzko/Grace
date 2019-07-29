@@ -256,6 +256,28 @@ macro_rules! separated_at_least_m {
     );
 }
 
+macro_rules! line_and_block (
+    ($i:expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                $submac!($($args)*),
+                ending_colon
+            ),
+            call!(block, $indent + 1)
+        )
+    );
+
+    ($i:expr, $f: expr, $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                call!($f),
+                ending_colon
+            ),
+            call!(block, $indent + 1)
+        )
+    );
+);
+
 /// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
 /// if, elif, except, fn are all rules of this form.
 macro_rules! line_then_block (
@@ -281,8 +303,24 @@ macro_rules! line_then_block (
 /// Create a rule of the form: KEYWORD COLON BLOCK
 /// else and try are both rules of this form.
 macro_rules! keyword_then_block (
+    ($i:expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
+        match line_then_block!($i, $keyword, inline_whitespace, $indent) {
+            Ok((remaining, (_,o))) => Ok((remaining, o)),
+            Err(e) => Err(e)
+        }
+    );
+
     ($i:expr, $keyword: expr, $indent: expr) => (
         match line_then_block!($i, $keyword, inline_whitespace, $indent) {
+            Ok((remaining, (_,o))) => Ok((remaining, o)),
+            Err(e) => Err(e)
+        }
+    );
+);
+
+macro_rules! keyword_and_block (
+    ($i:expr, $keyword: expr, $indent: expr) => (
+        match line_and_block!($i, $keyword, $indent) {
             Ok((remaining, (_,o))) => Ok((remaining, o)),
             Err(e) => Err(e)
         }
@@ -601,9 +639,14 @@ pub mod tokens {
 
     // Keywords
     keyword!(IF, "if");
+    keyword!(ELIF, "elif");
+    keyword!(ELSE, "else");
     keyword!(FOR, "for");
     keyword!(IN, "in");
     keyword!(WHILE, "while");
+    keyword!(TRY, "try");
+    keyword!(EXCEPT, "except");
+    keyword!(FINALLY, "finally");
     keyword!(LET, "let");
     keyword!(IMPORT, "import");
     keyword!(RETURN, "return");

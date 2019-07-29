@@ -396,12 +396,6 @@ pub fn continue_stmt(input: &[u8]) -> StmtRes {
     return fmap_node(parse_result, |_x| Stmt::ContinueStmt);
 }
 
-pub fn expression(input: &[u8]) -> ExprRes {
-    return alt_complete!(input, comparison_expr);
-}
-
-
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -452,8 +446,12 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
 pub mod expr_parsers {
     use super::*;
 
+    pub fn expression(input: &[u8]) -> ExprRes {
+        return alt_complete!(input, comparison_expr);
+    }
+
     /// Match a comparison expression.
-    pub fn comparison_expr(input: &[u8]) -> ExprRes {
+    fn comparison_expr(input: &[u8]) -> ExprRes {
         let parse_result = tuple!(input,
             alt!(match_expr | logical_binary_expr),
             optc!(tuple!(
@@ -475,7 +473,7 @@ pub mod expr_parsers {
     }
 
     /// Match a match expression.
-    pub fn match_expr(input: &[u8]) -> ExprRes {
+    fn match_expr(input: &[u8]) -> ExprRes {
 
         let parse_result = tuple!(input,
             delimited!(
@@ -513,7 +511,7 @@ pub mod expr_parsers {
     }
 
     /// Match a list of binary operations
-    pub fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+    fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
         let parse_result = tuple!(input,
             next_expr,
             optc!(tuple!(
@@ -526,22 +524,23 @@ pub mod expr_parsers {
     }
 
     /// Match logical expressions.
+    /// Must be public because it's used by several statements
     pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
     }
 
     /// Match bitwise boolean expressions.
-    pub fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
+    fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), shift_expr);
     }
 
     /// Match bit shift expressions.
-    pub fn shift_expr(input: &[u8]) -> ExprRes {
+    fn shift_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), additive_expr);
     }
 
     /// Match addition and subtraction expressions.
-    pub fn additive_expr(input: &[u8]) -> ExprRes {
+    fn additive_expr(input: &[u8]) -> ExprRes {
         // let symbols = vec!["+", "-"];
         // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
         // return binary_op_list(input, &symbols, &operators, mult_expr);
@@ -549,12 +548,12 @@ pub mod expr_parsers {
     }
 
     /// Match multiplication, division, and modulo expressions.
-    pub fn mult_expr(input: &[u8]) -> ExprRes {
+    fn mult_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr);
     }
 
     /// Match an exponentiation expression.
-    pub fn power_expr(input: &[u8]) -> ExprRes {
+    fn power_expr(input: &[u8]) -> ExprRes {
         return binary_expr(input, EXP, atomic_expr);
     }
 
@@ -562,7 +561,7 @@ pub mod expr_parsers {
 
     /// Match any unary expression.
     /// Implemented as a single parser because all unary expressions have the same precedence.
-    pub fn unary_expr(input: & [u8]) -> ExprRes {
+    fn unary_expr(input: & [u8]) -> ExprRes {
         let parse_result = alt!(input,
             tuple!(
                 map!(alt!(PLUS | MINUS | TILDE | NOT), Some),
@@ -586,7 +585,7 @@ pub mod expr_parsers {
     // BEGIN ATOMIC EXPRESSIONS
 
     //TODO get rid of all the bits
-    pub fn atomic_expr(input: &[u8]) -> ExprRes {
+    fn atomic_expr(input: &[u8]) -> ExprRes {
         let node = w_followed!(input, alt_complete!(
             bool_expr |
             float_expr |
@@ -608,7 +607,7 @@ pub mod expr_parsers {
     }
 
     /// An expression wrapped in parentheses.
-    pub fn wrapped_expr(input: &[u8]) -> ExprRes {
+    fn wrapped_expr(input: &[u8]) -> ExprRes {
         let node = delimited!(input,
             OPEN_PAREN,
             alt_complete!(generator_comprehension | tuple_literal | expression),
@@ -627,7 +626,7 @@ pub mod expr_parsers {
     }
 
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
-    pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
+    fn expr_with_trailer(input: &[u8]) -> ExprRes {
         let ident_as_expr = |x| fmap_iresult(
             IDENTIFIER(x),
             |y: Identifier| Node::from(Expr::IdentifierExpr (y))
@@ -750,7 +749,7 @@ pub mod expr_parsers {
     // Literal expressions.
 
     /// Match a boolean literal expression.
-    pub fn bool_expr(input: &[u8]) -> ExprRes {
+    fn bool_expr(input: &[u8]) -> ExprRes {
         let parse_result = w_followed!(input, 
             alt!(
             terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
@@ -764,7 +763,7 @@ pub mod expr_parsers {
     }
 
     /// Match an integer literal expression.
-    pub fn int_expr(input: &[u8]) -> ExprRes {
+    fn int_expr(input: &[u8]) -> ExprRes {
         let parse_result: IResult<&[u8], &[u8]> = w_followed!(input, 
             recognize!(tuple!(
                 optc!(sign),
@@ -778,7 +777,7 @@ pub mod expr_parsers {
     }
 
     /// Match a floating point literal expression.
-    pub fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
+    fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
         let with_dec = |x: &'a[u8]| tuple!(x,
             tag!("."),
             DIGIT0,
@@ -801,7 +800,7 @@ pub mod expr_parsers {
     }
 
     /// Match a string literal expression.
-    pub fn string_expr(input: &[u8]) -> ExprRes {
+    fn string_expr(input: &[u8]) -> ExprRes {
         let result = w_followed!(input, 
             recognize!(
                 tuple!(
@@ -817,7 +816,7 @@ pub mod expr_parsers {
     // Collection literals.
 
     /// Match a vector literal.
-    pub fn vec_literal(input: &[u8]) -> ExprRes {
+    fn vec_literal(input: &[u8]) -> ExprRes {
 
         let parse_result = terminated!(input,
             separated_nonempty_list_complete!(
@@ -831,7 +830,7 @@ pub mod expr_parsers {
     }
 
     /// Match a set literal.
-    pub fn set_literal(input: &[u8]) -> ExprRes {
+    fn set_literal(input: &[u8]) -> ExprRes {
         let parse_result = 
             separated_nonempty_list_complete!(input,
                 COMMA,
@@ -842,7 +841,7 @@ pub mod expr_parsers {
     }
 
     /// Match a map literal.
-    pub fn map_literal(input: &[u8]) -> ExprRes {
+    fn map_literal(input: &[u8]) -> ExprRes {
 
         let parse_result = separated_nonempty_list_complete!(input,
             COMMA,
@@ -858,7 +857,7 @@ pub mod expr_parsers {
 
     /// Match a tuple literal
     /// e.g. (), (1, ), (1,2,3), (1,2,3,)
-    pub fn tuple_literal(input: &[u8]) -> ExprRes {
+    fn tuple_literal(input: &[u8]) -> ExprRes {
 
         let parse_result = alt_complete!(input,
             // Empty input
@@ -885,7 +884,7 @@ pub mod expr_parsers {
     // Collection comprehensions
 
     /// Match the for part of a comprehension.
-    pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
+    fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
         let parse_result = tuple!(input,
             delimited!(
                 FOR,
@@ -904,7 +903,7 @@ pub mod expr_parsers {
     }
 
     /// Match the if part of a comprehension.
-    pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+    fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
         return many0c!(input,
             preceded!(
                 IF,
@@ -914,7 +913,7 @@ pub mod expr_parsers {
     }
 
     /// Match a vector comprehension.
-    pub fn vector_comprehension(input: &[u8]) -> ExprRes {
+    fn vector_comprehension(input: &[u8]) -> ExprRes {
         let parse_result = tuple!(input,
             logical_binary_expr,
             many1!(comprehension_for)
@@ -927,7 +926,7 @@ pub mod expr_parsers {
     }
 
     /// Match a generator comprehension.
-    pub fn generator_comprehension(input: &[u8]) -> ExprRes {
+    fn generator_comprehension(input: &[u8]) -> ExprRes {
         let parse_result = tuple!(input,
             logical_binary_expr,
             many1!(comprehension_for)
@@ -940,7 +939,7 @@ pub mod expr_parsers {
     }
 
     /// Match a map or a set.
-    pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+    fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
         let parse_result = tuple!(input,
                 logical_binary_expr,
                 opt!(complete!(preceded!(

@@ -34,13 +34,13 @@ pub struct Block {
 pub enum Stmt {
     AssignmentStmt  {name: Identifier, operator: Assignment, expression: Node<Expr>},
     LetStmt         {typed_name: TypedIdent, expression: Node<Expr>},
+    FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, vararg: Option<Identifier>,
+        kwargs: Vec<(Identifier, Type, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Type},
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
-    FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, vararg: Option<Identifier>,
-        kwargs: Vec<(Identifier, Type, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Type},
     TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
-    ImportStmt      (DottedIdentifier),
+    ImportStmt      (Vec<Identifier>),
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,
@@ -140,12 +140,6 @@ pub enum UnaryOperator {
     ToF32,
     ToF64,
     ToBool
-}
-
-/// A dotted identifier. Only used with import statements.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DottedIdentifier {
-    pub attributes: Vec<Identifier>
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
@@ -288,8 +282,29 @@ pub mod trait_impls {
                 "**=" => Assignment::Exponent,
                 _ => {
                     // TODO: Log
-                    println!("Bad input to Assignment::from<&str>: {}", input);
-                    panic!()
+                    panic!("Bad input to Assignment::from<&str>: {}", input)
+                }
+            };
+        }
+    }
+
+    impl<'a> From<&'a [u8]> for Assignment {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"=" => Assignment::Normal,
+                b"+=" => Assignment::Add,
+                b"-=" => Assignment::Sub,
+                b"*=" => Assignment::Mult,
+                b"/=" => Assignment::Div,
+                b"%=" => Assignment::Mod,
+                b"&=" => Assignment::BitAnd,
+                b"|=" => Assignment::BitOr,
+                b"^=" => Assignment::BitXor,
+                b"<<=" => Assignment::BitShiftL,
+                b">>=" => Assignment::BitShiftR,
+                b"**=" => Assignment::Exponent,
+                _ => {
+                    panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
                 }
             };
         }

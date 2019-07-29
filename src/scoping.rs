@@ -525,7 +525,7 @@ mod test {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
-        let mut func_stmt = output(parser::statement(func_str.as_bytes(), 0));
+        let mut func_stmt = output(parser::stmt_parsers::statement(func_str.as_bytes(), 0));
         let (id, init) = initial_context();
         let context = func_stmt.gen_scopes(id, &init);
         let usages = func_stmt.get_usages();
@@ -653,7 +653,7 @@ mod test {
 
     #[test]
     fn test_get_declarations() {
-        let mut func_dec = output(parser::statement("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(), 0));
+        let mut func_dec = output(parser::stmt_parsers::statement("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(), 0));
         let (id, init) = initial_context();
         let context = func_dec.gen_scopes(id, &init);
         let new_ident = Identifier::from("x");

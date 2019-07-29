@@ -142,38 +142,6 @@ macro_rules! many1c (
   );
 );
 
-
-
-pub fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return alt!(input, eof!() | tag!("\n"));
-}
-
-pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
-    let n = many0c!(input,
-        terminated!(many0c!(tag!(" ")), alt!(custom_eof | tag!("\n")))
-    );
-
-    return n;
-}
-
-pub fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return eof!(input, );
-}
-
-named!(pub inline_whitespace_char<&[u8], &[u8]>,
-    tag!(" ")
-);
-
-// pub fn inline_whitespace_char(input: &[u8]) -> IResult<&[u8], &[u8]> {
-//     return tag!(input, " ");
-// }
-
-// pub fn inline_whitespace(input: &[u8])
-
-named!(pub inline_whitespace<&[u8], Vec<&[u8]>>,
-    many0c!(inline_whitespace_char)
-);
-
 macro_rules! ta(
   ($i:expr, $tag: expr) => ({
       match tag!($i, $tag) {
@@ -184,40 +152,6 @@ macro_rules! ta(
     //     x => {println!("{:?}", x); panic!()}
     // }
   });
-);
-
-
-/// Matches a keyword within a line.
-/// Used for "and", "or", "xor", "in", etc.
-macro_rules! inline_keyword (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      delimited!($i,
-        inline_whitespace,
-        $submac!($($args)*),
-        preceded!(not!(valid_identifier_char), alt!(recognize!(many0c!(inline_whitespace_char)) | peek!(tag!("(")))))
-    }
-  );
-
-  ($i:expr, $f:expr) => (
-    inline_keyword!($i, tag!($f));
-  );
-);
-
-/// Matches a keyword at the beginning of input.
-/// Used for "return", etc.
-macro_rules! initial_keyword (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      terminated!($i,
-        $submac!($($args)*),
-        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
-    }
-  );
-
-  ($i:expr, $f:expr) => (
-    initial_keyword!($i, tag!($f));
-  );
 );
 
 /// Check that a macro is indented correctly.
@@ -256,55 +190,40 @@ macro_rules! separated_at_least_m {
     );
 }
 
-/// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
-/// if, elif, except, fn are all rules of this form.
-macro_rules! line_then_block (
-    ($i:expr, $keyword: expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
+macro_rules! line_and_block (
+    ($i:expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
         tuple!($i,
-            delimited!(
-                terminated!(
-                    tag!($keyword),
-                    not!(valid_identifier_char)
-                ),
-                inline_wrapped!($submac!($($args)*)),
-                ending_colon
+            terminated!(
+                $submac!($($args)*),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
             ),
             call!(block, $indent + 1)
         )
     );
 
-    ($i:expr, $keyword: expr, $func: expr, $indent: expr) => (
-        line_then_block!($i, $keyword, call!($func), $indent)
+    ($i:expr, $f: expr, $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                call!($f),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            call!(block, $indent + 1)
+        )
     );
 );
 
-/// Create a rule of the form: KEYWORD COLON BLOCK
-/// else and try are both rules of this form.
-macro_rules! keyword_then_block (
+macro_rules! keyword_and_block (
     ($i:expr, $keyword: expr, $indent: expr) => (
-        match line_then_block!($i, $keyword, inline_whitespace, $indent) {
+        match line_and_block!($i, $keyword, $indent) {
             Ok((remaining, (_,o))) => Ok((remaining, o)),
             Err(e) => Err(e)
         }
-    );
-);
-
-/// A macro for wrapping a parser in inline whitespace.
-/// Similar to ws!, but doesn't allow for \n, \r, or \t.
-macro_rules! inline_wrapped (
-    ($i:expr, $submac:ident!( $($args:tt)* )) => (
-        {
-            match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
-                Ok((remaining, (_,o, _))) => {
-                    Ok((remaining, o))
-                },
-                Err(e) => Err(e)
-            }
-        }
-    );
-
-    ($i:expr, $f:expr) => (
-        inline_wrapped!($i, call!($f));
     );
 );
 
@@ -315,7 +234,7 @@ macro_rules! inline_wrapped (
 macro_rules! w_followed (
     ($i:expr, $submac:ident!( $($args:tt)* )) => (
         {
-            match tuple!($i, $submac!($($args)*), inline_whitespace) {
+            match tuple!($i, $submac!($($args)*), many0c!(inline_whitespace_char)) {
                 Ok((remaining, (o, _))) => Ok((remaining, o)),
                 Err(x) => Err(x)
             }
@@ -327,111 +246,22 @@ macro_rules! w_followed (
     );
 );
 
-/// Match any of a list of strings. Return the matched string.
-pub fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u8]> {
-    // println!("keywords: {:?}", keywords);
-    let tag_lam = |x: &[u8]| {
-        let val = w_followed!(input, recognize!(complete!(tag!(x))));
-        // println!("input: {:?}. val: {:?}", input, val);
-        val
-    };
-    let tag_iter = keywords.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut ret = wrap_err(input, ErrorKind::Tag);
-    for res in tag_iter {
-        match res {
-            Ok((i, o)) => ret = Ok((i, o)),
-            _ => continue
-        };
-    }
-    // println!("Final val: {:?}", ret);
-    return ret
+#[inline]
+pub fn inline_whitespace_char(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    return tag!(input, " ");
 }
 
-named!(pub valid_identifier_char<&[u8], &[u8]>,
-    alt!(alpha | tag!("_") | digit)
-);
-
-// TODO: These should all be all caps.
-named!(pub equals <&[u8], &[u8]>,
-    w_followed!(tag!("="))
-);
-
-named!(pub comma <&[u8], &[u8]>,
-    w_followed!(tag!(","))
-);
-
-named!(pub open_paren <&[u8], &[u8]>,
-    w_followed!(tag!("("))
-);
-
-named!(pub close_paren <&[u8], &[u8]>,
-    w_followed!(tag!(")"))
-);
-
-named!(pub open_brace <&[u8], &[u8]>,
-    w_followed!(tag!("{"))
-);
-
-named!(pub close_brace <&[u8], &[u8]>,
-    w_followed!(tag!("}"))
-);
-
-named!(pub open_bracket <&[u8], &[u8]>,
-    w_followed!(tag!("["))
-);
-
-named!(pub close_bracket <&[u8], &[u8]>,
-    w_followed!(tag!("]"))
-);
-
-named!(pub colon <&[u8], &[u8]>,
-    w_followed!(tag!(":"))
-);
-
-named!(pub VBAR <&[u8], &[u8]>,
-    w_followed!(tag!("|"))
-);
-
-pub fn NEWLINE(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return tag!(input, "\n");
+pub fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    return alt!(input, eof!() | tag!("\n"));
 }
 
-named!(pub ending_colon <&[u8], &[u8]>,
-    terminated!(
-        inline_wrapped!(tag!(":")),
-        NEWLINE
-    )
-);
+pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
+    let n = many0c!(input,
+        terminated!(many0c!(inline_whitespace_char), eof_or_line)
+    );
 
-
-
-named!(pub dec_digit<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("0") |
-        tag!("1") |
-        tag!("2") |
-        tag!("3") |
-        tag!("4") |
-        tag!("5") |
-        tag!("6") |
-        tag!("7") |
-        tag!("8") |
-        tag!("9")
-    ))
-);
-
-named!(pub dec_seq<&[u8], &[u8]>,
-    recognize!(many1!(dec_digit))
-);
-
-named!(pub sign<&[u8], &[u8]>,
-    recognize!(alt!(tag!("+") | tag!("-")))
-);
-
-// pub fn sign<'a, T: Nommable<'a, T>> (input: T) -> IResult<T, T> {
-//     return recognize!(input, alt!(tag!("+") | tag!("-")));
-// }
-
+    return n;
+}
 
 
 pub mod tokens {
@@ -444,6 +274,14 @@ pub mod tokens {
         ($name:ident, $i: expr) => {
             pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
                 return w_followed!(input, tag!($i));
+            }
+        };
+    }
+
+    macro_rules! keyword {
+        ($name:ident, $i: expr) => {
+            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+                return w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))));
             }
         };
     }
@@ -559,7 +397,7 @@ pub mod tokens {
             },
             Err(x) => Err(x)
         };
-        return return fmap_iresult(intermediate, Identifier::from);
+        return fmap_iresult(intermediate, Identifier::from);
     }
 
     pub fn VALID_NUM_FOLLOW(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -567,7 +405,7 @@ pub mod tokens {
             return Ok((input, b""));
         } else {
             return peek!(input, alt!(
-                custom_eof | 
+                eof!() | 
                 tag!(" ") | 
                 tag!("(") | 
                 tag!(")") | 
@@ -581,15 +419,34 @@ pub mod tokens {
         }
     }
 
-    named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
-        preceded!(
-            alt!(tag!("e") | tag!("E")),
-            tuple!(
-                opt!(sign),
-                dec_seq
-            )
-        )
-    );
+    pub fn NEWLINE(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        return tag!(input, "\n");
+    }
+
+    pub fn SIGN(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        return recognize!(input, alt!(tag!("+") | tag!("-")));
+    }
+
+    // Keywords
+    keyword!(FN, "fn");
+    keyword!(IF, "if");
+    keyword!(ELIF, "elif");
+    keyword!(ELSE, "else");
+    keyword!(FOR, "for");
+    keyword!(IN, "in");
+    keyword!(WHILE, "while");
+    keyword!(TRY, "try");
+    keyword!(EXCEPT, "except");
+    keyword!(FINALLY, "finally");
+    keyword!(LET, "let");
+    keyword!(IMPORT, "import");
+    keyword!(RETURN, "return");
+    keyword!(YIELD, "yield");
+    keyword!(PASS, "pass");
+    keyword!(BREAK, "break");
+    keyword!(CONTINUE, "continue");
+
+    keyword!(MATCH, "match");
 
     // Syntax
     token!(COMMA, ",");
@@ -604,12 +461,8 @@ pub mod tokens {
     token!(CLOSE_BRACE, "}");
     token!(LANGLE, "<");
     token!(RANGLE, ">");
-
-    token!(IF, "if");
-    token!(FOR, "for");
-    token!(IN, "in");
-    token!(MATCH, "match");
     token!(ARROW, "=>");
+    token!(TARROW, "->");
 
     // Assignments
     token!(ADDASN, "+=");
@@ -626,12 +479,13 @@ pub mod tokens {
 
     // Binary operators
     // Logical operators
-    token!(AND, "and");
-    token!(OR, "or");
-    token!(XOR, "xor");
+    keyword!(AND, "and");
+    keyword!(OR, "or");
+    keyword!(XOR, "xor");
 
     // Bitwise operators
     token!(BAND, "&");
+    token!(VBAR, "|");
     token!(BXOR, "^");
 
     // Bitshift operators
@@ -781,19 +635,6 @@ mod tests {
 
             let res = DIGIT("a".as_bytes());
             assert_eq!(res, wrap_err("a".as_bytes(), ErrorKind::Digit));
-        }
-
-        #[test]
-        fn parse_inline_whitespace() {
-            let input = "   ".as_bytes();
-            let result = inline_whitespace(input);
-            match result {
-                Ok((leftover, parsed)) => {
-                    assert_eq!(parsed.len(), 3);
-                    assert_eq!(leftover.len(), 0);
-                },
-                _ => panic!()
-            };
         }
 
         #[test]

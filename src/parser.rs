@@ -123,54 +123,6 @@ pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
-/// Match any statement.
-pub fn statement(input: &[u8], indent: usize) -> StmtRes {
-    let node = alt_complete!(input,
-        let_stmt |
-        assignment_stmt |
-        call!(while_stmt, indent) |
-        call!(for_in, indent) |
-        call!(if_stmt, indent) |
-        call!(function_declaration_stmt, indent) |
-        call!(try_except, indent) |
-        import |
-        return_stmt |
-        break_stmt |
-        pass_stmt |
-        continue_stmt |
-        yield_stmt
-    );
-
-    return fmap_iresult(node, |x| x);
-}
-
-/// Match a list of arguments in a function call.
-pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
-    let parse_result = separated_nonempty_list_complete!(input,
-        COMMA,
-        terminated!(
-            logical_binary_expr,
-            not!(EQUALS)
-        )
-    );
-    return parse_result;
-}
-
-/// Match a list of keyword arguments in a function call.
-pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
-    let parse_result = separated_list!(input,
-        COMMA,
-        tuple!(
-            IDENTIFIER,
-            preceded!(
-                EQUALS,
-                logical_binary_expr
-            )
-        )
-    );
-    return parse_result;
-}
-
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         IDENTIFIER,
@@ -186,8 +138,29 @@ use self::stmt_parsers::*;
 pub mod stmt_parsers {
     use super::*;
 
+    /// Match any statement.
+    pub fn statement(input: &[u8], indent: usize) -> StmtRes {
+        let node = alt_complete!(input,
+            let_stmt |
+            assignment_stmt |
+            call!(while_stmt, indent) |
+            call!(for_in, indent) |
+            call!(if_stmt, indent) |
+            call!(function_declaration_stmt, indent) |
+            call!(try_except, indent) |
+            import |
+            return_stmt |
+            break_stmt |
+            pass_stmt |
+            continue_stmt |
+            yield_stmt
+        );
+
+        return fmap_iresult(node, |x| x);
+    }
+
     /// Match a let statement.
-    pub fn let_stmt(input: &[u8]) -> StmtRes {
+    fn let_stmt(input: &[u8]) -> StmtRes {
         let parse_result = separated_pair!(input,
             preceded!(
                 LET,
@@ -201,7 +174,7 @@ pub mod stmt_parsers {
     }
 
     /// Match an assignment statement.
-    pub fn assignment_stmt(input: &[u8]) -> StmtRes {
+    fn assignment_stmt(input: &[u8]) -> StmtRes {
 
         /// Match an assignment operator.
         fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
@@ -295,6 +268,7 @@ pub mod stmt_parsers {
     }
 
     /// Parse a function declaration.
+    /// Must be public because it's used by module.
     pub fn function_declaration_stmt<'a>(input: &'a [u8], indent: usize) -> StmtRes {
         let arg_parser = |i: &'a [u8]| tuple!(i,
             IDENTIFIER,
@@ -331,7 +305,7 @@ pub mod stmt_parsers {
     }
 
     /// Match an if statement.
-    pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
+    fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
         let parse_result = tuple!(input,
             line_and_block!(preceded!(IF, expression), indent),
             many0c!(indented!(line_and_block!(preceded!(ELIF, expression), indent), indent)),
@@ -342,13 +316,13 @@ pub mod stmt_parsers {
     }
 
     /// Parse a while loop.
-    pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
+    fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
         let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
         return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
     }
 
     /// Parse a for in loop.
-    pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
+    fn for_in(input: &[u8], indent: usize) -> StmtRes {
         let parse_result = line_and_block!(input, tuple!(
             preceded!(
                 FOR,
@@ -373,19 +347,19 @@ pub mod stmt_parsers {
     }
 
     /// Match a return statement.
-    pub fn return_stmt(input: &[u8]) -> StmtRes {
+    fn return_stmt(input: &[u8]) -> StmtRes {
         let parse_result = preceded!(input, RETURN, expression);
         return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
     }
 
     /// Match a yield statement.
-    pub fn yield_stmt(input: &[u8]) -> StmtRes {
+    fn yield_stmt(input: &[u8]) -> StmtRes {
         let parse_result = preceded!(input, YIELD, expression);
         return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
     }
 
     /// Match a break statement.
-    pub fn break_stmt(input: &[u8]) -> StmtRes {
+    fn break_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             BREAK,
             peek!(alt_complete!(
@@ -397,7 +371,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a pass statement.
-    pub fn pass_stmt(input: &[u8]) -> StmtRes {
+    fn pass_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             PASS,
             peek!(alt_complete!(
@@ -409,7 +383,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a continue statement.
-    pub fn continue_stmt(input: &[u8]) -> StmtRes {
+    fn continue_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             CONTINUE,
             peek!(alt_complete!(
@@ -421,7 +395,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a try except statement.
-    pub fn try_except(input: &[u8], indent: usize) -> StmtRes {
+    fn try_except(input: &[u8], indent: usize) -> StmtRes {
         let parse_result = tuple!(input,
             keyword_and_block!(TRY, indent),
             many1c!(keyword_and_block!(EXCEPT, indent)),
@@ -810,6 +784,33 @@ pub mod expr_parsers {
         Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
         Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
         Access{attributes: Vec<Identifier>}
+    }
+
+    /// Match a list of arguments in a function call.
+    fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+        let parse_result = separated_nonempty_list_complete!(input,
+            COMMA,
+            terminated!(
+                logical_binary_expr,
+                not!(EQUALS)
+            )
+        );
+        return parse_result;
+    }
+
+    /// Match a list of keyword arguments in a function call.
+    fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
+        let parse_result = separated_list!(input,
+            COMMA,
+            tuple!(
+                IDENTIFIER,
+                preceded!(
+                    EQUALS,
+                    logical_binary_expr
+                )
+            )
+        );
+        return parse_result;
     }
 
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
@@ -1659,8 +1660,8 @@ mod tests {
     fn test_block() {
         let exp_block = Block {
             statements: vec![
-                Box::new(output(assignment_stmt("x=0\n".as_bytes()))),
-                Box::new(output(assignment_stmt("y=true".as_bytes())))
+                Box::new(output(statement("x=0\n".as_bytes(), 0))),
+                Box::new(output(statement("y=true".as_bytes(), 0)))
             ]
         };
 

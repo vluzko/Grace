@@ -243,21 +243,6 @@ pub mod trait_impls {
         }
     }
 
-    /// From for UnaryOperator
-    impl <'a> From<&'a Type> for UnaryOperator {
-        fn from(input: &'a Type) -> Self {
-            match input {
-                Type::i32 => UnaryOperator::ToI32,
-                Type::ui32 => UnaryOperator::ToF32,
-                Type::i64 => UnaryOperator::ToI64,
-                Type::f32 => UnaryOperator::ToF32,
-                Type::f64 => UnaryOperator::ToF64,
-                Type::boolean => UnaryOperator::ToBool,
-                _ => panic!()
-            }
-        }
-    }
-
     /// From for Expr
     impl <'a> From<&'a str> for Expr {
         fn from(input: &'a str) -> Self {
@@ -306,6 +291,21 @@ pub mod trait_impls {
                     println!("Bad input to Assignment::from<&str>: {}", input);
                     panic!()
                 }
+            };
+        }
+    }
+
+    /// From for ComparisonOperator
+    impl <'a> From<&'a [u8]> for ComparisonOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"==" => ComparisonOperator::Equal,
+                b">=" => ComparisonOperator::GreaterEqual,
+                b"<=" => ComparisonOperator::LessEqual,
+                b">"  => ComparisonOperator::Greater,
+                b"<"  => ComparisonOperator::Less,
+                b"!=" => ComparisonOperator::Unequal,
+                _ => panic!(),
             };
         }
     }
@@ -386,6 +386,20 @@ pub mod trait_impls {
         }
     }
 
+    impl <'a> From<&'a Type> for UnaryOperator {
+        fn from(input: &'a Type) -> Self {
+            match input {
+                Type::i32 => UnaryOperator::ToI32,
+                Type::ui32 => UnaryOperator::ToF32,
+                Type::i64 => UnaryOperator::ToI64,
+                Type::f32 => UnaryOperator::ToF32,
+                Type::f64 => UnaryOperator::ToF64,
+                Type::boolean => UnaryOperator::ToBool,
+                _ => panic!()
+            }
+        }
+    }
+
     /// From for TypedIdent
     impl <'a> From<&'a str> for TypedIdent {
         fn from(input: &'a str) -> Self {
@@ -410,4 +424,3 @@ pub mod trait_impls {
         }
     }
 }
-

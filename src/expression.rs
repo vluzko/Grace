@@ -40,7 +40,7 @@ pub enum Stmt {
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
     TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
-    ImportStmt      (DottedIdentifier),
+    ImportStmt      (Vec<Identifier>),
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,
@@ -140,12 +140,6 @@ pub enum UnaryOperator {
     ToF32,
     ToF64,
     ToBool
-}
-
-/// A dotted identifier. Only used with import statements.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct DottedIdentifier {
-    pub attributes: Vec<Identifier>
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.

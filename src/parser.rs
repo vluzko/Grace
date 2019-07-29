@@ -144,17 +144,6 @@ pub fn statement(input: &[u8], indent: usize) -> StmtRes {
     return fmap_iresult(node, |x| x);
 }
 
-/// Parse dot separated identifiers.
-/// e.g. ident1.ident2   .   ident3
-pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
-    let parse_result = separated_nonempty_list_complete!(input,
-        w_followed!(tag!(".")),
-        IDENTIFIER
-    );
-
-    return fmap_iresult(parse_result, |x: Vec<Identifier>| DottedIdentifier{attributes: x});
-}
-
 /// Match a list of arguments in a function call.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
@@ -376,7 +365,10 @@ pub mod stmt_parsers {
 
     /// Match an import statement.
     pub fn import(input: &[u8]) -> StmtRes {
-        let parse_result = preceded!(input, IMPORT, dotted_identifier);
+        let parse_result = preceded!(input, IMPORT, separated_nonempty_list_complete!(
+            DOT,
+            IDENTIFIER
+        ));
         return fmap_node(parse_result,|x| Stmt::ImportStmt (x));
     }
 
@@ -498,24 +490,24 @@ pub mod stmt_parsers {
         #[test]
         fn parse_func_dec_parts() {
             // Args
-            // let actual = output(fn_dec_args("a: i32)".as_bytes()));
-            // assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
+            let actual = output(fn_dec_args("a: i32)".as_bytes()));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
             check_match("a: i32, b: i64", fn_dec_args, vec!(
                 (Identifier::from("a"), Type::i32),
                 (Identifier::from("b"), Type::i64)
             ));
 
             // Vararg
-            // let expected = Some(Identifier::from("args"));
-            // let actual = output(vararg(", *args".as_bytes()));
-            // assert_eq!(expected, actual);
+            let expected = Some(Identifier::from("args"));
+            let actual = output(vararg(", *args".as_bytes()));
+            assert_eq!(expected, actual);
 
             // Kwargs.
-            // let expected = vec!(
-            //        (Identifier::from("c"), Type::i32, Node::from(5)),
-            //        (Identifier::from("d"), Type::i32, Node::from(7))
-            // );
-            // check_match(", c: i32=5, d: i32=7", keyword_args, expected);
+            let expected = vec!(
+                   (Identifier::from("c"), Type::i32, Node::from(5)),
+                   (Identifier::from("d"), Type::i32, Node::from(7))
+            );
+            check_match(", c: i32=5, d: i32=7", keyword_args, expected);
         }
        
         #[test]
@@ -620,9 +612,11 @@ pub mod stmt_parsers {
 
         #[test]
         fn parse_import_stmt() {
-            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
-                attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
-            }));
+            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(vec!(
+                Identifier::from("foo"), 
+                Identifier::from("bar"), 
+                Identifier::from("baz"))
+            ));
         }
 
         #[test]
@@ -632,8 +626,6 @@ pub mod stmt_parsers {
 
             check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
         }
-
-
     }
 }
 
@@ -1682,18 +1674,4 @@ mod tests {
             unwrap_and_check_error(result, ErrorKind::Alt);
         }
     }
-
-    #[test]
-    fn test_dotted_identifier() {
-        let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
-        check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
-    }
-
-    #[cfg(test)]
-    mod statements {
-
-    }
-
-
-
 }

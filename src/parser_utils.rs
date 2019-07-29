@@ -604,6 +604,7 @@ pub mod tokens {
     keyword!(FOR, "for");
     keyword!(IN, "in");
     keyword!(WHILE, "while");
+    keyword!(LET, "let");
     keyword!(IMPORT, "import");
     keyword!(RETURN, "return");
     keyword!(YIELD, "yield");

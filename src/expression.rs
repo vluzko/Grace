@@ -288,8 +288,29 @@ pub mod trait_impls {
                 "**=" => Assignment::Exponent,
                 _ => {
                     // TODO: Log
-                    println!("Bad input to Assignment::from<&str>: {}", input);
-                    panic!()
+                    panic!("Bad input to Assignment::from<&str>: {}", input)
+                }
+            };
+        }
+    }
+
+    impl<'a> From<&'a [u8]> for Assignment {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"=" => Assignment::Normal,
+                b"+=" => Assignment::Add,
+                b"-=" => Assignment::Sub,
+                b"*=" => Assignment::Mult,
+                b"/=" => Assignment::Div,
+                b"%=" => Assignment::Mod,
+                b"&=" => Assignment::BitAnd,
+                b"|=" => Assignment::BitOr,
+                b"^=" => Assignment::BitXor,
+                b"<<=" => Assignment::BitShiftL,
+                b">>=" => Assignment::BitShiftR,
+                b"**=" => Assignment::Exponent,
+                _ => {
+                    panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
                 }
             };
         }

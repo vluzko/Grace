@@ -297,51 +297,6 @@ pub fn try_except(input: &[u8], indent: usize) -> StmtRes {
     });
 }
 
-pub fn let_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = separated_pair!(input,
-        preceded!(
-            tuple!(tag!("let"), many1!(inline_whitespace_char)),
-            typed_identifier
-        ),
-        w_followed!(tag!("=")),
-        w_followed!(expression)
-    );
-
-    return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
-}
-
-pub fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return alt_complete!(input, 
-        EQUALS | 
-        ADDASN |
-        SUBASN |
-        MULASN |
-        DIVASN |
-        MODASN |
-        EXPASN |
-        RSHASN |
-        LSHASN |
-        BORASN |
-        BANDASN |
-        BXORASN
-    );
-}
-
-pub fn assignment_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = terminated!(input,
-        tuple!(
-            IDENTIFIER,
-            w_followed!(assignments),
-            w_followed!(expression)
-        ),
-        alt_complete!(recognize!(NEWLINE)| custom_eof | EMPTY)
-    );
-
-    return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
-        name: x.0, operator:Assignment::from(from_utf8(x.1).unwrap()), expression: x.2
-    });
-}
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -393,6 +348,55 @@ use self::stmt_parsers::*;
 
 pub mod stmt_parsers {
     use super::*;
+
+    /// Match a let statement.
+    pub fn let_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = separated_pair!(input,
+            preceded!(
+                LET,
+                typed_identifier
+            ),
+            EQUALS,
+            expression
+        );
+
+        return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
+    }
+
+    /// Match an assignment statement.
+    pub fn assignment_stmt(input: &[u8]) -> StmtRes {
+
+        /// Match an assignment operator.
+        fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            return alt_complete!(input, 
+                EQUALS | 
+                ADDASN |
+                SUBASN |
+                MULASN |
+                DIVASN |
+                MODASN |
+                EXPASN |
+                RSHASN |
+                LSHASN |
+                BORASN |
+                BANDASN |
+                BXORASN
+            );
+        }
+
+        let parse_result = terminated!(input,
+            tuple!(
+                IDENTIFIER,
+                assignments,
+                expression
+            ),
+            alt_complete!(NEWLINE | custom_eof | EMPTY)
+        );
+
+        return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
+            name: x.0, operator: Assignment::from(x.1), expression: x.2
+        });
+    }
 
     /// Match an import statement.
     pub fn import(input: &[u8]) -> StmtRes {

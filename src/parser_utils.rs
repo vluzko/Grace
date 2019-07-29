@@ -448,6 +448,14 @@ pub mod tokens {
         };
     }
 
+    macro_rules! keyword {
+        ($name:ident, $i: expr) => {
+            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+                return w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))));
+            }
+        };
+    }
+
     /// Recognize an empty input.
     pub fn EMPTY(input: &[u8]) -> IResult<&[u8], &[u8]> {
         if input.len() == 0 {
@@ -591,6 +599,20 @@ pub mod tokens {
         )
     );
 
+    // Keywords
+    keyword!(IF, "if");
+    keyword!(FOR, "for");
+    keyword!(IN, "in");
+    keyword!(WHILE, "while");
+    keyword!(RETURN, "return");
+    keyword!(YIELD, "yield");
+    keyword!(IMPORT, "import");
+    keyword!(PASS, "pass");
+    keyword!(BREAK, "break");
+    keyword!(CONTINUE, "continue");
+
+    keyword!(MATCH, "match");
+
     // Syntax
     token!(COMMA, ",");
     token!(COLON, ":");
@@ -604,11 +626,6 @@ pub mod tokens {
     token!(CLOSE_BRACE, "}");
     token!(LANGLE, "<");
     token!(RANGLE, ">");
-
-    token!(IF, "if");
-    token!(FOR, "for");
-    token!(IN, "in");
-    token!(MATCH, "match");
     token!(ARROW, "=>");
 
     // Assignments
@@ -626,9 +643,9 @@ pub mod tokens {
 
     // Binary operators
     // Logical operators
-    token!(AND, "and");
-    token!(OR, "or");
-    token!(XOR, "xor");
+    keyword!(AND, "and");
+    keyword!(OR, "or");
+    keyword!(XOR, "xor");
 
     // Bitwise operators
     token!(BAND, "&");

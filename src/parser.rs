@@ -348,53 +348,7 @@ pub fn import(input: &[u8]) -> StmtRes {
     return fmap_node(parse_result,|x| Stmt::ImportStmt (x.1));
 }
 
-/// Match a return statement.
-pub fn return_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, initial_keyword!("return"), expression);
-    return fmap_node(parse_result,|x| Stmt::ReturnStmt (x.1));
-}
 
-pub fn yield_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = preceded!(input,
-        initial_keyword!("yield"),
-        w_followed!(expression)
-    );
-
-    return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
-}
-
-pub fn break_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = terminated!(input,
-        tag!("break"),
-        peek!(alt_complete!(
-            inline_whitespace_char | eof!() | NEWLINE | EMPTY
-        ))
-    );
-
-    return fmap_node(parse_result, |_x| Stmt::BreakStmt);
-}
-
-pub fn pass_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = terminated!(input,
-        tag!("pass"),
-        peek!(alt_complete!(
-            inline_whitespace_char | eof!() | NEWLINE | EMPTY
-        ))
-    );
-
-    return fmap_node(parse_result, |_x| Stmt::PassStmt);
-}
-
-pub fn continue_stmt(input: &[u8]) -> StmtRes {
-    let parse_result = terminated!(input,
-        tag!("continue"),
-        peek!(alt_complete!(
-            inline_whitespace_char | eof!() | NEWLINE | EMPTY
-        ))
-    );
-
-    return fmap_node(parse_result, |_x| Stmt::ContinueStmt);
-}
 
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
@@ -441,6 +395,245 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     );
 
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
+}
+
+use self::stmt_parsers::*;
+
+pub mod stmt_parsers {
+    use super::*;
+
+    /// Match a return statement.
+    pub fn return_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = tuple!(input, initial_keyword!("return"), expression);
+        return fmap_node(parse_result,|x| Stmt::ReturnStmt (x.1));
+    }
+
+    pub fn yield_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = preceded!(input,
+            initial_keyword!("yield"),
+            w_followed!(expression)
+        );
+
+        return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
+    }
+
+    pub fn break_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = terminated!(input,
+            BREAK,
+            peek!(alt_complete!(
+                eof!() | NEWLINE | EMPTY
+            ))
+        );
+
+        return fmap_node(parse_result, |_| Stmt::BreakStmt);
+    }
+
+    pub fn pass_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = terminated!(input,
+            PASS,
+            peek!(alt_complete!(
+                eof!() | NEWLINE | EMPTY
+            ))
+        );
+
+        return fmap_node(parse_result, |_| Stmt::PassStmt);
+    }
+
+    pub fn continue_stmt(input: &[u8]) -> StmtRes {
+        let parse_result = terminated!(input,
+            CONTINUE,
+            peek!(alt_complete!(
+                eof!() | NEWLINE | EMPTY
+            ))
+        );
+
+        return fmap_node(parse_result, |_| Stmt::ContinueStmt);
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use parser_utils::iresult_helpers::*;
+
+        #[test]
+        fn parse_func_dec_parts() {
+            // Args
+            let actual = output(args_dec_list("a: i32)".as_bytes()));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
+
+            // Vararg
+            let expected = Some(Identifier::from("args"));
+            let actual = output(vararg(", *args".as_bytes()));
+            assert_eq!(expected, actual);
+
+            // Kwargs.
+            let expected = vec!(
+                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
+                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
+            );
+            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
+            assert_eq!(expected, actual);
+        }
+       
+        #[test]
+        fn parse_func_dec() {
+            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wvars"),
+                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
+                vararg: Some(Identifier::from("args")),
+                kwargs: vec!(
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
+                ),
+                varkwarg: Some(Identifier::from("kwargs")),
+                block: output(block("let val =  5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
+            });
+
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wkwargs"),
+                args: vec![(Identifier::from("a"), typing::Type::i32)],
+                vararg: None,
+                kwargs: vec!(
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                ),
+                varkwarg: None,
+                block: output(block("let val=5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
+            });
+
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("a"),
+                args: vec!((Identifier::from("b"), typing::Type::i32)),
+                vararg: None,
+                kwargs: vec!(),
+                varkwarg: None,
+                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
+                return_type: typing::Type::i32
+            });
+        }
+
+        #[test]
+        fn parse_try_except() {
+            let blk = output(block("x=0".as_bytes(), 0));
+            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
+                block: blk.clone(),
+                exceptions: vec!(blk.clone()),
+                else_block: Some(blk.clone()),
+                final_block: Some(blk.clone())
+            });
+        }
+
+        #[test]
+        fn parse_let_stmt() {
+            check_data("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                typed_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: None
+                },
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+
+            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                typed_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: Some(typing::Type::f32)
+                },
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+        }
+
+        #[test]
+        fn parse_assignment_stmt() {
+            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("foo"),
+                operator: Assignment::Normal,
+                expression: Node::from(true)
+            });
+
+            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("x"),
+                operator: Assignment::Normal,
+                expression: Node::from(0)
+            });
+
+            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
+                    name: Identifier::from("x"),
+                    operator: Assignment::from(op),
+                    expression: Node::from("y"),
+                });
+            }
+
+        }
+
+        #[test]
+        fn parse_if_stmt() {
+            let good_input = "if (a and b):\n x = true";
+
+            let good_output = Stmt::IfStmt{
+                condition: output(expression("a and b".as_bytes())),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
+                elifs: vec!(),
+                else_block: None
+            };
+
+            check_data(good_input, |x| statement(x, 0), good_output);
+
+            check_failed("ifa and b:\n x = true", |x| statement(x, 0), ErrorKind::Alt);
+
+            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
+                
+                condition: Node::from(true),
+                block: output(block("x = true".as_bytes(), 0)),
+                elifs: vec!((Node::from(false), output(block("y = true".as_bytes(), 0)))),
+                else_block: Some(output(block("z = true".as_bytes(), 0)))
+            });
+        }
+
+        #[test]
+        fn parse_while_stmt() {
+            check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
+                condition: Node::from(true),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
+            });
+        }
+
+        #[test]
+        fn parse_simple_statements() {
+            check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
+            check_data_and_leftover("pass   \n  ", |x| statement(x, 0), Stmt::PassStmt, "\n  ");
+            check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
+            check_data_and_leftover("continue   \n  ", |x| statement(x, 0), Stmt::ContinueStmt, "\n  ");
+            check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
+            check_data_and_leftover("break   \n  ", |x| statement(x, 0), Stmt::BreakStmt, "\n  ");
+        }
+
+        #[test]
+        fn parse_import_stmt() {
+            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
+                attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
+            }));
+        }
+
+        #[test]
+        fn parse_return() {
+            check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
+
+            check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
+        }
+
+        #[test]
+        fn parse_for() {
+            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
+                iter_vars: Identifier::from("x"),
+                iterator: Node::from("y"),
+                block: output(block("a=true".as_bytes(), 0))
+            });
+        }
+    }
 }
 
 pub mod expr_parsers {
@@ -1453,175 +1646,7 @@ mod tests {
 
     #[cfg(test)]
     mod statements {
-        use super::*;
 
-        #[test]
-        fn parse_let() {
-            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: Some(typing::Type::f32)
-                },
-                expression: Node::from(Expr::Float("3.0".to_string()))
-            });
-        }
-
-        #[test]
-        fn parse_func_dec_parts() {
-            // Args
-            let actual = output(args_dec_list("a: i32)".as_bytes()));
-            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
-
-            // Vararg
-            let expected = Some(Identifier::from("args"));
-            let actual = output(vararg(", *args".as_bytes()));
-            assert_eq!(expected, actual);
-
-            // Kwargs.
-            let expected = vec!(
-                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
-                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
-            );
-            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
-            assert_eq!(expected, actual);
-        }
-       
-        #[test]
-        fn parse_func_dec() {
-            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("wvars"),
-                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
-                vararg: Some(Identifier::from("args")),
-                kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
-                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
-                ),
-                varkwarg: Some(Identifier::from("kwargs")),
-                block: output(block("let val =  5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
-            });
-
-            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("wkwargs"),
-                args: vec![(Identifier::from("a"), typing::Type::i32)],
-                vararg: None,
-                kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
-                ),
-                varkwarg: None,
-                block: output(block("let val=5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
-            });
-
-            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("a"),
-                args: vec!((Identifier::from("b"), typing::Type::i32)),
-                vararg: None,
-                kwargs: vec!(),
-                varkwarg: None,
-                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-                return_type: typing::Type::i32
-            });
-        }
-
-        #[test]
-        fn parse_try_except() {
-            let blk = output(block("x=0".as_bytes(), 0));
-            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
-                block: blk.clone(),
-                exceptions: vec!(blk.clone()),
-                else_block: Some(blk.clone()),
-                final_block: Some(blk.clone())
-            });
-        }
-
-        #[test]
-        fn parse_assignment() {
-            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("foo"),
-                operator: Assignment::Normal,
-                expression: Node::from(true)
-            });
-
-            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("x"),
-                operator: Assignment::Normal,
-                expression: Node::from(0)
-            });
-
-            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
-            for op in all_ops {
-                let input = format!("x {} y", op);
-                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
-                    name: Identifier::from("x"),
-                    operator: Assignment::from(op),
-                    expression: Node::from("y"),
-                });
-            }
-
-        }
-
-        #[test]
-        fn parse_if() {
-            let good_input = "if (a and b):\n x = true";
-
-            let good_output = Stmt::IfStmt{
-                condition: output(expression("a and b".as_bytes())),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
-                elifs: vec!(),
-                else_block: None
-            };
-
-            check_data(good_input, |x| statement(x, 0), good_output);
-
-            check_failed("ifa and b:\n x = true", |x| statement(x, 0), ErrorKind::Alt);
-
-            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
-                
-                condition: Node::from(true),
-                block: output(block("x = true".as_bytes(), 0)),
-                elifs: vec!((Node::from(false), output(block("y = true".as_bytes(), 0)))),
-                else_block: Some(output(block("z = true".as_bytes(), 0)))
-            });
-        }
-
-        #[test]
-        fn parse_while() {
-            check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
-                condition: Node::from(true),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
-            });
-        }
-
-        #[test]
-        fn parse_simple_statements() {
-            check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
-            check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
-            check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
-        }
-
-        #[test]
-        fn parse_import() {
-            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
-                attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
-            }));
-        }
-
-        #[test]
-        fn parse_return() {
-            check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
-
-            check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
-        }
-
-        #[test]
-        fn parse_for() {
-            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
-                iter_vars: Identifier::from("x"),
-                iterator: Node::from("y"),
-                block: output(block("a=true".as_bytes(), 0))
-            });
-        }
     }
 
     #[cfg(test)]

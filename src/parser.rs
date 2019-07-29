@@ -248,8 +248,8 @@ pub mod stmt_parsers {
 
     /// Match all normal arguments.
     fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
-        inline_wrapped!(input,
-            separated_list_complete!(
+        // inline_wrapped!(input,
+        return separated_list_complete!(input,
                 COMMA,
                 terminated!(
                     tuple!(
@@ -260,13 +260,12 @@ pub mod stmt_parsers {
                         )
                     ),
                     alt!(
-                        recognize!(many1!(inline_whitespace_char)) |
                         peek!(tag!(",")) |
                         peek!(tag!(")"))
                     )
                 )
             )
-        )
+        // )
     }
 
     /// Match the variable length argument.

@@ -249,12 +249,6 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
     });
 }
 
-/// Parse a while loop.
-pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = line_then_block!(input, "while", expression, indent);
-    return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
-}
-
 /// Parse a for in loop.
 pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "for", tuple!(
@@ -381,6 +375,12 @@ pub mod stmt_parsers {
         return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
     }
 
+    /// Parse a while loop.
+    pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
+        let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
+        return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
+    }
+
     /// Match an import statement.
     pub fn import(input: &[u8]) -> StmtRes {
         let parse_result = preceded!(input, IMPORT, dotted_identifier);
@@ -458,6 +458,51 @@ pub mod stmt_parsers {
         use parser_utils::iresult_helpers::*;
 
         #[test]
+        fn parse_let_stmt() {
+            check_data("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                typed_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: None
+                },
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+
+            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                typed_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: Some(typing::Type::f32)
+                },
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+        }
+
+        #[test]
+        fn parse_assignment_stmt() {
+            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("foo"),
+                operator: Assignment::Normal,
+                expression: Node::from(true)
+            });
+
+            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("x"),
+                operator: Assignment::Normal,
+                expression: Node::from(0)
+            });
+
+            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
+                    name: Identifier::from("x"),
+                    operator: Assignment::from(op),
+                    expression: Node::from("y"),
+                });
+            }
+
+        }
+
+        #[test]
         fn parse_func_dec_parts() {
             // Args
             let actual = output(args_dec_list("a: i32)".as_bytes()));
@@ -514,63 +559,7 @@ pub mod stmt_parsers {
                 return_type: typing::Type::i32
             });
         }
-
-        #[test]
-        fn parse_try_except() {
-            let blk = output(block("x=0".as_bytes(), 0));
-            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
-                block: blk.clone(),
-                exceptions: vec!(blk.clone()),
-                else_block: Some(blk.clone()),
-                final_block: Some(blk.clone())
-            });
-        }
-
-        #[test]
-        fn parse_let_stmt() {
-            check_data("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: None
-                },
-                expression: Node::from(Expr::Float("3.0".to_string()))
-            });
-
-            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: Some(typing::Type::f32)
-                },
-                expression: Node::from(Expr::Float("3.0".to_string()))
-            });
-        }
-
-        #[test]
-        fn parse_assignment_stmt() {
-            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("foo"),
-                operator: Assignment::Normal,
-                expression: Node::from(true)
-            });
-
-            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("x"),
-                operator: Assignment::Normal,
-                expression: Node::from(0)
-            });
-
-            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
-            for op in all_ops {
-                let input = format!("x {} y", op);
-                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
-                    name: Identifier::from("x"),
-                    operator: Assignment::from(op),
-                    expression: Node::from("y"),
-                });
-            }
-
-        }
-
+        
         #[test]
         fn parse_if_stmt() {
             let good_input = "if (a and b):\n x = true";
@@ -604,6 +593,26 @@ pub mod stmt_parsers {
         }
 
         #[test]
+        fn parse_for_in_stmt() {
+            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
+                iter_vars: Identifier::from("x"),
+                iterator: Node::from("y"),
+                block: output(block("a=true".as_bytes(), 0))
+            });
+        }
+
+        #[test]
+        fn parse_try_except() {
+            let blk = output(block("x=0".as_bytes(), 0));
+            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
+                block: blk.clone(),
+                exceptions: vec!(blk.clone()),
+                else_block: Some(blk.clone()),
+                final_block: Some(blk.clone())
+            });
+        }
+
+        #[test]
         fn parse_simple_statements() {
             check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
             check_data_and_leftover("pass   \n  ", |x| statement(x, 0), Stmt::PassStmt, "\n  ");
@@ -628,14 +637,7 @@ pub mod stmt_parsers {
             check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
         }
 
-        #[test]
-        fn parse_for() {
-            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
-                iter_vars: Identifier::from("x"),
-                iterator: Node::from("y"),
-                block: output(block("a=true".as_bytes(), 0))
-            });
-        }
+
     }
 }
 

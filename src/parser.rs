@@ -249,19 +249,6 @@ pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
     });
 }
 
-/// Parse a for in loop.
-pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
-    let parse_result = line_then_block!(input, "for", tuple!(
-        IDENTIFIER,
-        preceded!(
-            inline_keyword!("in"),
-            w_followed!(expression)
-        )
-    ), indent);
-
-    return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
-}
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -379,6 +366,22 @@ pub mod stmt_parsers {
     pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
         let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
         return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
+    }
+
+    /// Parse a for in loop.
+    pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
+        let parse_result = line_and_block!(input, tuple!(
+            preceded!(
+                FOR,
+                IDENTIFIER
+            ),
+            preceded!(
+                IN,
+                expression
+            )
+        ), indent);
+
+        return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
     }
 
     /// Match an import statement.

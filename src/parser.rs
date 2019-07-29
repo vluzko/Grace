@@ -404,19 +404,17 @@ pub mod stmt_parsers {
 
     /// Match a return statement.
     pub fn return_stmt(input: &[u8]) -> StmtRes {
-        let parse_result = tuple!(input, initial_keyword!("return"), expression);
-        return fmap_node(parse_result,|x| Stmt::ReturnStmt (x.1));
+        let parse_result = preceded!(input, RETURN, expression);
+        return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
     }
 
+    /// Match a yield statement.
     pub fn yield_stmt(input: &[u8]) -> StmtRes {
-        let parse_result = preceded!(input,
-            initial_keyword!("yield"),
-            w_followed!(expression)
-        );
-
+        let parse_result = preceded!(input, YIELD, expression);
         return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
     }
 
+    /// Match a break statement.
     pub fn break_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             BREAK,
@@ -428,6 +426,7 @@ pub mod stmt_parsers {
         return fmap_node(parse_result, |_| Stmt::BreakStmt);
     }
 
+    /// Match a pass statement.
     pub fn pass_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             PASS,
@@ -439,6 +438,7 @@ pub mod stmt_parsers {
         return fmap_node(parse_result, |_| Stmt::PassStmt);
     }
 
+    /// Match a continue statement.
     pub fn continue_stmt(input: &[u8]) -> StmtRes {
         let parse_result = terminated!(input,
             CONTINUE,
@@ -619,8 +619,9 @@ pub mod stmt_parsers {
         }
 
         #[test]
-        fn parse_return() {
+        fn parse_return_and_yield_stmts() {
             check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
+            check_data_and_leftover("return 1  \n  ", |x| statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
 
             check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
         }

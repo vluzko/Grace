@@ -177,7 +177,7 @@ pub mod stmt_parsers {
                 assignments,
                 expression
             ),
-            alt_complete!(NEWLINE | custom_eof | EMPTY)
+            alt_complete!(NEWLINE | eof!() | EMPTY)
         );
 
         return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
@@ -840,7 +840,7 @@ pub mod expr_parsers {
             OPEN_PAREN,
             alt_complete!(
                 tuple!(
-                    inline_wrapped!(args_list),
+                    args_list,
                     opt!(preceded!(
                         COMMA,
                         kwargs_list
@@ -879,7 +879,7 @@ pub mod expr_parsers {
                             ))
                         ))
                     ) |
-                    map!(colon, |_| (None, None))
+                    map!(COLON, |_| (None, None))
                 )
             ),
             CLOSE_BRACKET
@@ -931,7 +931,7 @@ pub mod expr_parsers {
     fn int_expr(input: &[u8]) -> ExprRes {
         let parse_result: IResult<&[u8], &[u8]> = w_followed!(input, 
             recognize!(tuple!(
-                optc!(sign),
+                optc!(SIGN),
                 terminated!(
                     DIGIT,
                     VALID_NUM_FOLLOW
@@ -943,6 +943,15 @@ pub mod expr_parsers {
 
     /// Match a floating point literal expression.
     fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
+        
+        let exponent = |x: &'a [u8]| preceded!(x, 
+            alt!(tag!("e") | tag!("E")),
+            tuple!(
+                opt!(SIGN),
+                DIGIT
+            )
+        );
+
         let with_dec = |x: &'a[u8]| tuple!(x,
             tag!("."),
             DIGIT0,
@@ -951,7 +960,7 @@ pub mod expr_parsers {
 
         let parse_result = w_followed!(input, 
             recognize!(tuple!(
-                opt!(sign),
+                opt!(SIGN),
                 DIGIT,
                 alt!(
                     value!((), with_dec) |
@@ -1518,7 +1527,7 @@ pub mod type_parser {
         let result = delimited!(input,
             OPEN_PAREN,
             separated_list!(
-                comma,
+                COMMA,
                 alt_complete!(product_type | sum_type)
             ),
             CLOSE_PAREN

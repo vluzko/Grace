@@ -342,14 +342,6 @@ pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     });
 }
 
-/// Match an import statement.
-pub fn import(input: &[u8]) -> StmtRes {
-    let parse_result = tuple!(input, initial_keyword!("import"), dotted_identifier);
-    return fmap_node(parse_result,|x| Stmt::ImportStmt (x.1));
-}
-
-
-
 /// Parse dot separated identifiers.
 /// e.g. ident1.ident2   .   ident3
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
@@ -401,6 +393,12 @@ use self::stmt_parsers::*;
 
 pub mod stmt_parsers {
     use super::*;
+
+    /// Match an import statement.
+    pub fn import(input: &[u8]) -> StmtRes {
+        let parse_result = preceded!(input, IMPORT, dotted_identifier);
+        return fmap_node(parse_result,|x| Stmt::ImportStmt (x));
+    }
 
     /// Match a return statement.
     pub fn return_stmt(input: &[u8]) -> StmtRes {

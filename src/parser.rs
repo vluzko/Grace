@@ -346,6 +346,7 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
 
 use self::stmt_parsers::*;
 
+/// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
 
@@ -639,6 +640,7 @@ pub mod stmt_parsers {
     }
 }
 
+/// All expression parsers.
 pub mod expr_parsers {
     use super::*;
 
@@ -1529,6 +1531,7 @@ pub mod expr_parsers {
     }
 }
 
+/// The type parser.
 pub mod type_parser {
     use super::*;
     /// Parse a type.
@@ -1585,6 +1588,48 @@ pub mod type_parser {
             Some(y) => typing::Type::Parameterized(x.0, y),
             None => typing::Type::from(x.0)
         });
+    }
+
+    #[cfg(test)]
+    mod test {
+        use super::*;
+        use parser_utils::iresult_helpers::*;
+
+        #[test]
+        fn test_simple_types() {
+            check_match("i32", any_type, typing::Type::i32);
+            check_match("i64", any_type, typing::Type::i64);
+            check_match("f32", any_type, typing::Type::f32);
+            check_match("f64", any_type, typing::Type::f64);
+            check_match("ui32", any_type, typing::Type::ui32);
+            check_match("ui64", any_type, typing::Type::ui64);
+            check_match("boolean", any_type, typing::Type::boolean);
+            check_match("string", any_type, typing::Type::string);
+
+            // TODO: Random string test
+        }
+
+        #[test]
+        fn test_parameterized_types() {
+            check_match("Test<i32>", any_type, typing::Type::Parameterized(
+                Identifier::from("Test"), 
+                vec!(typing::Type::i32)
+            ));
+        }
+
+        #[test]
+        fn test_sum_types() {
+            check_match("i32 | i64", any_type, typing::Type::Sum(vec!(
+                typing::Type::i32, typing::Type::i64
+            )));
+        }
+
+        #[test]
+        fn test_product_types() {
+            check_match("(i32, i64)", any_type, typing::Type::Product(vec!(
+                typing::Type::i32, typing::Type::i64
+            )));
+        }
     }
 
 }
@@ -1652,45 +1697,6 @@ mod tests {
 
     }
 
-    #[cfg(test)]
-    mod types {
-        use super::*;
-        use self::type_parser::*; 
-        #[test]
-        fn test_simple_types() {
-            check_match("i32", any_type, typing::Type::i32);
-            check_match("i64", any_type, typing::Type::i64);
-            check_match("f32", any_type, typing::Type::f32);
-            check_match("f64", any_type, typing::Type::f64);
-            check_match("ui32", any_type, typing::Type::ui32);
-            check_match("ui64", any_type, typing::Type::ui64);
-            check_match("boolean", any_type, typing::Type::boolean);
-            check_match("string", any_type, typing::Type::string);
 
-            // TODO: Random string test
-        }
-
-        #[test]
-        fn test_parameterized_types() {
-            check_match("Test<i32>", any_type, typing::Type::Parameterized(
-                Identifier::from("Test"), 
-                vec!(typing::Type::i32)
-            ));
-        }
-
-        #[test]
-        fn test_sum_types() {
-            check_match("i32 | i64", any_type, typing::Type::Sum(vec!(
-                typing::Type::i32, typing::Type::i64
-            )));
-        }
-
-        #[test]
-        fn test_product_types() {
-            check_match("(i32, i64)", any_type, typing::Type::Product(vec!(
-                typing::Type::i32, typing::Type::i64
-            )));
-        }
-    }
 
 }

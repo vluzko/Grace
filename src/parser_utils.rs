@@ -256,8 +256,6 @@ macro_rules! separated_at_least_m {
     );
 }
 
-
-
 /// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
 /// if, elif, except, fn are all rules of this form.
 macro_rules! line_then_block (
@@ -577,7 +575,8 @@ pub mod tokens {
                 tag!("\n")| 
                 tag!(",") | 
                 tag!("]") | 
-                tag!("}")
+                tag!("}") |
+                tag!("=>")
             ));
         }
     }
@@ -609,6 +608,8 @@ pub mod tokens {
     token!(IF, "if");
     token!(FOR, "for");
     token!(IN, "in");
+    token!(MATCH, "match");
+    token!(ARROW, "=>");
 
     // Assignments
     token!(ADDASN, "+=");
@@ -703,8 +704,7 @@ pub mod iresult_helpers {
                 assert_eq!(o, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }

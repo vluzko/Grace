@@ -662,29 +662,4 @@ mod test {
             assert_eq!(ptr, new_ident);
         }
     }
-
-    struct Temp {
-        a: i32,
-        b: f64
-    }
-
-    fn make_box() -> Box<Temp> {
-        let val = Temp{a: 0, b: 1.5};
-        let b = Box::new(val);
-        println!("Address at start: {:?}", b.as_ref() as *const Temp);
-        return b;
-    }
-
-    fn proc_box(b: &mut Box<Temp>){
-        b.a = 1;
-        // return b;
-    }
-
-    #[test]
-    fn test_ptrs() {
-        let mut b = make_box();
-        println!("Address after return: {:?}", b.as_ref() as *const Temp);
-        proc_box(&mut b);
-        println!("Address after proc: {:?}", b.as_ref() as *const Temp);
-    }
 }

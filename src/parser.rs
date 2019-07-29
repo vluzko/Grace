@@ -5,11 +5,13 @@ use std::collections::HashMap;
 extern crate cute;
 extern crate nom;
 use self::nom::*;
-use self::nom::IResult::Done as Done;
+
 use expression::*;
 use parser_utils::*;
+use parser_utils::tokens::*;
 use typing;
 use typing::Type;
+use self::expr_parsers::*;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -55,11 +57,11 @@ pub fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
     let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
     let list = reserved_list();
     let tag_iter = list.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut final_result: IResult<&[u8], &[u8]> = IResult::Error(ErrorKind::Tag);
+    let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
     for res in tag_iter {
         match res {
-            Done(i, o) => {
-                final_result = Done(i, o);
+            Ok((i, o)) => {
+                final_result = Ok((i, o));
                 break;
             },
             _ => continue
@@ -71,7 +73,7 @@ pub fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
 pub fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
     return separated_nonempty_list_complete!(input,
         w_followed!(tag!(",")),
-        w_followed!(identifier)
+        IDENTIFIER
     );
 }
 
@@ -80,7 +82,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
         opt!(between_statement),
         many1!(complete!(
             terminated!(
-                call!(function_declaration, 0),
+                alt!(complete!(call!(function_declaration, 0)) | complete!(import)),
                 between_statement
             )
         ))
@@ -90,16 +92,16 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
 }
 
 pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
-    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0!(tag!(" ")));
+    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
-        Done(i, o) => (i, o),
+        Ok((i, o)) => (i, o),
         _ => panic!()
     };
 
     // Break if the block is not indented enough.
     let parse_result = if full_indent.1.len() < indent {
         // TODO: This will happen if the indentation level is too low. Throw a proper error.
-        IResult::Error(ErrorKind::Count)
+        Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
     } else {
         let expected_indent = full_indent.1.len();
         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
@@ -149,7 +151,7 @@ pub fn args_dec_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
             w_followed!(tag!(",")),
             terminated!(
                 tuple!(
-                    identifier,
+                    IDENTIFIER,
                     preceded!(
                         colon,
                         type_parser::any_type
@@ -170,7 +172,7 @@ pub fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
             w_followed!(tag!(",")),
             w_followed!(tag!("*"))
         ),
-        w_followed!(identifier)
+        IDENTIFIER
     )));
 }
 
@@ -180,7 +182,7 @@ pub fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<
         w_followed!(tag!(",")),
         w_followed!(separated_list_complete!(inline_wrapped!(tag!(",")),
             tuple!(
-                identifier,
+                IDENTIFIER,
                 preceded!(
                     colon,
                     type_parser::any_type
@@ -207,14 +209,14 @@ pub fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
             w_followed!(tag!(",")),
             w_followed!(tag!("**"))
         ),
-        w_followed!(identifier)
+        IDENTIFIER
     )));
 }
 
 /// Parse a function declaration.
 pub fn function_declaration<'a>(input: &'a [u8], indent: usize) -> StmtRes {
     let arg_parser = |i: &'a [u8]| tuple!(i,
-        identifier,
+        IDENTIFIER,
         preceded!(
             open_paren,
             args_dec_list
@@ -256,7 +258,7 @@ pub fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
 /// Parse a for in loop.
 pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = line_then_block!(input, "for", tuple!(
-        w_followed!(identifier),
+        IDENTIFIER,
         preceded!(
             inline_keyword!("in"),
             w_followed!(expression)
@@ -269,7 +271,7 @@ pub fn for_in(input: &[u8], indent: usize) -> StmtRes {
 pub fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
     let parse_result = tuple!(input,
         line_then_block!("if", expression, indent),
-        many0!(indented!(line_then_block!("elif", expression, indent), indent)),
+        many0c!(indented!(line_then_block!("elif", expression, indent), indent)),
         opt!(complete!(indented!(keyword_then_block!("else", indent), indent)))
     );
 
@@ -309,30 +311,30 @@ pub fn let_stmt(input: &[u8]) -> StmtRes {
 }
 
 pub fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return recognize!(input, alt!(
-        tag!("=")   |
-        tag!("+=")  |
-        tag!("-=")  |
-        tag!("*=")  |
-        tag!("/=")  |
-        tag!("**=") |
-        tag!("%=")  |
-        tag!(">>=") |
-        tag!("<<=") |
-        tag!("|=")  |
-        tag!("&=")  |
-        tag!("^=")
-    ));
+    return alt_complete!(input, 
+        EQUALS | 
+        ADDASN |
+        SUBASN |
+        MULASN |
+        DIVASN |
+        MODASN |
+        EXPASN |
+        RSHASN |
+        LSHASN |
+        BORASN |
+        BANDASN |
+        BXORASN
+    );
 }
 
 pub fn assignment_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tuple!(
-            identifier,
+            IDENTIFIER,
             w_followed!(assignments),
             w_followed!(expression)
         ),
-        alt_complete!(recognize!(newline)| custom_eof)
+        alt_complete!(recognize!(NEWLINE)| custom_eof | EMPTY)
     );
 
     return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
@@ -364,10 +366,9 @@ pub fn yield_stmt(input: &[u8]) -> StmtRes {
 pub fn break_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("break"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::BreakStmt);
@@ -376,10 +377,9 @@ pub fn break_stmt(input: &[u8]) -> StmtRes {
 pub fn pass_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("pass"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::PassStmt);
@@ -388,230 +388,12 @@ pub fn pass_stmt(input: &[u8]) -> StmtRes {
 pub fn continue_stmt(input: &[u8]) -> StmtRes {
     let parse_result = terminated!(input,
         tag!("continue"),
-        terminated!(
-            inline_whitespace,
-            eof_or_line
-        )
+        peek!(alt_complete!(
+            inline_whitespace_char | eof!() | NEWLINE | EMPTY
+        ))
     );
 
     return fmap_node(parse_result, |_x| Stmt::ContinueStmt);
-}
-
-pub fn expression(input: &[u8]) -> ExprRes {
-    return alt_complete!(input, comparison);
-}
-
-pub fn comparisons(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return recognize!(input, alt!(
-        tag!("==") |
-        tag!("<=") |
-        tag!(">=") |
-        tag!("!=") |
-        tag!("<")  |
-        tag!(">")
-    ));
-}
-
-pub fn comparison(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        alt!(match_expr | boolean_op_expr),
-        opt!(complete!(tuple!(
-            w_followed!(comparisons),
-            boolean_op_expr
-        )))
-    );
-
-    let map = |x: (Node<Expr>, Option<(&[u8], Node<Expr>)>)| match x.1 {
-        None => x.0,
-        Some(y) => {
-            let operator = match from_utf8(y.0) {
-                Ok("==") => ComparisonOperator::Equal,
-                Ok(">=") => ComparisonOperator::GreaterEqual,
-                Ok("<=") => ComparisonOperator::LessEqual,
-                Ok(">")  => ComparisonOperator::Greater,
-                Ok("<")  => ComparisonOperator::Less,
-                Ok("!=") => ComparisonOperator::Unequal,
-                _ => panic!(),
-            };
-            Node::from(Expr::ComparisonExpr{operator, left: Box::new(x.0), right: Box::new(y.1)})
-        }
-    };
-
-    let node = fmap_iresult(parse_result, map);
-    return node;
-}
-
-pub fn match_expr(input: &[u8]) -> ExprRes {
-
-    let parse_result = tuple!(input,
-        delimited!(
-            tag!("match"),
-            inline_wrapped!(expression),
-            tuple!(
-                w_followed!(tag!(":")),
-                between_statement
-            )
-        ),
-        separated_nonempty_list_complete!(
-            between_statement,
-            separated_pair!(
-                alt!(float | int | string),
-                inline_wrapped!(tag!("=>")),
-                expression
-            )
-        )
-    );
-
-    return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-}
-
-/// Match a single binary expression.
-pub fn match_binary_expr(operator: BinaryOperator, output: (Node<Expr>, Option<Node<Expr>>)) -> Node<Expr> {
-    return match output.1 {
-        Some(x) => Node::from(Expr::BinaryExpr {operator, left: Box::new(output.0), right: Box::new(x)}),
-        None => output.0
-    };
-}
-
-/// Create a binary expression, where one of several operators is possible.
-pub fn match_binary_exprs(operators: &HashMap<&[u8], BinaryOperator>, output: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
-    return match output.1 {
-        Some(x) => {
-            let op: BinaryOperator = *operators.get(x.0).unwrap();
-            Node::from(Expr::BinaryExpr {operator: op, left: Box::new(output.0), right: Box::new(x.1)})
-        },
-        None => output.0
-    };
-}
-
-/// Match any of a list of strings. Return the matched string.
-pub fn match_any<'a>(input: &'a[u8], keywords: &Vec<&str>) -> IResult<&'a[u8], &'a[u8]> {
-    let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-    let tag_iter = keywords.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut ret = IResult::Error(ErrorKind::Tag);
-    for res in tag_iter {
-        match res {
-            Done(i, o) => ret = Done(i, o),
-            _ => continue
-        };
-    }
-    return ret
-}
-
-/// Match a binary expression whose operator is a symbol.
-pub fn binary_op_symbol<'a>(input: &'a [u8], symbol: &str, operator: BinaryOperator, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(complete!(preceded!(
-            w_followed!(tag!(symbol)),
-            call!(binary_op_symbol, symbol, operator, next_expr)
-        )))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_expr(operator, x));
-    return node;
-}
-
-/// Match a binary expression whose operator is a keyword
-/// Currently only used for and, or, and xor.
-pub fn binary_keyword_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(tuple!(
-            w_followed!(call!(match_any, symbols)),
-            call!(binary_op_list, symbols, operators, next_expr)
-        ))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-    return node;
-}
-
-/// Match a list of binary operations
-pub fn binary_op_list<'a>(input: &'a [u8], symbols: &Vec<&str>, operators: &HashMap<&[u8], BinaryOperator>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
-    let parse_result = tuple!(input,
-        w_followed!(next_expr),
-        opt!(tuple!(
-            w_followed!(call!(match_any, symbols)),
-            call!(binary_op_list, symbols, operators, next_expr)
-        ))
-    );
-
-    let node = fmap_iresult(parse_result, |x| match_binary_exprs(operators, x));
-    return node;
-}
-
-/// Match boolean operators.
-pub fn boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["and", "or", "xor"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_keyword_list(input, &symbols, &operators, bit_boolean_op_expr);
-}
-
-/// Match bitwise boolean operations.
-pub fn bit_boolean_op_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["&", "|", "^"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators,bit_shift);
-}
-
-/// Match the bit shift operators.
-pub fn bit_shift(input: &[u8]) -> ExprRes {
-    let symbols = vec![">>", "<<"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, additive_expr);
-}
-
-/// Match addition and subtraction.
-pub fn additive_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["+", "-"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, mult_expr);
-}
-
-/// Match multiplication, division, and modulo.
-pub fn mult_expr(input: &[u8]) -> ExprRes {
-    let symbols = vec!["*", "/", "%"];
-    let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
-    return binary_op_list(input, &symbols, &operators, unary_expr);
-}
-
-/// Match any unary expression.
-/// Implemented as a single parser because all unary expressions have the same precedence.
-pub fn unary_expr(input: & [u8]) -> ExprRes {
-    let parse_result = alt!(input,
-        tuple!(
-            map!(w_followed!(alt!(tag!("+") | tag!("-") | tag!("~") | inline_keyword!("not"))), Some),
-            unary_expr)
-         |
-        tuple!(
-            value!(None, tag!("")),
-            power_expr
-        )
-    );
-
-    let node = fmap_iresult(parse_result, |x|
-        match x.0 {
-            Some(y) => {
-                let unary_op = match from_utf8(y).unwrap() {
-                    "+" => UnaryOperator::Positive,
-                    "-" => UnaryOperator::Negative,
-                    "~" => UnaryOperator::BitNot,
-                    "not" => UnaryOperator::Not,
-                    _ => panic!()
-
-                };
-                Node::from(Expr::UnaryExpr {operator: unary_op, operand: Box::new(x.1)})
-            },
-            None => x.1
-
-        });
-    return node;
-}
-
-/// An exponentiation.
-pub fn power_expr(input: &[u8]) -> ExprRes {
-    return binary_op_symbol(input, "**", BinaryOperator::Exponent, atomic_expr);
 }
 
 /// Parse dot separated identifiers.
@@ -619,245 +401,19 @@ pub fn power_expr(input: &[u8]) -> ExprRes {
 pub fn dotted_identifier(input: &[u8]) -> IResult<&[u8], DottedIdentifier> {
     let parse_result = separated_nonempty_list_complete!(input,
         w_followed!(tag!(".")),
-        identifier
+        IDENTIFIER
     );
 
     return fmap_iresult(parse_result, |x: Vec<Identifier>| DottedIdentifier{attributes: x});
 }
 
-//TODO get rid of all the bits
-pub fn atomic_expr(input: &[u8]) -> ExprRes {
-    let node = alt_complete!(input,
-        bool_expr |
-        float |
-        int |
-        string |
-        delimited!(
-            w_followed!(tag!("{")),
-            alt_complete!(
-                map_or_set_comprehension |
-                set_literal |
-                map_literal
-            ),
-            w_followed!(tag!("}"))
-        ) |
-        delimited!(
-            w_followed!(tag!("[")),
-            alt_complete!(vector_comprehension | vec_literal),
-            w_followed!(tag!("]"))
-        ) |
-        expr_with_trailer
-    );
-    return node;
-}
-
-/// Match the for part of a comprehension.
-pub fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
-    let parse_result = tuple!(input,
-        delimited!(
-            inline_keyword!("for"),
-            variable_unpacking,
-            inline_keyword!("in")
-        ),
-        boolean_op_expr,
-        comprehension_if
-    );
-
-    return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
-        iter_vars: iter_vars,
-        iterator: Box::new(iterator),
-        if_clauses: if_clauses
-    });
-}
-
-/// Match the if part of a comprehension.
-pub fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
-    return many0!(input,
-        preceded!(
-            inline_keyword!("if"),
-            boolean_op_expr
-        )
-    );
-}
-
-/// Match a vector literal.
-pub fn vec_literal(input: &[u8]) -> ExprRes {
-
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(boolean_op_expr)
-        ),
-        peek!(close_bracket)
-    );
-
-    return fmap_node(parse_result, |x| Expr::VecLiteral(x));
-}
-
-/// Match a set literal.
-pub fn set_literal(input: &[u8]) -> ExprRes {
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            inline_wrapped!(boolean_op_expr)
-        ),
-        peek!(close_brace)
-    );
-
-    return fmap_node(parse_result, |x| Expr::SetLiteral(x));
-}
-
-/// Match a map literal.
-pub fn map_literal(input: &[u8]) -> ExprRes {
-
-    let parse_result = terminated!(input,
-        separated_nonempty_list_complete!(
-            inline_wrapped!(tag!(",")),
-            separated_pair!(
-                inline_wrapped!(identifier),
-                inline_wrapped!(tag!(":")),
-                inline_wrapped!(boolean_op_expr)
-            )
-        ),
-        peek!(close_brace)
-    );
-
-    return fmap_node(parse_result, |x| Expr::MapLiteral (x));
-}
-
-/// Match a tuple literal
-/// e.g. (), (1, ), (1,2,3), (1,2,3,)
-pub fn tuple_literal(input: &[u8]) -> ExprRes {
-    let parse_result = alt_complete!(input,
-        map!(
-            terminated!(
-                inline_whitespace,
-                peek!(close_paren)
-            ), |_| vec!()) |
-        map!(
-            terminated!(
-                inline_wrapped!(boolean_op_expr),
-                tuple!(
-                    comma,
-                    peek!(close_paren)
-                )
-            ), |x| vec!(x)
-        ) |
-        terminated!(
-            separated_at_least_m!(2, comma, boolean_op_expr),
-            terminated!(
-                opt!(complete!(comma)),
-                peek!(close_paren)
-            )
-        )
-    );
-
-    return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
-}
-
-/// Match a vector comprehension.
-pub fn vector_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        inline_wrapped!(boolean_op_expr),
-        many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |x| Expr::VecComprehension {
-        
-        values: Box::new(x.0),
-        iterators: x.1
-    });
-}
-
-/// Match a generator comprehension.
-pub fn generator_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-        boolean_op_expr,
-        many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |x| Expr::GenComprehension {
-        values: Box::new(x.0),
-        iterators: x.1
-    });
-}
-
-/// Match a map or a set.
-pub fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
-    let parse_result = tuple!(input,
-            boolean_op_expr,
-            opt!(complete!(preceded!(
-                inline_wrapped!(tag!(":")),
-                boolean_op_expr
-            ))),
-            many1!(comprehension_for)
-    );
-
-    return fmap_node(parse_result, |(keys_or_values, values, iters)| match values {
-        Some(y) => Expr::MapComprehension {
-            keys: Box::new(keys_or_values),
-            values: Box::new(y),
-            iterators: iters
-        },
-        None => Expr::SetComprehension {
-            values: Box::new(keys_or_values),
-            iterators: iters
-        }
-    });
-}
-
-/// An expression wrapped in parentheses.
-pub fn wrapped_expr(input: &[u8]) -> ExprRes {
-    let node = delimited!(input,
-        open_paren,
-        alt_complete!(generator_comprehension | tuple_literal | expression),
-        close_paren
-    );
-
-    return node;
-}
-
-/// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
-pub fn expr_with_trailer(input: &[u8]) -> ExprRes {
-    let ident = |x| fmap_iresult(
-        identifier(x),
-        |y: Identifier| Node::from(Expr::IdentifierExpr (y))
-    );
-
-    let parse_result = tuple!(input,
-        alt!(ident | wrapped_expr),
-        many0!(trailer)
-    );
-
-    let map = |x: (Node<Expr>, Vec<PostIdent>)| {
-        let mut tree_base = x.0.data;
-        for postval in x.1 {
-            match postval {
-                PostIdent::Call{args, kwargs} => {
-                    tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
-                },
-                PostIdent::Access{attributes} => {
-                    tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
-                }
-                PostIdent::Index{slices} => {
-                    tree_base = Expr::Index {slices: slices};
-                }
-            };
-        };
-        return Node::from(tree_base);
-    };
-
-    let node = fmap_iresult(parse_result, map);
-    return node;
-}
-
 /// Match a list of arguments.
 pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
     let parse_result = separated_nonempty_list_complete!(input,
-        inline_wrapped!(tag!(",")),
+        COMMA,
         terminated!(
-            w_followed!(boolean_op_expr),
-            not!(equals)
+            logical_binary_expr,
+            not!(EQUALS)
         )
     );
     return parse_result;
@@ -866,587 +422,586 @@ pub fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
 /// Match a list of keyword arguments.
 pub fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
     let parse_result = separated_list!(input,
-        inline_wrapped!(tag!(",")),
+        COMMA,
         tuple!(
-            identifier,
+            IDENTIFIER,
             preceded!(
-                inline_wrapped!(tag!("=")),
-                boolean_op_expr
+                EQUALS,
+                logical_binary_expr
             )
         )
     );
     return parse_result;
 }
 
-/// Match a function call following an expression.
-pub fn post_call(input: &[u8]) -> IResult<&[u8], (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)> {
-    let parse_result = delimited!(input,
-        open_paren,
-        alt_complete!(
-            tuple!(
-                inline_wrapped!(args_list),
-                opt!(preceded!(
-                    comma,
-                    inline_wrapped!(kwargs_list)
-                ))
-            ) |
-            map!(
-                w_followed!(kwargs_list), |x| (vec![], Some(x))
-            )
-        ),
-
-        close_paren
-    );
-    return fmap_iresult(parse_result, |(x, y)| (x, match y {
-        Some(z) => z,
-        None => vec![]
-    }));
-}
-
-/// Match an indexing operation following an expression.
-pub fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let parse_result = delimited!(input,
-        open_bracket,
-        separated_nonempty_list_complete!(
-            comma,
-            alt_complete!(
-                tuple!(
-                    map!(boolean_op_expr, |x| Some(x)),
-                    optc!(tuple!(
-                        preceded!(
-                            colon,
-                            boolean_op_expr
-                        ),
-                        optc!(preceded!(
-                            colon,
-                            boolean_op_expr
-                        ))
-                    ))
-                ) |
-                map!(colon, |_| (None, None))
-            )
-        ),
-        close_bracket
-    );
-
-    fn flatten((lower_or_upper, rest): (Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)) -> (Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>) {
-        match lower_or_upper {
-            Some(_) => {
-                match rest {
-                    Some((upper, step)) => (lower_or_upper, Some(upper), step),
-                    None => (lower_or_upper, None, None)
-                }
-            },
-            None => (None, None, None)
-        }
-    }
-
-    return fmap_iresult(parse_result, |x: Vec<(Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)>| PostIdent::Index {
-        slices: c![flatten(y), for y in x]
-    });
-}
-
-/// Match an access operation following an expression.
-pub fn post_access(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    return many1!(input, 
-        preceded!(
-            inline_wrapped!(tag!(".")),
-            identifier
-        )
-    );
-}
-
-/// Match a trailer behind an expression.
-/// A trailer is a function call, an attribute access, or an index.
-pub fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
-    let call_to_enum = |x: (Vec<Node<Expr>>, Vec<(Identifier, Node<Expr>)>)| PostIdent::Call{args: x.0, kwargs: x.1};
-    let access_to_enum = |x: Vec<Identifier>| PostIdent::Access{attributes: x};
-    let result = alt!(input,
-        map!(post_call, call_to_enum) |
-        map!(post_access, access_to_enum) |
-        post_index
-    );
-    return result;
-}
-
-/// Parser to return an Identifier AST.
-pub fn identifier(input: &[u8]) -> IResult<&[u8], Identifier> {
-    let not_result: IResult<&[u8], (&[u8], Vec<&[u8]>)> = pair!(input, 
-                    alt!(alpha | tag!("_")),
-                    many0!(valid_identifier_char)
-                );
-    let parse_result = inline_wrapped!(input,
-        recognize!(
-            pair!(
-                not!(peek!(tuple!(reserved_words, not!(valid_identifier_char)))),
-                pair!(
-                    alt!(alpha | tag!("_")),
-                    many0!(valid_identifier_char)
-                )
-            )
-        )
-    );
-    return fmap_iresult(parse_result,  Identifier::from);
-}
-
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
-        identifier,
+        IDENTIFIER,
         opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_parser::any_type)))
     );
 
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
-pub fn bool_expr(input: &[u8]) -> ExprRes {
-    let parse_result= alt!(input,
-        terminated!(tag!("true"), peek!(not!(valid_identifier_char))) |
-        terminated!(tag!("false"), peek!(not!(valid_identifier_char)))
-    );
-    return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x).unwrap() {
-        "true" => true,
-        "false" => false,
-        _ => panic!()
-    }));
-}
-
-// TODO: Hex encoded, byte encoded
-/// Match an integer literal.
-pub fn int(input: &[u8]) -> ExprRes {
-    let parse_result: IResult<&[u8], &[u8]> = recognize!(input,
-        tuple!(
-            opt!(sign),
-            terminated!(
-                dec_seq,
-                num_follow
-            )
-        )
-    );
-    return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
-}
-
-/// Match a floating point literal.
-pub fn float<'a>(input: &'a[u8]) -> ExprRes {
-
-    let with_dec = |x: &'a[u8]| tuple!(x,
-        tag!("."),
-        many0!(dec_digit),
-        opt!(complete!(exponent))
-    );
-
-    let parse_result = recognize!(input, tuple!(
-        opt!(sign),
-        many0!(dec_digit),
-        alt!(
-            value!((), with_dec) |
-            value!((), complete!(exponent))
-        ),
-        num_follow
-    ));
-
-    return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
-}
-
-named!(string_char<&[u8], &[u8]>,
-    recognize!(
-        alt!(
-            tag!("\\\"") |
-            tag!("\\\\") |
-            tag!("\\\n") |
-            tag!("\\\r") |
-            recognize!(none_of!("\n\""))
-        )
-    )
-);
-
-named!(string_literal<&[u8], &[u8]>,
-    recognize!(
-        tuple!(
-            tag!("\""),
-            many0!(string_char),
-            tag!("\"")
-        )
-    )
-);
-
-/// Match a string literal.
-pub fn string(input: &[u8]) -> ExprRes {
-    let parse_result = string_literal(input);
-
-    return fmap_node(parse_result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()));
-}
-
 pub mod expr_parsers {
     use super::*;
-}
 
-pub mod type_parser {
-    use super::*;
-    /// Parse a type.
-    pub fn any_type(input: &[u8]) -> TypeRes {
-        return alt_complete!(input, product_type | sum_type);
+    pub fn expression(input: &[u8]) -> ExprRes {
+        return alt_complete!(input, comparison_expr);
     }
 
-    pub fn product_type(input: &[u8]) -> TypeRes {
-        let result = delimited!(input,
-            open_paren,
-            separated_list!(
-                comma,
-                alt_complete!(product_type | sum_type)
-            ),
-            close_paren
+    /// Match a comparison expression.
+    fn comparison_expr(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+            alt!(match_expr | logical_binary_expr),
+            optc!(tuple!(
+                alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
+                comparison_expr
+            ))
         );
 
-        return fmap_iresult(result, |x| typing::Type::Product(x))
+        let map = |x: (Node<Expr>, Option<(&[u8], Node<Expr>)>)| match x.1 {
+            None => x.0,
+            Some(y) => {
+                let operator = ComparisonOperator::from(y.0);
+                Node::from(Expr::ComparisonExpr{operator, left: Box::new(x.0), right: Box::new(y.1)})
+            }
+        };
+
+        let node = fmap_iresult(parse_result, map);
+        return node;
     }
 
-    pub fn sum_type(input: &[u8]) -> TypeRes {
-        let result = tuple!(input, 
-            parameterized_type,
-            many0!(
-                preceded!(
-                    VBAR,
-                    parameterized_type
+    /// Match a match expression.
+    fn match_expr(input: &[u8]) -> ExprRes {
+
+        let parse_result = tuple!(input,
+            delimited!(
+                MATCH,
+                expression,
+                tuple!(
+                    COLON,
+                    between_statement
+                )
+            ),
+            separated_nonempty_list_complete!(
+                between_statement,
+                separated_pair!(
+                    alt!(float_expr | int_expr | string_expr),
+                    ARROW,
+                    expression
                 )
             )
         );
 
-        return fmap_iresult(result, |mut x| match x.1.len() {
-            0 => x.0,
-            _ => {
-                x.1.insert(0, x.0);
-                typing::Type::Sum(x.1)
-            }
-        });
+        return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
     }
 
-    pub fn parameterized_type(input: &[u8]) -> TypeRes {
-        let result = tuple!(input, 
-            identifier,
-            opt!(complete!(delimited!(
-                LANGLE,
-                separated_nonempty_list!(
-                    comma,
-                    any_type
-                ),
-                RANGLE
-            )))
+    // BEGIN BINARY EXPRESSIONS
+
+    /// Flatten a possible binary expression into a single expression.
+    fn flatten_binary(result: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
+        return match result.1 {
+            Some(x) => {
+                let op = BinaryOperator::from(x.0);
+                Node::from(Expr::BinaryExpr {operator: op, left: Box::new(result.0), right: Box::new(x.1)})
+            },
+            None => result.0
+        };
+    }
+
+    /// Match a list of binary operations
+    fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+        let parse_result = tuple!(input,
+            next_expr,
+            optc!(tuple!(
+                operator_parser,
+                call!(binary_expr, operator_parser, next_expr)
+            ))
         );
-        return fmap_iresult(result, |x| match x.1 {
-            Some(y) => typing::Type::Parameterized(x.0, y),
-            None => typing::Type::from(x.0)
-        });
+
+        return fmap_iresult(parse_result, flatten_binary);
     }
 
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use rand;
-    use std::fmt::Debug;
-
-    fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Done(i, o) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o, expected);
-            },
-            IResult::Error(e) => {
-                println!("Error: {}. Input was: {}", e, input);
-                panic!()
-            },
-            _ => panic!()
-        }
+    /// Match logical expressions.
+    /// Must be public because it's used by several statements
+    pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
     }
 
-    fn check_data<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Done(i, o) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o.data, expected);
-            },
-            IResult::Error(e) => {
-                println!("Error: {}. Input was: {}", e, input);
-                panic!()
-            },
-            _ => panic!()
-        }
+    /// Match bitwise boolean expressions.
+    fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), shift_expr);
     }
 
-    fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
-        let res = parser(input.as_bytes());
-        match res {
-            IResult::Error(_) => {},
-            _ => panic!()
-        }
+    /// Match bit shift expressions.
+    fn shift_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), additive_expr);
     }
 
-    fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind) {
-        let res = parser(input.as_bytes());
-        match res {
-            IResult::Error(e) => {
-                assert_eq!(e, expected);
-            },
-            _ => panic!()
-        }
+    /// Match addition and subtraction expressions.
+    fn additive_expr(input: &[u8]) -> ExprRes {
+        // let symbols = vec!["+", "-"];
+        // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
+        // return binary_op_list(input, &symbols, &operators, mult_expr);
+        return binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), mult_expr);
     }
 
-        #[test]
-    fn test_module() {
-       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
-       check_match(module_str, module, Node::from(Module{
-           declarations: vec!(
-               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
-               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
-           )
-       }))
+    /// Match multiplication, division, and modulo expressions.
+    fn mult_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr);
     }
 
-    #[test]
-    fn test_block() {
-        let exp_block = Block {
-            statements: vec![
-                Box::new(output(assignment_stmt("x=0\n".as_bytes()))),
-                Box::new(output(assignment_stmt("y=true".as_bytes())))
-            ]
+    /// Match an exponentiation expression.
+    fn power_expr(input: &[u8]) -> ExprRes {
+        return binary_expr(input, EXP, atomic_expr);
+    }
+
+    // END BINARY EXPRESSIONS
+
+    /// Match any unary expression.
+    /// Implemented as a single parser because all unary expressions have the same precedence.
+    fn unary_expr(input: & [u8]) -> ExprRes {
+        let parse_result = alt!(input,
+            tuple!(
+                map!(alt!(PLUS | MINUS | TILDE | NOT), Some),
+                unary_expr)
+            |
+            tuple!(
+                value!(None, tag!("")),
+                power_expr
+            )
+        );
+
+        let node = fmap_iresult(parse_result, |x|
+            match x.0 {
+                Some(y) => Node::from(Expr::UnaryExpr {operator: UnaryOperator::from(y), operand: Box::new(x.1)}),
+                None => x.1
+
+            });
+        return node;
+    }
+
+    // BEGIN ATOMIC EXPRESSIONS
+
+    //TODO get rid of all the bits
+    fn atomic_expr(input: &[u8]) -> ExprRes {
+        let node = w_followed!(input, alt_complete!(
+            bool_expr |
+            float_expr |
+            int_expr |
+            string_expr |
+            delimited!(
+                OPEN_BRACE,
+                alt_complete!( map_or_set_comprehension  | map_literal | set_literal),
+                CLOSE_BRACE
+            ) |
+            delimited!(
+                OPEN_BRACKET,
+                alt_complete!(vector_comprehension | vec_literal),
+                CLOSE_BRACKET
+            ) |
+            expr_with_trailer
+        ));
+        return node;
+    }
+
+    /// An expression wrapped in parentheses.
+    fn wrapped_expr(input: &[u8]) -> ExprRes {
+        let node = delimited!(input,
+            OPEN_PAREN,
+            alt_complete!(generator_comprehension | tuple_literal | expression),
+            CLOSE_PAREN
+        );
+
+        return node;
+    }
+
+    /// A helper Enum for trailers.
+    #[derive (Debug, Clone, PartialEq, Eq, Hash)]
+    enum PostIdent {
+        Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
+        Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
+        Access{attributes: Vec<Identifier>}
+    }
+
+    /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
+    fn expr_with_trailer(input: &[u8]) -> ExprRes {
+        let ident_as_expr = |x| fmap_iresult(
+            IDENTIFIER(x),
+            |y: Identifier| Node::from(Expr::IdentifierExpr (y))
+        );
+
+        let parse_result = tuple!(input,
+            alt!(ident_as_expr | wrapped_expr),
+            many0c!(trailer)
+        );
+
+        // Convert the vector of post identifiers into a single usable expression.
+        let map = |x: (Node<Expr>, Vec<PostIdent>)| {
+            let mut tree_base = x.0.data;
+            for postval in x.1 {
+                match postval {
+                    PostIdent::Call{args, kwargs} => {
+                        tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
+                    },
+                    PostIdent::Access{attributes} => {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
+                    }
+                    PostIdent::Index{slices} => {
+                        tree_base = Expr::Index {slices: slices};
+                    }
+                };
+            };
+            return Node::from(tree_base);
         };
 
-        check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
+        let node = fmap_iresult(parse_result, map);
+        return node;
     }
 
-    #[test]
-    fn test_reserved_words() {
-        for keyword in reserved_list() {
-            let result = identifier(keyword.as_bytes());
-            assert_eq!(result, IResult::Error(ErrorKind::Not));
-        }
+    /// Parse an expression trailer.
+    fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        return alt_complete!(input,
+            post_call |
+            post_access |
+            post_index
+        );
     }
 
-    #[test]
-    fn test_dotted_identifier() {
-        let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
-        check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
-    }
-
-    #[test]
-    fn test_post_ident() {
-        let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
-        check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
-        check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
-            args: vec!(Node::from("a")),
-            kwargs: vec!((Identifier::from("b"), Node::from(true)))
-        });
-
-        check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
-            args: vec![],
-            kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
-        });
-
-
-
-        simple_check_failed("(a | b=false)", trailer);
-        simple_check_failed("(a   b=false)", trailer);
-        simple_check_failed("(a,, b=false)", trailer);
-        simple_check_failed("(a,, b)", trailer);
-        simple_check_failed("(a, b =  true, c)", trailer);
-
-
-       check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
-
-       check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
-           slices: vec!(
-               (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
-               (None, None, None),
-               (Some(Node::from("d")), None, None)
-           )
-       })
-    }
-
-
-    #[cfg(test)]
-    mod statements {
-        use super::*;
-
-        #[test]
-        fn test_let() {
-            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: Some(typing::Type::f32)
-                },
-                expression: Node::from(Expr::Float("3.0".to_string()))
-            });
-        }
-
-        #[test]
-        fn test_func_dec_parts() {
-            // Args
-            let actual = output(args_dec_list("a: i32)".as_bytes()));
-            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
-
-            // Vararg
-            let expected = Some(Identifier::from("args"));
-            let actual = output(vararg(", *args".as_bytes()));
-            assert_eq!(expected, actual);
-
-            // Kwargs.
-            let expected = vec!(
-                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
-                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
-            );
-            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
-            assert_eq!(expected, actual);
-        }
-       
-        #[test]
-        fn test_func_dec() {
-            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("wvars"),
-                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
-                vararg: Some(Identifier::from("args")),
-                kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
-                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
-                ),
-                varkwarg: Some(Identifier::from("kwargs")),
-                block: output(block("let val =  5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
-            });
-
-            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("wkwargs"),
-                args: vec![(Identifier::from("a"), typing::Type::i32)],
-                vararg: None,
-                kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
-                ),
-                varkwarg: None,
-                block: output(block("let val=5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
-            });
-
-            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
-                name: Identifier::from("a"),
-                args: vec!((Identifier::from("b"), typing::Type::i32)),
-                vararg: None,
-                kwargs: vec!(),
-                varkwarg: None,
-                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-                return_type: typing::Type::i32
-            });
-        }
-
-        #[test]
-        fn test_try_except() {
-            let blk = output(block("x=0".as_bytes(), 0));
-            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
-                block: blk.clone(),
-                exceptions: vec!(blk.clone()),
-                else_block: Some(blk.clone()),
-                final_block: Some(blk.clone())
-            });
-        }
-
-        #[test]
-        fn test_assignment() {
-            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("foo"),
-                operator: Assignment::Normal,
-                expression: Node::from(true)
-            });
-
-            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
-                name: Identifier::from("x"),
-                operator: Assignment::Normal,
-                expression: Node::from(0)
-            });
-
-            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
-            for op in all_ops {
-                let input = format!("x {} y", op);
-                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
-                    name: Identifier::from("x"),
-                    operator: Assignment::from(op),
-                    expression: Node::from("y"),
-                });
+    /// Match a function call following an expression.
+    fn post_call(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let parse_result = delimited!(input,
+            OPEN_PAREN,
+            alt_complete!(
+                tuple!(
+                    inline_wrapped!(args_list),
+                    opt!(preceded!(
+                        COMMA,
+                        kwargs_list
+                    ))
+                ) |
+                map!(kwargs_list, |x| (vec![], Some(x)))
+            ),
+            CLOSE_PAREN
+        );
+        return fmap_iresult(parse_result, |(x, y)| PostIdent::Call{
+            args: x, 
+            kwargs: match y {
+                Some(z) => z,
+                None => vec![]
             }
-
-        }
-
-        #[test]
-        fn test_if_stmt() {
-            let good_input = "if (a and b):\n x = true";
-
-            let good_output = Stmt::IfStmt{
-                condition: output(expression("a and b".as_bytes())),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
-                elifs: vec!(),
-                else_block: None
-            };
-
-            check_data(good_input, |x| statement(x, 0), good_output);
-
-            check_failed("ifa and b:\n x = true", |x| statement(x, 0), nom::ErrorKind::Alt);
-
-            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
-                
-                condition: Node::from(true),
-                block: output(block("x = true".as_bytes(), 0)),
-                elifs: vec!((Node::from(false), output(block("y = true".as_bytes(), 0)))),
-                else_block: Some(output(block("z = true".as_bytes(), 0)))
-            });
-        }
-
-        #[test]
-        fn test_while_stmt() {
-            check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
-                condition: Node::from(true),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
-            });
-        }
-
-        #[test]
-        fn test_simple_statements() {
-            check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
-            check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
-            check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
-        }
-
-        #[test]
-        fn test_import() {
-            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
-                attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
-            }));
-        }
-
-        #[test]
-        fn test_returns() {
-            check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
-
-            check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
-        }
-
-        #[test]
-        fn test_for_in() {
-            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
-                iter_vars: Identifier::from("x"),
-                iterator: Node::from("y"),
-                block: output(block("a=true".as_bytes(), 0))
-            });
-        }
+        });
     }
 
+    /// Match an indexing operation following an expression.
+    fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let parse_result = delimited!(input,
+            OPEN_BRACKET,
+            separated_nonempty_list_complete!(
+                COMMA,
+                alt_complete!(
+                    tuple!(
+                        map!(logical_binary_expr, |x| Some(x)),
+                        optc!(tuple!(
+                            preceded!(
+                                COLON,
+                                logical_binary_expr
+                            ),
+                            optc!(preceded!(
+                                COLON,
+                                logical_binary_expr
+                            ))
+                        ))
+                    ) |
+                    map!(colon, |_| (None, None))
+                )
+            ),
+            CLOSE_BRACKET
+        );
+
+        fn flatten((lower_or_upper, rest): (Option<Node<Expr>>, Option<(Node<Expr>, Option<Node<Expr>>)>)) -> (Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>) {
+            match lower_or_upper {
+                Some(_) => {
+                    match rest {
+                        Some((upper, step)) => (lower_or_upper, Some(upper), step),
+                        None => (lower_or_upper, None, None)
+                    }
+                },
+                None => (None, None, None)
+            }
+        }
+
+        return fmap_iresult(parse_result, |x| PostIdent::Index { slices: c![flatten(y), for y in x] });
+    }
+
+    /// Match an access operation following an expression.
+    fn post_access(input: &[u8]) -> IResult<&[u8], PostIdent> {
+        let result = many1c!(input, 
+            preceded!(
+                DOT,
+                IDENTIFIER
+            )
+        );
+        return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
+    }
+
+    // Literal expressions.
+
+    /// Match a boolean literal expression.
+    fn bool_expr(input: &[u8]) -> ExprRes {
+        let parse_result = w_followed!(input, 
+            alt!(
+            terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
+            terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
+        ));
+        return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x).unwrap() {
+            "true" => true,
+            "false" => false,
+            _ => panic!()
+        }));
+    }
+
+    /// Match an integer literal expression.
+    fn int_expr(input: &[u8]) -> ExprRes {
+        let parse_result: IResult<&[u8], &[u8]> = w_followed!(input, 
+            recognize!(tuple!(
+                optc!(sign),
+                terminated!(
+                    DIGIT,
+                    VALID_NUM_FOLLOW
+                )
+            )
+        ));
+        return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
+    }
+
+    /// Match a floating point literal expression.
+    fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
+        let with_dec = |x: &'a[u8]| tuple!(x,
+            tag!("."),
+            DIGIT0,
+            opt!(complete!(exponent))
+        );
+
+        let parse_result = w_followed!(input, 
+            recognize!(tuple!(
+                opt!(sign),
+                DIGIT,
+                alt!(
+                    value!((), with_dec) |
+                    value!((), complete!(exponent))
+                ),
+                VALID_NUM_FOLLOW
+            )
+        ));
+
+        return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
+    }
+
+    /// Match a string literal expression.
+    fn string_expr(input: &[u8]) -> ExprRes {
+        let result = w_followed!(input, 
+            recognize!(
+                tuple!(
+                    tag!("\""),
+                    many0c!(STRING_CHAR),
+                    tag!("\"")
+                )
+            )
+        );
+        return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
+    }
+
+    // Collection literals.
+
+    /// Match a vector literal.
+    fn vec_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = terminated!(input,
+            separated_nonempty_list_complete!(
+                COMMA,
+                logical_binary_expr
+            ),
+            peek!(CLOSE_BRACKET)
+        );
+
+        return fmap_node(parse_result, |x| Expr::VecLiteral(x));
+    }
+
+    /// Match a set literal.
+    fn set_literal(input: &[u8]) -> ExprRes {
+        let parse_result = 
+            separated_nonempty_list_complete!(input,
+                COMMA,
+                logical_binary_expr
+            );
+
+        return fmap_node(parse_result, |x| Expr::SetLiteral(x));
+    }
+
+    /// Match a map literal.
+    fn map_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = separated_nonempty_list_complete!(input,
+            COMMA,
+            separated_pair!(
+                IDENTIFIER,
+                COLON,
+                logical_binary_expr
+            )
+        );
+
+        return fmap_node(parse_result, |x| Expr::MapLiteral (x));
+    }
+
+    /// Match a tuple literal
+    /// e.g. (), (1, ), (1,2,3), (1,2,3,)
+    fn tuple_literal(input: &[u8]) -> ExprRes {
+
+        let parse_result = alt_complete!(input,
+            // Empty input
+            map!(peek!(CLOSE_PAREN), |_| vec!()) |
+            // Single element tuple.
+            map!(
+                terminated!(
+                    logical_binary_expr,
+                    tuple!(
+                        COMMA,
+                        peek!(CLOSE_PAREN)
+                    )
+                ), |x| vec!(x)
+            ) |
+            terminated!(
+                separated_at_least_m!(2, COMMA, logical_binary_expr),
+                optc!(COMMA)
+            )
+        );
+
+        return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
+    }
+
+    // Collection comprehensions
+
+    /// Match the for part of a comprehension.
+    fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
+        let parse_result = tuple!(input,
+            delimited!(
+                FOR,
+                variable_unpacking,
+                IN
+            ),
+            logical_binary_expr,
+            comprehension_if
+        );
+
+        return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
+            iter_vars: iter_vars,
+            iterator: Box::new(iterator),
+            if_clauses: if_clauses
+        });
+    }
+
+    /// Match the if part of a comprehension.
+    fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+        return many0c!(input,
+            preceded!(
+                IF,
+                logical_binary_expr
+            )
+        );
+    }
+
+    /// Match a vector comprehension.
+    fn vector_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+            logical_binary_expr,
+            many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |x| Expr::VecComprehension {
+            values: Box::new(x.0),
+            iterators: x.1
+        });
+    }
+
+    /// Match a generator comprehension.
+    fn generator_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+            logical_binary_expr,
+            many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |x| Expr::GenComprehension {
+            values: Box::new(x.0),
+            iterators: x.1
+        });
+    }
+
+    /// Match a map or a set.
+    fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+        let parse_result = tuple!(input,
+                logical_binary_expr,
+                opt!(complete!(preceded!(
+                    COLON,
+                    logical_binary_expr
+                ))),
+                many1!(comprehension_for)
+        );
+
+        return fmap_node(parse_result, |(keys_or_values, values, iters)| match values {
+            Some(y) => Expr::MapComprehension {
+                keys: Box::new(keys_or_values),
+                values: Box::new(y),
+                iterators: iters
+            },
+            None => Expr::SetComprehension {
+                values: Box::new(keys_or_values),
+                iterators: iters
+            }
+        });
+    }
+
+    // END ATOMIC EXPRESSIONS
+
     #[cfg(test)]
-    mod expressions {
+    mod tests {
+        use parser_utils::iresult_helpers::*;
         use super::*;
+
+        #[test]
+        fn parse_post_ident() {
+            let expected_args = vec!("a", "b", "c").iter().map(|x| Node::from(*x)).collect();
+            check_match("( a ,  b , c ) ", trailer, PostIdent::Call{args: expected_args, kwargs: vec![]});
+            check_match("( a   ,  b  =    true)", trailer, PostIdent::Call {
+                args: vec!(Node::from("a")),
+                kwargs: vec!((Identifier::from("b"), Node::from(true)))
+            });
+
+            check_match("( a   = true,  b = true ) ", trailer, PostIdent::Call {
+                args: vec![],
+                kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
+            });
+
+
+
+            simple_check_failed("(a | b=false)", trailer);
+            simple_check_failed("(a   b=false)", trailer);
+            simple_check_failed("(a,, b=false)", trailer);
+            simple_check_failed("(a,, b)", trailer);
+            simple_check_failed("(a, b =  true, c)", trailer);
+
+
+            check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+
+            check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
+                slices: vec!(
+                    (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
+                    (None, None, None),
+                    (Some(Node::from("d")), None, None)
+                )
+            });
+        }
 
         #[test]
         fn test_parenthetical_expressions() {
@@ -1470,14 +1025,22 @@ mod tests {
         }
 
         #[test]
-        fn test_function_call() {
-            let a = output(boolean_op_expr("true and false".as_bytes()));
+        fn parse_function_call() {
+            let a = output(logical_binary_expr("true and false".as_bytes()));
+            let no_args = Node::from(Expr::FunctionCall{
+                function: Box::new(Node::from("func")),
+                args: vec!(),
+                kwargs: vec!()
+            });
+
+            check_match("func()", expr_with_trailer, no_args);
             let b = output(expression("func()".as_bytes()));
             let expected = Expr::FunctionCall{
                 function: Box::new(Node::from(Expr::IdentifierExpr(Identifier{name: "ident".to_string()}))), 
                 args: vec!(a, b), 
                 kwargs: vec!()
             };
+
             check_data("ident(true and false, func())", expression, expected);
 
             check_data("func(a, b, c=true, d=true)", expression, Expr::FunctionCall {
@@ -1488,10 +1051,65 @@ mod tests {
                     (Identifier::from("d"), Node::from(true))
                 )
             });
+
+            let expected = Expr::FunctionCall{
+                function: Box::new(Node::from(Expr::FunctionCall{
+                    function: Box::new(Node::from("func")), 
+                    args: vec!(Node::from("a")), 
+                    kwargs: vec!()
+                })),
+                args: vec!(Node::from("b"), Node::from("c")),
+                kwargs: vec!()
+            };
+            check_data("func(a)(b, c)", expression, expected);
+
+            check_data("(a and b)(true)", expression, Expr::FunctionCall {
+                function: Box::new(output(logical_binary_expr("a and b".as_bytes()))),
+                args: vec!(Node::from(true)),
+                kwargs: vec!()
+            });
         }
 
         #[test]
-        fn test_binary_expr() {
+        fn parse_comparison_expr() {
+            let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
+            let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
+                                ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
+            for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
+                let as_str = format!("true {} false", comp_str);
+                let expr = expression(as_str.as_bytes());
+                let expected = Node::from(Expr::ComparisonExpr{
+                    
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false)),
+                    operator: *comp_op
+                });
+
+                assert_eq!(expr, Ok(("".as_bytes(), expected)));
+            }
+        }
+
+        #[test]
+        fn parse_binary_expr() {
+
+            check_data("1 ** 2", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Exponent,
+                left: Box::new(Node::from(1)),
+                right: Box::new(Node::from(2))
+            });
+
+            check_data("true and false", logical_binary_expr, Expr::BinaryExpr{
+                operator: BinaryOperator::And,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
+            check_data("true or false", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Or,
+                left: Box::new(Node::from(true)),
+                right: Box::new(Node::from(false))
+            });
+
             check_data("true and false or true", expression, Expr::BinaryExpr{
                 
                 operator: BinaryOperator::And,
@@ -1517,7 +1135,7 @@ mod tests {
         }
 
         #[test]
-        fn test_unary_expr() {
+        fn parse_unary_expr() {
             let ops = vec!["not", "+", "-", "~"];
             for op in ops {
                 let input = format!("{} y", op);
@@ -1535,53 +1153,7 @@ mod tests {
         }
 
         #[test]
-        fn test_identifier_expr() {
-            let identifier_expr = expression("words".as_bytes());
-            let expected = Expr::IdentifierExpr(Identifier{name: "words".to_string()});
-            assert_eq!(identifier_expr, Done("".as_bytes(), Node::from(expected)));
-        }
-
-        #[test]
-        fn test_comparison_expr() {
-            let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-            let comp_ops = vec![ComparisonOperator::Greater, ComparisonOperator::Less, ComparisonOperator::GreaterEqual,
-                                ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
-            for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
-                let as_str = format!("true {} false", comp_str);
-                let expr = expression(as_str.as_bytes());
-                let expected = Node::from(Expr::ComparisonExpr{
-                    
-                    left: Box::new(Node::from(true)),
-                    right: Box::new(Node::from(false)),
-                    operator: *comp_op
-                });
-
-                assert_eq!(expr, Done("".as_bytes(), expected));
-            }
-        }
-
-        #[test]
-        fn test_repeated_func_calls() {
-            let expected = Expr::FunctionCall{
-                function: Box::new(Node::from(Expr::FunctionCall{
-                    function: Box::new(Node::from("func")), 
-                    args: vec!(Node::from("a")), 
-                    kwargs: vec!()
-                })),
-                args: vec!(Node::from("b"), Node::from("c")),
-                kwargs: vec!()
-            };
-            check_data("func(a)(b, c)", expression, expected);
-
-            check_data("(a and b)(true)", expression, Expr::FunctionCall {
-                function: Box::new(output(boolean_op_expr("a and b".as_bytes()))),
-                args: vec!(Node::from(true)),
-                kwargs: vec!()
-            });
-        }
-
-        #[test]
-        fn test_comprehensions() {
+        fn parse_comprehensions() {
             check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
                 
                 values: Box::new(Node::from("x")),
@@ -1643,19 +1215,32 @@ mod tests {
         }
 
         #[test]
-        fn test_match() {
+        fn parse_match_expr() {
             check_match("match x:\n5 => 5", expression, Node::from(Expr::MatchExpr {
                 value: Box::new(Node::from("x")),
-                cases: vec![(output(expression("5".as_bytes())), output(expression("5".as_bytes())))]
+                cases: vec![(Node::from(5), Node::from(5))]
             }));
         }
 
         #[test]
-        fn test_literals() {
+        fn parse_identifier_expr() {
+            let expected: Node<Expr> = Node::from("words");
+            check_match("words", expression, expected);
+
+            let expected = Node::from("abc_123");
+            check_match("abc_123", expression, expected);
+
+            check_failed("(", expression, ErrorKind::Alt);
+        }
+
+        #[test]
+        fn parse_literals() {
+            check_data_and_leftover("2]", expression, Expr::from(2), "]");
+
             let int = rand::random::<i64>().abs();
-            check_match(&int.to_string(), expression, Node::from(int));
+            check_match(&int.to_string(), int_expr, Node::from(int));
             let rand_float = rand::random::<f64>().abs();
-            check_match(&rand_float.to_string(), float, Node::from(rand_float));
+            check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
             let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
             check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
 
@@ -1663,6 +1248,379 @@ mod tests {
             check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
+
+            check_failed(".", expression, ErrorKind::Alt);
+        }
+
+        #[test]
+        fn parse_collection_literals() {
+            check_data("[1, 2]", expression, Expr::VecLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+            check_data("()", expression, Expr::TupleLiteral(
+                vec!()
+            ));
+
+            check_data("(  )", expression, Expr::TupleLiteral(
+                vec!()
+            ));
+
+            check_data("(1, )", expression, Expr::TupleLiteral(
+                vec!(Node::from(1))
+            ));
+
+            check_data("(1, 2)", expression, Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+            check_data("(1, 2,)", expression, Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
+
+
+            check_data("{a: 2}", expression, Expr::MapLiteral(
+                vec!((Identifier::from("a"), Node::from(2)))
+            ));
+        }
+
+        #[test]
+        fn parse_wrapped() {
+            check_data("2 * (1 + (3))", expression, Expr::BinaryExpr{
+                operator: BinaryOperator::Mult,
+                left: Box::new(Node::from(2)),
+                right: Box::new(Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::Add,
+                    left: Box::new(Node::from(Expr::from(1))),
+                    right: Box::new(Node::from(Expr::from(3)))
+                }))
+            });
+        }
+
+        #[cfg(test)]
+        mod subparsers {
+            use super::*;
+
+            #[test]
+            fn parse_atomic() {
+                // check_data_and_leftover("1 ** 2", atomic_expr, Expr::from(1), "** 2");
+                check_data("false", bool_expr, Expr::from(false));
+                // check_data("false", atomic_expr, Expr::from(false));
+            }
+
+            #[test]
+            fn parse_spec_literals() {
+                check_match("123", int_expr, Node::from(123));
+                check_failed("e10", float_expr, ErrorKind::Digit);
+                check_failed(".e10", float_expr, ErrorKind::Digit);
+                check_failed(".0", float_expr, ErrorKind::Digit);
+            }
+
+            #[test]
+            fn parse_boolean_op() {
+                check_match("true and false", logical_binary_expr, Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::And,
+                    left: Box::new(Node::from(true)),
+                    right: Box::new(Node::from(false))
+                }));
+            }
+
+            #[test]
+            fn parse_expr_with_trailer() {
+                check_failed("123", expr_with_trailer, ErrorKind::Alt);
+            }
+        }
+    }
+}
+
+pub mod type_parser {
+    use super::*;
+    /// Parse a type.
+    pub fn any_type(input: &[u8]) -> TypeRes {
+        return alt_complete!(input, product_type | sum_type);
+    }
+
+    pub fn product_type(input: &[u8]) -> TypeRes {
+        let result = delimited!(input,
+            open_paren,
+            separated_list!(
+                comma,
+                alt_complete!(product_type | sum_type)
+            ),
+            close_paren
+        );
+
+        return fmap_iresult(result, |x| typing::Type::Product(x))
+    }
+
+    pub fn sum_type(input: &[u8]) -> TypeRes {
+        let result = tuple!(input, 
+            parameterized_type,
+            many0c!(
+                preceded!(
+                    VBAR,
+                    parameterized_type
+                )
+            )
+        );
+
+        return fmap_iresult(result, |mut x| match x.1.len() {
+            0 => x.0,
+            _ => {
+                x.1.insert(0, x.0);
+                typing::Type::Sum(x.1)
+            }
+        });
+    }
+
+    pub fn parameterized_type(input: &[u8]) -> TypeRes {
+        let result = tuple!(input, 
+            IDENTIFIER,
+            opt!(complete!(delimited!(
+                LANGLE,
+                separated_nonempty_list!(
+                    comma,
+                    any_type
+                ),
+                RANGLE
+            )))
+        );
+        return fmap_iresult(result, |x| match x.1 {
+            Some(y) => typing::Type::Parameterized(x.0, y),
+            None => typing::Type::from(x.0)
+        });
+    }
+
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    use self::expr_parsers::*;
+    use rand;
+    use std::fmt::Debug;
+    use parser_utils::iresult_helpers::*;
+
+    #[test]
+    fn test_module() {
+       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+           )
+       }))
+    }
+
+        #[test]
+    fn test_module_with_import() {
+       let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(import("import foo".as_bytes()))),
+               Box::new(output(function_declaration("fn a():\n return 0".as_bytes(), 0))),
+               Box::new(output(function_declaration("fn b():\n return 1".as_bytes(), 0)))
+           )
+       }))
+    }
+
+    #[test]
+    fn test_block() {
+        let exp_block = Block {
+            statements: vec![
+                Box::new(output(assignment_stmt("x=0\n".as_bytes()))),
+                Box::new(output(assignment_stmt("y=true".as_bytes())))
+            ]
+        };
+
+        check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
+    }
+
+    #[test]
+    fn test_reserved_words() {
+        for keyword in reserved_list() {
+            let result = IDENTIFIER(keyword.as_bytes());
+            unwrap_and_check_error(result, ErrorKind::Alt);
+        }
+    }
+
+    #[test]
+    fn test_dotted_identifier() {
+        let expected = DottedIdentifier{attributes: vec!(Identifier::from("asdf"), Identifier::from("dfgr_1"), Identifier::from("_asdf"))};
+        check_match("asdf.dfgr_1   .   _asdf", dotted_identifier, expected);
+    }
+
+    #[cfg(test)]
+    mod statements {
+        use super::*;
+
+        #[test]
+        fn parse_let() {
+            check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
+                typed_name: TypedIdent {
+                    name: Identifier::from("x"),
+                    type_annotation: Some(typing::Type::f32)
+                },
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+        }
+
+        #[test]
+        fn parse_func_dec_parts() {
+            // Args
+            let actual = output(args_dec_list("a: i32)".as_bytes()));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
+
+            // Vararg
+            let expected = Some(Identifier::from("args"));
+            let actual = output(vararg(", *args".as_bytes()));
+            assert_eq!(expected, actual);
+
+            // Kwargs.
+            let expected = vec!(
+                   (Identifier::from("c"), Type::i32, output(expression("5".as_bytes()))),
+                   (Identifier::from("d"), Type::i32, output(expression("7".as_bytes())))
+            );
+            let actual = output(keyword_args(", c: i32=5, d: i32=7".as_bytes()));
+            assert_eq!(expected, actual);
+        }
+       
+        #[test]
+        fn parse_func_dec() {
+            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wvars"),
+                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
+                vararg: Some(Identifier::from("args")),
+                kwargs: vec!(
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
+                ),
+                varkwarg: Some(Identifier::from("kwargs")),
+                block: output(block("let val =  5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
+            });
+
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wkwargs"),
+                args: vec![(Identifier::from("a"), typing::Type::i32)],
+                vararg: None,
+                kwargs: vec!(
+                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                ),
+                varkwarg: None,
+                block: output(block("let val=5\n".as_bytes(), 0)),
+                return_type: typing::Type::empty
+            });
+
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| function_declaration(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("a"),
+                args: vec!((Identifier::from("b"), typing::Type::i32)),
+                vararg: None,
+                kwargs: vec!(),
+                varkwarg: None,
+                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
+                return_type: typing::Type::i32
+            });
+        }
+
+        #[test]
+        fn parse_try_except() {
+            let blk = output(block("x=0".as_bytes(), 0));
+            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
+                block: blk.clone(),
+                exceptions: vec!(blk.clone()),
+                else_block: Some(blk.clone()),
+                final_block: Some(blk.clone())
+            });
+        }
+
+        #[test]
+        fn parse_assignment() {
+            check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("foo"),
+                operator: Assignment::Normal,
+                expression: Node::from(true)
+            });
+
+            check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
+                name: Identifier::from("x"),
+                operator: Assignment::Normal,
+                expression: Node::from(0)
+            });
+
+            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
+                    name: Identifier::from("x"),
+                    operator: Assignment::from(op),
+                    expression: Node::from("y"),
+                });
+            }
+
+        }
+
+        #[test]
+        fn parse_if() {
+            let good_input = "if (a and b):\n x = true";
+
+            let good_output = Stmt::IfStmt{
+                condition: output(expression("a and b".as_bytes())),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
+                elifs: vec!(),
+                else_block: None
+            };
+
+            check_data(good_input, |x| statement(x, 0), good_output);
+
+            check_failed("ifa and b:\n x = true", |x| statement(x, 0), ErrorKind::Alt);
+
+            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
+                
+                condition: Node::from(true),
+                block: output(block("x = true".as_bytes(), 0)),
+                elifs: vec!((Node::from(false), output(block("y = true".as_bytes(), 0)))),
+                else_block: Some(output(block("z = true".as_bytes(), 0)))
+            });
+        }
+
+        #[test]
+        fn parse_while() {
+            check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
+                condition: Node::from(true),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
+            });
+        }
+
+        #[test]
+        fn parse_simple_statements() {
+            check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
+            check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
+            check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
+        }
+
+        #[test]
+        fn parse_import() {
+            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(DottedIdentifier{
+                attributes: vec!(Identifier::from("foo"), Identifier::from("bar"), Identifier::from("baz"))
+            }));
+        }
+
+        #[test]
+        fn parse_return() {
+            check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
+
+            check_data("yield true", |x| statement(x, 0), Stmt::YieldStmt (Node::from(true)));
+        }
+
+        #[test]
+        fn parse_for() {
+            check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
+                iter_vars: Identifier::from("x"),
+                iterator: Node::from("y"),
+                block: output(block("a=true".as_bytes(), 0))
+            });
         }
     }
 

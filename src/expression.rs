@@ -79,14 +79,6 @@ pub struct ComprehensionIter {
     pub if_clauses: Vec<Node<Expr>>
 }
 
-/// A helper Enum for trailers.
-#[derive (Debug, Clone, PartialEq, Eq, Hash)]
-pub enum PostIdent {
-    Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
-    Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-    Access{attributes: Vec<Identifier>}
-}
-
 /// An assignment
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum Assignment {
@@ -251,21 +243,6 @@ pub mod trait_impls {
         }
     }
 
-    /// From for UnaryOperator
-    impl <'a> From<&'a Type> for UnaryOperator {
-        fn from(input: &'a Type) -> Self {
-            match input {
-                Type::i32 => UnaryOperator::ToI32,
-                Type::ui32 => UnaryOperator::ToF32,
-                Type::i64 => UnaryOperator::ToI64,
-                Type::f32 => UnaryOperator::ToF32,
-                Type::f64 => UnaryOperator::ToF64,
-                Type::boolean => UnaryOperator::ToBool,
-                _ => panic!()
-            }
-        }
-    }
-
     /// From for Expr
     impl <'a> From<&'a str> for Expr {
         fn from(input: &'a str) -> Self {
@@ -318,6 +295,21 @@ pub mod trait_impls {
         }
     }
 
+    /// From for ComparisonOperator
+    impl <'a> From<&'a [u8]> for ComparisonOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"==" => ComparisonOperator::Equal,
+                b">=" => ComparisonOperator::GreaterEqual,
+                b"<=" => ComparisonOperator::LessEqual,
+                b">"  => ComparisonOperator::Greater,
+                b"<"  => ComparisonOperator::Less,
+                b"!=" => ComparisonOperator::Unequal,
+                _ => panic!(),
+            };
+        }
+    }
+
     /// From for BinaryOperator
     impl<'a> From<&'a str> for BinaryOperator {
         fn from(input: &'a str) -> Self {
@@ -345,6 +337,30 @@ pub mod trait_impls {
         }
     }
 
+    impl<'a> From<&'a [u8]> for BinaryOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"or" => BinaryOperator::Or,
+                b"and" => BinaryOperator::And,
+                b"xor" => BinaryOperator::Xor,
+                b"+" => BinaryOperator::Add,
+                b"-" => BinaryOperator::Sub,
+                b"*" => BinaryOperator::Mult,
+                b"/" => BinaryOperator::Div,
+                b"%" => BinaryOperator::Mod,
+                b"&" => BinaryOperator::BitAnd,
+                b"|" => BinaryOperator::BitOr,
+                b"^" => BinaryOperator::BitXor,
+                b"<<" => BinaryOperator::BitShiftL,
+                b">>" => BinaryOperator::BitShiftR,
+                b"**" => BinaryOperator::Exponent,
+                _ => {
+                    panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
+                }
+            };
+        }
+    }
+
     /// From for UnaryOperator
     impl <'a> From<&'a str> for UnaryOperator {
         fn from(input: &'a str) -> Self {
@@ -355,6 +371,32 @@ pub mod trait_impls {
                 "~" => UnaryOperator::BitNot,
                 _ => panic!()
             };
+        }
+    }
+
+    impl <'a> From<&'a [u8]> for UnaryOperator {
+        fn from(input: &'a [u8]) -> Self {
+            return match input {
+                b"not" => UnaryOperator::Not,
+                b"+" => UnaryOperator::Positive,
+                b"-" => UnaryOperator::Negative,
+                b"~" => UnaryOperator::BitNot,
+                _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input)
+            };
+        }
+    }
+
+    impl <'a> From<&'a Type> for UnaryOperator {
+        fn from(input: &'a Type) -> Self {
+            match input {
+                Type::i32 => UnaryOperator::ToI32,
+                Type::ui32 => UnaryOperator::ToF32,
+                Type::i64 => UnaryOperator::ToI64,
+                Type::f32 => UnaryOperator::ToF32,
+                Type::f64 => UnaryOperator::ToF64,
+                Type::boolean => UnaryOperator::ToBool,
+                _ => panic!()
+            }
         }
     }
 
@@ -382,4 +424,3 @@ pub mod trait_impls {
         }
     }
 }
-

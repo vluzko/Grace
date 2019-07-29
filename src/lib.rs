@@ -6,6 +6,8 @@ extern crate cute;
 extern crate maplit;
 #[macro_use]
 extern crate lazy_static;
+extern crate bytecount;
+extern crate memchr;
 
 #[macro_use]
 pub mod parser_utils;
@@ -17,3 +19,4 @@ pub mod bytecode;
 pub mod scoping;
 pub mod typing;
 pub mod compiler_layers;
+pub mod position_tracker;

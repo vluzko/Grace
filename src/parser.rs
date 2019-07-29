@@ -1,6 +1,5 @@
 use std::str;
 use std::str::from_utf8;
-use std::collections::HashMap;
 
 extern crate cute;
 extern crate nom;
@@ -11,7 +10,12 @@ use parser_utils::*;
 use parser_utils::tokens::*;
 use typing;
 use typing::Type;
-use self::expr_parsers::*;
+use self::expr_parsers::expression;
+use self::stmt_parsers::{
+    statement,
+    function_declaration_stmt,
+    import
+};
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -47,36 +51,7 @@ impl Parseable for Node<Expr> {
     }
 }
 
-pub fn reserved_list() -> Vec<&'static str>{
-    let list: Vec<&'static str> = vec!("if", "else", "elif", "for", "while", "and", "or", "not", "xor", "fn", "import", "true", "false", "in", "match", "pass", "continue", "break", "yield", "let");
-    return list;
-}
-
-/// Return true if a key
-pub fn reserved_words(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-    let list = reserved_list();
-    let tag_iter = list.iter().map(|x| x.as_bytes()).map(tag_lam);
-    let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
-    for res in tag_iter {
-        match res {
-            Ok((i, o)) => {
-                final_result = Ok((i, o));
-                break;
-            },
-            _ => continue
-        };
-    }
-    return final_result;
-}
-
-pub fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
-    return separated_nonempty_list_complete!(input,
-        w_followed!(tag!(",")),
-        IDENTIFIER
-    );
-}
-
+/// Match a module.
 pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
@@ -91,6 +66,7 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
     return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect()});
 }
 
+/// Match a block.
 pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
     let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
     let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
@@ -123,20 +99,21 @@ pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
+// TODO: Deprecate
+/// Match a typed identifier
 pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
     let parse_result = tuple!(input,
         IDENTIFIER,
-        opt!(complete!(preceded!(inline_wrapped!(tag!(":")), type_parser::any_type)))
+        optc!(preceded!(COLON, type_parser::any_type))
     );
 
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
-use self::stmt_parsers::*;
-
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
+    use super::expr_parsers::logical_binary_expr;
 
     /// Match any statement.
     pub fn statement(input: &[u8], indent: usize) -> StmtRes {
@@ -1071,6 +1048,14 @@ pub mod expr_parsers {
 
     // Collection comprehensions
 
+    /// Match a split variable.
+    fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+        return separated_nonempty_list_complete!(input,
+            COMMA,
+            IDENTIFIER
+        );
+    }
+
     /// Match the for part of a comprehension.
     fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
         let parse_result = tuple!(input,
@@ -1626,11 +1611,7 @@ pub mod type_parser {
 
 #[cfg(test)]
 mod tests {
-
     use super::*;
-    use self::expr_parsers::*;
-    use rand;
-    use std::fmt::Debug;
     use parser_utils::iresult_helpers::*;
 
     #[test]
@@ -1644,7 +1625,7 @@ mod tests {
        }))
     }
 
-        #[test]
+    #[test]
     fn test_module_with_import() {
        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
@@ -1666,13 +1647,5 @@ mod tests {
         };
 
         check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
-    }
-
-    #[test]
-    fn test_reserved_words() {
-        for keyword in reserved_list() {
-            let result = IDENTIFIER(keyword.as_bytes());
-            unwrap_and_check_error(result, ErrorKind::Alt);
-        }
     }
 }

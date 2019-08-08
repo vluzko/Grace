@@ -26,7 +26,7 @@ use self::nom::{
 pub type InputElement = u8;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
-pub struct Span<'a> {
+pub struct PosStr<'a> {
     /// The offset represents the position of the slice relatively to
     /// the input of the parser. It starts at offset 0.
     pub offset: usize,
@@ -43,10 +43,10 @@ pub struct Span<'a> {
     slice: &'a [u8]
 }
 
-impl<'a> Span<'a> {
+impl<'a> PosStr<'a> {
 
     pub fn new(input: &'a [u8]) -> Self {
-        Span {
+        PosStr {
             offset: 0,
             line  : 0,
             column: 0,
@@ -55,7 +55,7 @@ impl<'a> Span<'a> {
     }
 
     pub fn new_at(input: &'a [u8], offset: usize, line: u32, column: u32) -> Self {
-        Span {
+        PosStr {
             offset: offset,
             line  : line,
             column: column,
@@ -74,9 +74,9 @@ impl<'a> Span<'a> {
     }
 }
 
-impl <'a> From<&'a [u8]> for Span<'a> {
+impl <'a> From<&'a [u8]> for PosStr<'a> {
     fn from(input: &'a [u8]) -> Self {
-        return Span {
+        return PosStr {
             offset: 0,
             line  : 0,
             column: 0,
@@ -85,17 +85,32 @@ impl <'a> From<&'a [u8]> for Span<'a> {
     }
 }
 
-impl<'a> InputLength for Span<'a> {
+pub trait GraceFrom <T> {
+    fn from(input: T) -> Self
+}
+
+impl <'a, 'b> GraceFrom<&'b str> for PosStr<'a> {
+    fn from(input: &'b str) -> Self {
+        return PosStr {
+            offset: 0,
+            line  : 0,
+            column: 0,
+            slice : input.clone().as_bytes()
+        }
+    }
+}
+
+impl<'a> InputLength for PosStr<'a> {
     fn input_len(&self) -> usize {
         self.slice.len()
     }
 }
 
-impl<'a> InputIter for Span<'a> {
-    /// Type of an element of the span' slice.
+impl<'a> InputIter for PosStr<'a> {
+    /// Type of an element of the PosStr' slice.
     type Item     = &'a InputElement;
 
-    /// Type of a raw element of the span' slice.
+    /// Type of a raw element of the PosStr' slice.
     type RawItem  = InputElement;
 
     /// Type of the enumerator iterator.
@@ -130,7 +145,7 @@ impl<'a> InputIter for Span<'a> {
     }
 }
 
-impl<'a, 'b> FindSubstring<&'b [u8]> for Span<'a> {
+impl<'a, 'b> FindSubstring<&'b [u8]> for PosStr<'a> {
 
     fn find_substring(&self, substring: &'b [u8]) -> Option<usize> {
         let substring_length = substring.len();
@@ -164,7 +179,7 @@ impl<'a, 'b> FindSubstring<&'b [u8]> for Span<'a> {
     }
 }
 
-impl<'a, 'b> Compare<&'b [u8]> for Span<'a> {
+impl<'a, 'b> Compare<&'b [u8]> for PosStr<'a> {
 
     fn compare(&self, element: &'b [u8]) -> CompareResult {
         self.slice.compare(element)
@@ -176,7 +191,7 @@ impl<'a, 'b> Compare<&'b [u8]> for Span<'a> {
     }
 }
 
-impl<'a, 'b> Compare<&'b str> for Span<'a> {
+impl<'a, 'b> Compare<&'b str> for PosStr<'a> {
 
     fn compare(&self, element: &'b str) -> CompareResult {
         self.slice.compare(element)
@@ -188,40 +203,40 @@ impl<'a, 'b> Compare<&'b str> for Span<'a> {
     }
 }
 
-impl<'a, 'b> Compare<Span<'b>> for Span<'a> {
+impl<'a, 'b> Compare<PosStr<'b>> for PosStr<'a> {
 
-    fn compare(&self, element: Span<'b>) -> CompareResult {
+    fn compare(&self, element: PosStr<'b>) -> CompareResult {
         self.slice.compare(element.slice)
     }
 
     /// Compare self to another input for equality independently of the case.
-    fn compare_no_case(&self, element: Span<'b>) -> CompareResult {
+    fn compare_no_case(&self, element: PosStr<'b>) -> CompareResult {
         self.slice.compare_no_case(element.slice)
     }
 }
 
-impl <'a> AtEof for Span<'a> {
+impl <'a> AtEof for PosStr<'a> {
   fn at_eof(&self) -> bool {
     return self.slice.at_eof();
   }
 }
 
-impl <'a> InputTake for Span<'a> {
+impl <'a> InputTake for PosStr<'a> {
     fn take(&self, count: usize) -> Self {
         let new_slice = self.slice.take(count);
-        let new_span = Span {
+        let new_pos_str = PosStr {
             offset: self.offset,
             line: self.line, 
             column: self.column,
             slice: new_slice
           };
 
-        return new_span;
+        return new_pos_str;
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
         let (second_slice, first_slice) = self.slice.take_split(count);
-        let first_span = Span {
+        let first_pos_str = PosStr {
             offset: self.offset,
             line: self.line, 
             column: self.column,
@@ -240,18 +255,18 @@ impl <'a> InputTake for Span<'a> {
             }
         };
 
-        let second_span = Span {
+        let second_pos_str = PosStr {
             offset: next_offset,
             line: self.line + number_of_newlines,
             column: next_column,
             slice: second_slice
         };
 
-        return (second_span, first_span);
+        return (second_pos_str, first_pos_str);
     }
 }
 
-impl <'a> Offset for Span<'a> {
+impl <'a> Offset for PosStr<'a> {
     fn offset(&self, second: &Self) -> usize {
         return self.slice.offset(second.slice);
     }
@@ -259,7 +274,7 @@ impl <'a> Offset for Span<'a> {
 
 macro_rules! impl_slice_for_range {
     ($range:ty) => (
-        impl<'a> Slice<$range> for Span<'a> {
+        impl<'a> Slice<$range> for PosStr<'a> {
 
             fn slice(&self, range: $range) -> Self {
                 let next_slice = &self.slice[range];
@@ -271,7 +286,7 @@ macro_rules! impl_slice_for_range {
                 let next_offset = self.slice.offset(next_slice);
 
                 if next_offset == 0 {
-                    return Span {
+                    return PosStr {
                         offset: self.offset,
                         line  : self.line,
                         column: self.column,
@@ -294,7 +309,7 @@ macro_rules! impl_slice_for_range {
                     }
                 };
 
-                Span {
+                PosStr {
                     offset: self.offset + next_offset,
                     line  : self.line + number_of_newlines,
                     column: next_column,
@@ -334,8 +349,8 @@ macro_rules! custom_tag (
   );
 );
 
-pub fn dec_digit<'a>(input: Span<'a>) -> IResult<Span<'a>, Span<'a>> {
-    return custom_tag!(input, b"0");
+pub fn dec_digit<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
+    return custom_tag!(input, "0");
     // panic!()
 }
 
@@ -343,14 +358,14 @@ pub fn dec_digit<'a>(input: Span<'a>) -> IResult<Span<'a>, Span<'a>> {
 mod test {
     use super::*;
     #[test]
-    fn test_span() {
-        let input = Span::from("abcd\n1234\n\nk".as_bytes());
+    fn test_pos_str() {
+        let input = PosStr::from("abcd\n1234\n\nk".as_bytes());
         let (second, _) = input.take_split(9);
         assert_eq!(second.line, 1);
         assert_eq!(second.column, 5);
         assert_eq!(second.offset, 9);
 
-        let input = Span::from("1234".as_bytes());
+        let input = PosStr::from("1234".as_bytes());
         let result = dec_digit(input);
         println!("{:?}", result);
     }

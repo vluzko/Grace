@@ -19,7 +19,8 @@ use self::nom::{
     InputTake
 };
 use expression::Node;
-use position_tracker::Span;
+use position_tracker::PosStr;
+use position_tracker::GraceFrom;
 
 pub trait Nommable<'a>: 
 Clone +
@@ -38,10 +39,17 @@ Slice<Range<usize>> +
 Slice<RangeFull> +
 AtEof +
 InputTake + 
-Offset{}
+Offset+
+GraceFrom<&'a str>{}
 
+
+impl <'a, 'b> GraceFrom<&'b str> for &'a[u8] {
+    fn from(input: &'b str) -> Self {
+        return input.as_bytes().clone();
+    }
+}
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
-impl <'a, 'b> Nommable<'b> for Span<'a> {}
+impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
 
 
 /// Map the contents of an IResult.
@@ -407,9 +415,9 @@ pub mod tokens {
         return fmap_iresult(intermediate, Identifier::from);
     }
 
-    pub fn VALID_NUM_FOLLOW(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn VALID_NUM_FOLLOW <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
         if input.len() == 0 {
-            return Ok((input, b""));
+            return Ok((input, "".as_bytes()));
         } else {
             return peek!(input, alt!(
                 eof!() | 
@@ -426,11 +434,11 @@ pub mod tokens {
         }
     }
 
-    pub fn NEWLINE(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn NEWLINE <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
         return tag!(input, "\n");
     }
 
-    pub fn SIGN(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn SIGN <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
         return recognize!(input, alt!(tag!("+") | tag!("-")));
     }
 

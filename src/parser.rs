@@ -1,4 +1,3 @@
-use std::str;
 use std::str::from_utf8;
 
 extern crate cute;
@@ -113,7 +112,6 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
-    use super::expr_parsers::logical_binary_expr;
 
     /// Match any statement.
     pub fn statement(input: &[u8], indent: usize) -> StmtRes {

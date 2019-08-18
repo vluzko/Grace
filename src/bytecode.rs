@@ -261,6 +261,7 @@ impl ToBytecode for Identifier {
 mod tests {
 
     use super::*;
+    use compiler_layers;
 
     #[test]
     pub fn test_generate_function_call() {

@@ -4,8 +4,6 @@ extern crate log;
 extern crate cute;
 #[macro_use]
 extern crate maplit;
-#[macro_use]
-extern crate lazy_static;
 extern crate bytecount;
 extern crate memchr;
 

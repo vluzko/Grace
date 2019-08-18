@@ -133,7 +133,7 @@ impl Context {
     /// Extend this context with another one.
     pub fn extend(&mut self, other_context: Context) {
         for (id, scope) in other_context.scopes.into_iter() {
-            if (self.scopes.contains_key(&id)) {
+            if self.scopes.contains_key(&id) {
                 // TODO: Make this a real error.
                 panic!("Duplicate scope IDs.\n ID: {}.\n Existing: {:?}.\n Replacement: {:?}", id, self.scopes.get(&id), scope);
             } else {

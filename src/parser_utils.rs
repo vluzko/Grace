@@ -21,7 +21,6 @@ use self::nom::{
 };
 use expression::Node;
 use position_tracker::PosStr;
-// use position_tracker::FromStr;
 
 pub trait Nommable<'a>: 
 Clone +
@@ -648,15 +647,5 @@ pub mod iresult_helpers {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[cfg(test)]
-    mod position_tests {
-        use super::*;
-        #[test]
-        fn test_tokens() {
-
-        }
-    }
 
 }

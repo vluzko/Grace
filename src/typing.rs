@@ -140,7 +140,7 @@ impl Add for Type {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        if (self == other) {
+        if self == other {
             return self.clone();
         } else {
             return match self {
@@ -209,7 +209,7 @@ impl From<Identifier> for Type {
 pub trait Typed<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
+    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {

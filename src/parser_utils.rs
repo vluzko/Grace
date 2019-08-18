@@ -155,18 +155,6 @@ macro_rules! many1c (
   );
 );
 
-macro_rules! ta(
-  ($i:expr, $tag: expr) => ({
-      match tag!($i, $tag) {
-            Err(y) => panic!(),
-            x => {println!("{:?}", x); x}
-      }
-    // match nom::bytes::streaming::tag($tag)($i) {
-    //     x => {println!("{:?}", x); panic!()}
-    // }
-  });
-);
-
 /// Check that a macro is indented correctly.
 macro_rules! indented (
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
@@ -280,7 +268,7 @@ pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static reserved_words: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
@@ -378,7 +366,7 @@ pub mod tokens {
     /// Return true if a key
     pub fn RESERVED(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-        let tag_iter = reserved_words.iter().map(|x| x.as_bytes()).map(tag_lam);
+        let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
         let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
             match res {
@@ -403,7 +391,7 @@ pub mod tokens {
             )
         );
         let intermediate = match parse_result {
-            Ok((i, o)) => match reserved_words.iter().find(|x| *x == &o) {
+            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &o) {
                 Some(_) => wrap_err(i, ErrorKind::Alt),
                 None => Ok((i, o))
             },
@@ -571,13 +559,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -587,13 +573,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -642,8 +626,7 @@ pub mod iresult_helpers {
             Result::Err(e) => {
                 match e {
                     Err::Error(actual_err) => match actual_err {
-                        Context::Code(i, actual_err) => assert_eq!(actual_err, expected),
-                        _ => panic!()
+                        Context::Code(_, actual_err) => assert_eq!(actual_err, expected)
                     }
                     _ => panic!()
                 }

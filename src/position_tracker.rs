@@ -23,8 +23,6 @@ use self::nom::{
     InputTake
 };
 
-pub type InputElement = u8;
-
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct PosStr<'a> {
     /// The offset represents the position of the slice relatively to
@@ -93,10 +91,10 @@ impl<'a> InputLength for PosStr<'a> {
 
 impl<'a> InputIter for PosStr<'a> {
     /// Type of an element of the PosStr' slice.
-    type Item     = &'a InputElement;
+    type Item     = &'a u8;
 
     /// Type of a raw element of the PosStr' slice.
-    type RawItem  = InputElement;
+    type RawItem  = u8;
 
     /// Type of the enumerator iterator.
     type Iter     = Enumerate<Iter<'a, Self::RawItem>>;

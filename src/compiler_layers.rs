@@ -1,14 +1,11 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use expression;
-use parser;
 use parser::Parseable;
 use scoping;
 use scoping::Scoped;
 use typing;
 use typing::Typed;
-use bytecode;
 use bytecode::ToBytecode;
 
 pub trait Layer<T>{
@@ -23,8 +20,6 @@ impl Layer<String> for Bytecode {
     }
 }
 
-
-
 pub struct Compilation {
     /// Will need to be a project / directory later.
     pub file: String,
@@ -32,9 +27,6 @@ pub struct Compilation {
     pub counter: i64
 }
 
-pub fn parse(input: &[u8]) -> expression::Node<expression::Module>{
-    panic!()
-}
 
 pub fn to_scopes<T>(input: &[u8]) -> (T, scoping::Context)
 where T: Parseable, T: Scoped<T> {

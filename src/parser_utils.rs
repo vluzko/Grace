@@ -4,14 +4,8 @@ use std::str;
 use std::str::from_utf8;
 use std::fmt::Debug;
 use std::clone::Clone;
+use std::marker::Copy;
 use std::cmp::PartialEq;
-
-extern crate nom;
-use self::nom::*;
-use self::nom::Offset;
-// use self::nom::verbose_errors::Context;
-use expression::Node;
-
 use std::ops::{
     Range,
     RangeFrom,
@@ -19,28 +13,44 @@ use std::ops::{
     RangeTo
 };
 
-pub trait Nommable<'a, T>: 
-Clone+
-PartialEq+
-Debug+
-Compare<T>+
-Compare<&'a str>+
-Compare<&'a [u8]>+
-FindSubstring<T>+
-InputIter+
-InputLength+
-Slice<RangeFrom<usize>>+
-Slice<RangeTo<usize>>+
-Slice<Range<usize>>+
-Slice<RangeFull>+
-Offset{}
+extern crate nom;
+use self::nom::*;
+use self::nom::{
+    Offset,
+    InputTake
+};
+use expression::Node;
+use position_tracker::PosStr;
 
-impl <'a, 'b> Nommable<'a, &'b[u8]> for &'a[u8] {}
+pub trait Nommable<'a>: 
+Clone +
+PartialEq +
+Copy +
+Debug +
+Compare<Self> +
+Compare<&'a str> +
+Compare<&'a [u8]> +
+// TODO: should this actually always be returning a byte array?
+FindSubstring<&'a [u8]> +
+InputIter +
+InputLength +
+Slice<RangeFrom<usize>> +
+Slice<RangeTo<usize>> +
+Slice<Range<usize>> +
+Slice<RangeFull> +
+AtEof +
+InputTake + 
+Offset+
+// FromStr
+{}
+
+impl <'a, 'b> Nommable<'a> for &'a[u8] {}
+impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
 
 
 /// Map the contents of an IResult.
 /// Rust functors plox
-pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], T>
+pub fn fmap_iresult<'a, I: Nommable<'a>, X, T, F>(res: IResult<I, X>, func: F) -> IResult<I, T>
     where F: Fn(X) -> T {
     return match res {
         Ok((i, o)) => Ok((i, func(o))),
@@ -48,7 +58,7 @@ pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], 
     };
 }
 
-pub fn fmap_node<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], Node<T>>
+pub fn fmap_node<'a, I: Nommable<'a>, X, T, F>(res: IResult<I, X>, func: F) -> IResult<I, Node<T>>
     where F: Fn(X) -> T {
     return match res {
         Ok((i, o)) => Ok((i, Node::from(func(o)))),
@@ -56,21 +66,21 @@ pub fn fmap_node<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], Nod
     };
 }
 
-pub fn fmap_convert<X>(res: IResult<&[u8], X>) -> IResult<&[u8], Node<X>> {
+pub fn fmap_convert<'a, I: Nommable<'a>, X>(res: IResult<I, X>) -> IResult<I, Node<X>> {
     return match res {
         Ok((i, o)) => Ok((i, Node::from(o))),
         Err(e) => Err(e)
     };
 }
 
-pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
+pub fn fmap_and_full_log<'a, I: Nommable<'a>, X, T>(res: IResult<I, X>, func: fn(X) -> T, name: &str, input: I) -> IResult<I, T> {
     return match res {
         Ok((i, o)) => {
-            println!("{} leftover input is {:?}. Input was: {:?}", name, from_utf8(i), from_utf8(input));
+            println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
             Ok((i, func(o)))
         },
         Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, from_utf8(input));
+            println!("{} error: {:?}. Input was: {:?}", name, e, input);
             Err(e) 
         }
     };
@@ -78,29 +88,29 @@ pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, 
 
 // TODO: Change
 /// Map an IResult and log errors and incomplete values.
-pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
+pub fn fmap_and_log<'a, I: Nommable<'a>, X, T>(res: IResult<I, X>, func: fn(X) -> T, name: &str, input: I) -> IResult<I, T> {
     return match res {
         Ok((i, o)) => Ok((i, func(o))),
         Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, from_utf8(input));
+            println!("{} error: {:?}. Input was: {:?}", name, e, input);
             Err(e)
         }
     };
 }
 
-pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
+pub fn full_log<'a, I: Nommable<'a>, X>(res: IResult<I, X>, name: &str, input: I) -> IResult<I, X> {
     return fmap_and_full_log(res, |x| x, name, input);
 }
 
-pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
+pub fn log_err<'a, I: Nommable<'a>, X>(res: IResult<I, X>, name: &str, input: I) -> IResult<I, X> {
     return fmap_and_log(res, |x| x, name, input);
 }
 
-pub fn wrap_err<T>(input: &[u8], error: ErrorKind) -> IResult<&[u8], T> {
+pub fn wrap_err<'a, I: Nommable<'a>, T>(input: I, error: ErrorKind) -> IResult<I, T> {
     return Err(Err::Error(Context::Code(input, error)));
 }
 
-pub fn output<T>(res: IResult<&[u8], T>) -> T {
+pub fn output<'a, I: Nommable<'a>, T>(res: IResult<I, T>) -> T {
     return match res {
         Ok((_, o)) => o,
         Err(e) => {
@@ -122,6 +132,7 @@ macro_rules! optc (
   );
 );
 
+/// Alias for many0!(complete!())
 macro_rules! many0c (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
     many0!($i, complete!($submac!($($args)*)))
@@ -132,6 +143,7 @@ macro_rules! many0c (
   );
 );
 
+/// Alias for many1!(complete!())
 macro_rules! many1c (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
     many1!($i, complete!($submac!($($args)*)))
@@ -140,18 +152,6 @@ macro_rules! many1c (
   ($i:expr, $f:expr) => (
     many1c!($i, call!($f));
   );
-);
-
-macro_rules! ta(
-  ($i:expr, $tag: expr) => ({
-      match tag!($i, $tag) {
-            Err(y) => panic!(),
-            x => {println!("{:?}", x); x}
-      }
-    // match nom::bytes::streaming::tag($tag)($i) {
-    //     x => {println!("{:?}", x); panic!()}
-    // }
-  });
 );
 
 /// Check that a macro is indented correctly.
@@ -247,7 +247,7 @@ macro_rules! w_followed (
 );
 
 #[inline]
-pub fn inline_whitespace_char(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn inline_whitespace_char<'a, I: Nommable<'a>>(input: I) -> IResult<I, I> {
     return tag!(input, " ");
 }
 
@@ -263,12 +263,11 @@ pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
     return n;
 }
 
-
 pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static reserved_words: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
@@ -366,7 +365,7 @@ pub mod tokens {
     /// Return true if a key
     pub fn RESERVED(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-        let tag_iter = reserved_words.iter().map(|x| x.as_bytes()).map(tag_lam);
+        let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
         let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
             match res {
@@ -391,7 +390,7 @@ pub mod tokens {
             )
         );
         let intermediate = match parse_result {
-            Ok((i, o)) => match reserved_words.iter().find(|x| *x == &o) {
+            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &o) {
                 Some(_) => wrap_err(i, ErrorKind::Alt),
                 None => Ok((i, o))
             },
@@ -400,11 +399,11 @@ pub mod tokens {
         return fmap_iresult(intermediate, Identifier::from);
     }
 
-    pub fn VALID_NUM_FOLLOW(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        if input.len() == 0 {
-            return Ok((input, b""));
+    pub fn VALID_NUM_FOLLOW <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
+        if input.input_len() == 0 {
+            return Ok((input.clone(), input.clone()));
         } else {
-            return peek!(input, alt!(
+            return peek!(input.clone(), alt!(
                 eof!() | 
                 tag!(" ") | 
                 tag!("(") | 
@@ -419,11 +418,11 @@ pub mod tokens {
         }
     }
 
-    pub fn NEWLINE(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn NEWLINE <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
         return tag!(input, "\n");
     }
 
-    pub fn SIGN(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    pub fn SIGN <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
         return recognize!(input, alt!(tag!("+") | tag!("-")));
     }
 
@@ -509,6 +508,44 @@ pub mod tokens {
     // Unary operators
     token!(NOT, "not");
     token!(TILDE, "~");
+
+        #[cfg(test)]
+    mod tokens_test {
+        use super::*;
+        use self::iresult_helpers::*;
+
+        #[test]
+        fn parse_digits() {
+            let res = DIGIT("123".as_bytes());
+            assert_eq!(res, Ok(("".as_bytes(), "123".as_bytes())));
+
+            let res = DIGIT("123a".as_bytes());
+            assert_eq!(res, Ok(("a".as_bytes(), "123".as_bytes())));
+
+            let res = DIGIT("a".as_bytes());
+            assert_eq!(res, wrap_err("a".as_bytes(), ErrorKind::Digit));
+        }
+
+        #[test]
+        fn parse_identifier_raw() {
+            // Basic tests
+            check_match("a123", IDENTIFIER, Identifier::from("a123"));
+            check_match("a_b_1_a", IDENTIFIER, Identifier::from("a_b_1_a"));
+
+            // Check that trailers won't be matched.
+            check_match_and_leftover("ident(", IDENTIFIER, Identifier::from("ident"), "("); 
+            check_match_and_leftover("func()", IDENTIFIER, Identifier::from("func"), "()");
+
+            // Check that whitespace is consumed.
+            check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
+
+            // Check that identifiers can't start with digits.
+            check_failed("123", IDENTIFIER, ErrorKind::Alt);    
+
+            // Check that reserved words aren't matched.
+            check_failed("true", IDENTIFIER, ErrorKind::Alt);
+        }
+    }
 }
 
 
@@ -521,13 +558,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -537,13 +572,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -592,8 +625,7 @@ pub mod iresult_helpers {
             Result::Err(e) => {
                 match e {
                     Err::Error(actual_err) => match actual_err {
-                        Context::Code(i, actual_err) => assert_eq!(actual_err, expected),
-                        _ => panic!()
+                        Context::Code(_, actual_err) => assert_eq!(actual_err, expected)
                     }
                     _ => panic!()
                 }
@@ -615,47 +647,5 @@ pub mod iresult_helpers {
 
 #[cfg(test)]
 mod tests {
-    
-    use super::*;
-    use self::iresult_helpers::*;
-    use expression::Identifier;
-
-    #[cfg(test)]
-    mod tokens_test {
-        use super::*;
-        use self::tokens::*;
-
-        #[test]
-        fn parse_digits() {
-            let res = DIGIT("123".as_bytes());
-            assert_eq!(res, Ok(("".as_bytes(), "123".as_bytes())));
-
-            let res = DIGIT("123a".as_bytes());
-            assert_eq!(res, Ok(("a".as_bytes(), "123".as_bytes())));
-
-            let res = DIGIT("a".as_bytes());
-            assert_eq!(res, wrap_err("a".as_bytes(), ErrorKind::Digit));
-        }
-
-        #[test]
-        fn parse_identifier_raw() {
-            // Basic tests
-            check_match("a123", IDENTIFIER, Identifier::from("a123"));
-            check_match("a_b_1_a", IDENTIFIER, Identifier::from("a_b_1_a"));
-
-            // Check that trailers won't be matched.
-            check_match_and_leftover("ident(", IDENTIFIER, Identifier::from("ident"), "("); 
-            check_match_and_leftover("func()", IDENTIFIER, Identifier::from("func"), "()");
-
-            // Check that whitespace is consumed.
-            check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
-
-            // Check that identifiers can't start with digits.
-            check_failed("123", IDENTIFIER, ErrorKind::Alt);    
-
-            // Check that reserved words aren't matched.
-            check_failed("true", IDENTIFIER, ErrorKind::Alt);
-        }
-    }
 
 }

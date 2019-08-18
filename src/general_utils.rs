@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::BTreeSet;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fmt::Debug;
@@ -65,7 +64,7 @@ pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
 where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
     println!("Merging maps: {:?}, {:?}",a, b );
     for (k, v) in b.into_iter() {
-        if (a.contains_key(&k)) {
+        if a.contains_key(&k) {
             panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
         } else {
             a.insert(k, v);

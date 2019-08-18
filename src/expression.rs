@@ -3,7 +3,6 @@ use std::fmt::Display;
 use std::str::from_utf8;
 use std::convert::From;
 
-use scoping::*;
 use typing::*;
 use general_utils;
 

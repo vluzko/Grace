@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use expression;
 use parser::Parseable;
 use scoping;
 use scoping::Scoped;
@@ -20,8 +19,6 @@ impl Layer<String> for Bytecode {
         panic!()
     }
 }
-
-
 
 pub struct Compilation {
     /// Will need to be a project / directory later.

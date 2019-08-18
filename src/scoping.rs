@@ -1,10 +1,8 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::HashMap;
-use std::hash::Hash;
 use expression::*;
 use general_utils;
-use compiler_layers;
 use typing::Type;
 
 extern crate cute;
@@ -156,17 +154,6 @@ impl CanModifyScope {
     }
 }
 
-impl Scope {
-
-    pub fn get_parent(&self, context: &Context) -> Option<&Scope> {
-        panic!()
-        // return match self.parent_id {
-        //     Some(id) => context.scopes.get(&id),
-        //     None => None
-        // };
-    }
-}
-
 impl Scoped<Node<Module>> for Node<Module> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
@@ -174,7 +161,11 @@ impl Scoped<Node<Module>> for Node<Module> {
     }
 
     fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
-        panic!()
+        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        for stmt in &self.data.declarations {
+            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+        }
+        return top_level;
     }
 
     fn check_scope(self, _scope: Scope) -> bool {
@@ -185,25 +176,16 @@ impl Scoped<Node<Module>> for Node<Module> {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
 
-        let mut new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
+        let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
 
         let mut new_context = empty_context();
         new_context.add_scope(scope_id, new_scope);
 
-        for (i, stmt) in self.data.declarations.iter_mut().enumerate() {
+        for stmt in self.data.declarations.iter_mut() {
             let child_context = stmt.gen_scopes(scope_id, context);
             new_context.extend(child_context);
-            // match &stmt.data {
-            //     Stmt::FunctionDecStmt{ref name, ..} => {
-            //         let scope_mod = CanModifyScope::Statement(Box::into_raw(stmt.clone()));
-            //         new_scope.declarations.insert(name.clone(), scope_mod);
-            //         new_scope.declaration_order.insert(name.clone(), i);
-            //     },
-            //     Stmt::ReturnStmt(name) => {},
-            //     _ => {}
-            // };
         }
 
         self.update_scope(&mut new_context);
@@ -238,13 +220,13 @@ impl Scoped<Node<Block>> for Node<Block> {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
 
-        let mut new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
+        let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
         let mut new_context = empty_context();
         new_context.add_scope(scope_id, new_scope);
         // Compute the child contexts.
-        for (i, stmt) in self.data.statements.iter_mut().enumerate() {
+        for stmt in self.data.statements.iter_mut() {
             let child_context = stmt.gen_scopes(scope_id, context);
             new_context.extend(child_context);
         }
@@ -297,15 +279,15 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let raw_pointer = self as *const Node<Stmt>;
         let new_context = match &mut self.data {
-            Stmt::LetStmt{typed_name, expression} => {
+            Stmt::LetStmt{expression, ..} => {
                 self.scope = parent_id;
                 expression.gen_scopes(parent_id, context)
             },
-            Stmt::AssignmentStmt{name, expression, ..} => {
+            Stmt::AssignmentStmt{expression, ..} => {
                 self.scope = parent_id;
                 expression.gen_scopes(parent_id, context)
             },
-            Stmt::FunctionDecStmt{name, args, vararg, kwargs, varkwarg, ref mut block, return_type} => {
+            Stmt::FunctionDecStmt{args, vararg, varkwarg, ref mut block, ..} => {
                 // TODO: Handle keyword args expressions. They should receive just the parent scope.
                 let mut declarations = BTreeMap::new();
                 let mut declaration_order = BTreeMap::new();
@@ -337,7 +319,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 };
                 
                 let mut new_context = empty_context();
-                let mut new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
+                let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
                 let scope_id = new_context.new_scope(new_scope);
                 self.scope = scope_id;
 
@@ -416,7 +398,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
+    fn get_true_declarations(&self, _context: &Context) -> HashSet<Identifier> {
         panic!()
     }
 
@@ -426,7 +408,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let new_context = match &mut self.data {
-            Expr::BinaryExpr{ref mut operator, ref mut left, ref mut right} => {
+            Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
                 let mut new_context = empty_context();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
@@ -502,7 +484,7 @@ impl Node<Module> {
                     scope.declarations.insert(name.clone(), scope_mod);
                     scope.declaration_order.insert(name.clone(), i);
                 },
-                Stmt::ReturnStmt(name) => {
+                Stmt::ReturnStmt(..) => {
                     // TODO: Add module
                 },
                 _ => {
@@ -519,15 +501,14 @@ mod test {
     use parser;
     use super::*;
     use parser_utils::output;
+    use compiler_layers;
 
     #[test]
     fn test_function_locals() {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
-        let mut func_stmt = output(parser::stmt_parsers::statement(func_str.as_bytes(), 0));
-        let (id, init) = initial_context();
-        let context = func_stmt.gen_scopes(id, &init);
+        let func_stmt = output(parser::stmt_parsers::statement(func_str.as_bytes(), 0));
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));
@@ -582,14 +563,14 @@ mod test {
                 let context = block.gen_scopes(id, &init);
                 let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
-                let fn_node1 = match fn1.extract_stmt() {
+                match fn1.extract_stmt() {
                     Stmt::FunctionDecStmt{name, ..} => {
                         assert_eq!(name, Identifier::from("a"))
                     },
                     _ => panic!()
                 };
 
-                let fn_node2 = match fn2.extract_stmt() {
+                match fn2.extract_stmt() {
                     Stmt::FunctionDecStmt{name, .. } => {
                         assert_eq!(name, Identifier::from("b"))
                     },

@@ -10,7 +10,7 @@ use std::ops::{
 use bytecount;
 use memchr;
 extern crate nom;
-use self::nom::*;
+// use self::nom::*;
 use self::nom::{
     Compare,
     CompareResult,
@@ -18,10 +18,10 @@ use self::nom::{
     InputIter,
     InputLength,
     Offset,
-    Slice
+    Slice,
+    AtEof,
+    InputTake
 };
-
-
 
 pub type InputElement = u8;
 
@@ -81,21 +81,6 @@ impl <'a> From<&'a [u8]> for PosStr<'a> {
             line  : 0,
             column: 0,
             slice : input
-        }
-    }
-}
-
-pub trait GraceFrom <T> {
-    fn from(input: T) -> Self
-}
-
-impl <'a, 'b> GraceFrom<&'b str> for PosStr<'a> {
-    fn from(input: &'b str) -> Self {
-        return PosStr {
-            offset: 0,
-            line  : 0,
-            column: 0,
-            slice : input.clone().as_bytes()
         }
     }
 }
@@ -325,48 +310,6 @@ impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
 
-macro_rules! custom_tag (
-  ($i:expr, $tag: expr) => (
-    {
-      use self::nom::{Err,Needed,IResult,ErrorKind};
-      use self::nom::{Compare,CompareResult,need_more};
-
-      let res: IResult<_,_> = match ($i).compare($tag) {
-        CompareResult::Ok => {
-          let blen = $tag.input_len();
-          Ok($i.take_split(blen))
-        },
-        CompareResult::Incomplete => {
-          need_more($i, Needed::Size($tag.input_len()))
-        },
-        CompareResult::Error => {
-          let e:ErrorKind<u32> = ErrorKind::Tag;
-          Err(Err::Error(Context::Code($i, e)))
-        }
-      };
-      res
-    }
-  );
-);
-
-pub fn dec_digit<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
-    return custom_tag!(input, "0");
-    // panic!()
-}
-
 #[cfg(test)]
 mod test {
-    use super::*;
-    #[test]
-    fn test_pos_str() {
-        let input = PosStr::from("abcd\n1234\n\nk".as_bytes());
-        let (second, _) = input.take_split(9);
-        assert_eq!(second.line, 1);
-        assert_eq!(second.column, 5);
-        assert_eq!(second.offset, 9);
-
-        let input = PosStr::from("1234".as_bytes());
-        let result = dec_digit(input);
-        println!("{:?}", result);
-    }
 }

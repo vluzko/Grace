@@ -4,6 +4,7 @@ use std::str;
 use std::str::from_utf8;
 use std::fmt::Debug;
 use std::clone::Clone;
+use std::marker::Copy;
 use std::cmp::PartialEq;
 use std::ops::{
     Range,
@@ -20,11 +21,12 @@ use self::nom::{
 };
 use expression::Node;
 use position_tracker::PosStr;
-use position_tracker::GraceFrom;
+// use position_tracker::FromStr;
 
 pub trait Nommable<'a>: 
 Clone +
 PartialEq +
+Copy +
 Debug +
 Compare<Self> +
 Compare<&'a str> +
@@ -40,14 +42,9 @@ Slice<RangeFull> +
 AtEof +
 InputTake + 
 Offset+
-GraceFrom<&'a str>{}
+// FromStr
+{}
 
-
-impl <'a, 'b> GraceFrom<&'b str> for &'a[u8] {
-    fn from(input: &'b str) -> Self {
-        return input.as_bytes().clone();
-    }
-}
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
 impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
 
@@ -416,10 +413,10 @@ pub mod tokens {
     }
 
     pub fn VALID_NUM_FOLLOW <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
-        if input.len() == 0 {
-            return Ok((input, "".as_bytes()));
+        if input.input_len() == 0 {
+            return Ok((input.clone(), input.clone()));
         } else {
-            return peek!(input, alt!(
+            return peek!(input.clone(), alt!(
                 eof!() | 
                 tag!(" ") | 
                 tag!("(") | 

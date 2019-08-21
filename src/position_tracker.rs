@@ -20,7 +20,8 @@ use self::nom::{
     Offset,
     Slice,
     AtEof,
-    InputTake
+    InputTake,
+    UnspecializedInput
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -102,22 +103,18 @@ impl<'a> InputIter for PosStr<'a> {
     /// Type of the iterator.
     type IterElem = Iter<'a, Self::RawItem>;
 
-
     fn iter_indices(&self) -> Self::Iter {
         self.slice.iter().enumerate()
     }
-
 
     fn iter_elements(&self) -> Self::IterElem {
         self.slice.iter()
     }
 
-
     fn position<P>(&self, predicate: P) -> Option<usize>
         where P: Fn(Self::RawItem) -> bool {
         self.slice.iter().position(|x| predicate(*x))
     }
-
 
     fn slice_index(&self, count: usize) -> Option<usize> {
         if self.slice.len() >= count {
@@ -255,6 +252,47 @@ impl <'a> Offset for PosStr<'a> {
     }
 }
 
+impl <'a> InputTakeAtPosition for PosStr<'a> {
+  type Item = <Self as InputIter>::RawItem;
+
+  fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
+  where
+    P: Fn(Self::Item) -> bool,
+  {
+    match self.position(predicate) {
+      Some(n) => Ok(self.take_split(n)),
+      None => {
+        if self.at_eof() {
+          Ok(self.take_split(self.input_len()))
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
+
+  fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+  where
+    P: Fn(Self::Item) -> bool,
+  {
+    match self.position(predicate) {
+      Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
+      Some(n) => Ok(self.take_split(n)),
+      None => {
+        if self.at_eof() {
+          if self.input_len() == 0 {
+            Err(Err::Error(Context::Code(self.clone(), e)))
+          } else {
+            Ok(self.take_split(self.input_len()))
+          }
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
+}
+
 macro_rules! impl_slice_for_range {
     ($range:ty) => (
         impl<'a> Slice<$range> for PosStr<'a> {
@@ -307,6 +345,8 @@ impl_slice_for_range!(Range<usize>);
 impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
+
+impl <'a> UnspecializedInput for PosStr<'a> {}
 
 #[cfg(test)]
 mod test {

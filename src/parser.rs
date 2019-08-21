@@ -689,8 +689,8 @@ pub mod expr_parsers {
     }
 
     /// Match an exponentiation expression.
-    fn power_expr(input: &[u8]) -> ExprRes {
-        return binary_expr(input, EXP, atomic_expr);
+    fn power_expr<'a> (input: &'a [u8]) -> ExprRes {
+        return binary_expr(input, |x| call!(x, EXP), atomic_expr);
     }
 
     // END BINARY EXPRESSIONS

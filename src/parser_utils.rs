@@ -17,7 +17,8 @@ extern crate nom;
 use self::nom::*;
 use self::nom::{
     Offset,
-    InputTake
+    InputTake,
+    UnspecializedInput
 };
 use expression::Node;
 use position_tracker::PosStr;
@@ -41,7 +42,7 @@ Slice<RangeFull> +
 AtEof +
 InputTake + 
 Offset+
-// FromStr
+UnspecializedInput
 {}
 
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
@@ -271,7 +272,7 @@ pub mod tokens {
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
-            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn $name<'a, T: Nommable<'a>>(input: T) -> IResult<T, T> {
                 return w_followed!(input, tag!($i));
             }
         };
@@ -341,8 +342,9 @@ pub mod tokens {
         };
     }
 
-    pub fn IDENT_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        return match input.position(|x: u8| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
+    pub fn IDENT_CHAR<'a, T: Nommable<'a>>(input: T) -> IResult<T, T>
+    where <T as InputTakeAtPosition>::Item: AsChar {
+        return match input.position(|x| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
@@ -444,7 +446,6 @@ pub mod tokens {
     keyword!(PASS, "pass");
     keyword!(BREAK, "break");
     keyword!(CONTINUE, "continue");
-
     keyword!(MATCH, "match");
 
     // Syntax

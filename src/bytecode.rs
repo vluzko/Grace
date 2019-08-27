@@ -1,13 +1,11 @@
 use std::hash::Hash;
 use std::collections::HashMap;
-use std::collections::HashSet;
 extern crate itertools;
 
 use expression::*;
 use scoping::*;
 use typing;
 use typing::Type;
-use compiler_layers;
 
 pub trait ToBytecode: Hash  {
     /// Generate WAST bytecode from an AST
@@ -53,7 +51,7 @@ impl ToBytecode for Node<Stmt> {
         let bytecode = match &self.data {
             &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
 
-                let (arg_types, ret) = match type_map.get(&self.id).unwrap() {
+                let (_, ret) = match type_map.get(&self.id).unwrap() {
                     typing::Type::Function(x, y) => (x.clone(), y.clone()),
                     x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
                 };
@@ -194,7 +192,7 @@ impl ToBytecode for Node<Expr> {
 }
 
 impl ToBytecode for ComparisonOperator {
-    fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
+    fn generate_bytecode(&self, _context: &Context, _type_map: &mut HashMap<usize, typing::Type>) -> String {
         return match self {
             &ComparisonOperator::Equal => "i32.eq".to_string(),
             &ComparisonOperator::Unequal => "i32.ne".to_string(),
@@ -252,7 +250,7 @@ impl UnaryOperator {
 }
 
 impl ToBytecode for Identifier {
-    fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
+    fn generate_bytecode(&self, _context: &Context, _type_map: &mut HashMap<usize, typing::Type>) -> String {
         let name = self.name.clone();
 	    return name;
     }
@@ -263,9 +261,7 @@ impl ToBytecode for Identifier {
 mod tests {
 
     use super::*;
-    use parser;
-    use parser_utils::*;
-    use typing::Typed;
+    use compiler_layers;
 
     #[test]
     pub fn test_generate_function_call() {

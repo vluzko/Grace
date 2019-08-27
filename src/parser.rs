@@ -1,4 +1,3 @@
-use std::str;
 use std::str::from_utf8;
 
 extern crate cute;
@@ -113,7 +112,6 @@ pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
-    use super::expr_parsers::logical_binary_expr;
 
     /// Match any statement.
     pub fn statement(input: &[u8], indent: usize) -> StmtRes {
@@ -691,8 +689,8 @@ pub mod expr_parsers {
     }
 
     /// Match an exponentiation expression.
-    fn power_expr(input: &[u8]) -> ExprRes {
-        return binary_expr(input, EXP, atomic_expr);
+    fn power_expr<'a> (input: &'a [u8]) -> ExprRes {
+        return binary_expr(input, |x| call!(x, EXP), atomic_expr);
     }
 
     // END BINARY EXPRESSIONS

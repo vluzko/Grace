@@ -10,7 +10,7 @@ use std::ops::{
 use bytecount;
 use memchr;
 extern crate nom;
-use self::nom::*;
+// use self::nom::*;
 use self::nom::{
     Compare,
     CompareResult,
@@ -18,12 +18,11 @@ use self::nom::{
     InputIter,
     InputLength,
     Offset,
-    Slice
+    Slice,
+    AtEof,
+    InputTake,
+    UnspecializedInput
 };
-
-
-
-pub type InputElement = u8;
 
 #[derive(Debug, PartialEq, Copy, Clone)]
 pub struct PosStr<'a> {
@@ -85,21 +84,6 @@ impl <'a> From<&'a [u8]> for PosStr<'a> {
     }
 }
 
-pub trait GraceFrom <T> {
-    fn from(input: T) -> Self
-}
-
-impl <'a, 'b> GraceFrom<&'b str> for PosStr<'a> {
-    fn from(input: &'b str) -> Self {
-        return PosStr {
-            offset: 0,
-            line  : 0,
-            column: 0,
-            slice : input.clone().as_bytes()
-        }
-    }
-}
-
 impl<'a> InputLength for PosStr<'a> {
     fn input_len(&self) -> usize {
         self.slice.len()
@@ -108,10 +92,10 @@ impl<'a> InputLength for PosStr<'a> {
 
 impl<'a> InputIter for PosStr<'a> {
     /// Type of an element of the PosStr' slice.
-    type Item     = &'a InputElement;
+    type Item     = &'a u8;
 
     /// Type of a raw element of the PosStr' slice.
-    type RawItem  = InputElement;
+    type RawItem  = u8;
 
     /// Type of the enumerator iterator.
     type Iter     = Enumerate<Iter<'a, Self::RawItem>>;
@@ -119,22 +103,18 @@ impl<'a> InputIter for PosStr<'a> {
     /// Type of the iterator.
     type IterElem = Iter<'a, Self::RawItem>;
 
-
     fn iter_indices(&self) -> Self::Iter {
         self.slice.iter().enumerate()
     }
-
 
     fn iter_elements(&self) -> Self::IterElem {
         self.slice.iter()
     }
 
-
     fn position<P>(&self, predicate: P) -> Option<usize>
         where P: Fn(Self::RawItem) -> bool {
         self.slice.iter().position(|x| predicate(*x))
     }
-
 
     fn slice_index(&self, count: usize) -> Option<usize> {
         if self.slice.len() >= count {
@@ -272,6 +252,47 @@ impl <'a> Offset for PosStr<'a> {
     }
 }
 
+impl <'a> InputTakeAtPosition for PosStr<'a> {
+  type Item = <Self as InputIter>::RawItem;
+
+  fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
+  where
+    P: Fn(Self::Item) -> bool,
+  {
+    match self.position(predicate) {
+      Some(n) => Ok(self.take_split(n)),
+      None => {
+        if self.at_eof() {
+          Ok(self.take_split(self.input_len()))
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
+
+  fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+  where
+    P: Fn(Self::Item) -> bool,
+  {
+    match self.position(predicate) {
+      Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
+      Some(n) => Ok(self.take_split(n)),
+      None => {
+        if self.at_eof() {
+          if self.input_len() == 0 {
+            Err(Err::Error(Context::Code(self.clone(), e)))
+          } else {
+            Ok(self.take_split(self.input_len()))
+          }
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
+}
+
 macro_rules! impl_slice_for_range {
     ($range:ty) => (
         impl<'a> Slice<$range> for PosStr<'a> {
@@ -325,48 +346,8 @@ impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
 
-macro_rules! custom_tag (
-  ($i:expr, $tag: expr) => (
-    {
-      use self::nom::{Err,Needed,IResult,ErrorKind};
-      use self::nom::{Compare,CompareResult,need_more};
-
-      let res: IResult<_,_> = match ($i).compare($tag) {
-        CompareResult::Ok => {
-          let blen = $tag.input_len();
-          Ok($i.take_split(blen))
-        },
-        CompareResult::Incomplete => {
-          need_more($i, Needed::Size($tag.input_len()))
-        },
-        CompareResult::Error => {
-          let e:ErrorKind<u32> = ErrorKind::Tag;
-          Err(Err::Error(Context::Code($i, e)))
-        }
-      };
-      res
-    }
-  );
-);
-
-pub fn dec_digit<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
-    return custom_tag!(input, "0");
-    // panic!()
-}
+impl <'a> UnspecializedInput for PosStr<'a> {}
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    #[test]
-    fn test_pos_str() {
-        let input = PosStr::from("abcd\n1234\n\nk".as_bytes());
-        let (second, _) = input.take_split(9);
-        assert_eq!(second.line, 1);
-        assert_eq!(second.column, 5);
-        assert_eq!(second.offset, 9);
-
-        let input = PosStr::from("1234".as_bytes());
-        let result = dec_digit(input);
-        println!("{:?}", result);
-    }
 }

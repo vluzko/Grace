@@ -4,6 +4,7 @@ use std::str;
 use std::str::from_utf8;
 use std::fmt::Debug;
 use std::clone::Clone;
+use std::marker::Copy;
 use std::cmp::PartialEq;
 use std::ops::{
     Range,
@@ -16,15 +17,16 @@ extern crate nom;
 use self::nom::*;
 use self::nom::{
     Offset,
-    InputTake
+    InputTake,
+    UnspecializedInput
 };
 use expression::Node;
 use position_tracker::PosStr;
-use position_tracker::GraceFrom;
 
 pub trait Nommable<'a>: 
 Clone +
 PartialEq +
+Copy +
 Debug +
 Compare<Self> +
 Compare<&'a str> +
@@ -40,14 +42,9 @@ Slice<RangeFull> +
 AtEof +
 InputTake + 
 Offset+
-GraceFrom<&'a str>{}
+UnspecializedInput
+{}
 
-
-impl <'a, 'b> GraceFrom<&'b str> for &'a[u8] {
-    fn from(input: &'b str) -> Self {
-        return input.as_bytes().clone();
-    }
-}
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
 impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
 
@@ -156,18 +153,6 @@ macro_rules! many1c (
   ($i:expr, $f:expr) => (
     many1c!($i, call!($f));
   );
-);
-
-macro_rules! ta(
-  ($i:expr, $tag: expr) => ({
-      match tag!($i, $tag) {
-            Err(y) => panic!(),
-            x => {println!("{:?}", x); x}
-      }
-    // match nom::bytes::streaming::tag($tag)($i) {
-    //     x => {println!("{:?}", x); panic!()}
-    // }
-  });
 );
 
 /// Check that a macro is indented correctly.
@@ -283,11 +268,11 @@ pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static reserved_words: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
-            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn $name<'a, T: Nommable<'a>>(input: T) -> IResult<T, T> {
                 return w_followed!(input, tag!($i));
             }
         };
@@ -357,8 +342,9 @@ pub mod tokens {
         };
     }
 
-    pub fn IDENT_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        return match input.position(|x: u8| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
+    pub fn IDENT_CHAR<'a, T: Nommable<'a>>(input: T) -> IResult<T, T>
+    where <T as InputTakeAtPosition>::Item: AsChar {
+        return match input.position(|x| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
@@ -381,7 +367,7 @@ pub mod tokens {
     /// Return true if a key
     pub fn RESERVED(input: &[u8]) -> IResult<&[u8], &[u8]> {
         let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
-        let tag_iter = reserved_words.iter().map(|x| x.as_bytes()).map(tag_lam);
+        let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
         let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
             match res {
@@ -406,7 +392,7 @@ pub mod tokens {
             )
         );
         let intermediate = match parse_result {
-            Ok((i, o)) => match reserved_words.iter().find(|x| *x == &o) {
+            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &o) {
                 Some(_) => wrap_err(i, ErrorKind::Alt),
                 None => Ok((i, o))
             },
@@ -416,10 +402,10 @@ pub mod tokens {
     }
 
     pub fn VALID_NUM_FOLLOW <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
-        if input.len() == 0 {
-            return Ok((input, "".as_bytes()));
+        if input.input_len() == 0 {
+            return Ok((input.clone(), input.clone()));
         } else {
-            return peek!(input, alt!(
+            return peek!(input.clone(), alt!(
                 eof!() | 
                 tag!(" ") | 
                 tag!("(") | 
@@ -460,7 +446,6 @@ pub mod tokens {
     keyword!(PASS, "pass");
     keyword!(BREAK, "break");
     keyword!(CONTINUE, "continue");
-
     keyword!(MATCH, "match");
 
     // Syntax
@@ -574,13 +559,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -590,13 +573,11 @@ pub mod iresult_helpers {
         let res = parser(input.as_bytes());
         match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
                 assert_eq!(i, expected_leftover.as_bytes());
                 assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
-                println!("Error: {:?}. Input was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}. Input was: {}", e, input)
             }
         }
     }
@@ -645,8 +626,7 @@ pub mod iresult_helpers {
             Result::Err(e) => {
                 match e {
                     Err::Error(actual_err) => match actual_err {
-                        Context::Code(i, actual_err) => assert_eq!(actual_err, expected),
-                        _ => panic!()
+                        Context::Code(_, actual_err) => assert_eq!(actual_err, expected)
                     }
                     _ => panic!()
                 }
@@ -668,15 +648,5 @@ pub mod iresult_helpers {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
-    #[cfg(test)]
-    mod position_tests {
-        use super::*;
-        #[test]
-        fn test_tokens() {
-
-        }
-    }
 
 }

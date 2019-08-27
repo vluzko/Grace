@@ -20,8 +20,7 @@ use self::nom::{
     Offset,
     Slice,
     AtEof,
-    InputTake,
-    UnspecializedInput
+    InputTake
 };
 
 #[derive(Debug, PartialEq, Copy, Clone)]
@@ -252,46 +251,46 @@ impl <'a> Offset for PosStr<'a> {
     }
 }
 
-impl <'a> InputTakeAtPosition for PosStr<'a> {
-  type Item = <Self as InputIter>::RawItem;
+// impl <'a> InputTakeAtPosition for PosStr<'a> {
+//   type Item = <Self as InputIter>::RawItem;
 
-  fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
-  where
-    P: Fn(Self::Item) -> bool,
-  {
-    match self.position(predicate) {
-      Some(n) => Ok(self.take_split(n)),
-      None => {
-        if self.at_eof() {
-          Ok(self.take_split(self.input_len()))
-        } else {
-          Err(Err::Incomplete(Needed::Size(1)))
-        }
-      }
-    }
-  }
-
-  fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
-  where
-    P: Fn(Self::Item) -> bool,
-  {
-    match self.position(predicate) {
-      Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
-      Some(n) => Ok(self.take_split(n)),
-      None => {
-        if self.at_eof() {
-          if self.input_len() == 0 {
-            Err(Err::Error(Context::Code(self.clone(), e)))
-          } else {
-            Ok(self.take_split(self.input_len()))
-          }
-        } else {
-          Err(Err::Incomplete(Needed::Size(1)))
-        }
-      }
-    }
-  }
-}
+//   fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
+//   where
+//     P: Fn(Self::Item) -> bool,
+//   {
+//     match self.position(predicate) {
+//       Some(n) => Ok(self.take_split(n)),
+//       None => {
+//         if self.at_eof() {
+//           Ok(self.take_split(self.input_len()))
+//         } else {
+//           Err(Err::Incomplete(Needed::Size(1)))
+//         }
+//       }
+//     }
+//   }
+//
+//   fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+//   where
+//     P: Fn(Self::Item) -> bool,
+//   {
+//     match self.position(predicate) {
+//       Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
+//       Some(n) => Ok(self.take_split(n)),
+//       None => {
+//         if self.at_eof() {
+//           if self.input_len() == 0 {
+//             Err(Err::Error(Context::Code(self.clone(), e)))
+//           } else {
+//             Ok(self.take_split(self.input_len()))
+//           }
+//         } else {
+//           Err(Err::Incomplete(Needed::Size(1)))
+//         }
+//       }
+//     }
+//   }
+// }
 
 macro_rules! impl_slice_for_range {
     ($range:ty) => (
@@ -346,7 +345,6 @@ impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
 
-impl <'a> UnspecializedInput for PosStr<'a> {}
 
 #[cfg(test)]
 mod test {

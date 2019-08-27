@@ -17,8 +17,7 @@ extern crate nom;
 use self::nom::*;
 use self::nom::{
     Offset,
-    InputTake,
-    UnspecializedInput
+    InputTake
 };
 use expression::Node;
 use position_tracker::PosStr;
@@ -41,8 +40,7 @@ Slice<Range<usize>> +
 Slice<RangeFull> +
 AtEof +
 InputTake + 
-Offset+
-UnspecializedInput
+Offset
 {}
 
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
@@ -343,8 +341,12 @@ pub mod tokens {
     }
 
     pub fn IDENT_CHAR<'a, T: Nommable<'a>>(input: T) -> IResult<T, T>
-    where <T as InputTakeAtPosition>::Item: AsChar {
-        return match input.position(|x| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
+    where <T as InputIter>::RawItem: AsChar {
+        let identifier_segment = input.position(|x| {
+            let y = x.as_char();
+            !(y.is_alpha() || y.is_dec_digit() || y == '_') 
+        });
+        return match identifier_segment {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {

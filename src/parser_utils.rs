@@ -278,7 +278,8 @@ pub mod tokens {
 
     macro_rules! keyword {
         ($name:ident, $i: expr) => {
-            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn $name<'a, T: Nommable<'a>>(input: T) -> IResult<T, T> 
+            where <T as InputIter>::RawItem: AsChar {
                 return w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))));
             }
         };

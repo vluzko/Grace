@@ -46,6 +46,8 @@ Offset
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
 impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
 
+type usable <'a> = Nommable<'a> where <Self as InputIter>::RawItem: AsChar
+
 
 /// Map the contents of an IResult.
 /// Rust functors plox

@@ -22,31 +22,30 @@ use self::nom::{
 use expression::Node;
 use position_tracker::PosStr;
 
-pub trait Nommable<'a>: 
-Clone +
-PartialEq +
-Copy +
-Debug +
-Compare<Self> +
-Compare<&'a str> +
-Compare<&'a [u8]> +
+pub trait Nommable<'a> where 
+Self:Clone,
+Self:PartialEq,
+Self:Copy,
+Self:Debug,
+Self:Compare<Self>,
+Self:Compare<&'a str>,
+Self:Compare<&'a [u8]>,
 // TODO: should this actually always be returning a byte array?
-FindSubstring<&'a [u8]> +
-InputIter +
-InputLength +
-Slice<RangeFrom<usize>> +
-Slice<RangeTo<usize>> +
-Slice<Range<usize>> +
-Slice<RangeFull> +
-AtEof +
-InputTake + 
-Offset
+Self:FindSubstring<&'a [u8]>,
+Self:InputIter,
+Self:InputLength,
+Self:Slice<RangeFrom<usize>>,
+Self:Slice<RangeTo<usize>>,
+Self:Slice<Range<usize>>,
+Self:Slice<RangeFull>,
+Self:AtEof,
+Self:InputTake, 
+Self:Offset,
+<Self as InputIter>::RawItem: AsChar
 {}
 
 impl <'a, 'b> Nommable<'a> for &'a[u8] {}
 impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
-
-type usable <'a> = Nommable<'a> where <Self as InputIter>::RawItem: AsChar
 
 
 /// Map the contents of an IResult.

@@ -499,7 +499,6 @@ impl Node<Module> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use parser_utils::output;
     use compiler_layers;
 
     #[test]

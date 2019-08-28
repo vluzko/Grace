@@ -1574,46 +1574,46 @@ pub mod type_parser {
         });
     }
 
-    // #[cfg(test)]
-    // mod test {
-    //     use super::*;
+    #[cfg(test)]
+    mod test {
+        use super::*;
 
-    //     #[test]
-    //     fn test_simple_types() {
-    //         check_match("i32", any_type, Type::i32);
-    //         check_match("i64", any_type, Type::i64);
-    //         check_match("f32", any_type, Type::f32);
-    //         check_match("f64", any_type, Type::f64);
-    //         check_match("ui32", any_type, Type::ui32);
-    //         check_match("ui64", any_type, Type::ui64);
-    //         check_match("boolean", any_type, Type::boolean);
-    //         check_match("string", any_type, Type::string);
+        #[test]
+        fn test_simple_types() {
+            check_match("i32", any_type, Type::i32);
+            check_match("i64", any_type, Type::i64);
+            check_match("f32", any_type, Type::f32);
+            check_match("f64", any_type, Type::f64);
+            check_match("ui32", any_type, Type::ui32);
+            check_match("ui64", any_type, Type::ui64);
+            check_match("boolean", any_type, Type::boolean);
+            check_match("string", any_type, Type::string);
 
-    //         // TODO: Random string test
-    //     }
+            // TODO: Random string test
+        }
 
-    //     #[test]
-    //     fn test_parameterized_types() {
-    //         check_match("Test<i32>", any_type, Type::Parameterized(
-    //             Identifier::from("Test"), 
-    //             vec!(Type::i32)
-    //         ));
-    //     }
+        #[test]
+        fn test_parameterized_types() {
+            check_match("Test<i32>", any_type, Type::Parameterized(
+                Identifier::from("Test"), 
+                vec!(Type::i32)
+            ));
+        }
 
-    //     #[test]
-    //     fn test_sum_types() {
-    //         check_match("i32 | i64", any_type, Type::Sum(vec!(
-    //             Type::i32, Type::i64
-    //         )));
-    //     }
+        #[test]
+        fn test_sum_types() {
+            check_match("i32 | i64", any_type, Type::Sum(vec!(
+                Type::i32, Type::i64
+            )));
+        }
 
-    //     #[test]
-    //     fn test_product_types() {
-    //         check_match("(i32, i64)", any_type, Type::Product(vec!(
-    //             Type::i32, Type::i64
-    //         )));
-    //     }
-    // }
+        #[test]
+        fn test_product_types() {
+            check_match("(i32, i64)", any_type, Type::Product(vec!(
+                Type::i32, Type::i64
+            )));
+        }
+    }
 
 }
 

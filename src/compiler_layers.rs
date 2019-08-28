@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
 
-use p_pos::Parseable;
+use parser::Parseable;
 use position_tracker::PosStr;
 use scoping;
 use scoping::Scoped;

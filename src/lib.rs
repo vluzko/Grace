@@ -10,7 +10,7 @@ extern crate memchr;
 pub mod position_tracker;
 #[macro_use]
 pub mod parser_utils;
-pub mod p_pos;
+pub mod parser;
 pub mod general_utils;
 pub mod grace_error;
 pub mod expression;

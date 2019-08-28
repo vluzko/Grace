@@ -5,9 +5,10 @@ extern crate nom;
 use self::nom::*;
 
 use expression::*;
+use position_tracker::PosStr;
 use parser_utils::*;
+use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
-use typing;
 use typing::Type;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
@@ -18,40 +19,43 @@ use self::stmt_parsers::{
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
-type StmtRes<'a> = IResult<&'a[u8], StmtNode>;
-type ExprRes<'a> = IResult<&'a[u8], ExprNode>;
-type TypeRes<'a> = IResult<&'a[u8], typing::Type>;
+type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
+type Res<'a, T> = IResult<PosStr<'a>, T>;
+type StmtRes<'a> = IResult<PosStr<'a>, StmtNode>;
+type ExprRes<'a> = IResult<PosStr<'a>, ExprNode>;
+type TypeRes<'a> = IResult<PosStr<'a>, Type>;
+
 
 pub trait Parseable {
-    fn parse(input: &[u8]) -> Self;
+    fn parse<'a>(input: PosStr<'a>) -> Self;
 }
 
 impl Parseable for Node<Module> {
-    fn parse(input: &[u8]) -> Node<Module> {
-        return  output(module(input));
+    fn parse<'a>(input: PosStr<'a>) -> Node<Module> {
+        return  output(module(PosStr::from(input)));
     }
 }
 
 impl Parseable for Node<Block> {
-    fn parse(input: &[u8]) -> Node<Block> {
-        return output(block(input, 0));
+    fn parse<'a>(input: PosStr<'a>) -> Node<Block> {
+        return output(block(PosStr::from(input), 0));
     }
 }
 
 impl Parseable for Node<Stmt> {
-    fn parse(input: &[u8]) -> Node<Stmt> {
-        return output(statement(input, 0));
+    fn parse<'a>(input: PosStr<'a>) -> Node<Stmt> {
+        return output(statement(PosStr::from(input), 0));
     }
 }
 
 impl Parseable for Node<Expr> {
-    fn parse(input: &[u8]) -> Node<Expr> {
-        return output(expression(input));
+    fn parse<'a>(input: PosStr<'a>) -> Node<Expr> {
+        return output(expression(PosStr::from(input)));
     }
 }
 
 /// Match a module.
-pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
+pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
         many1!(complete!(
@@ -66,9 +70,9 @@ pub fn module(input: &[u8]) -> IResult<&[u8], Node<Module>>{
 }
 
 /// Match a block.
-pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
-    let first_indent_parse: IResult<&[u8], Vec<&[u8]>> = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
-    let full_indent: (&[u8], Vec<&[u8]>) = match first_indent_parse {
+pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<Block>> {
+    let first_indent_parse = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
+    let full_indent = match first_indent_parse {
         Ok((i, o)) => (i, o),
         _ => panic!()
     };
@@ -100,7 +104,7 @@ pub fn block(input: &[u8], indent: usize) -> IResult<&[u8], Node<Block>> {
 
 // TODO: Deprecate
 /// Match a typed identifier
-pub fn typed_identifier(input: &[u8]) -> IResult<&[u8], TypedIdent> {
+pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent> {
     let parse_result = tuple!(input,
         IDENTIFIER,
         optc!(preceded!(COLON, type_parser::any_type))
@@ -114,7 +118,7 @@ pub mod stmt_parsers {
     use super::*;
 
     /// Match any statement.
-    pub fn statement(input: &[u8], indent: usize) -> StmtRes {
+    pub fn statement<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let node = alt_complete!(input,
             let_stmt |
             assignment_stmt |
@@ -135,7 +139,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a let statement.
-    fn let_stmt(input: &[u8]) -> StmtRes {
+    fn let_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = separated_pair!(input,
             preceded!(
                 LET,
@@ -149,10 +153,10 @@ pub mod stmt_parsers {
     }
 
     /// Match an assignment statement.
-    fn assignment_stmt(input: &[u8]) -> StmtRes {
+    fn assignment_stmt<'a>(input: PosStr<'a>) -> StmtRes {
 
         /// Match an assignment operator.
-        fn assignments(input: &[u8]) -> IResult<&[u8], &[u8]> {
+        fn assignments<'a>(input: PosStr<'a>) -> IO<'a> {
             return alt_complete!(input, 
                 EQUALS | 
                 ADDASN |
@@ -184,7 +188,7 @@ pub mod stmt_parsers {
     }
 
     /// Match the standard arguments in a function declaration.
-    fn fn_dec_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type)>> {
+    fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
         let result = separated_list_complete!(input,
             COMMA,
             tuple!(
@@ -200,7 +204,7 @@ pub mod stmt_parsers {
 
     // TODO: Deprecate
     /// Match the variable length argument in a function declaration.
-    fn vararg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
+    fn vararg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
         return optc!(input, preceded!(
             tuple!(
                 COMMA,
@@ -211,7 +215,7 @@ pub mod stmt_parsers {
     }
 
     /// Match all keyword arguments in a function declaration.
-    fn keyword_args(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Type, Node<Expr>)>> {
+    fn keyword_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
         let parse_result = optc!(input, preceded!(
             COMMA,
             separated_list_complete!(
@@ -232,7 +236,7 @@ pub mod stmt_parsers {
 
     // TODO: Deprecate
     /// Match the variable length keyword arguments in a function declaration.
-    fn varkwarg(input: &[u8]) -> IResult<&[u8], Option<Identifier>> {
+    fn varkwarg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
         return optc!(input, preceded!(
             tuple!(
                 COMMA,
@@ -244,8 +248,8 @@ pub mod stmt_parsers {
 
     /// Parse a function declaration.
     /// Must be public because it's used by module.
-    pub fn function_declaration_stmt<'a>(input: &'a [u8], indent: usize) -> StmtRes {
-        let arg_parser = |i: &'a [u8]| tuple!(i,
+    pub fn function_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+        let arg_parser = |i: PosStr<'a>| tuple!(i,
             IDENTIFIER,
             preceded!(
                 OPEN_PAREN,
@@ -274,13 +278,13 @@ pub mod stmt_parsers {
             block: body,
             return_type: match return_type {
                 Some(x) => x,
-                None => typing::Type::empty
+                None => Type::empty
             }
         });
     }
 
     /// Match an if statement.
-    fn if_stmt(input: &[u8], indent: usize) -> StmtRes {
+    fn if_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let parse_result = tuple!(input,
             line_and_block!(preceded!(IF, expression), indent),
             many0c!(indented!(line_and_block!(preceded!(ELIF, expression), indent), indent)),
@@ -291,13 +295,13 @@ pub mod stmt_parsers {
     }
 
     /// Parse a while loop.
-    fn while_stmt(input: &[u8], indent: usize) -> StmtRes {
+    fn while_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
         return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
     }
 
     /// Parse a for in loop.
-    fn for_in(input: &[u8], indent: usize) -> StmtRes {
+    fn for_in<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let parse_result = line_and_block!(input, tuple!(
             preceded!(
                 FOR,
@@ -313,7 +317,7 @@ pub mod stmt_parsers {
     }
 
     /// Match an import statement.
-    pub fn import(input: &[u8]) -> StmtRes {
+    pub fn import<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = preceded!(input, IMPORT, separated_nonempty_list_complete!(
             DOT,
             IDENTIFIER
@@ -322,19 +326,19 @@ pub mod stmt_parsers {
     }
 
     /// Match a return statement.
-    fn return_stmt(input: &[u8]) -> StmtRes {
+    fn return_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = preceded!(input, RETURN, expression);
         return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
     }
 
     /// Match a yield statement.
-    fn yield_stmt(input: &[u8]) -> StmtRes {
+    fn yield_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = preceded!(input, YIELD, expression);
         return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
     }
 
     /// Match a break statement.
-    fn break_stmt(input: &[u8]) -> StmtRes {
+    fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             BREAK,
             peek!(alt_complete!(
@@ -346,7 +350,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a pass statement.
-    fn pass_stmt(input: &[u8]) -> StmtRes {
+    fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             PASS,
             peek!(alt_complete!(
@@ -358,7 +362,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a continue statement.
-    fn continue_stmt(input: &[u8]) -> StmtRes {
+    fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             CONTINUE,
             peek!(alt_complete!(
@@ -370,7 +374,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a try except statement.
-    fn try_except(input: &[u8], indent: usize) -> StmtRes {
+    fn try_except<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let parse_result = tuple!(input,
             keyword_and_block!(TRY, indent),
             many1c!(keyword_and_block!(EXCEPT, indent)),
@@ -389,7 +393,6 @@ pub mod stmt_parsers {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use parser_utils::iresult_helpers::*;
 
         #[test]
         fn parse_let_stmt() {
@@ -404,7 +407,7 @@ pub mod stmt_parsers {
             check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
                 typed_name: TypedIdent {
                     name: Identifier::from("x"),
-                    type_annotation: Some(typing::Type::f32)
+                    type_annotation: Some(Type::f32)
                 },
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
@@ -439,7 +442,7 @@ pub mod stmt_parsers {
         #[test]
         fn parse_func_dec_parts() {
             // Args
-            let actual = output(fn_dec_args("a: i32)".as_bytes()));
+            let actual = output(fn_dec_args(PosStr::from("a: i32)")));
             assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
             check_match("a: i32, b: i64", fn_dec_args, vec!(
                 (Identifier::from("a"), Type::i32),
@@ -448,7 +451,7 @@ pub mod stmt_parsers {
 
             // Vararg
             let expected = Some(Identifier::from("args"));
-            let actual = output(vararg(", *args".as_bytes()));
+            let actual = output(vararg(PosStr::from(", *args")));
             assert_eq!(expected, actual);
 
             // Kwargs.
@@ -463,37 +466,37 @@ pub mod stmt_parsers {
         fn parse_func_dec() {
             check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wvars"),
-                args: vec!((Identifier::from("a"), typing::Type::i32), (Identifier::from("b"), typing::Type::i32)),
+                args: vec!((Identifier::from("a"), Type::i32), (Identifier::from("b"), Type::i32)),
                 vararg: Some(Identifier::from("args")),
                 kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
-                    (Identifier::from("d"), typing::Type::i32, output(expression("7".as_bytes())))
+                    (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
+                    (Identifier::from("d"), Type::i32, output(expression(PosStr::from("7"))))
                 ),
                 varkwarg: Some(Identifier::from("kwargs")),
-                block: output(block("let val =  5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
+                block: output(block(PosStr::from("let val =  5\n"), 0)),
+                return_type: Type::empty
             });
 
             check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wkwargs"),
-                args: vec![(Identifier::from("a"), typing::Type::i32)],
+                args: vec![(Identifier::from("a"), Type::i32)],
                 vararg: None,
                 kwargs: vec!(
-                    (Identifier::from("c"), typing::Type::i32, output(expression("5".as_bytes()))),
+                    (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                 ),
                 varkwarg: None,
-                block: output(block("let val=5\n".as_bytes(), 0)),
-                return_type: typing::Type::empty
+                block: output(block(PosStr::from("let val=5\n"), 0)),
+                return_type: Type::empty
             });
 
             check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
-                args: vec!((Identifier::from("b"), typing::Type::i32)),
+                args: vec!((Identifier::from("b"), Type::i32)),
                 vararg: None,
                 kwargs: vec!(),
                 varkwarg: None,
-                block: output(block("let x = 5 + 6\nreturn x".as_bytes(), 0)),
-                return_type: typing::Type::i32
+                block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
+                return_type: Type::i32
             });
         }
         
@@ -502,8 +505,8 @@ pub mod stmt_parsers {
             let good_input = "if (a and b):\n x = true";
 
             let good_output = Stmt::IfStmt{
-                condition: output(expression("a and b".as_bytes())),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x = true".as_bytes()))))}),
+                condition: output(expression(PosStr::from("a and b"))),
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt(PosStr::from("x = true")))))}),
                 elifs: vec!(),
                 else_block: None
             };
@@ -513,11 +516,10 @@ pub mod stmt_parsers {
             check_failed("ifa and b:\n x = true", |x| statement(x, 0), ErrorKind::Alt);
 
             check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
-                
                 condition: Node::from(true),
-                block: output(block("x = true".as_bytes(), 0)),
-                elifs: vec!((Node::from(false), output(block("y = true".as_bytes(), 0)))),
-                else_block: Some(output(block("z = true".as_bytes(), 0)))
+                block: output(block(PosStr::from("x = true"), 0)),
+                elifs: vec!((Node::from(false), output(block(PosStr::from("y = true"), 0)))),
+                else_block: Some(output(block(PosStr::from("z = true"), 0)))
             });
         }
 
@@ -525,7 +527,7 @@ pub mod stmt_parsers {
         fn parse_while_stmt() {
             check_data("while true:\n x=true", |x| statement(x, 0), Stmt::WhileStmt {
                 condition: Node::from(true),
-                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt("x=true".as_bytes()))))})
+                block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt(PosStr::from("x=true")))))})
             });
         }
 
@@ -534,13 +536,13 @@ pub mod stmt_parsers {
             check_data("for x in y:\n a=true", |x| statement(x, 0), Stmt::ForInStmt {
                 iter_vars: Identifier::from("x"),
                 iterator: Node::from("y"),
-                block: output(block("a=true".as_bytes(), 0))
+                block: output(block(PosStr::from("a=true"), 0))
             });
         }
 
         #[test]
         fn parse_try_except() {
-            let blk = output(block("x=0".as_bytes(), 0));
+            let blk = output(block(PosStr::from("x=0"), 0));
             check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
                 block: blk.clone(),
                 exceptions: vec!(blk.clone()),
@@ -582,12 +584,12 @@ pub mod stmt_parsers {
 pub mod expr_parsers {
     use super::*;
 
-    pub fn expression(input: &[u8]) -> ExprRes {
+    pub fn expression<'a>(input: PosStr<'a>) -> ExprRes {
         return alt_complete!(input, comparison_expr);
     }
 
     /// Match a comparison expression.
-    fn comparison_expr(input: &[u8]) -> ExprRes {
+    fn comparison_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = tuple!(input,
             alt!(match_expr | logical_binary_expr),
             optc!(tuple!(
@@ -596,7 +598,7 @@ pub mod expr_parsers {
             ))
         );
 
-        let map = |x: (Node<Expr>, Option<(&[u8], Node<Expr>)>)| match x.1 {
+        let map = |x: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)| match x.1 {
             None => x.0,
             Some(y) => {
                 let operator = ComparisonOperator::from(y.0);
@@ -609,7 +611,7 @@ pub mod expr_parsers {
     }
 
     /// Match a match expression.
-    fn match_expr(input: &[u8]) -> ExprRes {
+    fn match_expr<'a>(input: PosStr<'a>) -> ExprRes {
 
         let parse_result = tuple!(input,
             delimited!(
@@ -636,10 +638,10 @@ pub mod expr_parsers {
     // BEGIN BINARY EXPRESSIONS
 
     /// Flatten a possible binary expression into a single expression.
-    fn flatten_binary(result: (Node<Expr>, Option<(&[u8], Node<Expr>)>)) -> Node<Expr> {
+    fn flatten_binary<'a>(result: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)) -> Node<Expr> {
         return match result.1 {
             Some(x) => {
-                let op = BinaryOperator::from(x.0);
+                let op = BinaryOperator::from(x.0.slice);
                 Node::from(Expr::BinaryExpr {operator: op, left: Box::new(result.0), right: Box::new(x.1)})
             },
             None => result.0
@@ -647,7 +649,7 @@ pub mod expr_parsers {
     }
 
     /// Match a list of binary operations
-    fn binary_expr<'a>(input: &'a [u8], operator_parser: fn(&[u8]) -> IResult<&[u8], &[u8]>, next_expr: fn(&[u8]) -> ExprRes) -> ExprRes<'a> {
+    fn binary_expr<'a>(input: PosStr<'a>, operator_parser: fn(PosStr) -> IResult<PosStr, PosStr>, next_expr: fn(PosStr) -> ExprRes) -> ExprRes<'a> {
         let parse_result = tuple!(input,
             next_expr,
             optc!(tuple!(
@@ -661,22 +663,22 @@ pub mod expr_parsers {
 
     /// Match logical expressions.
     /// Must be public because it's used by several statements
-    pub fn logical_binary_expr(input: &[u8]) -> ExprRes {
+    pub fn logical_binary_expr<'a>(input: PosStr<'a>) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), bitwise_binary_expr);
     }
 
     /// Match bitwise boolean expressions.
-    fn bitwise_binary_expr(input: &[u8]) -> ExprRes {
+    fn bitwise_binary_expr<'a>(input: PosStr<'a>) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), shift_expr);
     }
 
     /// Match bit shift expressions.
-    fn shift_expr(input: &[u8]) -> ExprRes {
+    fn shift_expr<'a>(input: PosStr<'a>) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), additive_expr);
     }
 
     /// Match addition and subtraction expressions.
-    fn additive_expr(input: &[u8]) -> ExprRes {
+    fn additive_expr<'a>(input: PosStr<'a>) -> ExprRes {
         // let symbols = vec!["+", "-"];
         // let operators = c!{k.as_bytes() => BinaryOperator::from(*k), for k in symbols.iter()};
         // return binary_op_list(input, &symbols, &operators, mult_expr);
@@ -684,12 +686,12 @@ pub mod expr_parsers {
     }
 
     /// Match multiplication, division, and modulo expressions.
-    fn mult_expr(input: &[u8]) -> ExprRes {
+    fn mult_expr<'a>(input: PosStr<'a>) -> ExprRes {
         return binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr);
     }
 
     /// Match an exponentiation expression.
-    fn power_expr<'a> (input: &'a [u8]) -> ExprRes {
+    fn power_expr<'a> (input: PosStr<'a>) -> ExprRes {
         return binary_expr(input, |x| call!(x, EXP), atomic_expr);
     }
 
@@ -697,7 +699,7 @@ pub mod expr_parsers {
 
     /// Match any unary expression.
     /// Implemented as a single parser because all unary expressions have the same precedence.
-    fn unary_expr(input: & [u8]) -> ExprRes {
+    fn unary_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = alt!(input,
             tuple!(
                 map!(alt!(PLUS | MINUS | TILDE | NOT), Some),
@@ -711,7 +713,7 @@ pub mod expr_parsers {
 
         let node = fmap_iresult(parse_result, |x|
             match x.0 {
-                Some(y) => Node::from(Expr::UnaryExpr {operator: UnaryOperator::from(y), operand: Box::new(x.1)}),
+                Some(y) => Node::from(Expr::UnaryExpr {operator: UnaryOperator::from(y.slice), operand: Box::new(x.1)}),
                 None => x.1
 
             });
@@ -721,7 +723,7 @@ pub mod expr_parsers {
     // BEGIN ATOMIC EXPRESSIONS
 
     //TODO get rid of all the bits
-    fn atomic_expr(input: &[u8]) -> ExprRes {
+    fn atomic_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let node = w_followed!(input, alt_complete!(
             bool_expr |
             float_expr |
@@ -743,7 +745,7 @@ pub mod expr_parsers {
     }
 
     /// An expression wrapped in parentheses.
-    fn wrapped_expr(input: &[u8]) -> ExprRes {
+    fn wrapped_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let node = delimited!(input,
             OPEN_PAREN,
             alt_complete!(generator_comprehension | tuple_literal | expression),
@@ -762,7 +764,7 @@ pub mod expr_parsers {
     }
 
     /// Match a list of arguments in a function call.
-    fn args_list(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+    fn args_list<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Node<Expr>>> {
         let parse_result = separated_nonempty_list_complete!(input,
             COMMA,
             terminated!(
@@ -774,7 +776,7 @@ pub mod expr_parsers {
     }
 
     /// Match a list of keyword arguments in a function call.
-    fn kwargs_list(input: &[u8]) -> IResult<&[u8], Vec<(Identifier, Node<Expr>)>> {
+    fn kwargs_list<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<(Identifier, Node<Expr>)>> {
         let parse_result = separated_list!(input,
             COMMA,
             tuple!(
@@ -789,7 +791,7 @@ pub mod expr_parsers {
     }
 
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
-    fn expr_with_trailer(input: &[u8]) -> ExprRes {
+    fn expr_with_trailer<'a>(input: PosStr<'a>) -> ExprRes {
         let ident_as_expr = |x| fmap_iresult(
             IDENTIFIER(x),
             |y: Identifier| Node::from(Expr::IdentifierExpr (y))
@@ -824,7 +826,7 @@ pub mod expr_parsers {
     }
 
     /// Parse an expression trailer.
-    fn trailer(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    fn trailer<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
         return alt_complete!(input,
             post_call |
             post_access |
@@ -833,7 +835,7 @@ pub mod expr_parsers {
     }
 
     /// Match a function call following an expression.
-    fn post_call(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    fn post_call<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
         let parse_result = delimited!(input,
             OPEN_PAREN,
             alt_complete!(
@@ -858,7 +860,7 @@ pub mod expr_parsers {
     }
 
     /// Match an indexing operation following an expression.
-    fn post_index(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    fn post_index<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
         let parse_result = delimited!(input,
             OPEN_BRACKET,
             separated_nonempty_list_complete!(
@@ -899,7 +901,7 @@ pub mod expr_parsers {
     }
 
     /// Match an access operation following an expression.
-    fn post_access(input: &[u8]) -> IResult<&[u8], PostIdent> {
+    fn post_access<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
         let result = many1c!(input, 
             preceded!(
                 DOT,
@@ -912,13 +914,13 @@ pub mod expr_parsers {
     // Literal expressions.
 
     /// Match a boolean literal expression.
-    fn bool_expr(input: &[u8]) -> ExprRes {
+    fn bool_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = w_followed!(input, 
             alt!(
             terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
             terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
         ));
-        return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x).unwrap() {
+        return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x.slice).unwrap() {
             "true" => true,
             "false" => false,
             _ => panic!()
@@ -926,8 +928,8 @@ pub mod expr_parsers {
     }
 
     /// Match an integer literal expression.
-    fn int_expr(input: &[u8]) -> ExprRes {
-        let parse_result: IResult<&[u8], &[u8]> = w_followed!(input, 
+    fn int_expr<'a>(input: PosStr<'a>) -> ExprRes {
+        let parse_result = w_followed!(input, 
             recognize!(tuple!(
                 optc!(SIGN),
                 terminated!(
@@ -936,13 +938,13 @@ pub mod expr_parsers {
                 )
             )
         ));
-        return fmap_node(parse_result, |x| Expr::Int(from_utf8(x).unwrap().to_string()));
+        return fmap_node(parse_result, |x| Expr::Int(from_utf8(x.slice).unwrap().to_string()));
     }
 
     /// Match a floating point literal expression.
-    fn float_expr<'a>(input: &'a[u8]) -> ExprRes {
+    fn float_expr<'a>(input: PosStr<'a>) -> ExprRes {
         
-        let exponent = |x: &'a [u8]| preceded!(x, 
+        let exponent = |x: PosStr<'a>| preceded!(x, 
             alt!(tag!("e") | tag!("E")),
             tuple!(
                 opt!(SIGN),
@@ -950,7 +952,7 @@ pub mod expr_parsers {
             )
         );
 
-        let with_dec = |x: &'a[u8]| tuple!(x,
+        let with_dec = |x: PosStr<'a>| tuple!(x,
             tag!("."),
             DIGIT0,
             opt!(complete!(exponent))
@@ -968,11 +970,11 @@ pub mod expr_parsers {
             )
         ));
 
-        return fmap_node(parse_result, |x| Expr::Float(from_utf8(x).unwrap().to_string()));
+        return fmap_node(parse_result, |x| Expr::Float(from_utf8(x.slice).unwrap().to_string()));
     }
 
     /// Match a string literal expression.
-    fn string_expr(input: &[u8]) -> ExprRes {
+    fn string_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let result = w_followed!(input, 
             recognize!(
                 tuple!(
@@ -982,13 +984,13 @@ pub mod expr_parsers {
                 )
             )
         );
-        return fmap_node(result, |x: &[u8]| Expr::String(from_utf8(x).unwrap().to_string()))
+        return fmap_node(result, |x| Expr::String(from_utf8(x.slice).unwrap().to_string()))
     }
 
     // Collection literals.
 
     /// Match a vector literal.
-    fn vec_literal(input: &[u8]) -> ExprRes {
+    fn vec_literal<'a>(input: PosStr<'a>) -> ExprRes {
 
         let parse_result = terminated!(input,
             separated_nonempty_list_complete!(
@@ -1002,7 +1004,7 @@ pub mod expr_parsers {
     }
 
     /// Match a set literal.
-    fn set_literal(input: &[u8]) -> ExprRes {
+    fn set_literal<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = 
             separated_nonempty_list_complete!(input,
                 COMMA,
@@ -1013,7 +1015,7 @@ pub mod expr_parsers {
     }
 
     /// Match a map literal.
-    fn map_literal(input: &[u8]) -> ExprRes {
+    fn map_literal<'a>(input: PosStr<'a>) -> ExprRes {
 
         let parse_result = separated_nonempty_list_complete!(input,
             COMMA,
@@ -1029,7 +1031,7 @@ pub mod expr_parsers {
 
     /// Match a tuple literal
     /// e.g. (), (1, ), (1,2,3), (1,2,3,)
-    fn tuple_literal(input: &[u8]) -> ExprRes {
+    fn tuple_literal<'a>(input: PosStr<'a>) -> ExprRes {
 
         let parse_result = alt_complete!(input,
             // Empty input
@@ -1056,7 +1058,7 @@ pub mod expr_parsers {
     // Collection comprehensions
 
     /// Match a split variable.
-    fn variable_unpacking(input: &[u8]) -> IResult<&[u8], Vec<Identifier>> {
+    fn variable_unpacking<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Identifier>> {
         return separated_nonempty_list_complete!(input,
             COMMA,
             IDENTIFIER
@@ -1064,7 +1066,7 @@ pub mod expr_parsers {
     }
 
     /// Match the for part of a comprehension.
-    fn comprehension_for(input: &[u8]) -> IResult<&[u8], ComprehensionIter> {
+    fn comprehension_for<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ComprehensionIter> {
         let parse_result = tuple!(input,
             delimited!(
                 FOR,
@@ -1083,7 +1085,7 @@ pub mod expr_parsers {
     }
 
     /// Match the if part of a comprehension.
-    fn comprehension_if(input: &[u8]) -> IResult<&[u8], Vec<Node<Expr>>> {
+    fn comprehension_if<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Node<Expr>>> {
         return many0c!(input,
             preceded!(
                 IF,
@@ -1093,7 +1095,7 @@ pub mod expr_parsers {
     }
 
     /// Match a vector comprehension.
-    fn vector_comprehension(input: &[u8]) -> ExprRes {
+    fn vector_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = tuple!(input,
             logical_binary_expr,
             many1!(comprehension_for)
@@ -1106,7 +1108,7 @@ pub mod expr_parsers {
     }
 
     /// Match a generator comprehension.
-    fn generator_comprehension(input: &[u8]) -> ExprRes {
+    fn generator_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = tuple!(input,
             logical_binary_expr,
             many1!(comprehension_for)
@@ -1119,7 +1121,7 @@ pub mod expr_parsers {
     }
 
     /// Match a map or a set.
-    fn map_or_set_comprehension(input: &[u8]) -> ExprRes {
+    fn map_or_set_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
         let parse_result = tuple!(input,
                 logical_binary_expr,
                 opt!(complete!(preceded!(
@@ -1146,7 +1148,6 @@ pub mod expr_parsers {
 
     #[cfg(test)]
     mod tests {
-        use parser_utils::iresult_helpers::*;
         use super::*;
 
         #[test]
@@ -1206,7 +1207,7 @@ pub mod expr_parsers {
 
         #[test]
         fn parse_function_call() {
-            let a = output(logical_binary_expr("true and false".as_bytes()));
+            let a = output(logical_binary_expr(PosStr::from("true and false")));
             let no_args = Node::from(Expr::FunctionCall{
                 function: Box::new(Node::from("func")),
                 args: vec!(),
@@ -1214,7 +1215,7 @@ pub mod expr_parsers {
             });
 
             check_match("func()", expr_with_trailer, no_args);
-            let b = output(expression("func()".as_bytes()));
+            let b = output(expression(PosStr::from("func()")));
             let expected = Expr::FunctionCall{
                 function: Box::new(Node::from(Expr::IdentifierExpr(Identifier{name: "ident".to_string()}))), 
                 args: vec!(a, b), 
@@ -1244,7 +1245,7 @@ pub mod expr_parsers {
             check_data("func(a)(b, c)", expression, expected);
 
             check_data("(a and b)(true)", expression, Expr::FunctionCall {
-                function: Box::new(output(logical_binary_expr("a and b".as_bytes()))),
+                function: Box::new(output(logical_binary_expr(PosStr::from("a and b")))),
                 args: vec!(Node::from(true)),
                 kwargs: vec!()
             });
@@ -1257,15 +1258,14 @@ pub mod expr_parsers {
                                 ComparisonOperator::LessEqual, ComparisonOperator::Equal, ComparisonOperator::Unequal];
             for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
                 let as_str = format!("true {} false", comp_str);
-                let expr = expression(as_str.as_bytes());
-                let expected = Node::from(Expr::ComparisonExpr{
-                    
+                let expr = expression(PosStr::new(as_str.as_bytes()));
+                let expected = Node::from(Expr::ComparisonExpr{ 
                     left: Box::new(Node::from(true)),
                     right: Box::new(Node::from(false)),
                     operator: *comp_op
                 });
 
-                assert_eq!(expr, Ok(("".as_bytes(), expected)));
+                assert_eq!(expr.unwrap().1, expected);
             }
         }
 
@@ -1327,7 +1327,7 @@ pub mod expr_parsers {
             }
             check_data("~+y", expression, Expr::UnaryExpr {
                 operator: UnaryOperator::BitNot,
-                operand: Box::new(output(expression("+y".as_bytes()))),
+                operand: Box::new(output(expression(PosStr::from("+y")))),
             });
             check_data("not true", expression, Expr::UnaryExpr {operator: UnaryOperator::Not, operand: Box::new(Node::from(true))});
         }
@@ -1517,11 +1517,11 @@ pub mod expr_parsers {
 pub mod type_parser {
     use super::*;
     /// Parse a type.
-    pub fn any_type(input: &[u8]) -> TypeRes {
+    pub fn any_type<'a>(input: PosStr<'a>) -> TypeRes {
         return alt_complete!(input, product_type | sum_type);
     }
 
-    pub fn product_type(input: &[u8]) -> TypeRes {
+    pub fn product_type<'a>(input: PosStr<'a>) -> TypeRes {
         let result = delimited!(input,
             OPEN_PAREN,
             separated_list!(
@@ -1531,10 +1531,10 @@ pub mod type_parser {
             CLOSE_PAREN
         );
 
-        return fmap_iresult(result, |x| typing::Type::Product(x))
+        return fmap_iresult(result, |x| Type::Product(x))
     }
 
-    pub fn sum_type(input: &[u8]) -> TypeRes {
+    pub fn sum_type<'a>(input: PosStr<'a>) -> TypeRes {
         let result = tuple!(input, 
             parameterized_type,
             many0c!(
@@ -1549,12 +1549,12 @@ pub mod type_parser {
             0 => x.0,
             _ => {
                 x.1.insert(0, x.0);
-                typing::Type::Sum(x.1)
+                Type::Sum(x.1)
             }
         });
     }
 
-    pub fn parameterized_type(input: &[u8]) -> TypeRes {
+    pub fn parameterized_type<'a>(input: PosStr<'a>) -> TypeRes {
         let result = tuple!(input, 
             IDENTIFIER,
             optc!(delimited!(
@@ -1567,49 +1567,48 @@ pub mod type_parser {
             ))
         );
         return fmap_iresult(result, |x| match x.1 {
-            Some(y) => typing::Type::Parameterized(x.0, y),
-            None => typing::Type::from(x.0)
+            Some(y) => Type::Parameterized(x.0, y),
+            None => Type::from(x.0)
         });
     }
 
     #[cfg(test)]
     mod test {
         use super::*;
-        use parser_utils::iresult_helpers::*;
 
         #[test]
         fn test_simple_types() {
-            check_match("i32", any_type, typing::Type::i32);
-            check_match("i64", any_type, typing::Type::i64);
-            check_match("f32", any_type, typing::Type::f32);
-            check_match("f64", any_type, typing::Type::f64);
-            check_match("ui32", any_type, typing::Type::ui32);
-            check_match("ui64", any_type, typing::Type::ui64);
-            check_match("boolean", any_type, typing::Type::boolean);
-            check_match("string", any_type, typing::Type::string);
+            check_match("i32", any_type, Type::i32);
+            check_match("i64", any_type, Type::i64);
+            check_match("f32", any_type, Type::f32);
+            check_match("f64", any_type, Type::f64);
+            check_match("ui32", any_type, Type::ui32);
+            check_match("ui64", any_type, Type::ui64);
+            check_match("boolean", any_type, Type::boolean);
+            check_match("string", any_type, Type::string);
 
             // TODO: Random string test
         }
 
         #[test]
         fn test_parameterized_types() {
-            check_match("Test<i32>", any_type, typing::Type::Parameterized(
+            check_match("Test<i32>", any_type, Type::Parameterized(
                 Identifier::from("Test"), 
-                vec!(typing::Type::i32)
+                vec!(Type::i32)
             ));
         }
 
         #[test]
         fn test_sum_types() {
-            check_match("i32 | i64", any_type, typing::Type::Sum(vec!(
-                typing::Type::i32, typing::Type::i64
+            check_match("i32 | i64", any_type, Type::Sum(vec!(
+                Type::i32, Type::i64
             )));
         }
 
         #[test]
         fn test_product_types() {
-            check_match("(i32, i64)", any_type, typing::Type::Product(vec!(
-                typing::Type::i32, typing::Type::i64
+            check_match("(i32, i64)", any_type, Type::Product(vec!(
+                Type::i32, Type::i64
             )));
         }
     }
@@ -1619,15 +1618,13 @@ pub mod type_parser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use parser_utils::iresult_helpers::*;
-
     #[test]
     fn test_module() {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
-               Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
+               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
+               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
            )
        }))
     }
@@ -1637,9 +1634,9 @@ mod tests {
        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               Box::new(output(import("import foo".as_bytes()))),
-               Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
-               Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
+               Box::new(output(import(PosStr::from("import foo")))),
+               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
+               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
            )
        }))
     }
@@ -1648,8 +1645,8 @@ mod tests {
     fn test_block() {
         let exp_block = Block {
             statements: vec![
-                Box::new(output(statement("x=0\n".as_bytes(), 0))),
-                Box::new(output(statement("y=true".as_bytes(), 0)))
+                Box::new(output(statement(PosStr::from("x=0\n"), 0))),
+                Box::new(output(statement(PosStr::from("y=true"), 0)))
             ]
         };
 

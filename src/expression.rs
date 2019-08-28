@@ -333,6 +333,11 @@ pub mod trait_impls {
             };
         }
     }
+    impl <'a> From<PosStr<'a>> for ComparisonOperator {
+        fn from(input: PosStr<'a>) -> Self {
+            return ComparisonOperator::from(input.slice);
+        }
+    }
 
     /// From for BinaryOperator
     impl<'a> From<&'a str> for BinaryOperator {

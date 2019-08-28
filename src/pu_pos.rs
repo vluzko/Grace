@@ -11,80 +11,10 @@ use self::nom::*;
 use expression::Node;
 use position_tracker::PosStr;
 
+use self::iresult_helpers::*;
+
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
-
-
-/// Map the contents of an IResult.
-/// Rust functors plox
-pub fn fmap_iresult<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, T>
-    where F: Fn(X) -> T {
-    return match res {
-        Ok((i, o)) => Ok((i, func(o))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
-    where F: Fn(X) -> T {
-    return match res {
-        Ok((i, o)) => Ok((i, Node::from(func(o)))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
-    return match res {
-        Ok((i, o)) => Ok((i, Node::from(o))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_and_full_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
-    return match res {
-        Ok((i, o)) => {
-            println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
-            Ok((i, func(o)))
-        },
-        Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, input);
-            Err(e) 
-        }
-    };
-}
-
-/// Map an IResult and log errors and incomplete values.
-pub fn fmap_and_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
-    return match res {
-        Ok((i, o)) => Ok((i, func(o))),
-        Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, input);
-            Err(e)
-        }
-    };
-}
-
-pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-    return fmap_and_full_log(res, |x| x, name, input);
-}
-
-pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-    return fmap_and_log(res, |x| x, name, input);
-}
-
-pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
-    return Err(Err::Error(Context::Code(input, error)));
-}
-
-pub fn output<'a, T>(res: Res<'a, T>) -> T {
-    return match res {
-        Ok((_, o)) => o,
-        Err(e) => {
-            println!("Output error: {:?}.", e);
-            panic!()
-        }
-    };
-}
 
 
 /// Alias for opt!(complete!())
@@ -516,6 +446,77 @@ pub mod tokens {
 pub mod iresult_helpers {
 
     use super::*;
+
+    /// Map the contents of an IResult.
+    /// Rust functors plox
+    pub fn fmap_iresult<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, T>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(o))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_and_full_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
+        return match res {
+            Ok((i, o)) => {
+                println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
+                Ok((i, func(o)))
+            },
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e) 
+            }
+        };
+    }
+
+    /// Map an IResult and log errors and incomplete values.
+    pub fn fmap_and_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e)
+            }
+        };
+    }
+
+    pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_full_log(res, |x| x, name, input);
+    }
+
+    pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_log(res, |x| x, name, input);
+    }
+
+    pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
+        return Err(Err::Error(Context::Code(input, error)));
+    }
+
+    pub fn output<'a, T>(res: Res<'a, T>) -> T {
+        return match res {
+            Ok((_, o)) => o,
+            Err(e) => {
+                println!("Output error: {:?}.", e);
+                panic!()
+            }
+        };
+    }
 
     pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
         where T: Debug + PartialEq + Eq {

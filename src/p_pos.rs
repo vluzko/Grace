@@ -6,9 +6,9 @@ use self::nom::*;
 
 use expression::*;
 use position_tracker::PosStr;
-use pu_pos::*;
-use pu_pos::iresult_helpers::*;
-use pu_pos::tokens::*;
+use parser_utils::*;
+use parser_utils::iresult_helpers::*;
+use parser_utils::tokens::*;
 use typing::Type;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{

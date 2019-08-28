@@ -36,7 +36,6 @@ where T: Parseable, T: Scoped<T> {
     let (id, mut init) = scoping::initial_context();
     let context = result.gen_scopes(id, &init);
     init.extend(context);
-    // println!("\ninit context: {:?}.\nNew context: {:?}", init, context);
     return (result, init);
 }
 

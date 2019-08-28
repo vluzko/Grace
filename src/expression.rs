@@ -243,14 +243,19 @@ pub mod trait_impls {
             return Expr::IdentifierExpr(Identifier::from(input));
         }
     }
-    impl From<bool> for Expr {
-        fn from(input: bool) -> Self {
-            return Expr::Bool(input);
-        }
-    }
     impl<'a> From<&'a [u8]> for Expr {
         fn from(input: &'a [u8]) -> Self {
             return Expr::IdentifierExpr (Identifier::from(input));
+        }
+    }
+    impl<'a> From<PosStr<'a>> for Expr {
+        fn from(input: PosStr<'a>) -> Self {
+            return Expr::from(input.slice);
+        }
+    }
+    impl From<bool> for Expr {
+        fn from(input: bool) -> Self {
+            return Expr::Bool(input);
         }
     }
     impl From<i64> for Expr {
@@ -287,7 +292,6 @@ pub mod trait_impls {
             };
         }
     }
-
     impl<'a> From<&'a [u8]> for Assignment {
         fn from(input: &'a [u8]) -> Self {
             return match input {
@@ -307,6 +311,11 @@ pub mod trait_impls {
                     panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
                 }
             };
+        }
+    }
+    impl<'a> From<PosStr<'a>> for Assignment {
+        fn from(input: PosStr<'a>) -> Self {
+            return Assignment::from(input.slice);
         }
     }
 
@@ -351,7 +360,6 @@ pub mod trait_impls {
             };
         }
     }
-
     impl<'a> From<&'a [u8]> for BinaryOperator {
         fn from(input: &'a [u8]) -> Self {
             return match input {
@@ -375,6 +383,11 @@ pub mod trait_impls {
             };
         }
     }
+    impl<'a> From<PosStr<'a>> for BinaryOperator {
+        fn from(input: PosStr<'a>) -> Self {
+            return BinaryOperator::from(input.slice);
+        }
+    }
 
     /// From for UnaryOperator
     impl <'a> From<&'a str> for UnaryOperator {
@@ -388,7 +401,6 @@ pub mod trait_impls {
             };
         }
     }
-
     impl <'a> From<&'a [u8]> for UnaryOperator {
         fn from(input: &'a [u8]) -> Self {
             return match input {
@@ -398,6 +410,11 @@ pub mod trait_impls {
                 b"~" => UnaryOperator::BitNot,
                 _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input)
             };
+        }
+    }
+    impl <'a> From<PosStr<'a>> for UnaryOperator {
+        fn from(input: PosStr<'a>) -> Self {
+            return UnaryOperator::from(input.slice);
         }
     }
 

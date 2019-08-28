@@ -4,6 +4,7 @@ use std::str::from_utf8;
 use std::convert::From;
 
 use typing::*;
+use position_tracker::PosStr;
 use general_utils;
 
 #[derive(Debug, Clone, Eq, Hash)]
@@ -435,6 +436,12 @@ pub mod trait_impls {
                 _ => panic!()
             };
             return Identifier{name: val.to_string()};
+        }
+    }
+    
+    impl <'a> From<PosStr<'a>> for Identifier {
+        fn from(input: PosStr<'a>) -> Self {
+            return Identifier::from(input.slice)
         }
     }
 }

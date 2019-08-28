@@ -23,7 +23,7 @@ use self::nom::{
     InputTake
 };
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct PosStr<'a> {
     /// The offset represents the position of the slice relatively to
     /// the input of the parser. It starts at offset 0.
@@ -38,7 +38,7 @@ pub struct PosStr<'a> {
     pub column: u32,
 
     /// The slice that is spanned.
-    slice: &'a [u8]
+    pub slice: &'a [u8]
 }
 
 impl<'a> PosStr<'a> {
@@ -61,15 +61,17 @@ impl<'a> PosStr<'a> {
         }
     }
 
-
     pub fn empty() -> Self {
         Self::new(b"")
     }
 
-
     pub fn as_slice(&self) -> &'a [u8] {
         self.slice
     }
+
+    // pub fn from_str(input: &'a str) -> Self {
+    //     return PosStr::new(input.as_bytes());
+    // }
 }
 
 impl <'a> From<&'a [u8]> for PosStr<'a> {
@@ -80,6 +82,12 @@ impl <'a> From<&'a [u8]> for PosStr<'a> {
             column: 0,
             slice : input
         }
+    }
+}
+
+impl <'a> From<&'a str> for PosStr<'a> {
+    fn from(input: &'a str) -> Self {
+        return PosStr::new(input.as_bytes());
     }
 }
 

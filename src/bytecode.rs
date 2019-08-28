@@ -56,8 +56,6 @@ impl ToBytecode for Node<Stmt> {
                     x => panic!("Wrong type for function {:?}.\nShould be a function type, found: {:?}", self, x)
                 };
 
-                
-            
                 let body_bytecode = block.generate_bytecode(context, type_map);
                 
                 let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");

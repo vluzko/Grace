@@ -1617,38 +1617,39 @@ pub mod type_parser {
 
 #[cfg(test)]
 mod tests {
-    // #[test]
-    // fn test_module() {
-    //    let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
-    //    check_match(module_str, module, Node::from(Module{
-    //        declarations: vec!(
-    //            Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
-    //            Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
-    //        )
-    //    }))
-    // }
+    use super::*;
+    #[test]
+    fn test_module() {
+       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
+               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
+           )
+       }))
+    }
 
-    // #[test]
-    // fn test_module_with_import() {
-    //    let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
-    //    check_match(module_str, module, Node::from(Module{
-    //        declarations: vec!(
-    //            Box::new(output(import("import foo".as_bytes()))),
-    //            Box::new(output(statement("fn a():\n return 0".as_bytes(), 0))),
-    //            Box::new(output(statement("fn b():\n return 1".as_bytes(), 0)))
-    //        )
-    //    }))
-    // }
+    #[test]
+    fn test_module_with_import() {
+       let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
+       check_match(module_str, module, Node::from(Module{
+           declarations: vec!(
+               Box::new(output(import(PosStr::from("import foo")))),
+               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
+               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
+           )
+       }))
+    }
 
-    // #[test]
-    // fn test_block() {
-    //     let exp_block = Block {
-    //         statements: vec![
-    //             Box::new(output(statement("x=0\n".as_bytes(), 0))),
-    //             Box::new(output(statement("y=true".as_bytes(), 0)))
-    //         ]
-    //     };
+    #[test]
+    fn test_block() {
+        let exp_block = Block {
+            statements: vec![
+                Box::new(output(statement(PosStr::from("x=0\n"), 0))),
+                Box::new(output(statement(PosStr::from("y=true"), 0)))
+            ]
+        };
 
-    //     check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
-    // }
+        check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
+    }
 }

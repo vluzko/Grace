@@ -487,30 +487,28 @@ pub mod tokens {
         fn parse_digits() {
             check_match("123", DIGIT, PosStr::from("123"));
             check_match_and_leftover("123a", DIGIT, PosStr::from("123"), "a");
-
-            // let res = DIGIT("a".as_bytes());
-            // assert_eq!(res, wrap_err("a".as_bytes(), ErrorKind::Digit));
+            simple_check_failed("a", DIGIT);
         }
 
-        // #[test]
-        // fn parse_identifier_raw() {
-        //     // Basic tests
-        //     check_match("a123", IDENTIFIER, Identifier::from("a123"));
-        //     check_match("a_b_1_a", IDENTIFIER, Identifier::from("a_b_1_a"));
+        #[test]
+        fn parse_identifier_raw() {
+            // Basic tests
+            check_match("a123", IDENTIFIER, Identifier::from("a123"));
+            check_match("a_b_1_a", IDENTIFIER, Identifier::from("a_b_1_a"));
 
-        //     // Check that trailers won't be matched.
-        //     check_match_and_leftover("ident(", IDENTIFIER, Identifier::from("ident"), "("); 
-        //     check_match_and_leftover("func()", IDENTIFIER, Identifier::from("func"), "()");
+            // Check that trailers won't be matched.
+            check_match_and_leftover("ident(", IDENTIFIER, Identifier::from("ident"), "("); 
+            check_match_and_leftover("func()", IDENTIFIER, Identifier::from("func"), "()");
 
-        //     // Check that whitespace is consumed.
-        //     check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
+            // Check that whitespace is consumed.
+            check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
 
-        //     // Check that identifiers can't start with digits.
-        //     check_failed("123", IDENTIFIER, ErrorKind::Alt);    
+            // Check that identifiers can't start with digits.
+            check_failed("123", IDENTIFIER, ErrorKind::Alt);    
 
-        //     // Check that reserved words aren't matched.
-        //     check_failed("true", IDENTIFIER, ErrorKind::Alt);
-        // }
+            // Check that reserved words aren't matched.
+            check_failed("true", IDENTIFIER, ErrorKind::Alt);
+        }
     }
 }
 

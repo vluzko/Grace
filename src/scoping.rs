@@ -498,7 +498,6 @@ impl Node<Module> {
 
 #[cfg(test)]
 mod test {
-    use parser;
     use super::*;
     use parser_utils::output;
     use compiler_layers;
@@ -508,7 +507,7 @@ mod test {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
-        let func_stmt = output(parser::stmt_parsers::statement(func_str.as_bytes(), 0));
+        let (func_stmt, _) = compiler_layers::to_scopes::<Node<Stmt>>(func_str.as_bytes());
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));
@@ -557,10 +556,7 @@ mod test {
                 fn b():
                     return 1
                 "#;
-
-                let mut block = output(parser::block(block_str.as_bytes(),0 ));
-                let (id, init) = initial_context();
-                let context = block.gen_scopes(id, &init);
+                let (block, context) = compiler_layers::to_scopes::<Node<Block>>(block_str.as_bytes());
                 let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
                 match fn1.extract_stmt() {
@@ -634,9 +630,7 @@ mod test {
 
     #[test]
     fn test_get_declarations() {
-        let mut func_dec = output(parser::stmt_parsers::statement("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(), 0));
-        let (id, init) = initial_context();
-        let context = func_dec.gen_scopes(id, &init);
+        let (func_dec, context) = compiler_layers::to_scopes::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         for ptr in actual {

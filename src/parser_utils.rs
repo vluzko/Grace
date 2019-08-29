@@ -1,171 +1,52 @@
 #![allow(non_snake_case)]
 
 use std::str;
-use std::str::from_utf8;
+use std::fmt::Debug;
+use std::clone::Clone;
+use std::cmp::PartialEq;
+
 
 extern crate nom;
 use self::nom::*;
-use self::nom::IResult::Done as Done;
-// use self::nom::error::*;
-// use self::nom::error::ErrorKind;
-// use self::nom::error::ParseError;
-// use self::nom::internal::{Err, IResult, Needed};
-// use self::nom::lib::std::ops::RangeFrom;
-// use self::nom::lib::std::result::Result::*;
-// use self::nom::traits::{Compare, CompareResult, FindSubstring, FindToken, InputIter, InputLength, InputTake, InputTakeAtPosition, Slice, ToUsize};
 use expression::Node;
+use position_tracker::PosStr;
 
-/// Map the contents of an IResult.
-/// Rust functors plox
-pub fn fmap_iresult<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], T>
-    where F: Fn(X) -> T {
-    return match res {
-        Done(i, o) => Done(i, func(o)),
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n)
-    };
-}
+use self::iresult_helpers::*;
 
-pub fn fmap_node<X, T, F>(res: IResult<&[u8], X>, func: F) -> IResult<&[u8], Node<T>>
-    where F: Fn(X) -> T {
-    return match res {
-        Done(i, o) => Done(i, Node::from(func(o))),
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n)
-    };
-}
-
-pub fn fmap_convert<X>(res: IResult<&[u8], X>) -> IResult<&[u8], Node<X>> {
-    return match res {
-        Done(i, o) => Done(i, Node::from(o)),
-        IResult::Error(e) => IResult::Error(e),
-        IResult::Incomplete(n) => IResult::Incomplete(n)
-    };
-}
-
-pub fn fmap_and_full_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
-    return match res {
-        Done(i, o) => {
-            println!("{} leftover input is {:?}. Input was: {:?}", name, from_utf8(i), from_utf8(input));
-            Done(i, func(o))
-        },
-        IResult::Error(e) => {
-            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
-            IResult::Error(e)
-        },
-        IResult::Incomplete(n) => {
-            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
-            IResult::Incomplete(n)
-        }
-    };
-}
-
-// TODO: Change
-/// Map an IResult and log errors and incomplete values.
-pub fn fmap_and_log<'a, X, T>(res: IResult<&'a [u8], X>, func: fn(X) -> T, name: &str, input: &[u8]) -> IResult<&'a [u8], T> {
-    return match res {
-        Done(i, o) => Done(i, func(o)),
-        IResult::Error(e) => {
-            println!("{} error: {}. Input was: {:?}", name, e, from_utf8(input));
-            IResult::Error(e)
-        },
-        IResult::Incomplete(n) => {
-            println!("{} incomplete: {:?}. Input was: {:?}", name, n, from_utf8(input));
-            IResult::Incomplete(n)
-        }
-    };
-}
-
-pub fn full_log<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
-    return fmap_and_full_log(res, |x| x, name, input);
-}
-
-pub fn log_err<'a, X>(res: IResult<&'a [u8], X>, name: &str, input: &[u8]) -> IResult<&'a [u8], X> {
-    return fmap_and_log(res, |x| x, name, input);
-}
-
-pub fn output<T>(res: IResult<&[u8], T>) -> T {
-    return match res {
-        Done(_, o) => o,
-        IResult::Error(e) => {
-            println!("Output error: {:?}.", e);
-            panic!()
-        },
-        IResult::Incomplete(n) => {
-            println!("Incomplete: {:?}", n);
-            panic!()
-        }
-    };
-}
-
-pub fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return alt!(input, eof!() | tag!("\n"));
-}
-
-pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
-    let n = many0!(input,
-        terminated!(many0!(tag!(" ")), alt!(custom_eof | tag!("\n")))
-    );
-
-    return n;
-}
-
-pub fn custom_eof(input: &[u8]) -> IResult<&[u8], &[u8]> {
-    return eof!(input, );
-}
-
-named!(pub inline_whitespace_char<&[u8], &[u8]>,
-    tag!(" ")
-);
-
-named!(pub inline_whitespace<&[u8], Vec<&[u8]>>,
-    many0!(inline_whitespace_char)
-);
-
-macro_rules! ta(
-  ($i:expr, $tag: expr) => ({
-      match tag!($i, $tag) {
-            //   nom::ErrorKind(y) => panic!(),
-            IResult::Error(y) => panic!(),
-            x => {println!("{:?}", x); x}
-      }
-    // match nom::bytes::streaming::tag($tag)($i) {
-    //     x => {println!("{:?}", x); panic!()}
-    // }
-  });
-);
+type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
+type Res<'a, T> = IResult<PosStr<'a>, T>;
 
 
-/// Matches a keyword within a line.
-/// Used for "and", "or", "xor", "in", etc.
-macro_rules! inline_keyword (
+/// Alias for opt!(complete!())
+macro_rules! optc (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      delimited!($i,
-        inline_whitespace,
-        $submac!($($args)*),
-        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
-    }
+    opt!($i, complete!($submac!($($args)*)))
   );
 
   ($i:expr, $f:expr) => (
-    inline_keyword!($i, tag!($f));
+    optc!($i, call!($f));
   );
 );
 
-/// Matches a keyword at the beginning of input.
-/// Used for "return", etc.
-macro_rules! initial_keyword (
+/// Alias for many0!(complete!())
+macro_rules! many0c (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    {
-      terminated!($i,
-        $submac!($($args)*),
-        preceded!(not!(valid_identifier_char), alt!(recognize!(many1!(inline_whitespace_char)) | peek!(tag!("(")))))
-    }
+    many0!($i, complete!($submac!($($args)*)))
   );
 
   ($i:expr, $f:expr) => (
-    initial_keyword!($i, tag!($f));
+    many0c!($i, call!($f));
+  );
+);
+
+/// Alias for many1!(complete!())
+macro_rules! many1c (
+  ($i:expr, $submac:ident!( $($args:tt)* )) => (
+    many1!($i, complete!($submac!($($args)*)))
+  );
+
+  ($i:expr, $f:expr) => (
+    many1c!($i, call!($f));
   );
 );
 
@@ -183,15 +64,14 @@ macro_rules! indented (
 macro_rules! separated_at_least_m {
     ($i:expr, $m: expr, $sep:ident!( $($args:tt)* ), $submac:ident!( $($args2:tt)* )) => ({
         match separated_list_complete!($i, complete!($sep!($($args)*)), complete!($submac!($($args2)*))) {
-            IResult::Done(i, o) => {
+            Ok((i, o)) => {
                 if o.len() < $m {
-                    IResult::Error(ErrorKind::ManyMN)
+                    wrap_err($i, ErrorKind::ManyMN)
                 } else {
-                    IResult::Done(i, o)
+                    Ok((i, o))
                 }
             },
-            IResult::Error(e) => IResult::Error(e),
-            IResult::Incomplete(n) => IResult::Incomplete(n)
+            x => x
         }
     });
 
@@ -206,80 +86,53 @@ macro_rules! separated_at_least_m {
     );
 }
 
-/// Alias for opt!(complete!())
-macro_rules! optc (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    opt!($i, complete!($submac!($($args)*)))
-  );
-
-  ($i:expr, $f:expr, $ind: expr) => (
-    optc!($i, call!($f));
-  );
-);
-
-/// Create a rule of the form: KEYWORD SUBPARSER COLON BLOCK
-/// if, elif, except, fn are all rules of this form.
-macro_rules! line_then_block (
-    ($i:expr, $keyword: expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
+macro_rules! line_and_block (
+    ($i:expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
         tuple!($i,
-            delimited!(
-                terminated!(
-                    tag!($keyword),
-                    not!(valid_identifier_char)
-                ),
-                inline_wrapped!($submac!($($args)*)),
-                ending_colon
+            terminated!(
+                $submac!($($args)*),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
             ),
             call!(block, $indent + 1)
         )
     );
 
-    ($i:expr, $keyword: expr, $func: expr, $indent: expr) => (
-        line_then_block!($i, $keyword, call!($func), $indent)
+    ($i:expr, $f: expr, $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                call!($f),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            call!(block, $indent + 1)
+        )
     );
 );
 
-/// Create a rule of the form: KEYWORD COLON BLOCK
-/// else and try are both rules of this form.
-macro_rules! keyword_then_block (
+macro_rules! keyword_and_block (
     ($i:expr, $keyword: expr, $indent: expr) => (
-        match line_then_block!($i, $keyword, inline_whitespace, $indent) {
-            IResult::Error(a)      => IResult::Error(a),
-            IResult::Incomplete(i) => IResult::Incomplete(i),
-            IResult::Done(remaining, (_,o)) => IResult::Done(remaining, o)
+        match line_and_block!($i, $keyword, $indent) {
+            Ok((remaining, (_,o))) => Ok((remaining, o)),
+            Err(e) => Err(e)
         }
     );
 );
 
-/// A macro for wrapping a parser in inline whitespace.
-/// Similar to ws!, but doesn't allow for \n, \r, or \t.
-macro_rules! inline_wrapped (
-    ($i:expr, $submac:ident!( $($args:tt)* )) => (
-        {
-            match tuple!($i, inline_whitespace, $submac!($($args)*), inline_whitespace) {
-                IResult::Error(a)      => IResult::Error(a),
-                IResult::Incomplete(i) => IResult::Incomplete(i),
-                IResult::Done(remaining, (_,o, _))    => {
-                    IResult::Done(remaining, o)
-                }
-            }
-        }
-    );
-
-    ($i:expr, $f:expr) => (
-        inline_wrapped!($i, call!($f));
-    );
-);
-
+/// A macro for consuming spaces following a submacro.
+/// w_followed!(submacro!) will recognize all strings of the form:
+/// "x" + " " * n
+/// where "x" is recognized by the submacro.
 macro_rules! w_followed (
     ($i:expr, $submac:ident!( $($args:tt)* )) => (
         {
-            match tuple!($i, $submac!($($args)*), inline_whitespace) {
-                IResult::Error(a)      => IResult::Error(a),
-                IResult::Incomplete(i) => IResult::Incomplete(i),
-                IResult::Done(remaining, (o, _))    => {
-                    IResult::Done(remaining, o)
-                }
+            match tuple!($i, $submac!($($args)*), many0c!(inline_whitespace_char)) {
+                Ok((remaining, (o, _))) => Ok((remaining, o)),
+                Err(x) => Err(x)
             }
         }
     );
@@ -289,104 +142,474 @@ macro_rules! w_followed (
     );
 );
 
-named!(pub valid_identifier_char<&[u8], &[u8]>,
-    alt!(alpha | tag!("_") | digit)
-);
+#[inline]
+pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
+    return tag!(input, " ");
+}
 
-// TODO: These should all be all caps.
-named!(pub equals <&[u8], &[u8]>,
-    w_followed!(tag!("="))
-);
+pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
+    return alt!(input, eof!() | tag!("\n"));
+}
 
-named!(pub comma <&[u8], &[u8]>,
-    w_followed!(tag!(","))
-);
+pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {
+    let n = many0c!(input,
+        terminated!(many0c!(inline_whitespace_char), eof_or_line)
+    );
 
-named!(pub open_paren <&[u8], &[u8]>,
-    w_followed!(tag!("("))
-);
+    return n;
+}
 
-named!(pub close_paren <&[u8], &[u8]>,
-    w_followed!(tag!(")"))
-);
+pub mod tokens {
+    use super::*;
+    use expression::Identifier;
 
-named!(pub open_brace <&[u8], &[u8]>,
-    w_followed!(tag!("{"))
-);
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
 
-named!(pub close_brace <&[u8], &[u8]>,
-    w_followed!(tag!("}"))
-);
+    macro_rules! token {
+        ($name:ident, $i: expr) => {
+            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
+                return w_followed!(input, tag!($i));
+            }
+        };
+    }
 
-named!(pub open_bracket <&[u8], &[u8]>,
-    w_followed!(tag!("["))
-);
+    macro_rules! keyword {
+        ($name:ident, $i: expr) => {
+            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
+                return w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))));
+            }
+        };
+    }
 
-named!(pub close_bracket <&[u8], &[u8]>,
-    w_followed!(tag!("]"))
-);
+    /// Recognize an empty input.
+    pub fn EMPTY<'a>(input: PosStr<'a>) -> IO<'a> {
+        if input.input_len() == 0 {
+            return Ok((input, PosStr::empty()));
+        } else {
+            return wrap_err(input, ErrorKind::NonEmpty);
+        }
+    }
 
-named!(pub colon <&[u8], &[u8]>,
-    w_followed!(tag!(":"))
-);
+    /// Recognize a non-empty sequence of decimal digits.
+    pub fn DIGIT<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
+            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
 
-named!(pub DOT <&[u8], &[u8]>,
-    w_followed!(tag!("."))
-);
+    /// Recognize a sequence of decimal digits.
+    pub fn DIGIT0<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
 
-named!(pub LANGLE <&[u8], &[u8]>,
-    w_followed!(tag!("<"))
-);
+    /// Recognize a sequence of (ASCII) alphabetic characters.
+    pub fn ALPHA<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
+            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
 
-named!(pub RANGLE <&[u8], &[u8]>,
-    w_followed!(tag!(">"))
-);
+    /// Recognize a sequence of alphanumeric characters.
+    pub fn ALPHANUM<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
+            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
 
-named!(pub VBAR <&[u8], &[u8]>,
-    w_followed!(tag!("|"))
-);
+    pub fn IDENT_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
+        let identifier_segment = input.position(|x| {
+            let y = x.as_char();
+            !(y.is_alpha() || y.is_dec_digit() || y == '_') 
+        });
+        return match identifier_segment {
+            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(n) => Ok(input.take_split(n)),
+            None => match input.input_len() {
+                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                n => Ok(input.take_split(n))
+            }
+        };
+    }
 
-named!(pub ending_colon <&[u8], &[u8]>,
-    terminated!(
-        inline_wrapped!(tag!(":")),
-        newline
-    )
-);
+    pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a>{
+        return alt!(input,
+            tag!("\\\"") |
+            tag!("\\\\") |
+            tag!("\\\n") |
+            tag!("\\\r") |
+            recognize!(none_of!("\n\""))
+        );
+    }
 
-named!(pub num_follow<&[u8], &[u8]> ,
-    peek!(alt!(custom_eof | tag!(" ") | tag!("(") | tag!(")") | tag!(":") | tag!("\n") | tag!(",")))
-);
+    /// Return true if a key
+    pub fn RESERVED<'a>(input: PosStr<'a>) -> IO<'a> {
+        let tag_lam = |x| recognize!(input, complete!(tag!(PosStr::new(x))));
+        let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
+        let mut final_result: IO<'a> = wrap_err(input, ErrorKind::Tag);
+        for res in tag_iter {
+            match res {
+                Ok((i, o)) => {
+                    final_result = Ok((i, o));
+                    break;
+                },
+                _ => continue
+            };
+        }
+        return final_result;
+    }
 
-named!(pub dec_digit<&[u8], &[u8]>,
-    recognize!(alt!(
-        tag!("0") |
-        tag!("1") |
-        tag!("2") |
-        tag!("3") |
-        tag!("4") |
-        tag!("5") |
-        tag!("6") |
-        tag!("7") |
-        tag!("8") |
-        tag!("9")
-    ))
-);
+    /// Parser to return an Identifier AST.
+    pub fn IDENTIFIER<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Identifier> {
+        let parse_result = w_followed!(input,
+            recognize!(
+                pair!(
+                    alt!(ALPHA | tag!("_")),
+                    optc!(IDENT_CHAR)
+                )
+            )
+        );
+        let intermediate = match parse_result {
+            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &(o.slice)) {
+                Some(_) => wrap_err(i, ErrorKind::Alt),
+                None => Ok((i, o))
+            },
+            Err(x) => Err(x)
+        };
+        return fmap_iresult(intermediate, Identifier::from);
+    }
 
-named!(pub dec_seq<&[u8], &[u8]>,
-    recognize!(many1!(dec_digit))
-);
+    pub fn VALID_NUM_FOLLOW <'a> (input: PosStr<'a>) -> IO<'a> {
+        if input.input_len() == 0 {
+            return Ok((input.clone(), input.clone()));
+        } else {
+            return peek!(input.clone(), alt!(
+                eof!() | 
+                tag!(" ") | 
+                tag!("(") | 
+                tag!(")") | 
+                tag!(":") | 
+                tag!("\n")| 
+                tag!(",") | 
+                tag!("]") | 
+                tag!("}") |
+                tag!("=>")
+            ));
+        }
+    }
 
-named!(pub sign<&[u8], &[u8]>,
-    recognize!(alt!(tag!("+") | tag!("-")))
-);
+    pub fn NEWLINE <'a> (input: PosStr<'a>) -> IO<'a> {
+        return tag!(input, "\n");
+    }
 
-named!(pub exponent<&[u8], (Option<&[u8]>, &[u8])>,
-    preceded!(
-        alt!(tag!("e") | tag!("E")),
-        tuple!(
-            opt!(sign),
-            dec_seq
-        )
-    )
-);
+    pub fn SIGN <'a> (input: PosStr<'a>) -> IO<'a> {
+        return recognize!(input, alt!(tag!("+") | tag!("-")));
+    }
 
+    // Keywords
+    keyword!(FN, "fn");
+    keyword!(IF, "if");
+    keyword!(ELIF, "elif");
+    keyword!(ELSE, "else");
+    keyword!(FOR, "for");
+    keyword!(IN, "in");
+    keyword!(WHILE, "while");
+    keyword!(TRY, "try");
+    keyword!(EXCEPT, "except");
+    keyword!(FINALLY, "finally");
+    keyword!(LET, "let");
+    keyword!(IMPORT, "import");
+    keyword!(RETURN, "return");
+    keyword!(YIELD, "yield");
+    keyword!(PASS, "pass");
+    keyword!(BREAK, "break");
+    keyword!(CONTINUE, "continue");
+    keyword!(MATCH, "match");
+
+    // Syntax
+    token!(COMMA, ",");
+    token!(COLON, ":");
+    token!(DOT, ".");
+    token!(EQUALS, "=");
+    token!(OPEN_PAREN, "(");
+    token!(CLOSE_PAREN, ")");
+    token!(OPEN_BRACKET, "[");
+    token!(CLOSE_BRACKET, "]");
+    token!(OPEN_BRACE, "{");
+    token!(CLOSE_BRACE, "}");
+    token!(LANGLE, "<");
+    token!(RANGLE, ">");
+    token!(ARROW, "=>");
+    token!(TARROW, "->");
+
+    // Assignments
+    token!(ADDASN, "+=");
+    token!(SUBASN, "-=");
+    token!(MULASN, "*=");
+    token!(DIVASN, "/=");
+    token!(MODASN, "%=");
+    token!(EXPASN, "**=");
+    token!(RSHASN, ">>=");
+    token!(LSHASN, "<<=");
+    token!(BORASN, "|=");
+    token!(BANDASN, "&=");
+    token!(BXORASN, "^=");
+
+    // Binary operators
+    // Logical operators
+    keyword!(AND, "and");
+    keyword!(OR, "or");
+    keyword!(XOR, "xor");
+
+    // Bitwise operators
+    token!(BAND, "&");
+    token!(VBAR, "|");
+    token!(BXOR, "^");
+
+    // Bitshift operators
+    token!(LSHIFT, "<<");
+    token!(RSHIFT, ">>");
+
+    // Arithmetic operators
+    token!(PLUS, "+");
+    token!(MINUS, "-");
+    token!(STAR, "*");
+    token!(DIV, "/");
+    token!(MOD, "%");
+    token!(EXP, "**");
+
+    // Comparisons
+    token!(DEQUAL, "==");
+    token!(NEQUAL, "!=");
+    token!(LEQUAL, "<=");
+    token!(GEQUAL, ">=");
+
+    // Unary operators
+    token!(NOT, "not");
+    token!(TILDE, "~");
+
+    #[cfg(test)]
+    mod tokens_test {
+        use super::*;
+
+        #[test]
+        fn parse_digits() {
+            check_match("123", DIGIT, PosStr::from("123"));
+            check_match_and_leftover("123a", DIGIT, PosStr::from("123"), "a");
+            simple_check_failed("a", DIGIT);
+        }
+
+        #[test]
+        fn parse_identifier_raw() {
+            // Basic tests
+            check_match("a123", IDENTIFIER, Identifier::from("a123"));
+            check_match("a_b_1_a", IDENTIFIER, Identifier::from("a_b_1_a"));
+
+            // Check that trailers won't be matched.
+            check_match_and_leftover("ident(", IDENTIFIER, Identifier::from("ident"), "("); 
+            check_match_and_leftover("func()", IDENTIFIER, Identifier::from("func"), "()");
+
+            // Check that whitespace is consumed.
+            check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
+
+            // Check that identifiers can't start with digits.
+            check_failed("123", IDENTIFIER, ErrorKind::Alt);    
+
+            // Check that reserved words aren't matched.
+            check_failed("true", IDENTIFIER, ErrorKind::Alt);
+        }
+    }
+}
+
+
+pub mod iresult_helpers {
+
+    use super::*;
+
+    /// Map the contents of an IResult.
+    /// Rust functors plox
+    pub fn fmap_iresult<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, T>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(o))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_and_full_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
+        return match res {
+            Ok((i, o)) => {
+                println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
+                Ok((i, func(o)))
+            },
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e) 
+            }
+        };
+    }
+
+    /// Map an IResult and log errors and incomplete values.
+    pub fn fmap_and_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e)
+            }
+        };
+    }
+
+    pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_full_log(res, |x| x, name, input);
+    }
+
+    pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_log(res, |x| x, name, input);
+    }
+
+    pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
+        return Err(Err::Error(Context::Code(input, error)));
+    }
+
+    pub fn output<'a, T>(res: Res<'a, T>) -> T {
+        return match res {
+            Ok((_, o)) => o,
+            Err(e) => {
+                println!("Output error: {:?}.", e);
+                panic!()
+            }
+        };
+    }
+
+    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                assert_eq!(i.slice, expected_leftover.as_bytes());
+                assert_eq!(o, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                assert_eq!(i.slice, expected_leftover.as_bytes());
+                assert_eq!(o.data, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_match<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_data<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        return match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o.data, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        };
+    }
+
+    pub fn simple_check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>) {
+        let res = parser(PosStr::from(input));
+        match res {
+            Result::Err(_) => {},
+            _ => panic!()
+        }
+    }
+
+    pub fn unwrap_and_check_error<'a, T>(result: Res<'a, T>, expected: ErrorKind)
+    where T: Debug {
+        match result {
+            Result::Err(e) => {
+                match e {
+                    Err::Error(actual_err) => match actual_err {
+                        Context::Code(_, actual_err) => assert_eq!(actual_err, expected)
+                    }
+                    _ => panic!()
+                }
+            },
+            Ok(x) => {
+                println!("Should have failed, got: {:?}", x);
+                panic!()
+            }
+        }
+    }
+
+    pub fn check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
+    where T: Debug {
+        let res = parser(PosStr::from(input));
+        unwrap_and_check_error(res, expected);
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+
+}

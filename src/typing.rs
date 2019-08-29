@@ -1,6 +1,4 @@
-use std::collections::HashSet;
 use std::collections::HashMap;
-use std::iter::FromIterator;
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -8,8 +6,6 @@ use std::convert::From;
 use expression::*;
 use general_utils;
 use scoping;
-use scoping::Scoped;
-use compiler_layers;
 
 /// Types
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -144,7 +140,7 @@ impl Add for Type {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        if (self == other) {
+        if self == other {
             return self.clone();
         } else {
             return match self {
@@ -213,7 +209,7 @@ impl From<Identifier> for Type {
 pub trait Typed<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
 
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
+    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
@@ -247,7 +243,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                     expr.resolve_types(context, type_map)
                 }
             },
-            scoping::CanModifyScope::Argument(ref ptr, ref index) => {
+            scoping::CanModifyScope::Argument(..) => {
                 // Hack: assume all arguments are i32s for now
                 return (type_map, Type::i32);
                 // let arg = unsafe {
@@ -379,7 +375,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 (new_map, t)
             },
             Stmt::FunctionDecStmt{ref args, ref kwargs, ref block, ref return_type, ..} => {
-                let (mut new_map, t) = block.resolve_types(context, type_map);
+                let (mut new_map, _) = block.resolve_types(context, type_map);
 
                 // let total_args = args.len() + kwargs.len();
                 // let argument_type = vec![Type::Undetermined; total_args];
@@ -394,19 +390,19 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 (new_map, function_type)
             },
             Stmt::WhileStmt{ref condition, ref block} => {
-                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (new_map, _) = condition.resolve_types(context, type_map);
                 let (mut final_map, t) = block.resolve_types(context, new_map);
                 final_map.insert(self.id, t.clone());
                 (final_map, t)
             }
             Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
-                let (mut new_map, _) = condition.resolve_types(context, type_map);
+                let (new_map, _) = condition.resolve_types(context, type_map);
                 let (mut block_map, t) = block.resolve_types(context, new_map);
                 block_map.insert(self.id, t.clone());
 
                 // Elifs
                 for (expr, block) in elifs {
-                    let mut expr_map = expr.resolve_types(context, block_map).0;
+                    let expr_map = expr.resolve_types(context, block_map).0;
                     block_map = block.resolve_types(context, expr_map).0;
                 }
 
@@ -425,7 +421,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 impl Typed<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
         let new_expr = match self.data {
-            Expr::ComparisonExpr {mut left, mut right, operator} => {
+            Expr::ComparisonExpr {left, right, operator} => {
                 let left = Box::new(left.type_based_rewrite(context, type_map));
                 let right = Box::new(right.type_based_rewrite(context, type_map));
                 Expr::ComparisonExpr {left, right, operator}
@@ -607,9 +603,7 @@ impl BinaryOperator {
 mod test {
 
     use super::*;
-    use parser;
-    use parser_utils;
-    use scoping;
+    use compiler_layers;
 
     #[cfg(test)]
     mod expressions {
@@ -637,11 +631,12 @@ mod test {
 
     #[test]
     fn test_identifier_resolution() {
-        let block = "let a = 1\nlet b = a";
-        let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        let (id, init) = scoping::initial_context();
-        let context = parsed.gen_scopes(id, &init);
-        let (types, _) = parsed.resolve_types(&context, HashMap::new());
+        let block_str = "let a = 1\nlet b = a";
+        // let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
+        // let (id, init) = scoping::initial_context();
+        // let context = parsed.gen_scopes(id, &init);
+        // let (types, _) = parsed.resolve_types(&context, HashMap::new());
+        let (parsed, _, types) = compiler_layers::to_types::<Node<Block>>(block_str.as_bytes());
         assert_eq!(types.get(&parsed.id), Some(&Type::empty));
         let id2 = parsed.data.statements[1].id;
         assert_eq!(types.get(&id2), Some(&Type::i32));

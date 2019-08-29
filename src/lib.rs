@@ -4,14 +4,15 @@ extern crate log;
 extern crate cute;
 #[macro_use]
 extern crate maplit;
-#[macro_use]
-extern crate lazy_static;
+extern crate bytecount;
+extern crate memchr;
 
+pub mod position_tracker;
 #[macro_use]
 pub mod parser_utils;
+pub mod parser;
 pub mod general_utils;
 pub mod grace_error;
-pub mod parser;
 pub mod expression;
 pub mod bytecode;
 pub mod scoping;

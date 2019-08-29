@@ -603,11 +603,7 @@ impl BinaryOperator {
 mod test {
 
     use super::*;
-    use parser;
-    use parser_utils;
     use compiler_layers;
-    use scoping;
-    use scoping::Scoped;
 
     #[cfg(test)]
     mod expressions {
@@ -635,11 +631,12 @@ mod test {
 
     #[test]
     fn test_identifier_resolution() {
-        let block = "let a = 1\nlet b = a";
-        let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        let (id, init) = scoping::initial_context();
-        let context = parsed.gen_scopes(id, &init);
-        let (types, _) = parsed.resolve_types(&context, HashMap::new());
+        let block_str = "let a = 1\nlet b = a";
+        // let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
+        // let (id, init) = scoping::initial_context();
+        // let context = parsed.gen_scopes(id, &init);
+        // let (types, _) = parsed.resolve_types(&context, HashMap::new());
+        let (parsed, _, types) = compiler_layers::to_types::<Node<Block>>(block_str.as_bytes());
         assert_eq!(types.get(&parsed.id), Some(&Type::empty));
         let id2 = parsed.data.statements[1].id;
         assert_eq!(types.get(&id2), Some(&Type::i32));

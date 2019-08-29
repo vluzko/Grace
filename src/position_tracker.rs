@@ -23,7 +23,7 @@ use self::nom::{
     InputTake
 };
 
-#[derive(Debug, PartialEq, Copy, Clone)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone)]
 pub struct PosStr<'a> {
     /// The offset represents the position of the slice relatively to
     /// the input of the parser. It starts at offset 0.
@@ -38,7 +38,7 @@ pub struct PosStr<'a> {
     pub column: u32,
 
     /// The slice that is spanned.
-    slice: &'a [u8]
+    pub slice: &'a [u8]
 }
 
 impl<'a> PosStr<'a> {
@@ -61,15 +61,17 @@ impl<'a> PosStr<'a> {
         }
     }
 
-
     pub fn empty() -> Self {
         Self::new(b"")
     }
 
-
     pub fn as_slice(&self) -> &'a [u8] {
         self.slice
     }
+
+    // pub fn from_str(input: &'a str) -> Self {
+    //     return PosStr::new(input.as_bytes());
+    // }
 }
 
 impl <'a> From<&'a [u8]> for PosStr<'a> {
@@ -80,6 +82,12 @@ impl <'a> From<&'a [u8]> for PosStr<'a> {
             column: 0,
             slice : input
         }
+    }
+}
+
+impl <'a> From<&'a str> for PosStr<'a> {
+    fn from(input: &'a str) -> Self {
+        return PosStr::new(input.as_bytes());
     }
 }
 
@@ -102,22 +110,18 @@ impl<'a> InputIter for PosStr<'a> {
     /// Type of the iterator.
     type IterElem = Iter<'a, Self::RawItem>;
 
-
     fn iter_indices(&self) -> Self::Iter {
         self.slice.iter().enumerate()
     }
-
 
     fn iter_elements(&self) -> Self::IterElem {
         self.slice.iter()
     }
 
-
     fn position<P>(&self, predicate: P) -> Option<usize>
         where P: Fn(Self::RawItem) -> bool {
         self.slice.iter().position(|x| predicate(*x))
     }
-
 
     fn slice_index(&self, count: usize) -> Option<usize> {
         if self.slice.len() >= count {
@@ -255,6 +259,47 @@ impl <'a> Offset for PosStr<'a> {
     }
 }
 
+// impl <'a> InputTakeAtPosition for PosStr<'a> {
+//   type Item = <Self as InputIter>::RawItem;
+
+//   fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
+//   where
+//     P: Fn(Self::Item) -> bool,
+//   {
+//     match self.position(predicate) {
+//       Some(n) => Ok(self.take_split(n)),
+//       None => {
+//         if self.at_eof() {
+//           Ok(self.take_split(self.input_len()))
+//         } else {
+//           Err(Err::Incomplete(Needed::Size(1)))
+//         }
+//       }
+//     }
+//   }
+//
+//   fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+//   where
+//     P: Fn(Self::Item) -> bool,
+//   {
+//     match self.position(predicate) {
+//       Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
+//       Some(n) => Ok(self.take_split(n)),
+//       None => {
+//         if self.at_eof() {
+//           if self.input_len() == 0 {
+//             Err(Err::Error(Context::Code(self.clone(), e)))
+//           } else {
+//             Ok(self.take_split(self.input_len()))
+//           }
+//         } else {
+//           Err(Err::Incomplete(Needed::Size(1)))
+//         }
+//       }
+//     }
+//   }
+// }
+
 macro_rules! impl_slice_for_range {
     ($range:ty) => (
         impl<'a> Slice<$range> for PosStr<'a> {
@@ -307,6 +352,7 @@ impl_slice_for_range!(Range<usize>);
 impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
+
 
 #[cfg(test)]
 mod test {

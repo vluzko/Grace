@@ -1,124 +1,20 @@
 #![allow(non_snake_case)]
 
 use std::str;
-use std::str::from_utf8;
 use std::fmt::Debug;
 use std::clone::Clone;
-use std::marker::Copy;
 use std::cmp::PartialEq;
-use std::ops::{
-    Range,
-    RangeFrom,
-    RangeFull,
-    RangeTo
-};
+
 
 extern crate nom;
 use self::nom::*;
-use self::nom::{
-    Offset,
-    InputTake
-};
 use expression::Node;
 use position_tracker::PosStr;
 
-pub trait Nommable<'a>: 
-Clone +
-PartialEq +
-Copy +
-Debug +
-Compare<Self> +
-Compare<&'a str> +
-Compare<&'a [u8]> +
-// TODO: should this actually always be returning a byte array?
-FindSubstring<&'a [u8]> +
-InputIter +
-InputLength +
-Slice<RangeFrom<usize>> +
-Slice<RangeTo<usize>> +
-Slice<Range<usize>> +
-Slice<RangeFull> +
-AtEof +
-InputTake + 
-Offset+
-// FromStr
-{}
+use self::iresult_helpers::*;
 
-impl <'a, 'b> Nommable<'a> for &'a[u8] {}
-impl <'a, 'b> Nommable<'b> for PosStr<'a> {}
-
-
-/// Map the contents of an IResult.
-/// Rust functors plox
-pub fn fmap_iresult<'a, I: Nommable<'a>, X, T, F>(res: IResult<I, X>, func: F) -> IResult<I, T>
-    where F: Fn(X) -> T {
-    return match res {
-        Ok((i, o)) => Ok((i, func(o))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_node<'a, I: Nommable<'a>, X, T, F>(res: IResult<I, X>, func: F) -> IResult<I, Node<T>>
-    where F: Fn(X) -> T {
-    return match res {
-        Ok((i, o)) => Ok((i, Node::from(func(o)))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_convert<'a, I: Nommable<'a>, X>(res: IResult<I, X>) -> IResult<I, Node<X>> {
-    return match res {
-        Ok((i, o)) => Ok((i, Node::from(o))),
-        Err(e) => Err(e)
-    };
-}
-
-pub fn fmap_and_full_log<'a, I: Nommable<'a>, X, T>(res: IResult<I, X>, func: fn(X) -> T, name: &str, input: I) -> IResult<I, T> {
-    return match res {
-        Ok((i, o)) => {
-            println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
-            Ok((i, func(o)))
-        },
-        Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, input);
-            Err(e) 
-        }
-    };
-}
-
-// TODO: Change
-/// Map an IResult and log errors and incomplete values.
-pub fn fmap_and_log<'a, I: Nommable<'a>, X, T>(res: IResult<I, X>, func: fn(X) -> T, name: &str, input: I) -> IResult<I, T> {
-    return match res {
-        Ok((i, o)) => Ok((i, func(o))),
-        Err(e) => {
-            println!("{} error: {:?}. Input was: {:?}", name, e, input);
-            Err(e)
-        }
-    };
-}
-
-pub fn full_log<'a, I: Nommable<'a>, X>(res: IResult<I, X>, name: &str, input: I) -> IResult<I, X> {
-    return fmap_and_full_log(res, |x| x, name, input);
-}
-
-pub fn log_err<'a, I: Nommable<'a>, X>(res: IResult<I, X>, name: &str, input: I) -> IResult<I, X> {
-    return fmap_and_log(res, |x| x, name, input);
-}
-
-pub fn wrap_err<'a, I: Nommable<'a>, T>(input: I, error: ErrorKind) -> IResult<I, T> {
-    return Err(Err::Error(Context::Code(input, error)));
-}
-
-pub fn output<'a, I: Nommable<'a>, T>(res: IResult<I, T>) -> T {
-    return match res {
-        Ok((_, o)) => o,
-        Err(e) => {
-            println!("Output error: {:?}.", e);
-            panic!()
-        }
-    };
-}
+type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
+type Res<'a, T> = IResult<PosStr<'a>, T>;
 
 
 /// Alias for opt!(complete!())
@@ -247,15 +143,15 @@ macro_rules! w_followed (
 );
 
 #[inline]
-pub fn inline_whitespace_char<'a, I: Nommable<'a>>(input: I) -> IResult<I, I> {
+pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
     return tag!(input, " ");
 }
 
-pub fn eof_or_line(input: &[u8]) -> IResult<&[u8], &[u8]> {
+pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
     return alt!(input, eof!() | tag!("\n"));
 }
 
-pub fn between_statement(input: &[u8]) -> IResult<&[u8], Vec<Vec<&[u8]>>> {
+pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {
     let n = many0c!(input,
         terminated!(many0c!(inline_whitespace_char), eof_or_line)
     );
@@ -271,7 +167,7 @@ pub mod tokens {
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
-            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
                 return w_followed!(input, tag!($i));
             }
         };
@@ -279,23 +175,23 @@ pub mod tokens {
 
     macro_rules! keyword {
         ($name:ident, $i: expr) => {
-            pub fn $name(input: &[u8]) -> IResult<&[u8], &[u8]> {
+            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
                 return w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))));
             }
         };
     }
 
     /// Recognize an empty input.
-    pub fn EMPTY(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        if input.len() == 0 {
-            return Ok((input, b""));
+    pub fn EMPTY<'a>(input: PosStr<'a>) -> IO<'a> {
+        if input.input_len() == 0 {
+            return Ok((input, PosStr::empty()));
         } else {
             return wrap_err(input, ErrorKind::NonEmpty);
         }
     }
 
     /// Recognize a non-empty sequence of decimal digits.
-    pub fn DIGIT<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
+    pub fn DIGIT<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -307,7 +203,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of decimal digits.
-    pub fn DIGIT0<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
+    pub fn DIGIT0<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
@@ -318,7 +214,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of (ASCII) alphabetic characters.
-    pub fn ALPHA<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
+    pub fn ALPHA<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -330,7 +226,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of alphanumeric characters.
-    pub fn ALPHANUM<'a>(input: &'a[u8]) -> IResult<&'a[u8], &'a[u8]> {
+    pub fn ALPHANUM<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -341,8 +237,12 @@ pub mod tokens {
         };
     }
 
-    pub fn IDENT_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        return match input.position(|x: u8| !(x.is_alpha() || x.is_dec_digit() || x == 95)) {
+    pub fn IDENT_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
+        let identifier_segment = input.position(|x| {
+            let y = x.as_char();
+            !(y.is_alpha() || y.is_dec_digit() || y == '_') 
+        });
+        return match identifier_segment {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
@@ -352,7 +252,7 @@ pub mod tokens {
         };
     }
 
-    pub fn STRING_CHAR(input: &[u8]) -> IResult<&[u8], &[u8]>{
+    pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a>{
         return alt!(input,
             tag!("\\\"") |
             tag!("\\\\") |
@@ -363,10 +263,10 @@ pub mod tokens {
     }
 
     /// Return true if a key
-    pub fn RESERVED(input: &[u8]) -> IResult<&[u8], &[u8]> {
-        let tag_lam = |x: &[u8]| recognize!(input, complete!(tag!(x)));
+    pub fn RESERVED<'a>(input: PosStr<'a>) -> IO<'a> {
+        let tag_lam = |x| recognize!(input, complete!(tag!(PosStr::new(x))));
         let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
-        let mut final_result: IResult<&[u8], &[u8]> = wrap_err(input, ErrorKind::Tag);
+        let mut final_result: IO<'a> = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
             match res {
                 Ok((i, o)) => {
@@ -380,7 +280,7 @@ pub mod tokens {
     }
 
     /// Parser to return an Identifier AST.
-    pub fn IDENTIFIER(input: &[u8]) -> IResult<&[u8], Identifier> {
+    pub fn IDENTIFIER<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Identifier> {
         let parse_result = w_followed!(input,
             recognize!(
                 pair!(
@@ -390,7 +290,7 @@ pub mod tokens {
             )
         );
         let intermediate = match parse_result {
-            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &o) {
+            Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &(o.slice)) {
                 Some(_) => wrap_err(i, ErrorKind::Alt),
                 None => Ok((i, o))
             },
@@ -399,7 +299,7 @@ pub mod tokens {
         return fmap_iresult(intermediate, Identifier::from);
     }
 
-    pub fn VALID_NUM_FOLLOW <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
+    pub fn VALID_NUM_FOLLOW <'a> (input: PosStr<'a>) -> IO<'a> {
         if input.input_len() == 0 {
             return Ok((input.clone(), input.clone()));
         } else {
@@ -418,11 +318,11 @@ pub mod tokens {
         }
     }
 
-    pub fn NEWLINE <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
+    pub fn NEWLINE <'a> (input: PosStr<'a>) -> IO<'a> {
         return tag!(input, "\n");
     }
 
-    pub fn SIGN <'a, T: Nommable<'a>> (input: T) -> IResult<T, T> {
+    pub fn SIGN <'a> (input: PosStr<'a>) -> IO<'a> {
         return recognize!(input, alt!(tag!("+") | tag!("-")));
     }
 
@@ -444,7 +344,6 @@ pub mod tokens {
     keyword!(PASS, "pass");
     keyword!(BREAK, "break");
     keyword!(CONTINUE, "continue");
-
     keyword!(MATCH, "match");
 
     // Syntax
@@ -509,21 +408,15 @@ pub mod tokens {
     token!(NOT, "not");
     token!(TILDE, "~");
 
-        #[cfg(test)]
+    #[cfg(test)]
     mod tokens_test {
         use super::*;
-        use self::iresult_helpers::*;
 
         #[test]
         fn parse_digits() {
-            let res = DIGIT("123".as_bytes());
-            assert_eq!(res, Ok(("".as_bytes(), "123".as_bytes())));
-
-            let res = DIGIT("123a".as_bytes());
-            assert_eq!(res, Ok(("a".as_bytes(), "123".as_bytes())));
-
-            let res = DIGIT("a".as_bytes());
-            assert_eq!(res, wrap_err("a".as_bytes(), ErrorKind::Digit));
+            check_match("123", DIGIT, PosStr::from("123"));
+            check_match_and_leftover("123a", DIGIT, PosStr::from("123"), "a");
+            simple_check_failed("a", DIGIT);
         }
 
         #[test]
@@ -553,73 +446,144 @@ pub mod iresult_helpers {
 
     use super::*;
 
-    pub fn check_match_and_leftover<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T, expected_leftover: &str)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Ok((i, o)) => {
-                assert_eq!(i, expected_leftover.as_bytes());
-                assert_eq!(o, expected);
-            },
-            Result::Err(e) => {
-                panic!("Error: {:?}. Input was: {}", e, input)
-            }
-        }
+    /// Map the contents of an IResult.
+    /// Rust functors plox
+    pub fn fmap_iresult<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, T>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => Err(e)
+        };
     }
 
-    pub fn check_data_and_leftover<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T, expected_leftover: &str)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Ok((i, o)) => {
-                assert_eq!(i, expected_leftover.as_bytes());
-                assert_eq!(o.data, expected);
-            },
-            Result::Err(e) => {
-                panic!("Error: {:?}. Input was: {}", e, input)
-            }
-        }
+    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Err(e) => Err(e)
+        };
     }
 
-    pub fn check_match<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: T)
-        where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
-        match res {
-            Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o, expected);
-            },
-            Result::Err(e) => {
-                panic!("Error: {:?}. Input was: {}", e, input)
-            }
-        }
+    pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
+        return match res {
+            Ok((i, o)) => Ok((i, Node::from(o))),
+            Err(e) => Err(e)
+        };
     }
 
-    pub fn check_data<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], Node<T>>, expected: T)
-    where T: Debug + PartialEq + Eq {
-        let res = parser(input.as_bytes());
+    pub fn fmap_and_full_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
         return match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i, "".as_bytes(), "Leftover input should have been empty, was: {:?}\nResults were: {}", from_utf8(i), l_r);
-                assert_eq!(o.data, expected);
+                println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
+                Ok((i, func(o)))
             },
-            Result::Err(e) => {
-                panic!("Error: {:?}. Input was: {}", e, input)
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e) 
             }
         };
     }
 
-    pub fn simple_check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>) {
-        let res = parser(input.as_bytes());
+    /// Map an IResult and log errors and incomplete values.
+    pub fn fmap_and_log<'a, X, T>(res: Res<'a, X>, func: fn(X) -> T, name: &str, input: PosStr<'a>) -> Res<'a, T> {
+        return match res {
+            Ok((i, o)) => Ok((i, func(o))),
+            Err(e) => {
+                println!("{} error: {:?}. Input was: {:?}", name, e, input);
+                Err(e)
+            }
+        };
+    }
+
+    pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_full_log(res, |x| x, name, input);
+    }
+
+    pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
+        return fmap_and_log(res, |x| x, name, input);
+    }
+
+    pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
+        return Err(Err::Error(Context::Code(input, error)));
+    }
+
+    pub fn output<'a, T>(res: Res<'a, T>) -> T {
+        return match res {
+            Ok((_, o)) => o,
+            Err(e) => {
+                println!("Output error: {:?}.", e);
+                panic!()
+            }
+        };
+    }
+
+    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                assert_eq!(i.slice, expected_leftover.as_bytes());
+                assert_eq!(o, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                assert_eq!(i.slice, expected_leftover.as_bytes());
+                assert_eq!(o.data, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_match<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_data<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        return match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o.data, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        };
+    }
+
+    pub fn simple_check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>) {
+        let res = parser(PosStr::from(input));
         match res {
             Result::Err(_) => {},
             _ => panic!()
         }
     }
 
-    pub fn unwrap_and_check_error<T>(result: IResult<&[u8], T>, expected: ErrorKind)
+    pub fn unwrap_and_check_error<'a, T>(result: Res<'a, T>, expected: ErrorKind)
     where T: Debug {
         match result {
             Result::Err(e) => {
@@ -637,9 +601,9 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_failed<T>(input: &str, parser: fn(&[u8]) -> IResult<&[u8], T>, expected: ErrorKind)
+    pub fn check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
     where T: Debug {
-        let res = parser(input.as_bytes());
+        let res = parser(PosStr::from(input));
         unwrap_and_check_error(res, expected);
     }
 }

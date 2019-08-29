@@ -62,7 +62,6 @@ where T: Eq, T: Clone {
 
 pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
 where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
-    println!("Merging maps: {:?}, {:?}",a, b );
     for (k, v) in b.into_iter() {
         if a.contains_key(&k) {
             panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
@@ -96,6 +95,6 @@ mod tests {
         let vec1 = vec![1, 2, 3];
         let vec2 = vec![3, 4, 5];
         let merged = vec_c_int(&vec1, &vec2);
-        println!("{:?}", merged);
+        assert_eq!(merged, vec![3]);
     }
 }

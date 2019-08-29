@@ -411,7 +411,6 @@ pub mod tokens {
     #[cfg(test)]
     mod tokens_test {
         use super::*;
-        use self::iresult_helpers::*;
 
         #[test]
         fn parse_digits() {

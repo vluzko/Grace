@@ -636,7 +636,7 @@ mod test {
         // let (id, init) = scoping::initial_context();
         // let context = parsed.gen_scopes(id, &init);
         // let (types, _) = parsed.resolve_types(&context, HashMap::new());
-        let (parsed, context, types) = compiler_layers::to_types::<Node<Block>>(block_str.as_bytes());
+        let (parsed, _, types) = compiler_layers::to_types::<Node<Block>>(block_str.as_bytes());
         assert_eq!(types.get(&parsed.id), Some(&Type::empty));
         let id2 = parsed.data.statements[1].id;
         assert_eq!(types.get(&id2), Some(&Type::i32));

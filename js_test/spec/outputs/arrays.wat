@@ -1,7 +1,7 @@
 (module
-(import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
-(import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
-(import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+(import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+(import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
 ;; Create an array
@@ -12,7 +12,7 @@
     get_local $number_of_elements
     get_local $element_size
     i32.mul
-    call $alloc_words
+    call $.memory_management.alloc_words
 )(export "create_array" (func $create_array))
 
 (func $get_value (param $array_start i32) (param $index i32) (param $element_size i32) (result i32)
@@ -49,7 +49,7 @@
 ;;      array_index (i32): Pointer to the array (not the metadata of the chunk containing the array)
 (func $delete (param $array_index i32)(result i32)
     get_local $array_index
-    call $free_chunk 
+    call $.memory_management.free_chunk 
 )(export "delete" (func $delete))
 
 ;; Resize an array.
@@ -130,17 +130,17 @@
                 ;; If new_size > cur_size and there isn't enough room to expand, free the current array, create a new one, and copy
 
                 get_local $array_index
-                call $free_chunk        ;; Free the current chunk
+                call $.memory_management.free_chunk        ;; Free the current chunk
                 drop
 
                 get_local $array_index  ;; Load onto the stack
 
                 get_local $new_size
-                call $alloc_words       ;; Create a new chunk
+                call $.memory_management.alloc_words       ;; Create a new chunk
                 tee_local $ptr_to_new
 
                 get_local $new_size
-                call $copy_many
+                call $.memory_management.copy_many
                 drop
                 get_local $ptr_to_new
             end

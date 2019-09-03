@@ -28,9 +28,9 @@ impl ToBytecode for Node<Module> {
         let decls = self.data.declarations.iter().map(|x| x.generate_bytecode(context, type_map));
         let joined = itertools::join(decls, "\n");
         return format!("(module\n\
-(import \"memory_management\" \"alloc_words\" (func $alloc_words (param $a i32) (result i32)))
-(import \"memory_management\" \"free_chunk\" (func $free_chunk (param $a i32) (result i32)))
-(import \"memory_management\" \"copy_many\" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+(import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+(import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import \"memory_management\" \"mem\" (memory (;0;) 1))
 {}\n)\n", joined).to_string();
     }
@@ -274,9 +274,9 @@ mod tests {
        let (module, context, mut type_map) = 
        compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
        let mod_bytecode = r#"(module
-(import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
-(import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
-(import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+(import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+(import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 (func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5

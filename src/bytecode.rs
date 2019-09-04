@@ -6,6 +6,7 @@ use expression::*;
 use scoping::*;
 use typing;
 use typing::Type;
+use compiler_layers::compile_from_file;
 
 pub trait ToBytecode: Hash  {
     /// Generate WAST bytecode from an AST
@@ -126,6 +127,21 @@ impl ToBytecode for Node<Stmt> {
                 let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
                 while_bytecode
             },
+            &Stmt::ImportStmt (ref names) => {
+                let path = itertools::join(names.iter(), "/");
+                let (module, _, _, _) = compile_from_file(path);
+                let mut func_names = vec!();
+                for statement in module.data.declarations {
+                    match statement.data {
+                        Stmt::FunctionDecStmt{ref name, ..} => {
+                            func_names.push(name.clone());
+                        }
+                        _ => {}
+                    }
+                }
+                // stick the resulting bytecode somewhere
+                panic!();
+            }
 	        _ => panic!()
         };
 

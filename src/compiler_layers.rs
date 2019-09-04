@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 use std::fmt::Debug;
+use std::io::prelude::*;
+use std::fs::File;
 
 use parser::Parseable;
 use position_tracker::PosStr;
@@ -8,6 +10,8 @@ use scoping::Scoped;
 use typing;
 use typing::Typed;
 use bytecode::ToBytecode;
+use expression::Node;
+use expression::Module;
 
 pub trait Layer<T>{
     fn run_from_start(&[u8]) -> T;
@@ -26,6 +30,14 @@ pub struct Compilation {
     pub file: String,
     /// Counter for uniquely identifying every ASTNode.
     pub counter: i64
+}
+
+pub fn compile_from_file(file_name: String) -> (Node<Module>, scoping::Context, HashMap<usize, typing::Type>, String){
+    let mut f = File::open(file_name).expect("File not found");
+    let mut file_contents = String::new();
+    f.read_to_string(&mut file_contents).unwrap();
+    return to_bytecode::<Node<Module>>(file_contents.as_bytes());
+
 }
 
 
@@ -53,10 +65,11 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
     return (rewritten, context, type_map);
 }
 
-pub fn to_bytecode<'a, T>(input: &'a [u8]) -> String 
+pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, scoping::Context, HashMap<usize, typing::Type>, String) 
 where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
     let (result, context, mut type_map): (T, scoping::Context, HashMap<usize, typing::Type>) = to_type_rewrites(input);
-    return result.generate_bytecode(&context, &mut type_map);
+    let bytecode = result.generate_bytecode(&context, &mut type_map);
+    return (result, context, type_map, bytecode);
 }
 
 

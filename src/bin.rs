@@ -12,7 +12,7 @@ fn main() {
     let mut f = File::open(&args[1]).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
-    let wast = compiler_layers::to_bytecode::<Node<Module>>(file_contents.as_bytes());
+    let (_, _, _, wast) = compiler_layers::to_bytecode::<Node<Module>>(file_contents.as_bytes());
     let outfile = File::create(&args[2]);
     outfile.unwrap().write_all(wast.as_bytes()).unwrap();
 }

@@ -13,8 +13,7 @@ use typing::Type;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
-    function_declaration_stmt,
-    import
+    function_declaration_stmt
 };
 
 type StmtNode = Node<Stmt>;
@@ -58,15 +57,31 @@ impl Parseable for Node<Expr> {
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
-        many1!(complete!(
-            terminated!(
-                alt!(complete!(call!(function_declaration_stmt, 0)) | complete!(import)),
-                between_statement
+        tuple!(
+            many0c!(
+                terminated!(import, between_statement)
+            ),
+            many1c!(
+                terminated!(
+                    alt_complete!(call!(function_declaration_stmt, 0)),
+                    between_statement
+                )
             )
-        ))
+        )
     );
 
-    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect(), imports: vec!()});
+    return fmap_node(parse_result, |x| Module{imports: x.0, declarations: x.1.into_iter().map(Box::new).collect()});
+}
+
+/// Match an import statement.
+fn import<'a>(input: PosStr<'a>) -> Res<'a, (Vec<Identifier>, Option<Identifier>)> {
+    let parse_result = preceded!(input, IMPORT, 
+        pair!(
+            separated_nonempty_list_complete!(DOT, IDENTIFIER), 
+            optc!(preceded!(AS, IDENTIFIER))
+        )
+    );
+    return parse_result;
 }
 
 /// Match a block.
@@ -113,6 +128,7 @@ pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
+
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
@@ -127,7 +143,6 @@ pub mod stmt_parsers {
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
             call!(try_except, indent) |
-            import |
             return_stmt |
             break_stmt |
             pass_stmt |
@@ -314,15 +329,6 @@ pub mod stmt_parsers {
         ), indent);
 
         return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
-    }
-
-    /// Match an import statement.
-    pub fn import<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = preceded!(input, IMPORT, separated_nonempty_list_complete!(
-            DOT,
-            IDENTIFIER
-        ));
-        return fmap_node(parse_result,|x| Stmt::ImportStmt (x));
     }
 
     /// Match a return statement.
@@ -559,15 +565,6 @@ pub mod stmt_parsers {
             check_data_and_leftover("continue   \n  ", |x| statement(x, 0), Stmt::ContinueStmt, "\n  ");
             check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
             check_data_and_leftover("break   \n  ", |x| statement(x, 0), Stmt::BreakStmt, "\n  ");
-        }
-
-        #[test]
-        fn parse_import_stmt() {
-            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(vec!(
-                Identifier::from("foo"), 
-                Identifier::from("bar"), 
-                Identifier::from("baz"))
-            ));
         }
 
         #[test]
@@ -1619,7 +1616,7 @@ pub mod type_parser {
 mod tests {
     use super::*;
     #[test]
-    fn test_module() {
+    fn parse_module() {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
@@ -1631,16 +1628,22 @@ mod tests {
     }
 
     #[test]
-    fn test_module_with_import() {
+    fn parse_module_with_import() {
        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               Box::new(output(import(PosStr::from("import foo")))),
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
            ),
-           imports: vec!()
+           imports: vec!((vec!(Identifier::from("foo")), None))
        }))
+    }        
+    #[test]
+    fn parse_imports() {
+        check_match("import foo.bar.baz", import, (vec!(
+            Identifier::from("foo"), 
+            Identifier::from("bar"), 
+            Identifier::from("baz")), None));
     }
 
     #[test]

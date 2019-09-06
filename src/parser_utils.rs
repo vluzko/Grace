@@ -339,6 +339,7 @@ pub mod tokens {
     keyword!(FINALLY, "finally");
     keyword!(LET, "let");
     keyword!(IMPORT, "import");
+    keyword!(AS, "as");
     keyword!(RETURN, "return");
     keyword!(YIELD, "yield");
     keyword!(PASS, "pass");

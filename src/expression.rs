@@ -23,7 +23,7 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
-    pub imports: Vec<Import>
+    pub imports: Vec<(Vec<Identifier>, Option<Identifier>)>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -75,7 +75,7 @@ pub enum Expr {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Import {
-    Single(Vec<Identifier>, Option<String>),
+    Value(Vec<Identifier>, Option<String>),
     Multiple(String, Vec<(Identifier, Option<String>)>)
 }
 

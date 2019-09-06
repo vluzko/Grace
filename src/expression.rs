@@ -22,12 +22,13 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
-    pub declarations: Vec<Box<Node<Stmt>>>
+    pub declarations: Vec<Box<Node<Stmt>>>,
+    pub imports: Vec<Import>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
-    pub statements: Vec<Box<Node<Stmt>>>,
+    pub statements: Vec<Box<Node<Stmt>>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -70,6 +71,12 @@ pub enum Expr {
     SetLiteral      (Vec<Node<Expr>>),
     TupleLiteral    (Vec<Node<Expr>>),
     MapLiteral      (Vec<(Identifier, Node<Expr>)>)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Import {
+    Single(Vec<Identifier>, Option<String>),
+    Multiple(String, Vec<(Identifier, Option<String>)>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

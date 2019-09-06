@@ -66,7 +66,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         ))
     );
 
-    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect()});
+    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect(), imports: vec!()});
 }
 
 /// Match a block.
@@ -1625,7 +1625,8 @@ mod tests {
            declarations: vec!(
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           )
+           ),
+           imports: vec!()
        }))
     }
 
@@ -1637,7 +1638,8 @@ mod tests {
                Box::new(output(import(PosStr::from("import foo")))),
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           )
+           ),
+           imports: vec!()
        }))
     }
 

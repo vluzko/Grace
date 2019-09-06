@@ -266,7 +266,7 @@ impl Typed<Node<Module>> for Node<Module> {
         let new_decs = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.declarations];
         return Node{
             id: self.id,
-            data: Module{ declarations: new_decs},
+            data: Module{declarations: new_decs, imports: vec!()},
             scope: self.scope
         };
     }

@@ -18,14 +18,44 @@ pub trait ToBytecode: Hash  {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String;
 }
 
-// impl <T> ToBytecode for Node<T> where T: ToBytecode {
-    // fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
-        // return self.data.generate_bytecode(context, type_map);
-    // }
-// }
-
 impl ToBytecode for Node<Module> {
+
+    /// Generate bytecode for a module.
+    /// Is this code unbelievably ugly? Yes. Can I think of an easy way to make it prettier? No.
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
+
+        let mut imports = vec!();
+        for (dotted_path, rep_name) in &self.data.imports {
+            let path = itertools::join(dotted_path.iter(), "/");
+            let (module, _, imported_types, _) = compile_from_file(path);
+            for dec in module.data.declarations {
+                let module_access = itertools::join(dotted_path.iter(), ".");
+                // let heading = get_function_heading(&module_access, &dec, &imported_types);
+                let heading = match dec.data {
+                    Stmt::FunctionDecStmt{ref name, ref args, ..} => {
+                        let return_bytecode = match imported_types.get(&dec.id).unwrap() {
+                            typing::Type::Function(_x, y) => match &(**y) {
+                                Type::empty => "".to_string(),
+                                x => format!("(result {})", x.wast_name())
+                            },
+                            _ => panic!()
+                        };
+    
+                        let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");
+                        let new_name = format!("{}.{}", module_access, match rep_name {
+                            Some(x) => x,
+                            None => name
+                        });
+                        format!("(func ${func_name} {params} {return_type}",
+                            func_name=new_name, params=params, return_type=return_bytecode
+                        )
+                    },
+                    _ => panic!()
+                };
+                imports.push(heading);
+            }
+        }
+
         let decls = self.data.declarations.iter().map(|x| x.generate_bytecode(context, type_map));
         let joined = itertools::join(decls, "\n");
         return format!("(module\n\
@@ -127,21 +157,6 @@ impl ToBytecode for Node<Stmt> {
                 let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
                 while_bytecode
             },
-            &Stmt::ImportStmt (ref names) => {
-                let path = itertools::join(names.iter(), "/");
-                let (module, _, _, _) = compile_from_file(path);
-                let mut func_names = vec!();
-                for statement in module.data.declarations {
-                    match statement.data {
-                        Stmt::FunctionDecStmt{ref name, ..} => {
-                            func_names.push(name.clone());
-                        }
-                        _ => {}
-                    }
-                }
-                // stick the resulting bytecode somewhere
-                panic!();
-            }
 	        _ => panic!()
         };
 

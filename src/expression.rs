@@ -41,7 +41,6 @@ pub enum Stmt {
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
     TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
-    ImportStmt      (Vec<Identifier>),
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,

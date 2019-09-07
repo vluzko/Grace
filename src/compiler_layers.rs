@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::File;
@@ -26,10 +27,24 @@ impl Layer<String> for Bytecode {
 }
 
 pub struct Compilation {
-    /// Will need to be a project / directory later.
-    pub file: String,
-    /// Counter for uniquely identifying every ASTNode.
-    pub counter: i64
+    /// The path to the main file or folder.
+    pub main_path: Option<Box<Path>>,
+    /// All parsed modules.
+    pub modules: HashMap<usize, Node<Module>>,
+    /// Paths to all module files.
+    pub module_paths: HashMap<usize, Box<Path>>,
+    /// The dependency graph.
+    pub dependencies: HashMap<usize, Vec<usize>>,
+    /// File hashes
+    pub hashes: HashMap<usize, u64>
+}
+
+impl Compilation {
+    pub fn compile(file_name: String) {
+        let mut f = File::open(file_name).expect("File not found");
+        let mut file_contents = String::new();
+        f.read_to_string(&mut file_contents).unwrap();
+    }
 }
 
 pub fn compile_from_file(file_name: String) -> (Node<Module>, scoping::Context, HashMap<usize, typing::Type>, String){
@@ -37,9 +52,7 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, scoping::Context, 
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
     return to_bytecode::<Node<Module>>(file_contents.as_bytes());
-
 }
-
 
 pub fn to_scopes<'a, T>(input: &'a [u8]) -> (T, scoping::Context)
 where T: Parseable, T: Scoped<T> {

@@ -757,7 +757,7 @@ pub mod expr_parsers {
     enum PostIdent {
         Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
         Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-        Access{attributes: Vec<Identifier>}
+        Access{attributes: Identifier}
     }
 
     /// Match a list of arguments in a function call.
@@ -899,11 +899,9 @@ pub mod expr_parsers {
 
     /// Match an access operation following an expression.
     fn post_access<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
-        let result = many1c!(input, 
-            preceded!(
-                DOT,
-                IDENTIFIER
-            )
+        let result = preceded!(input,
+            DOT,
+            IDENTIFIER
         );
         return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
     }
@@ -1170,7 +1168,7 @@ pub mod expr_parsers {
             simple_check_failed("(a, b =  true, c)", trailer);
 
 
-            check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+            check_match(".asdf_   ", trailer, PostIdent::Access{attributes: Identifier::from("asdf_")});
 
             check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
                 slices: vec!(

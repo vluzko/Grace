@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -26,6 +27,8 @@ pub enum Type {
     Function(Vec<Type>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
+    Module(BTreeMap<Identifier, Type>),
+    Record(BTreeMap<Identifier, Type>),
     Undetermined
 }
 
@@ -488,8 +491,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 (new_map, new_type)
             }
             Expr::IdentifierExpr(ref name) => {
-                // println!("scope id: {:?}.\t\tName: {:?}", self.scope, name);
-                // println!("scope: {:?}", context.get_scope(self.scope));
                 let creation = context.get_declaration(self.scope, name).unwrap();
                 let (mut new_map, t) = creation.resolve_types(context, type_map);
                 new_map.insert(self.id, t.clone());

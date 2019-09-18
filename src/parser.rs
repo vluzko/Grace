@@ -70,18 +70,21 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         )
     );
 
-    return fmap_node(parse_result, |x| Module{imports: x.0, declarations: x.1.into_iter().map(Box::new).collect()});
+    return fmap_node(parse_result, |x| Module{
+        imports: x.0.into_iter().map(Box::new).collect(), 
+        declarations: x.1.into_iter().map(Box::new).collect()
+    });
 }
 
 /// Match an import statement.
-fn import<'a>(input: PosStr<'a>) -> Res<'a, (Vec<Identifier>, Option<Identifier>)> {
+fn import<'a>(input: PosStr<'a>) -> Res<'a, Node<Import>> {
     let parse_result = preceded!(input, IMPORT, 
         pair!(
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
             optc!(preceded!(AS, IDENTIFIER))
         )
     );
-    return parse_result;
+    return fmap_node(parse_result, |(x, y)| Import{path: x, alias: y});
 }
 
 /// Match a block.
@@ -757,7 +760,7 @@ pub mod expr_parsers {
     enum PostIdent {
         Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
         Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-        Access{attributes: Identifier}
+        Access{attribute: Identifier}
     }
 
     /// Match a list of arguments in a function call.
@@ -807,8 +810,8 @@ pub mod expr_parsers {
                     PostIdent::Call{args, kwargs} => {
                         tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
                     },
-                    PostIdent::Access{attributes} => {
-                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
+                    PostIdent::Access{attribute} => {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attribute: attribute};
                     }
                     PostIdent::Index{slices} => {
                         tree_base = Expr::Index {slices: slices};
@@ -903,7 +906,7 @@ pub mod expr_parsers {
             DOT,
             IDENTIFIER
         );
-        return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
+        return fmap_iresult(result, |x| PostIdent::Access{attribute: x});
     }
 
     // Literal expressions.
@@ -1168,7 +1171,7 @@ pub mod expr_parsers {
             simple_check_failed("(a, b =  true, c)", trailer);
 
 
-            check_match(".asdf_   ", trailer, PostIdent::Access{attributes: Identifier::from("asdf_")});
+            check_match(".asdf_   ", trailer, PostIdent::Access{attribute: Identifier::from("asdf_")});
 
             check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
                 slices: vec!(
@@ -1633,15 +1636,17 @@ mod tests {
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
            ),
-           imports: vec!((vec!(Identifier::from("foo")), None))
+           imports: vec!(Box::new(Node::from(Import{path: vec!(Identifier::from("foo")), alias: None})))
        }))
     }        
     #[test]
     fn parse_imports() {
-        check_match("import foo.bar.baz", import, (vec!(
-            Identifier::from("foo"), 
-            Identifier::from("bar"), 
-            Identifier::from("baz")), None));
+        check_match("import foo.bar.baz", import, Node::from(Import{
+            path: vec!(
+                Identifier::from("foo"), 
+                Identifier::from("bar"), 
+                Identifier::from("baz")), alias: None
+        }));
     }
 
     #[test]

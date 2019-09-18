@@ -25,11 +25,11 @@ impl ToBytecode for Node<Module> {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
 
         let mut imports = vec!();
-        for (dotted_path, rep_name) in &self.data.imports {
-            let path = itertools::join(dotted_path.iter(), "/");
+        for import in &self.data.imports {
+            let path = itertools::join(import.data.path.iter(), "/");
             let (module, _, imported_types, _) = compile_from_file(path);
             for dec in module.data.declarations {
-                let module_access = itertools::join(dotted_path.iter(), ".");
+                let module_access = itertools::join(import.data.path.iter(), ".");
                 // let heading = get_function_heading(&module_access, &dec, &imported_types);
                 let heading = match dec.data {
                     Stmt::FunctionDecStmt{ref name, ref args, ..} => {
@@ -42,7 +42,7 @@ impl ToBytecode for Node<Module> {
                         };
     
                         let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");
-                        let new_name = format!("{}.{}", module_access, match rep_name {
+                        let new_name = format!("{}.{}", module_access, match &import.data.alias {
                             Some(x) => x,
                             None => name
                         });

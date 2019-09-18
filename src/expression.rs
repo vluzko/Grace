@@ -23,7 +23,13 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
-    pub imports: Vec<(Vec<Identifier>, Option<Identifier>)>
+    pub imports: Vec<Box<Node<Import>>>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Import {
+    pub path: Vec<Identifier>,
+    pub alias: Option<Identifier>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -55,7 +61,7 @@ pub enum Expr {
     BinaryExpr      {operator: BinaryOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},
     UnaryExpr       {operator: UnaryOperator, operand: Box<Node<Expr>>},
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
-    AttributeAccess {base: Box<Node<Expr>>, attributes: Identifier},
+    AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
@@ -70,12 +76,6 @@ pub enum Expr {
     SetLiteral      (Vec<Node<Expr>>),
     TupleLiteral    (Vec<Node<Expr>>),
     MapLiteral      (Vec<(Identifier, Node<Expr>)>)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Import {
-    Value(Vec<Identifier>, Option<String>),
-    Multiple(String, Vec<(Identifier, Option<String>)>)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

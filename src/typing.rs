@@ -137,6 +137,20 @@ impl Type {
             _ => false
         };
     }
+
+    pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
+        return match self {
+            Type::Module(attributes) | Type::Record (attributes) => {
+                for (attr_name, attr_type) in attributes {
+                    if attribute == attr_name {
+                        return attr_type.clone();
+                    }
+                }
+                panic!()
+            },
+            _ => panic!("The provided type doesn't have attributes.")
+        };
+    }
 }
 
 impl Add for Type {
@@ -523,7 +537,13 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 }
                 new_map.insert(self.id, t.clone());
                 (new_map, t)
-            }
+            },
+            Expr::AttributeAccess{ref base, ref attribute} => {
+                let (mut new_map, base_type) = base.resolve_types(context, type_map);
+                let attribute_type = base_type.resolve_attribute(attribute);
+                new_map.insert(self.id, attribute_type.clone());
+                (new_map, attribute_type)
+            },
             _ => panic!()
         };
     }

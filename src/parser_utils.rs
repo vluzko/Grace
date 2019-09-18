@@ -457,6 +457,7 @@ pub mod iresult_helpers {
         };
     }
 
+    /// Map the contents and wrap a Node around it.
     pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
         where F: Fn(X) -> T {
         return match res {

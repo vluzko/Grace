@@ -213,11 +213,15 @@ impl ToBytecode for Node<Expr> {
                     false => "0".to_string()
                 }
             },
+            &Expr::VecLiteral(ref _exprs) => {
+                let _size = _exprs.len();
+
+                panic!()
+            },
             _ => panic!()
         };
         return bytecode_rep;
     }
-
 }
 
 impl ToBytecode for ComparisonOperator {
@@ -303,7 +307,7 @@ mod tests {
         #[test]
         fn test_generate_array() {
             let input = "let x = [1, 2, 3]".as_bytes();
-            let (stmt, context, type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
             println!("{}", bytecode);
         }
         

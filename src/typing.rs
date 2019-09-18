@@ -544,6 +544,17 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 new_map.insert(self.id, attribute_type.clone());
                 (new_map, attribute_type)
             },
+            Expr::VecLiteral(exprs) => {
+                let mut vec_t = Type::Undetermined;
+                for expr in exprs {
+                    let res = expr.resolve_types(context, type_map);
+                    type_map = res.0;
+                    vec_t = vec_t.merge(&res.1);
+                }
+
+                (type_map, Type::Vector(Box::new(vec_t)))
+            },
+            
             _ => panic!()
         };
     }

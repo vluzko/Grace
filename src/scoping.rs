@@ -419,6 +419,15 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 self.scope = parent_id;
                 new_context
             },
+            Expr::VecLiteral(exprs) | Expr::SetLiteral(exprs) | Expr::TupleLiteral(exprs) => {
+                let mut new_context = empty_context();
+                for expr in exprs {
+                    new_context.extend(expr.gen_scopes(parent_id, context));
+                    self.scope = parent_id;
+                }
+                new_context
+            },
+            
             _ => panic!()
         };
 

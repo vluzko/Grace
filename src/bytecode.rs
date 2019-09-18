@@ -292,6 +292,23 @@ mod tests {
     use super::*;
     use compiler_layers;
 
+    #[cfg(test)]
+    mod statements {
+    }
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        #[test]
+        fn test_generate_array() {
+            let input = "let x = [1, 2, 3]".as_bytes();
+            let (stmt, context, type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
+            println!("{}", bytecode);
+        }
+        
+    }
+
     #[test]
     pub fn test_generate_function_call() {
         let (function_call, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Block>>(
@@ -301,7 +318,59 @@ mod tests {
     }
 
     #[test]
-   pub fn test_generate_module() {
+    fn test_generate_add() {
+        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 + 6".as_bytes());
+        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.add".to_string());
+        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6".as_bytes());
+        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "f32.const 5.0\nf64.promote/f32\ni32.const 6\nf64.convert_s/i32\nf64.add".to_string());
+        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 + 6.0".as_bytes());
+        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 5\nf64.convert_s/i32\nf32.const 6.0\nf64.promote/f32\nf64.add".to_string());
+        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6.0".as_bytes());
+        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "f32.const 5.0\nf32.const 6.0\nf32.add".to_string());
+    }
+
+    #[test]
+    fn test_generate_subtract() {
+        let (sub_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("1 - 2".as_bytes());
+        let bytecode = sub_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 1\ni32.const 2\ni32.sub".to_string());
+    }
+
+    #[test]
+    fn test_generate_multiply() {
+        let (mult_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("3 * 4".as_bytes());
+        let bytecode = mult_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 3\ni32.const 4\ni32.mul".to_string());
+    }
+
+    #[test]
+    fn test_generate_divide() {
+        let (div_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("8 / 9".as_bytes());
+        let bytecode = div_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 8\nf64.convert_s/i32\ni32.const 9\nf64.convert_s/i32\nf64.div".to_string());
+    }
+
+    #[test]
+    fn test_generate_rem() {
+        let (rem_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 % 6".as_bytes());
+        let bytecode = rem_expr.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.rem_u".to_string());
+    }
+
+    #[test]
+    fn test_generate_assignment() {
+        // let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
+        let (stmt, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Stmt>>("foo = 3".as_bytes());
+        let bytecode = stmt.generate_bytecode(&context, &mut type_map);
+        assert_eq!(bytecode, "i32.const 3\nset_local $foo".to_string());
+    }
+
+    #[test]
+   fn test_generate_module() {
        let (module, context, mut type_map) = 
        compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
        let mod_bytecode = r#"(module
@@ -323,7 +392,7 @@ get_local $x
    }
 
     #[test]
-    pub fn test_generate_function() {
+    fn test_generate_function() {
         let (func_stmt, context, mut type_map) = 
         compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
         let bytecode = func_stmt.generate_bytecode(&context, &mut type_map);
@@ -335,57 +404,5 @@ set_local $x
 get_local $x
 )
 (export "a" (func $a))"#);
-    }
-
-    #[test]
-    pub fn test_generate_add() {
-        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 + 6".as_bytes());
-        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.add".to_string());
-        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6".as_bytes());
-        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "f32.const 5.0\nf64.promote/f32\ni32.const 6\nf64.convert_s/i32\nf64.add".to_string());
-        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 + 6.0".as_bytes());
-        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 5\nf64.convert_s/i32\nf32.const 6.0\nf64.promote/f32\nf64.add".to_string());
-        let (add_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5.0 + 6.0".as_bytes());
-        let bytecode = add_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "f32.const 5.0\nf32.const 6.0\nf32.add".to_string());
-    }
-
-    #[test]
-    pub fn test_generate_subtract() {
-        let (sub_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("1 - 2".as_bytes());
-        let bytecode = sub_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 1\ni32.const 2\ni32.sub".to_string());
-    }
-
-    #[test]
-    pub fn test_generate_multiply() {
-        let (mult_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("3 * 4".as_bytes());
-        let bytecode = mult_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 3\ni32.const 4\ni32.mul".to_string());
-    }
-
-    #[test]
-    pub fn test_generate_divide() {
-        let (div_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("8 / 9".as_bytes());
-        let bytecode = div_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 8\nf64.convert_s/i32\ni32.const 9\nf64.convert_s/i32\nf64.div".to_string());
-    }
-
-    #[test]
-    pub fn test_generate_rem() {
-        let (rem_expr, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Expr>>("5 % 6".as_bytes());
-        let bytecode = rem_expr.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 5\ni32.const 6\ni32.rem_u".to_string());
-    }
-
-    #[test]
-    pub fn test_generate_assignment() {
-        // let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
-        let (stmt, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Stmt>>("foo = 3".as_bytes());
-        let bytecode = stmt.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 3\nset_local $foo".to_string());
     }
 }

@@ -49,9 +49,6 @@ pub trait Scoped<T> {
     /// Get all *non-Argument* declarations.
     fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier>;
 
-    /// Check that all of the objects references are valid.
-    fn check_scope(self, scope: Scope) -> bool;
-
     /// Generate scopes recursively. Returns all scopes.
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
 }
@@ -168,10 +165,6 @@ impl Scoped<Node<Module>> for Node<Module> {
         return top_level;
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
@@ -212,10 +205,6 @@ impl Scoped<Node<Block>> for Node<Block> {
         return top_level;
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-    
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
@@ -270,10 +259,6 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
             },
             _ => HashSet::new()
         };
-    }
-
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
     }
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
@@ -400,10 +385,6 @@ impl Scoped<Node<Expr>> for Node<Expr> {
 
     fn get_true_declarations(&self, _context: &Context) -> HashSet<Identifier> {
         panic!()
-    }
-
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
     }
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {

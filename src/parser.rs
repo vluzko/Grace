@@ -13,8 +13,7 @@ use typing::Type;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
-    function_declaration_stmt,
-    import
+    function_declaration_stmt
 };
 
 type StmtNode = Node<Stmt>;
@@ -58,15 +57,34 @@ impl Parseable for Node<Expr> {
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let parse_result = preceded!(input,
         opt!(between_statement),
-        many1!(complete!(
-            terminated!(
-                alt!(complete!(call!(function_declaration_stmt, 0)) | complete!(import)),
-                between_statement
+        tuple!(
+            many0c!(
+                terminated!(import, between_statement)
+            ),
+            many1c!(
+                terminated!(
+                    alt_complete!(call!(function_declaration_stmt, 0)),
+                    between_statement
+                )
             )
-        ))
+        )
     );
 
-    return fmap_node(parse_result, |x| Module{declarations: x.into_iter().map(Box::new).collect()});
+    return fmap_node(parse_result, |x| Module{
+        imports: x.0.into_iter().map(Box::new).collect(), 
+        declarations: x.1.into_iter().map(Box::new).collect()
+    });
+}
+
+/// Match an import statement.
+fn import<'a>(input: PosStr<'a>) -> Res<'a, Node<Import>> {
+    let parse_result = preceded!(input, IMPORT, 
+        pair!(
+            separated_nonempty_list_complete!(DOT, IDENTIFIER), 
+            optc!(preceded!(AS, IDENTIFIER))
+        )
+    );
+    return fmap_node(parse_result, |(x, y)| Import{path: x, alias: y});
 }
 
 /// Match a block.
@@ -113,6 +131,7 @@ pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent
     return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
 }
 
+
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
@@ -127,7 +146,6 @@ pub mod stmt_parsers {
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
             call!(try_except, indent) |
-            import |
             return_stmt |
             break_stmt |
             pass_stmt |
@@ -314,15 +332,6 @@ pub mod stmt_parsers {
         ), indent);
 
         return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
-    }
-
-    /// Match an import statement.
-    pub fn import<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = preceded!(input, IMPORT, separated_nonempty_list_complete!(
-            DOT,
-            IDENTIFIER
-        ));
-        return fmap_node(parse_result,|x| Stmt::ImportStmt (x));
     }
 
     /// Match a return statement.
@@ -562,15 +571,6 @@ pub mod stmt_parsers {
         }
 
         #[test]
-        fn parse_import_stmt() {
-            check_data("import foo.bar.baz", |x| statement(x, 0), Stmt::ImportStmt(vec!(
-                Identifier::from("foo"), 
-                Identifier::from("bar"), 
-                Identifier::from("baz"))
-            ));
-        }
-
-        #[test]
         fn parse_return_and_yield_stmts() {
             check_data("return true", |x| statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
             check_data_and_leftover("return 1  \n  ", |x| statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
@@ -760,7 +760,7 @@ pub mod expr_parsers {
     enum PostIdent {
         Call{args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
         Index{slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-        Access{attributes: Vec<Identifier>}
+        Access{attribute: Identifier}
     }
 
     /// Match a list of arguments in a function call.
@@ -810,8 +810,8 @@ pub mod expr_parsers {
                     PostIdent::Call{args, kwargs} => {
                         tree_base = Expr::FunctionCall {function: Box::new(Node::from(tree_base)), args: args, kwargs: kwargs};
                     },
-                    PostIdent::Access{attributes} => {
-                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attributes: attributes};
+                    PostIdent::Access{attribute} => {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attribute: attribute};
                     }
                     PostIdent::Index{slices} => {
                         tree_base = Expr::Index {slices: slices};
@@ -902,13 +902,11 @@ pub mod expr_parsers {
 
     /// Match an access operation following an expression.
     fn post_access<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
-        let result = many1c!(input, 
-            preceded!(
-                DOT,
-                IDENTIFIER
-            )
+        let result = preceded!(input,
+            DOT,
+            IDENTIFIER
         );
-        return fmap_iresult(result, |x| PostIdent::Access{attributes: x});
+        return fmap_iresult(result, |x| PostIdent::Access{attribute: x});
     }
 
     // Literal expressions.
@@ -1173,7 +1171,7 @@ pub mod expr_parsers {
             simple_check_failed("(a, b =  true, c)", trailer);
 
 
-            check_match(".asdf_   .   asdf", trailer, PostIdent::Access{attributes: vec!(Identifier::from("asdf_"), Identifier::from("asdf"))});
+            check_match(".asdf_   ", trailer, PostIdent::Access{attribute: Identifier::from("asdf_")});
 
             check_match("[a:b:c, :, d]", trailer, PostIdent::Index {
                 slices: vec!(
@@ -1619,26 +1617,36 @@ pub mod type_parser {
 mod tests {
     use super::*;
     #[test]
-    fn test_module() {
+    fn parse_module() {
        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           )
+           ),
+           imports: vec!()
        }))
     }
 
     #[test]
-    fn test_module_with_import() {
+    fn parse_module_with_import() {
        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
        check_match(module_str, module, Node::from(Module{
            declarations: vec!(
-               Box::new(output(import(PosStr::from("import foo")))),
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           )
+           ),
+           imports: vec!(Box::new(Node::from(Import{path: vec!(Identifier::from("foo")), alias: None})))
        }))
+    }        
+    #[test]
+    fn parse_imports() {
+        check_match("import foo.bar.baz", import, Node::from(Import{
+            path: vec!(
+                Identifier::from("foo"), 
+                Identifier::from("bar"), 
+                Identifier::from("baz")), alias: None
+        }));
     }
 
     #[test]

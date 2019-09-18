@@ -339,6 +339,7 @@ pub mod tokens {
     keyword!(FINALLY, "finally");
     keyword!(LET, "let");
     keyword!(IMPORT, "import");
+    keyword!(AS, "as");
     keyword!(RETURN, "return");
     keyword!(YIELD, "yield");
     keyword!(PASS, "pass");
@@ -456,6 +457,7 @@ pub mod iresult_helpers {
         };
     }
 
+    /// Map the contents and wrap a Node around it.
     pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
         where F: Fn(X) -> T {
         return match res {

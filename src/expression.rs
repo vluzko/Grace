@@ -22,12 +22,19 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
-    pub declarations: Vec<Box<Node<Stmt>>>
+    pub declarations: Vec<Box<Node<Stmt>>>,
+    pub imports: Vec<Box<Node<Import>>>
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Import {
+    pub path: Vec<Identifier>,
+    pub alias: Option<Identifier>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Block {
-    pub statements: Vec<Box<Node<Stmt>>>,
+    pub statements: Vec<Box<Node<Stmt>>>
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -40,7 +47,6 @@ pub enum Stmt {
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
     TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
-    ImportStmt      (Vec<Identifier>),
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,
@@ -55,7 +61,7 @@ pub enum Expr {
     BinaryExpr      {operator: BinaryOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},
     UnaryExpr       {operator: UnaryOperator, operand: Box<Node<Expr>>},
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
-    AttributeAccess {base: Box<Node<Expr>>, attributes: Vec<Identifier>},
+    AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},

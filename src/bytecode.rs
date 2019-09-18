@@ -6,6 +6,7 @@ use expression::*;
 use scoping::*;
 use typing;
 use typing::Type;
+use compiler_layers::compile_from_file;
 
 pub trait ToBytecode: Hash  {
     /// Generate WAST bytecode from an AST
@@ -17,20 +18,50 @@ pub trait ToBytecode: Hash  {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String;
 }
 
-// impl <T> ToBytecode for Node<T> where T: ToBytecode {
-    // fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
-        // return self.data.generate_bytecode(context, type_map);
-    // }
-// }
-
 impl ToBytecode for Node<Module> {
+
+    /// Generate bytecode for a module.
+    /// Is this code unbelievably ugly? Yes. Can I think of an easy way to make it prettier? No.
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
+
+        let mut imports = vec!();
+        for import in &self.data.imports {
+            let path = itertools::join(import.data.path.iter(), "/");
+            let (module, _, imported_types, _) = compile_from_file(path);
+            for dec in module.data.declarations {
+                let module_access = itertools::join(import.data.path.iter(), ".");
+                // let heading = get_function_heading(&module_access, &dec, &imported_types);
+                let heading = match dec.data {
+                    Stmt::FunctionDecStmt{ref name, ref args, ..} => {
+                        let return_bytecode = match imported_types.get(&dec.id).unwrap() {
+                            typing::Type::Function(_x, y) => match &(**y) {
+                                Type::empty => "".to_string(),
+                                x => format!("(result {})", x.wast_name())
+                            },
+                            _ => panic!()
+                        };
+    
+                        let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");
+                        let new_name = format!("{}.{}", module_access, match &import.data.alias {
+                            Some(x) => x,
+                            None => name
+                        });
+                        format!("(func ${func_name} {params} {return_type}",
+                            func_name=new_name, params=params, return_type=return_bytecode
+                        )
+                    },
+                    _ => panic!()
+                };
+                imports.push(heading);
+            }
+        }
+
         let decls = self.data.declarations.iter().map(|x| x.generate_bytecode(context, type_map));
         let joined = itertools::join(decls, "\n");
         return format!("(module\n\
-(import \"memory_management\" \"alloc_words\" (func $alloc_words (param $a i32) (result i32)))
-(import \"memory_management\" \"free_chunk\" (func $free_chunk (param $a i32) (result i32)))
-(import \"memory_management\" \"copy_many\" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+(import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+(import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import \"memory_management\" \"mem\" (memory (;0;) 1))
 {}\n)\n", joined).to_string();
     }
@@ -274,9 +305,9 @@ mod tests {
        let (module, context, mut type_map) = 
        compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
        let mod_bytecode = r#"(module
-(import "memory_management" "alloc_words" (func $alloc_words (param $a i32) (result i32)))
-(import "memory_management" "free_chunk" (func $free_chunk (param $a i32) (result i32)))
-(import "memory_management" "copy_many" (func $copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+(import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+(import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 (func $a (param $b i32) (result i32) (local $x i32)
 i32.const 5

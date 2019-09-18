@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -26,6 +27,8 @@ pub enum Type {
     Function(Vec<Type>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
+    Module(BTreeMap<Identifier, Type>),
+    Record(BTreeMap<Identifier, Type>),
     Undetermined
 }
 
@@ -132,6 +135,20 @@ impl Type {
                 }
             },
             _ => false
+        };
+    }
+
+    pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
+        return match self {
+            Type::Module(attributes) | Type::Record (attributes) => {
+                for (attr_name, attr_type) in attributes {
+                    if attribute == attr_name {
+                        return attr_type.clone();
+                    }
+                }
+                panic!()
+            },
+            _ => panic!("The provided type doesn't have attributes.")
         };
     }
 }
@@ -266,7 +283,7 @@ impl Typed<Node<Module>> for Node<Module> {
         let new_decs = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.declarations];
         return Node{
             id: self.id,
-            data: Module{ declarations: new_decs},
+            data: Module{declarations: new_decs, imports: vec!()},
             scope: self.scope
         };
     }
@@ -488,8 +505,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 (new_map, new_type)
             }
             Expr::IdentifierExpr(ref name) => {
-                // println!("scope id: {:?}.\t\tName: {:?}", self.scope, name);
-                // println!("scope: {:?}", context.get_scope(self.scope));
                 let creation = context.get_declaration(self.scope, name).unwrap();
                 let (mut new_map, t) = creation.resolve_types(context, type_map);
                 new_map.insert(self.id, t.clone());
@@ -522,7 +537,13 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 }
                 new_map.insert(self.id, t.clone());
                 (new_map, t)
-            }
+            },
+            Expr::AttributeAccess{ref base, ref attribute} => {
+                let (mut new_map, base_type) = base.resolve_types(context, type_map);
+                let attribute_type = base_type.resolve_attribute(attribute);
+                new_map.insert(self.id, attribute_type.clone());
+                (new_map, attribute_type)
+            },
             _ => panic!()
         };
     }

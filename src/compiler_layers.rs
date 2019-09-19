@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::File;
@@ -23,24 +24,24 @@ use expression::{
     Module,
     Identifier
 };
+use general_utils::{
+    extend_map,
+    get_next_module_id
+};
 
-pub trait Layer<T>{
-    fn run_from_start(&[u8]) -> T;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CompiledModule {
+    pub ast: Node<Module>,
+    pub scope: Context,
+    pub type_map: HashMap<usize, Type>
 }
 
-pub struct Bytecode{}
-
-impl Layer<String> for Bytecode {
-    fn run_from_start(_input: &[u8]) -> String {
-        panic!()
-    }
-}
-
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Compilation {
     /// The path to the main file or folder.
     pub main_path: Option<Box<Path>>,
     /// All parsed modules.
-    pub modules: HashMap<usize, Node<Module>>,
+    pub modules: HashMap<usize, CompiledModule>,
     /// Paths to all module files.
     pub module_paths: HashMap<usize, Box<Path>>,
     /// The dependency graph.
@@ -57,18 +58,64 @@ impl Compilation {
     }
 
     /// Compile an individual module.
-    pub fn compile_module(file_name: String) {
+    pub fn compile_tree(&self, file_name: &Box<Path>) -> (usize, Compilation) {
         let mut f = File::open(file_name).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
+        let mut tree = Compilation::empty();
+        let mut dependencies = vec!();
+        let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
+        for import in &parsed_module.data.imports {
+            let path = module_path_to_path(&import.data.path);
+            let (dep_id, subtree) = self.compile_tree(&path);
+            dependencies.push(dep_id);
+            tree = tree.merge(subtree);
+        }
+        // Get the scopes for the module.
+        let (id, mut init) = initial_context();
+        let context = parsed_module.gen_scopes(id, &init);
+        init.extend(context);
+        // Get the types for the module and do type_rewrites.
+        let (mut type_map, _) = parsed_module.resolve_types(&init, HashMap::new());
+        let rewritten = parsed_module.type_based_rewrite(&mut init, &mut type_map);
+        // Put the results in the tree.
+        let compiled = CompiledModule {
+            ast: rewritten,
+            scope: init,
+            type_map: type_map
+        };
+        let id = get_next_module_id();
+        tree.modules.insert(id, compiled);
+        tree.module_paths.insert(id, file_name.clone());
+        tree.dependencies.insert(id, dependencies);
+        return (id, tree);
+    }
 
-        let parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
+    pub fn merge(mut self, other: Compilation) -> Compilation {
+        self.modules = extend_map(self.modules, other.modules);
+        self.module_paths = extend_map(self.module_paths, other.module_paths);
+        self.dependencies = extend_map(self.dependencies, other.dependencies);
+        self.hashes = extend_map(self.hashes, other.hashes);
+        return self;
+    }
 
+    pub fn empty() -> Compilation {
+        return Compilation {
+            main_path: None,
+            modules: HashMap::new(),
+            module_paths: HashMap::new(),
+            dependencies: HashMap::new(),
+            hashes: HashMap::new()
+        };
     }
 }
 
-fn module_path_to_path(module_path: Vec<Identifier>) -> Box<Path> {
-    let path = Path::new(module_path.get(0).unwrap());
+fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
+    let mut path = PathBuf::new();
+    for component in module_path {
+        path.push(component.name.as_str());
+    }
+    return path.into_boxed_path();
 }
 
 pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<usize, Type>, String){

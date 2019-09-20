@@ -15,7 +15,7 @@ use scoping::{
     Context,
     CanModifyScope,
     initial_context,
-    empty_scope
+    base_scope
 };
 // use typing;
 use typing::{
@@ -84,7 +84,7 @@ impl Compilation {
         // Set everything up for compiling the dependencies.
         let mut tree = Compilation::empty();
         let mut dependencies = vec!();
-        let mut init_scope = empty_scope();
+        let mut init_scope = base_scope();
         let mut init_type_map = HashMap::new();
 
         // Compile dependencies

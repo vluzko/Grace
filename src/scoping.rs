@@ -57,7 +57,7 @@ pub trait Scoped<T> {
 }
 
 /// Create an empty scope.
-pub fn empty_scope() -> Scope {
+pub fn base_scope() -> Scope {
     return Scope{
         parent_id: None,
         declarations: BTreeMap::new(),
@@ -67,7 +67,7 @@ pub fn empty_scope() -> Scope {
 
 /// Create a context containing only the empty scope.
 pub fn initial_context() -> (usize, Context) {
-    let empty = empty_scope();
+    let empty = base_scope();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);

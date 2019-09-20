@@ -54,6 +54,17 @@ pub enum Stmt {
     ContinueStmt,
 }
 
+impl Stmt {
+    pub fn get_name(&self) -> Identifier {
+        return match self {
+            Stmt::AssignmentStmt{ref name, ..} => name.clone(),
+            Stmt::LetStmt{ref typed_name, ..} => typed_name.name.clone(),
+            Stmt::FunctionDecStmt{ref name, ..} => name.clone(),
+            x => panic!("get_name called on an enum value that doesn't have a name: {:?}", x)
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     MatchExpr       {value: Box<Node<Expr>>, cases: Vec<(Node<Expr>, Node<Expr>)>},

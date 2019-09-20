@@ -5,13 +5,17 @@ use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::File;
 
+extern crate itertools;
+
 use parser::Parseable;
 use position_tracker::PosStr;
 // use scoping;
 use scoping::{
     Scoped,
     Context,
-    initial_context
+    CanModifyScope,
+    initial_context,
+    empty_scope
 };
 // use typing;
 use typing::{
@@ -26,14 +30,31 @@ use expression::{
 };
 use general_utils::{
     extend_map,
+    get_next_id,
+    get_next_scope_id,
     get_next_module_id
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledModule {
+    pub id: usize,
     pub ast: Node<Module>,
-    pub scope: Context,
-    pub type_map: HashMap<usize, Type>
+    pub context: Context,
+    pub type_map: HashMap<usize, Type>,
+    // The path to the module file.
+    pub path: Box<Path>,
+    // The dependencies of this module.
+    pub dependencies: Vec<usize>,
+    // The MD5 hash of the *file* describing the module.
+    pub hash: u64
+}
+
+impl CompiledModule {
+    fn full_name(&self) -> String {
+        let joined = self.path.components().into_iter();
+        panic!()
+    }
+
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,13 +62,7 @@ pub struct Compilation {
     /// The path to the main file or folder.
     pub main_path: Option<Box<Path>>,
     /// All parsed modules.
-    pub modules: HashMap<usize, CompiledModule>,
-    /// Paths to all module files.
-    pub module_paths: HashMap<usize, Box<Path>>,
-    /// The dependency graph.
-    pub dependencies: HashMap<usize, Vec<usize>>,
-    /// File hashes
-    pub hashes: HashMap<usize, u64>
+    pub modules: HashMap<usize, CompiledModule>
 }
 
 impl Compilation {
@@ -57,55 +72,90 @@ impl Compilation {
         f.read_to_string(&mut file_contents).unwrap();
     }
 
-    /// Compile an individual module.
+    /// Compile the module tree rooted at the given file name.
     pub fn compile_tree(&self, file_name: &Box<Path>) -> (usize, Compilation) {
         let mut f = File::open(file_name).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
+
+        // Parse the module
+        let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
+
+        // Set everything up for compiling the dependencies.
         let mut tree = Compilation::empty();
         let mut dependencies = vec!();
-        let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
+        let mut init_scope = empty_scope();
+        let mut init_type_map = HashMap::new();
+
+        // Compile dependencies
         for import in &parsed_module.data.imports {
             let path = module_path_to_path(&import.data.path);
-            let (dep_id, subtree) = self.compile_tree(&path);
-            dependencies.push(dep_id);
-            tree = tree.merge(subtree);
-        }
-        // Get the scopes for the module.
-        let (id, mut init) = initial_context();
-        let context = parsed_module.gen_scopes(id, &init);
-        init.extend(context);
-        // Get the types for the module and do type_rewrites.
-        let (mut type_map, _) = parsed_module.resolve_types(&init, HashMap::new());
-        let rewritten = parsed_module.type_based_rewrite(&mut init, &mut type_map);
-        // Put the results in the tree.
-        let compiled = CompiledModule {
-            ast: rewritten,
-            scope: init,
-            type_map: type_map
-        };
-        let id = get_next_module_id();
-        tree.modules.insert(id, compiled);
-        tree.module_paths.insert(id, file_name.clone());
-        tree.dependencies.insert(id, dependencies);
-        return (id, tree);
-    }
+            let (sub_id, sub_tree) = self.compile_tree(&path);
+            let sub_module = sub_tree.modules.get(&sub_id).unwrap();
 
+            let submodule_name = itertools::join(import.data.path.iter().map(|x| x.name.clone()), ".");
+
+            // Add the imported functions to scope and types.
+            for func_dec in &sub_module.ast.data.declarations {
+                let full_name = Identifier{name: format!("{}.{}", submodule_name, func_dec.data.get_name())};
+                let import_id = get_next_id();
+
+                // Add the imported function to the initial scope.
+                init_scope.declarations.insert(full_name.clone(), CanModifyScope::Import(import_id));
+                init_scope.declaration_order.insert(full_name, init_scope.declaration_order.len());
+
+                // Add the imported function type to the starting type map.
+                let func_type = sub_module.type_map.get(&func_dec.id).unwrap();
+                init_type_map.insert(import_id, func_type.clone());
+            }
+
+            dependencies.push(sub_id);
+            tree = tree.merge(sub_tree);
+        }
+
+        // Create the initial context for the current module.
+        let mut scopes = HashMap::new();
+        let scope_id = get_next_scope_id();
+        scopes.insert(scope_id, init_scope);
+        let mut init_context = Context {
+            scopes: scopes,
+            containing_scopes: HashMap::new()
+        };
+
+        // Calculate all scopes for the current module.
+        let context = parsed_module.gen_scopes(scope_id, &init_context);
+        init_context.extend(context);
+
+        // Get the types for the module and do type_rewrites.
+        let (mut type_map, _) = parsed_module.resolve_types(&init_context, init_type_map);
+        let rewritten = parsed_module.type_based_rewrite(&mut init_context, &mut type_map);
+
+        // Put the results in the tree.
+        let module_id = get_next_module_id();
+        let compiled = CompiledModule {
+            id: module_id,
+            ast: rewritten,
+            context: init_context,
+            type_map: type_map,
+            path: file_name.clone(),
+            dependencies: dependencies,
+            hash: 0
+        };
+        tree.modules.insert(module_id, compiled);
+        return (module_id, tree);
+    }
+    
+    /// Merge two Compilations together.
     pub fn merge(mut self, other: Compilation) -> Compilation {
         self.modules = extend_map(self.modules, other.modules);
-        self.module_paths = extend_map(self.module_paths, other.module_paths);
-        self.dependencies = extend_map(self.dependencies, other.dependencies);
-        self.hashes = extend_map(self.hashes, other.hashes);
         return self;
     }
 
+    /// Create an empty Compilation.
     pub fn empty() -> Compilation {
         return Compilation {
             main_path: None,
             modules: HashMap::new(),
-            module_paths: HashMap::new(),
-            dependencies: HashMap::new(),
-            hashes: HashMap::new()
         };
     }
 }

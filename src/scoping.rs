@@ -11,10 +11,10 @@ extern crate cute;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
     // A map from Scope ids to Scopes.
-    scopes: HashMap<usize, Scope>,
+    pub scopes: HashMap<usize, Scope>,
     // A map from Node ids to Scope ids. Each node that modifies scope
     // maps to the scope it's contained in.
-    containing_scopes: HashMap<usize, usize>
+    pub containing_scopes: HashMap<usize, usize>
 }
 
 /// A sum type for things that can modify scope.
@@ -27,16 +27,19 @@ pub struct Context {
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>),
     Expression(*const Node<Expr>),
-    Argument(*const Node<Stmt>, usize)
+    Argument(*const Node<Stmt>, usize),
+    Import(usize)
 }
 
 /// A single layer of scope.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {
+    /// The id of the parent scope.
     pub parent_id: Option<usize>,
-    // pub parent_scope: Option<*const Scope>,
     // TODO: Consider replacing with an insertion ordered map.
+    /// The identifiers declared in this scope, and raw pointers to the statements that created them.
     pub declarations: BTreeMap<Identifier, CanModifyScope>,
+    /// The order in which each identifier was declared. (Important for blocks.)
     pub declaration_order: BTreeMap<Identifier, usize>
 }
 

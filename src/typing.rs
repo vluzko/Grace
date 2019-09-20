@@ -262,7 +262,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
             },
             scoping::CanModifyScope::Argument(..) => {
                 // Hack: assume all arguments are i32s for now
-                return (type_map, Type::i32);
+                (type_map, Type::i32)
                 // let arg = unsafe {
                 //     &**ptr
                 // };
@@ -273,6 +273,10 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                 // } else {
                 //     arg.resolve_types(context, type_map)
                 // }                
+            },
+            scoping::CanModifyScope::Import(ref id) => {
+                let t = type_map.get(id).unwrap().clone();
+                (type_map, t)
             }
         };
     }

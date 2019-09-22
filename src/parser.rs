@@ -9,7 +9,10 @@ use position_tracker::PosStr;
 use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
+
 use typing::Type;
+use general_utils::get_next_id;
+
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
@@ -77,14 +80,14 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 }
 
 /// Match an import statement.
-fn import<'a>(input: PosStr<'a>) -> Res<'a, Node<Import>> {
+fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
     let parse_result = preceded!(input, IMPORT, 
         pair!(
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
             optc!(preceded!(AS, IDENTIFIER))
         )
     );
-    return fmap_node(parse_result, |(x, y)| Import{path: x, alias: y});
+    return fmap_iresult(parse_result, |(x, y)| Import{id: get_next_id(), path: x, alias: y, values: vec!()});
 }
 
 /// Match a block.
@@ -1636,17 +1639,20 @@ mod tests {
                Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
                Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
            ),
-           imports: vec!(Box::new(Node::from(Import{path: vec!(Identifier::from("foo")), alias: None})))
+           imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
        }))
     }        
     #[test]
     fn parse_imports() {
-        check_match("import foo.bar.baz", import, Node::from(Import{
+        check_match("import foo.bar.baz", import, Import{
+            id: 0,
             path: vec!(
                 Identifier::from("foo"), 
                 Identifier::from("bar"), 
-                Identifier::from("baz")), alias: None
-        }));
+                Identifier::from("baz")), 
+            alias: None,
+            values: vec!()
+        });
     }
 
     #[test]

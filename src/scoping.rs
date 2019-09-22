@@ -28,7 +28,8 @@ pub enum CanModifyScope {
     Statement(*const Node<Stmt>),
     Expression(*const Node<Expr>),
     Argument(*const Node<Stmt>, usize),
-    Import(usize)
+    ImportedModule(usize),
+    ImportedFunction(usize)
 }
 
 /// A single layer of scope.

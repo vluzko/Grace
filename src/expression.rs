@@ -14,6 +14,7 @@ pub struct Node<T> {
     pub scope: usize
 }
 
+/// We don't compare the ids of Nodes.
 impl <T> PartialEq for Node<T> where T:PartialEq {
     fn eq(&self, other: &Node<T>) -> bool {
         return self.data == other.data && self.scope == other.scope;
@@ -23,13 +24,22 @@ impl <T> PartialEq for Node<T> where T:PartialEq {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
-    pub imports: Vec<Box<Node<Import>>>
+    pub imports: Vec<Box<Import>>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Eq, Hash)]
 pub struct Import {
+    pub id: usize,
     pub path: Vec<Identifier>,
-    pub alias: Option<Identifier>
+    pub alias: Option<Identifier>,
+    pub values: Vec<Identifier>
+}
+
+/// We don't compare the ids of import statements.
+impl PartialEq for Import {
+    fn eq(&self, other: &Import) -> bool {
+        return self.path == other.path && self.alias == other.alias && self.values == other.values;
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

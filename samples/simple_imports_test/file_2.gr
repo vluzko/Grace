@@ -1,0 +1,4 @@
+import file_3
+
+fn func_2():
+    return 2

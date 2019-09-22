@@ -64,7 +64,9 @@ pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
 where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
     for (k, v) in b.into_iter() {
         if a.contains_key(&k) {
-            panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
+            if a.get(&k) != Some(&v) {
+                panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
+            }
         } else {
             a.insert(k, v);
         }

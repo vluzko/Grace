@@ -4,7 +4,8 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
-use std::fs::File;
+use std::fs::{File, canonicalize};
+use std::env;
 
 extern crate itertools;
 
@@ -59,9 +60,11 @@ pub struct Compilation {
 
 impl Compilation {
     pub fn compile(file_name: String) -> Compilation {
-        let path = Box::from(Path::new(&file_name));
-        let mut compilation = Compilation::compile_tree(&path);
-        compilation.main_path = Some(path);
+        let path = Path::new(&file_name);
+        env::set_current_dir(path.parent().unwrap());
+        let boxed = Box::from(Path::new(path.file_name().unwrap()));
+        let mut compilation = Compilation::compile_tree(&boxed);
+        compilation.main_path = Some(canonicalize(path).unwrap().into_boxed_path());
 
         return compilation;
     }
@@ -177,12 +180,20 @@ fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
     for component in module_path {
         path.push(component.name.as_str());
     }
-    return path.into_boxed_path();
+    return match path.is_dir() {
+        true => path.into_boxed_path(),
+        false => {
+            path.set_extension("gr");
+            path.into_boxed_path()
+        }
+    };
 }
 
+/// Convert a file path to an internal module reference.
 fn path_to_module_reference(path: &Box<Path>) -> String {
     // WOW it's hard to convert Paths to Strings.
-    return itertools::join(path.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
+    let without_extension = path.parent().unwrap().join(path.file_stem().unwrap());
+    return itertools::join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
 }
 
 pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<usize, Type>, String){
@@ -226,9 +237,10 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
 mod tests {
     use super::*;
 
+    use std::env;
     #[test]
     fn simple_imports_test() {
-        let file_path = ".samples/simple_imports_test/file_1.gr".to_string();
+        let file_path = "./samples/simple_imports_test/file_1.gr".to_string();
         let compiled = Compilation::compile(file_path);
         println!("{:?}", compiled);
     }

@@ -73,6 +73,7 @@ pub struct Compilation {
 
 impl Compilation {
     pub fn compile(file_name: String) -> Compilation {
+        let original_path = env::current_dir();
         let path = Path::new(&file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
         env::set_current_dir(path.parent().unwrap());
@@ -83,6 +84,7 @@ impl Compilation {
             root_name: Some(path_to_module_reference(&boxed))
         };
         compilation.compile_tree(&boxed);
+        env::set_current_dir(original_path.unwrap());
         return compilation;
     }
 
@@ -190,7 +192,7 @@ impl Compilation {
             let relative_path = &Path::new(&path_str);
             let bytecode = v.ast.generate_bytecode(&v.context, &mut v.type_map.clone());
             let mut output_path = output_dir.join(relative_path);
-            output_path.set_extension(".gr");
+            output_path.set_extension("wat");
             create_dir_all(output_path.parent().unwrap());
             let outfile = File::create(output_path);
             outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
@@ -278,8 +280,7 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
 
 mod tests {
     use super::*;
-
-    use std::env;
+  
     #[test]
     fn simple_imports_test() {
         let file_path = "./samples/simple_imports_test/file_1.gr".to_string();

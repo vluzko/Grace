@@ -77,8 +77,7 @@ pub fn initial_context() -> (usize, Context) {
 }
 
 pub fn empty_context() -> Context {
-    let scopes = HashMap::new();
-    return Context{scopes, containing_scopes: HashMap::new()};
+    return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
 }
 
 impl Context {

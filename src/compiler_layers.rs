@@ -187,7 +187,7 @@ impl Compilation {
             dependencies: dependencies,
             hash: 0
         };
-        self.modules.insert(module_name.clone(), compiled);
+        self.modules.insert(module_name, compiled);
     }
     
     /// Merge two Compilations together.

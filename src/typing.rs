@@ -27,7 +27,6 @@ pub enum Type {
     Function(Vec<Type>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
-    Module(BTreeMap<Identifier, Type>),
     Record(BTreeMap<Identifier, Type>),
     Undetermined
 }
@@ -140,7 +139,7 @@ impl Type {
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
-            Type::Module(attributes) | Type::Record (attributes) => {
+            Type::Record (attributes) => {
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         return attr_type.clone();
@@ -150,6 +149,16 @@ impl Type {
             },
             _ => panic!("The provided type doesn't have attributes.")
         };
+    }
+
+    pub fn flatten_to_record(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
+        let mut rec = Type::Record(base);
+        for ident in idents[1..].iter().rev() {
+            let mut map = BTreeMap::new();
+            map.insert(ident.clone(), rec);
+            rec = Type::Record(map);
+        }
+        return rec;
     }
 }
 
@@ -262,7 +271,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
             },
             scoping::CanModifyScope::Argument(..) => {
                 // Hack: assume all arguments are i32s for now
-                return (type_map, Type::i32);
+                (type_map, Type::i32)
                 // let arg = unsafe {
                 //     &**ptr
                 // };
@@ -273,6 +282,13 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                 // } else {
                 //     arg.resolve_types(context, type_map)
                 // }                
+            },
+            scoping::CanModifyScope::ImportedFunction(id) => {
+                let func_type = type_map.get(id).unwrap().clone();
+                (type_map, func_type)
+            },
+            scoping::CanModifyScope::ImportedModule(id) => {
+                panic!()
             }
         };
     }
@@ -544,6 +560,17 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 new_map.insert(self.id, attribute_type.clone());
                 (new_map, attribute_type)
             },
+            Expr::VecLiteral(exprs) => {
+                let mut vec_t = Type::Undetermined;
+                for expr in exprs {
+                    let res = expr.resolve_types(context, type_map);
+                    type_map = res.0;
+                    vec_t = vec_t.merge(&res.1);
+                }
+
+                (type_map, Type::Vector(Box::new(vec_t)))
+            },
+            
             _ => panic!()
         };
     }
@@ -627,6 +654,29 @@ mod test {
     use compiler_layers;
 
     #[cfg(test)]
+    mod types {
+
+        use super::*;
+
+        #[test]
+        fn test_flatten() {
+            let idents = vec!(Identifier::from("a"), Identifier::from("b"));
+            let bottom_map = btreemap!{
+                Identifier::from("c") => Type::Function(vec!(Type::i32), Box::new(Type::i64)),
+            };
+            let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
+            let second_map = btreemap!{
+                Identifier::from("b") => Type::Record(bottom_map),
+            };
+            let first_map = btreemap!{
+                Identifier::from("a") => Type::Record(second_map),
+            };
+            assert_eq!(Type::Record(first_map), record_type);
+            // let expected = Type::Record()
+        }
+    }
+
+    #[cfg(test)]
     mod expressions {
         use super::*;
 
@@ -665,12 +715,12 @@ mod test {
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {
         let if_stmt = r#"
-let a = 1
-let b = 1
-if 0:
-    return a
-else:
-    return b"#;
+        let a = 1
+        let b = 1
+        if 0:
+            return a
+        else:
+            return b"#;
         return if_stmt.as_bytes(); 
     }
 }

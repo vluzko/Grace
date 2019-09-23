@@ -64,7 +64,9 @@ pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
 where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
     for (k, v) in b.into_iter() {
         if a.contains_key(&k) {
-            panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
+            if a.get(&k) != Some(&v) {
+                panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
+            }
         } else {
             a.insert(k, v);
         }
@@ -74,7 +76,9 @@ where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
 
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static SCOPE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static MODULE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
+// Return a unique node ID.
 pub fn get_next_id() -> usize {
     let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as usize;
@@ -83,6 +87,12 @@ pub fn get_next_id() -> usize {
 /// Return a unique scope ID.
 pub fn get_next_scope_id() -> usize {
     let next_id = SCOPE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    return next_id as usize;
+}
+
+/// Return a unique module ID.
+pub fn get_next_module_id() -> usize {
+    let next_id = MODULE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as usize;
 }
 

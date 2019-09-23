@@ -11,10 +11,10 @@ extern crate cute;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
     // A map from Scope ids to Scopes.
-    scopes: HashMap<usize, Scope>,
+    pub scopes: HashMap<usize, Scope>,
     // A map from Node ids to Scope ids. Each node that modifies scope
     // maps to the scope it's contained in.
-    containing_scopes: HashMap<usize, usize>
+    pub containing_scopes: HashMap<usize, usize>
 }
 
 /// A sum type for things that can modify scope.
@@ -27,16 +27,20 @@ pub struct Context {
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>),
     Expression(*const Node<Expr>),
-    Argument(*const Node<Stmt>, usize)
+    Argument(*const Node<Stmt>, usize),
+    ImportedModule(usize),
+    ImportedFunction(usize)
 }
 
 /// A single layer of scope.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {
+    /// The id of the parent scope.
     pub parent_id: Option<usize>,
-    // pub parent_scope: Option<*const Scope>,
     // TODO: Consider replacing with an insertion ordered map.
+    /// The identifiers declared in this scope, and raw pointers to the statements that created them.
     pub declarations: BTreeMap<Identifier, CanModifyScope>,
+    /// The order in which each identifier was declared. (Important for blocks.)
     pub declaration_order: BTreeMap<Identifier, usize>
 }
 
@@ -49,15 +53,12 @@ pub trait Scoped<T> {
     /// Get all *non-Argument* declarations.
     fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier>;
 
-    /// Check that all of the objects references are valid.
-    fn check_scope(self, scope: Scope) -> bool;
-
     /// Generate scopes recursively. Returns all scopes.
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
 }
 
 /// Create an empty scope.
-pub fn empty_scope() -> Scope {
+pub fn base_scope() -> Scope {
     return Scope{
         parent_id: None,
         declarations: BTreeMap::new(),
@@ -67,7 +68,7 @@ pub fn empty_scope() -> Scope {
 
 /// Create a context containing only the empty scope.
 pub fn initial_context() -> (usize, Context) {
-    let empty = empty_scope();
+    let empty = base_scope();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
@@ -75,10 +76,9 @@ pub fn initial_context() -> (usize, Context) {
     return (id, context);
 }
 
-pub fn empty_context() -> Context {
-    let scopes = HashMap::new();
-    return Context{scopes, containing_scopes: HashMap::new()};
-}
+// pub fn empty_context() -> Context {
+//     return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
+// }
 
 impl Context {
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
@@ -141,6 +141,10 @@ impl Context {
             }
         }
     }
+
+    pub fn empty() -> Context {
+        return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
+    }
 }
 
 impl CanModifyScope {
@@ -168,10 +172,6 @@ impl Scoped<Node<Module>> for Node<Module> {
         return top_level;
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
@@ -180,7 +180,7 @@ impl Scoped<Node<Module>> for Node<Module> {
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
 
-        let mut new_context = empty_context();
+        let mut new_context = Context::empty();
         new_context.add_scope(scope_id, new_scope);
 
         for stmt in self.data.declarations.iter_mut() {
@@ -212,10 +212,6 @@ impl Scoped<Node<Block>> for Node<Block> {
         return top_level;
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-    
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let declarations = BTreeMap::new();
         let declaration_order = BTreeMap::new();
@@ -223,7 +219,7 @@ impl Scoped<Node<Block>> for Node<Block> {
         let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
-        let mut new_context = empty_context();
+        let mut new_context = Context::empty();
         new_context.add_scope(scope_id, new_scope);
         // Compute the child contexts.
         for stmt in self.data.statements.iter_mut() {
@@ -272,10 +268,6 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let raw_pointer = self as *const Node<Stmt>;
         let new_context = match &mut self.data {
@@ -318,7 +310,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     None => {}
                 };
                 
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
                 let scope_id = new_context.new_scope(new_scope);
                 self.scope = scope_id;
@@ -402,14 +394,10 @@ impl Scoped<Node<Expr>> for Node<Expr> {
         panic!()
     }
 
-    fn check_scope(self, _scope: Scope) -> bool {
-        panic!();
-    }
-
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let new_context = match &mut self.data {
             Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
@@ -417,10 +405,10 @@ impl Scoped<Node<Expr>> for Node<Expr> {
             },
             Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::String(_) | Expr::IdentifierExpr(_) => {
                 self.scope = parent_id;
-                empty_context()
+                Context::empty()
             },
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(function.gen_scopes(parent_id, context));
                 for arg in args {
                     new_context.extend(arg.gen_scopes(parent_id, context));
@@ -432,12 +420,21 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 new_context
             },
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
                 new_context
             },
+            Expr::VecLiteral(exprs) | Expr::SetLiteral(exprs) | Expr::TupleLiteral(exprs) => {
+                let mut new_context = Context::empty();
+                for expr in exprs {
+                    new_context.extend(expr.gen_scopes(parent_id, context));
+                    self.scope = parent_id;
+                }
+                new_context
+            },
+            
             _ => panic!()
         };
 
@@ -528,7 +525,7 @@ mod test {
                 let (id, init) = initial_context();
                 for literal in literals.iter_mut() {
                     let context = literal.gen_scopes(id, &init);
-                    assert_eq!(context, empty_context());
+                    assert_eq!(context, Context::empty());
                 }
             }
         }

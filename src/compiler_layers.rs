@@ -14,6 +14,7 @@ use position_tracker::PosStr;
 // use scoping;
 use scoping::{
     Scoped,
+    Scope,
     Context,
     CanModifyScope,
     initial_context,
@@ -49,6 +50,18 @@ pub struct CompiledModule {
     pub hash: u64
 }
 
+impl CompiledModule {
+    pub fn get_type(&self) -> Type {
+        let mut attribute_map = BTreeMap::new();
+        for func_dec in &self.ast.data.declarations {
+            let func_type = self.type_map.get(&func_dec.id).unwrap().clone();
+            attribute_map.insert(func_dec.data.get_name(), func_type);
+        }
+
+        return Type::Record(attribute_map);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Compilation {
     /// The path to the main file or folder.
@@ -61,16 +74,47 @@ pub struct Compilation {
 impl Compilation {
     pub fn compile(file_name: String) -> Compilation {
         let path = Path::new(&file_name);
+        let absolute_path = canonicalize(path).unwrap().into_boxed_path();
         env::set_current_dir(path.parent().unwrap());
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
-        let mut compilation = Compilation::compile_tree(&boxed);
-        compilation.main_path = Some(canonicalize(path).unwrap().into_boxed_path());
-
+        let mut compilation = Compilation{
+            main_path: Some(absolute_path),
+            modules: HashMap::new(),
+            root_name: Some(path_to_module_reference(&boxed))
+        };
+        compilation.compile_tree(&boxed);
         return compilation;
     }
 
+    /// 
+    fn get_submodule_type(sub_module: &CompiledModule, import: &Import) -> Type {
+
+        // Add the types of all the imported functions to the record type.
+        let mut record_type = BTreeMap::new();
+        for func_dec in &sub_module.ast.data.declarations {
+            let func_type = sub_module.type_map.get(&func_dec.id).unwrap().clone();
+            record_type.insert(func_dec.data.get_name(), func_type);
+        }
+
+        // The type of the full module (including all the parent modules).
+        let module_type = Type::flatten_to_record(&import.path, record_type);
+
+        return module_type;
+    }
+
+    fn add_submodule_to_scope(import: &Import, mut init_scope: Scope) -> Scope {
+
+        // Add the imported module to scope.
+        // TODO: I think this can just be in scoping.
+        let module_root = import.path.get(0).unwrap().clone();
+        init_scope.declarations.insert(module_root.clone(), CanModifyScope::ImportedFunction(import.id));
+        init_scope.declaration_order.insert(module_root, init_scope.declaration_order.len());
+
+        return init_scope;
+    }
+
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(file_name: &Box<Path>) -> Compilation {
+    pub fn compile_tree(&mut self, file_name: &Box<Path>) {
         let mut f = File::open(file_name).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
@@ -79,11 +123,6 @@ impl Compilation {
         let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
         let module_name = path_to_module_reference(&file_name);
         // Set everything up for compiling the dependencies.
-        let mut tree = Compilation {
-            main_path: None,
-            modules: HashMap::new(),
-            root_name: Some(module_name.clone())
-        };
         let mut new_imports = vec!();
         let mut dependencies = vec!();
         let mut init_scope = base_scope();
@@ -94,39 +133,32 @@ impl Compilation {
             let path = module_path_to_path(&import.path);
             let submodule_name = itertools::join(import.path.iter().map(|x| x.name.clone()), ".");
 
-            let sub_tree = Compilation::compile_tree(&path);
-            let sub_module = sub_tree.modules.get(&submodule_name).unwrap();
+            if self.modules.contains_key(&submodule_name) {
+                continue;
+            } else {
+                self.compile_tree(&path);
+                let sub_module = self.modules.get(&submodule_name).unwrap();
 
-            // A vector containing all the names of the imported functions.
-            let exports = sub_module.ast.data.declarations.iter().map(
-                |x| x.data.get_name().clone()
-            ).collect();
+                // A vector containing all the names of the imported functions.
+                let exports = sub_module.ast.data.declarations.iter().map(
+                    |x| x.data.get_name().clone()
+                ).collect();
 
-            // Add the imported module to scope.
-            // TODO: I think this can just be in scoping.
-            let module_root = import.path.get(0).unwrap().clone();
-            init_scope.declarations.insert(module_root.clone(), CanModifyScope::ImportedFunction(import.id));
-            init_scope.declaration_order.insert(module_root, init_scope.declaration_order.len());
+                // Add the imported functions to scope.
+                init_scope = Compilation::add_submodule_to_scope(import, init_scope);
 
-            // Add the types of all the imported functions to the record type.
-            let mut record_type = BTreeMap::new();
-            for func_dec in &sub_module.ast.data.declarations {
-                let func_type = sub_module.type_map.get(&func_dec.id).unwrap().clone();
-                record_type.insert(func_dec.data.get_name(), func_type);
+                // The type of the full module (including all the parent modules).
+                let module_type = Compilation::get_submodule_type(sub_module, import);
+                init_type_map.insert(import.id, module_type);
+
+                new_imports.push(Box::new(Import {
+                    id: import.id,
+                    path: import.path.clone(),
+                    alias: import.alias.clone(),
+                    values: exports
+                }));
+                dependencies.push(submodule_name);
             }
-
-            // The type of the full module (including all the parent modules).
-            let module_type = Type::flatten_to_record(&import.path, record_type);
-            init_type_map.insert(import.id, module_type);
-
-            new_imports.push(Box::new(Import {
-                id: import.id,
-                path: import.path.clone(),
-                alias: import.alias.clone(),
-                values: exports
-            }));
-            dependencies.push(submodule_name);
-            tree = tree.merge(sub_tree);
         }
 
         // Create the initial context for the current module.
@@ -155,8 +187,7 @@ impl Compilation {
             dependencies: dependencies,
             hash: 0
         };
-        tree.modules.insert(module_name.clone(), compiled);
-        return tree;
+        self.modules.insert(module_name.clone(), compiled);
     }
     
     /// Merge two Compilations together.
@@ -243,5 +274,6 @@ mod tests {
         let file_path = "./samples/simple_imports_test/file_1.gr".to_string();
         let compiled = Compilation::compile(file_path);
         println!("{:?}", compiled);
+        assert_eq!(compiled.modules.len(), 3);
     }
 }

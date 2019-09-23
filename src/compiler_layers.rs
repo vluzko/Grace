@@ -4,7 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
-use std::fs::{File, canonicalize};
+use std::fs::{File, canonicalize, create_dir_all};
 use std::env;
 
 extern crate itertools;
@@ -86,7 +86,8 @@ impl Compilation {
         return compilation;
     }
 
-    /// 
+    /// Get the full record type of a submodule.
+    /// a.b.c turns into Record(a => Record(b => Record(c => functions_in_c)))
     fn get_submodule_type(sub_module: &CompiledModule, import: &Import) -> Type {
 
         // Add the types of all the imported functions to the record type.
@@ -103,7 +104,6 @@ impl Compilation {
     }
 
     fn add_submodule_to_scope(import: &Import, mut init_scope: Scope) -> Scope {
-
         // Add the imported module to scope.
         // TODO: I think this can just be in scoping.
         let module_root = import.path.get(0).unwrap().clone();
@@ -122,6 +122,7 @@ impl Compilation {
         // Parse the module
         let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
         let module_name = path_to_module_reference(&file_name);
+
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec!();
         let mut dependencies = vec!();
@@ -133,9 +134,7 @@ impl Compilation {
             let path = module_path_to_path(&import.path);
             let submodule_name = itertools::join(import.path.iter().map(|x| x.name.clone()), ".");
 
-            if self.modules.contains_key(&submodule_name) {
-                continue;
-            } else {
+            if !self.modules.contains_key(&submodule_name) {
                 self.compile_tree(&path);
                 let sub_module = self.modules.get(&submodule_name).unwrap();
 
@@ -183,6 +182,25 @@ impl Compilation {
         self.modules.insert(module_name, compiled);
     }
     
+    // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
+    pub fn generate_wast_files(&self, output_dir: &Box<Path>) -> Option<String> {
+        let mut ret_str = None;
+        for (k, v) in self.modules.iter() {
+            let path_str = k.replace(".", "/");
+            let relative_path = &Path::new(&path_str);
+            let bytecode = v.ast.generate_bytecode(&v.context, &mut v.type_map.clone());
+            let mut output_path = output_dir.join(relative_path);
+            output_path.set_extension(".gr");
+            create_dir_all(output_path.parent().unwrap());
+            let outfile = File::create(output_path);
+            outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
+            if Some(k) == self.root_name.as_ref() {
+                ret_str = Some(bytecode);
+            }
+        }
+        return ret_str;
+    }
+
     /// Merge two Compilations together.
     pub fn merge(mut self, other: Compilation) -> Compilation {
         self.modules = extend_map(self.modules, other.modules);
@@ -268,5 +286,13 @@ mod tests {
         let compiled = Compilation::compile(file_path);
         println!("{:?}", compiled);
         assert_eq!(compiled.modules.len(), 3);
+    }
+
+    #[test]
+    fn simple_imports_compile_test() {
+        let file_path = "./samples/simple_imports_test/file_1.gr".to_string();
+        let compiled = Compilation::compile(file_path);
+        let outpath = Path::new("./samples/outputs/simple_imports_test/");
+        let bytecode = compiled.generate_wast_files(&Box::from(outpath));
     }
 }

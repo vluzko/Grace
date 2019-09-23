@@ -21,12 +21,6 @@ pub trait ToBytecode {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String;
 }
 
-impl Compilation {
-    fn generate_bytecode(&self) -> String {
-        panic!()
-    }
-}
-
 impl ToBytecode for Node<Module> {
 
     /// Generate bytecode for a module.

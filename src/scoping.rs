@@ -76,9 +76,9 @@ pub fn initial_context() -> (usize, Context) {
     return (id, context);
 }
 
-pub fn empty_context() -> Context {
-    return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
-}
+// pub fn empty_context() -> Context {
+//     return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
+// }
 
 impl Context {
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
@@ -141,6 +141,10 @@ impl Context {
             }
         }
     }
+
+    pub fn empty() -> Context {
+        return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
+    }
 }
 
 impl CanModifyScope {
@@ -176,7 +180,7 @@ impl Scoped<Node<Module>> for Node<Module> {
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
 
-        let mut new_context = empty_context();
+        let mut new_context = Context::empty();
         new_context.add_scope(scope_id, new_scope);
 
         for stmt in self.data.declarations.iter_mut() {
@@ -215,7 +219,7 @@ impl Scoped<Node<Block>> for Node<Block> {
         let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
         let scope_id = general_utils::get_next_scope_id();
         self.scope = scope_id;
-        let mut new_context = empty_context();
+        let mut new_context = Context::empty();
         new_context.add_scope(scope_id, new_scope);
         // Compute the child contexts.
         for stmt in self.data.statements.iter_mut() {
@@ -306,7 +310,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     None => {}
                 };
                 
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
                 let scope_id = new_context.new_scope(new_scope);
                 self.scope = scope_id;
@@ -393,7 +397,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let new_context = match &mut self.data {
             Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
@@ -401,10 +405,10 @@ impl Scoped<Node<Expr>> for Node<Expr> {
             },
             Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::String(_) | Expr::IdentifierExpr(_) => {
                 self.scope = parent_id;
-                empty_context()
+                Context::empty()
             },
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(function.gen_scopes(parent_id, context));
                 for arg in args {
                     new_context.extend(arg.gen_scopes(parent_id, context));
@@ -416,14 +420,14 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 new_context
             },
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
                 new_context
             },
             Expr::VecLiteral(exprs) | Expr::SetLiteral(exprs) | Expr::TupleLiteral(exprs) => {
-                let mut new_context = empty_context();
+                let mut new_context = Context::empty();
                 for expr in exprs {
                     new_context.extend(expr.gen_scopes(parent_id, context));
                     self.scope = parent_id;
@@ -521,7 +525,7 @@ mod test {
                 let (id, init) = initial_context();
                 for literal in literals.iter_mut() {
                     let context = literal.gen_scopes(id, &init);
-                    assert_eq!(context, empty_context());
+                    assert_eq!(context, Context::empty());
                 }
             }
         }

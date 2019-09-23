@@ -140,9 +140,7 @@ impl Compilation {
                 let sub_module = self.modules.get(&submodule_name).unwrap();
 
                 // A vector containing all the names of the imported functions.
-                let exports = sub_module.ast.data.declarations.iter().map(
-                    |x| x.data.get_name().clone()
-                ).collect();
+                let exports = sub_module.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
 
                 // Add the imported functions to scope.
                 init_scope = Compilation::add_submodule_to_scope(import, init_scope);
@@ -162,13 +160,8 @@ impl Compilation {
         }
 
         // Create the initial context for the current module.
-        let mut scopes = HashMap::new();
-        let scope_id = get_next_scope_id();
-        scopes.insert(scope_id, init_scope);
-        let mut init_context = Context {
-            scopes: scopes,
-            containing_scopes: HashMap::new()
-        };
+        let mut init_context = Context::empty();
+        let scope_id = init_context.new_scope(init_scope);
 
         // Calculate all scopes for the current module.
         let context = parsed_module.gen_scopes(scope_id, &init_context);

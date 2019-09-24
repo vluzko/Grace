@@ -679,11 +679,7 @@ mod test {
             let second_map = btreemap!{
                 Identifier::from("b") => Type::Record(bottom_map),
             };
-            let first_map = btreemap!{
-                Identifier::from("a") => Type::Record(second_map),
-            };
-            assert_eq!(Type::Record(first_map), record_type);
-            // let expected = Type::Record()
+            assert_eq!(Type::Record(second_map), record_type);
         }
     }
 

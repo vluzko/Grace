@@ -4,7 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
-use std::fs::{File, canonicalize, create_dir_all};
+use std::fs::{File, canonicalize, create_dir_all, read_to_string};
 use std::env;
 
 extern crate itertools;
@@ -60,6 +60,10 @@ impl CompiledModule {
 
         return Type::Record(attribute_map);
     }
+
+    pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {
+        return itertools::join(idents.iter().map(|x| x.name.clone()), ".");
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -84,6 +88,7 @@ impl Compilation {
             root_name: Some(path_to_module_reference(&boxed))
         };
         compilation.compile_tree(&boxed);
+        let res = compilation.modules.get(&"file_1".to_string()).unwrap().ast.clone();
         env::set_current_dir(original_path.unwrap());
         return compilation;
     }
@@ -109,7 +114,7 @@ impl Compilation {
         // Add the imported module to scope.
         // TODO: I think this can just be in scoping.
         let module_root = import.path.get(0).unwrap().clone();
-        init_scope.declarations.insert(module_root.clone(), CanModifyScope::ImportedFunction(import.id));
+        init_scope.declarations.insert(module_root.clone(), CanModifyScope::ImportedModule(import.id));
         init_scope.declaration_order.insert(module_root, init_scope.declaration_order.len());
 
         return init_scope;
@@ -136,29 +141,34 @@ impl Compilation {
             let path = module_path_to_path(&import.path);
             let submodule_name = itertools::join(import.path.iter().map(|x| x.name.clone()), ".");
 
-            if !self.modules.contains_key(&submodule_name) {
-                self.compile_tree(&path);
-                let sub_module = self.modules.get(&submodule_name).unwrap();
+            let submodule = match self.modules.get(&submodule_name) {
+                Some(x) => x,
+                None => {
+                    self.compile_tree(&path);
+                    self.modules.get(&submodule_name).unwrap()
+                }
+            };
 
-                // A vector containing all the names of the imported functions.
-                let exports = sub_module.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
+            // A vector containing all the names of the imported functions.
+            let exports = submodule.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
 
-                // Add the imported functions to scope.
-                init_scope = Compilation::add_submodule_to_scope(import, init_scope);
+            // Add the imported functions to scope.
+            init_scope = Compilation::add_submodule_to_scope(import, init_scope);
 
-                // The type of the full module (including all the parent modules).
-                let module_type = Compilation::get_submodule_type(sub_module, import);
-                init_type_map.insert(import.id, module_type);
+            // The type of the full module (including all the parent modules).
+            let module_type = Compilation::get_submodule_type(submodule, import);
+            init_type_map.insert(import.id, module_type);
 
-                new_imports.push(Box::new(Import {
-                    id: import.id,
-                    path: import.path.clone(),
-                    alias: import.alias.clone(),
-                    values: exports
-                }));
-                dependencies.push(submodule_name);
-            }
+            new_imports.push(Box::new(Import {
+                id: import.id,
+                path: import.path.clone(),
+                alias: import.alias.clone(),
+                values: exports
+            }));
+            dependencies.push(submodule_name);
         }
+
+        parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
         let mut init_context = Context::empty();
@@ -283,17 +293,24 @@ mod tests {
   
     #[test]
     fn simple_imports_test() {
-        let file_path = "./samples/simple_imports_test/file_1.gr".to_string();
+        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
         let compiled = Compilation::compile(file_path);
-        println!("{:?}", compiled);
+        // println!("{:?}", compiled);
         assert_eq!(compiled.modules.len(), 3);
     }
 
     #[test]
     fn simple_imports_compile_test() {
-        let file_path = "./samples/simple_imports_test/file_1.gr".to_string();
+        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
         let compiled = Compilation::compile(file_path);
-        let outpath = Path::new("./samples/outputs/simple_imports_test/");
-        let bytecode = compiled.generate_wast_files(&Box::from(outpath));
+        let outpath = Path::new("./test_data/outputs/simple_imports_test/");
+        let _ = compiled.generate_wast_files(&Box::from(outpath));
+        for i in (1..4).rev() {
+            let actual_file = format!("./test_data/outputs/simple_imports_test/file_{}.wat", i);
+            let expected_file = format!("./test_data/outputs/simple_imports_test/file_{}_expected.wat", i);
+            let actual = read_to_string(actual_file).unwrap();
+            let expected = read_to_string(expected_file).unwrap();
+            assert_eq!(actual, expected);
+        }
     }
 }

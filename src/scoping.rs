@@ -156,6 +156,13 @@ impl CanModifyScope {
             }
         };
     }
+
+    pub fn get_id(&self) -> usize {
+        return match self {
+            CanModifyScope::ImportedModule(val) => *val,
+            _ => panic!()
+        };
+    }
 }
 
 impl Scoped<Node<Module>> for Node<Module> {

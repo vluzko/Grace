@@ -8,7 +8,7 @@ use typing;
 use typing::Type;
 use compiler_layers::{
     compile_from_file,
-    Compilation
+    CompiledModule
 };
 
 pub trait ToBytecode {
@@ -26,47 +26,35 @@ impl ToBytecode for Node<Module> {
     /// Generate bytecode for a module.
     /// Is this code unbelievably ugly? Yes. Can I think of an easy way to make it prettier? No.
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
-
         let mut imports = vec!();
         for import in &self.data.imports {
-            let path = itertools::join(import.path.iter(), "/");
-            let (module, _, imported_types, _) = compile_from_file(path);
-            for dec in module.data.declarations {
-                let module_access = itertools::join(import.path.iter(), ".");
-                // let heading = get_function_heading(&module_access, &dec, &imported_types);
-                let heading = match dec.data {
-                    Stmt::FunctionDecStmt{ref name, ref args, ..} => {
-                        let return_bytecode = match imported_types.get(&dec.id).unwrap() {
-                            typing::Type::Function(_x, y) => match &(**y) {
-                                Type::empty => "".to_string(),
-                                x => format!("(result {})", x.wast_name())
-                            },
-                            _ => panic!()
-                        };
-    
-                        let params = itertools::join(args.iter().map(|x| format!("(param ${} {})", x.0.to_string(), x.1.wast_name())), " ");
-                        let new_name = format!("{}.{}", module_access, match &import.alias {
-                            Some(x) => x,
-                            None => name
-                        });
-                        format!("(func ${func_name} {params} {return_type}",
-                            func_name=new_name, params=params, return_type=return_bytecode
-                        )
-                    },
-                    _ => panic!()
-                };
-                imports.push(heading);
+            let import_stmt = context.get_declaration(self.scope, &import.path.get(0).unwrap()).unwrap();
+            let import_type = type_map.get(&import_stmt.get_id()).unwrap();
+            for value in &import.values {
+                let mut ident_vec = import.path[1..].to_vec().clone();
+                ident_vec.push(value.clone());
+                let func_type = import_type.resolve_nested_record(&ident_vec);
+                let module_name = CompiledModule::get_internal_module_name(&import.path);
+                let type_str = func_type.wast_name();
+                let import_stmt = format!("(import \"{mod}\" \"{func}\" (func $.{mod}.{func} {type}))", 
+                    mod=module_name, 
+                    func=value.name,
+                    type=type_str
+                );
+                imports.push(import_stmt);
             }
         }
 
         let decls = self.data.declarations.iter().map(|x| x.generate_bytecode(context, type_map));
+        let import_str = itertools::join(imports.iter(), "\n");
         let joined = itertools::join(decls, "\n");
         return format!("(module\n\
 (import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))
 (import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))
 (import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
 (import \"memory_management\" \"mem\" (memory (;0;) 1))
-{}\n)\n", joined).to_string();
+{}
+{}\n)\n", import_str, joined).to_string();
     }
 }
 

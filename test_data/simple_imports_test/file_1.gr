@@ -2,5 +2,5 @@ import file_2
 import file_3
 
 
-fn func_1():
+fn func_1() -> i32:
     return 1

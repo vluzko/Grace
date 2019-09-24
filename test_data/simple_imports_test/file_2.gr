@@ -1,4 +1,4 @@
 import file_3
 
-fn func_2():
+fn func_2() -> i32:
     return 2

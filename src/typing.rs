@@ -74,6 +74,9 @@ impl Type {
             &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
             &Type::empty => "".to_string(),
+            &Type::Function(ref args, ref ret) => {
+                format!("(result {})", ret.wast_name())
+            }
             _ => panic!()
         }
     }
@@ -159,6 +162,14 @@ impl Type {
             rec = Type::Record(map);
         }
         return rec;
+    }
+
+    pub fn resolve_nested_record(&self, idents: &Vec<Identifier>) -> Type {
+        let mut t = self.clone();
+        for ident in idents {
+            t = t.resolve_attribute(ident);
+        }
+        return t.clone();
     }
 }
 
@@ -299,7 +310,7 @@ impl Typed<Node<Module>> for Node<Module> {
         let new_decs = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.declarations];
         return Node{
             id: self.id,
-            data: Module{declarations: new_decs, imports: vec!()},
+            data: Module{declarations: new_decs, imports: self.data.imports},
             scope: self.scope
         };
     }
@@ -668,11 +679,7 @@ mod test {
             let second_map = btreemap!{
                 Identifier::from("b") => Type::Record(bottom_map),
             };
-            let first_map = btreemap!{
-                Identifier::from("a") => Type::Record(second_map),
-            };
-            assert_eq!(Type::Record(first_map), record_type);
-            // let expected = Type::Record()
+            assert_eq!(Type::Record(second_map), record_type);
         }
     }
 

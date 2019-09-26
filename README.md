@@ -23,7 +23,7 @@ Grace mostly draws inspiration from Python and Haskell.
     * Decorators
     * An equality operator that makes any sense at all.
 
-## Roadmap to v 0.1
+## Roadmap to MVP
 Grace is *very much* in development. It's not remotely usable as a language yet. We're planning on declaring version 0.1 once Grace reaches roughly the same level of functionality as C, meaning:
 
 * ~~Parsing~~
@@ -38,7 +38,7 @@ Grace is *very much* in development. It's not remotely usable as a language yet.
         * ~~while~~
         * ~~if~~
         * break
-    * Imports
+    * ~~Imports~~
     * Structs
 * ~~Simple type coercion (i32 -> i64, etc)~~
 * ~~Basic type checking and inference~~

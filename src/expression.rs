@@ -53,6 +53,7 @@ pub enum Stmt {
     LetStmt         {typed_name: TypedIdent, expression: Node<Expr>},
     FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, vararg: Option<Identifier>,
         kwargs: Vec<(Identifier, Type, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Type},
+    StructDec       {name: Identifier, fields: Vec<(Identifier, Type)>},
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
@@ -78,10 +79,11 @@ impl Stmt {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
     MatchExpr       {value: Box<Node<Expr>>, cases: Vec<(Node<Expr>, Node<Expr>)>},
-    ComparisonExpr  {operator: ComparisonOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},//TODO take this out
+    ComparisonExpr  {operator: ComparisonOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},
     BinaryExpr      {operator: BinaryOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},
     UnaryExpr       {operator: UnaryOperator, operand: Box<Node<Expr>>},
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
+    StructLiteral   {base: Box<Node<Expr>>, fields: Vec<(Identifier, Node<Expr>)>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},

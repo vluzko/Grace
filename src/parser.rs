@@ -817,7 +817,7 @@ pub mod expr_parsers {
                         tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attribute: attribute};
                     }
                     PostIdent::Index{slices} => {
-                        tree_base = Expr::Index {slices: slices};
+                        tree_base = Expr::Index {base: Box::new(Node::from(tree_base)), slices: slices};
                     }
                 };
             };

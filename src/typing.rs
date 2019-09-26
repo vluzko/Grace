@@ -114,14 +114,13 @@ impl Type {
 
     pub fn size(&self) -> usize {
         return match self {
-            Type::i32 => 32,
-            Type::i64 => 64,
-            Type::f32 => 32,
-            Type::f64 => 64,
-            Type::ui32 => 64,
-            Type::boolean => 32,
-            Type::string => 32,
-            Type::Sum(ref types) => types.iter().map(|x| x.size()).fold(usize::MIN, usize::max),
+            Type::i32 => 1,
+            Type::i64 => 2,
+            Type::f32 => 1,
+            Type::f64 => 2,
+            Type::ui32 => 2,
+            Type::boolean => 1,
+            Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
             _ => panic!()
         }
@@ -578,6 +577,7 @@ impl Typed<Node<Expr>> for Node<Expr> {
                     type_map = res.0;
                     vec_t = vec_t.merge(&res.1);
                 }
+                type_map.insert(self.id, vec_t.clone());
 
                 (type_map, Type::Vector(Box::new(vec_t)))
             },

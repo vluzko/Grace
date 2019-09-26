@@ -74,7 +74,7 @@ impl Type {
             &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
             &Type::empty => "".to_string(),
-            &Type::Function(ref args, ref ret) => {
+            &Type::Function(ref _args, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
             _ => panic!()
@@ -173,7 +173,10 @@ impl Type {
 
     pub fn resolve_slice(&self, slices: &Vec<(Option<Type>, Option<Type>, Option<Type>)>) -> Type {
         return match self {
-            Type::Vector(ref t) => (**t).clone(),
+            Type::Vector(ref t) => match slices.get(0).unwrap() {
+                (Some(_x), None, None) => (**t).clone(),
+                _ => panic!()
+            },
             _ => panic!()
         };
     }
@@ -304,9 +307,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                 let func_type = type_map.get(id).unwrap().clone();
                 (type_map, func_type)
             },
-            scoping::CanModifyScope::ImportedModule(id) => {
-                panic!()
-            }
+            _ => panic!()
         };
     }
 }

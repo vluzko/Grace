@@ -1,4 +1,3 @@
-use std::hash::Hash;
 use std::collections::HashMap;
 extern crate itertools;
 
@@ -7,7 +6,6 @@ use scoping::*;
 use typing;
 use typing::Type;
 use compiler_layers::{
-    compile_from_file,
     CompiledModule
 };
 
@@ -337,7 +335,6 @@ mod tests {
         fn test_array_access() {
             let input = "let x = [1, 2, 3]\nlet y = x[0]".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
-            println!("{:?}", _stmt);
             let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x\nget_local $x\ni32.const 0\ni32.local 1\ncall $.arrays.get_value\nset_local $y".to_string();
             assert_eq!(bytecode, expected);
         }

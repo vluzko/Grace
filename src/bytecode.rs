@@ -1,4 +1,3 @@
-use std::hash::Hash;
 use std::collections::HashMap;
 extern crate itertools;
 
@@ -7,7 +6,6 @@ use scoping::*;
 use typing;
 use typing::Type;
 use compiler_layers::{
-    compile_from_file,
     CompiledModule
 };
 
@@ -187,6 +185,21 @@ impl ToBytecode for Node<Expr> {
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
             },
+            &Expr::Index{ref base, ref slices} => {
+                // For now, nested slices are not possible.
+                assert_eq!(slices.len(), 1);
+                let slice = slices.get(0).unwrap();
+                let t_size = type_map.get(&self.id).unwrap().size();
+                let index_bytecode = match &slice {
+                    // For now, ranges are not possible.
+                    (Some(start), None, None) => {
+                        start.generate_bytecode(context, type_map)
+                    },
+                    _ => panic!()
+                };
+                let base_bytecode = base.generate_bytecode(context, type_map);
+                format!("{}\n{}\ni32.local {}\ncall $.arrays.get_value", base_bytecode, index_bytecode, t_size)
+            },
             &Expr::IdentifierExpr (ref ident) => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
@@ -204,10 +217,25 @@ impl ToBytecode for Node<Expr> {
                     false => "0".to_string()
                 }
             },
-            &Expr::VecLiteral(ref _exprs) => {
-                let _size = _exprs.len();
+            &Expr::VecLiteral(ref exprs) => {
+                let size = exprs.len();
+                let t_size = type_map.get(&self.id).unwrap().size();
 
-                panic!()
+                let create_array = format!(
+                    "i32.const {}\ni32.const {}\ncall $.arrays.create_array", size, t_size);
+                // put the values on the stack in reverse order,
+                // then call set_value on each value in order
+                let mut values = vec!();
+                let mut calls = vec!();
+                for (i, expr) in exprs.iter().enumerate() {
+                    let value = expr.generate_bytecode(context, type_map);
+                    let call = format!("i32.local {}\ni32.local {}\ncall $.arrays.set_value", i, t_size);
+                    values.insert(0, value);  // values go in backwards
+                    calls.push(call);                    
+                }
+                format!("{}\n{}\n{}", itertools::join(values.iter(), "\n"), 
+                    create_array, itertools::join(calls.iter(), "\n")
+                ) 
             },
             _ => panic!()
         };
@@ -299,7 +327,16 @@ mod tests {
         fn test_generate_array() {
             let input = "let x = [1, 2, 3]".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
-            println!("{}", bytecode);
+            let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x".to_string();
+            assert_eq!(bytecode, expected);
+        }
+
+        #[test]
+        fn test_array_access() {
+            let input = "let x = [1, 2, 3]\nlet y = x[0]".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x\nget_local $x\ni32.const 0\ni32.local 1\ncall $.arrays.get_value\nset_local $y".to_string();
+            assert_eq!(bytecode, expected);
         }
         
     }

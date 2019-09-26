@@ -4,7 +4,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
-use std::fs::{File, canonicalize, create_dir_all, read_to_string};
+use std::fs::{File, canonicalize, create_dir_all};
 use std::env;
 
 extern crate itertools;
@@ -32,10 +32,7 @@ use expression::{
     Identifier,
     Import
 };
-use general_utils::{
-    extend_map,
-    get_next_scope_id,
-};
+use general_utils::extend_map;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledModule {
@@ -80,7 +77,10 @@ impl Compilation {
         let original_path = env::current_dir();
         let path = Path::new(&file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
-        env::set_current_dir(path.parent().unwrap());
+        match env::set_current_dir(path.parent().unwrap()) {
+            Ok(_) => {},
+            Err(x) => panic!("{:?}", x)
+        };
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
         let mut compilation = Compilation{
             main_path: Some(absolute_path),
@@ -88,8 +88,10 @@ impl Compilation {
             root_name: Some(path_to_module_reference(&boxed))
         };
         compilation.compile_tree(&boxed);
-        let res = compilation.modules.get(&"file_1".to_string()).unwrap().ast.clone();
-        env::set_current_dir(original_path.unwrap());
+        match env::set_current_dir(original_path.unwrap()) {
+            Ok(_) => {},
+            Err(x) => panic!("{:?}", x)
+        }
         return compilation;
     }
 
@@ -203,7 +205,10 @@ impl Compilation {
             let bytecode = v.ast.generate_bytecode(&v.context, &mut v.type_map.clone());
             let mut output_path = output_dir.join(relative_path);
             output_path.set_extension("wat");
-            create_dir_all(output_path.parent().unwrap());
+            match create_dir_all(output_path.parent().unwrap()) {
+                Ok(_) => {},
+                Err(x) => panic!("{:?}", x)
+            };
             let outfile = File::create(output_path);
             outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
             if Some(k) == self.root_name.as_ref() {
@@ -288,8 +293,10 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
     return (result, context, type_map, bytecode);
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs::read_to_string;
   
     #[test]
     fn simple_imports_test() {

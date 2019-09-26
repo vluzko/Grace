@@ -74,7 +74,7 @@ impl Type {
             &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
             &Type::empty => "".to_string(),
-            &Type::Function(ref args, ref ret) => {
+            &Type::Function(ref _args, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
             _ => panic!()
@@ -114,14 +114,13 @@ impl Type {
 
     pub fn size(&self) -> usize {
         return match self {
-            Type::i32 => 32,
-            Type::i64 => 64,
-            Type::f32 => 32,
-            Type::f64 => 64,
-            Type::ui32 => 64,
-            Type::boolean => 32,
-            Type::string => 32,
-            Type::Sum(ref types) => types.iter().map(|x| x.size()).fold(usize::MIN, usize::max),
+            Type::i32 => 1,
+            Type::i64 => 2,
+            Type::f32 => 1,
+            Type::f64 => 2,
+            Type::ui32 => 2,
+            Type::boolean => 1,
+            Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
             _ => panic!()
         }
@@ -170,6 +169,16 @@ impl Type {
             t = t.resolve_attribute(ident);
         }
         return t.clone();
+    }
+
+    pub fn resolve_slice(&self, slices: &Vec<(Option<Type>, Option<Type>, Option<Type>)>) -> Type {
+        return match self {
+            Type::Vector(ref t) => match slices.get(0).unwrap() {
+                (Some(_x), None, None) => (**t).clone(),
+                _ => panic!()
+            },
+            _ => panic!()
+        };
     }
 }
 
@@ -298,9 +307,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                 let func_type = type_map.get(id).unwrap().clone();
                 (type_map, func_type)
             },
-            scoping::CanModifyScope::ImportedModule(id) => {
-                panic!()
-            }
+            _ => panic!()
         };
     }
 }
@@ -530,28 +537,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 let (mut new_map, new_type) = operand.resolve_types(context, type_map);
                 new_map.insert(self.id, new_type.clone());
                 (new_map, new_type)
-            }
-            Expr::IdentifierExpr(ref name) => {
-                let creation = context.get_declaration(self.scope, name).unwrap();
-                let (mut new_map, t) = creation.resolve_types(context, type_map);
-                new_map.insert(self.id, t.clone());
-                (new_map, t)
-            }
-            Expr::String(_) => {
-                type_map.insert(self.id, Type::string);
-                (type_map, Type::string)
-            },
-            Expr::Float(_) => {
-                type_map.insert(self.id, Type::f32);
-                (type_map, Type::f32)
-            },
-            Expr::Bool(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
-            },
-            Expr::Int(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
                 let (mut new_map, t) = function.resolve_types(context, type_map);
@@ -571,6 +556,62 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 new_map.insert(self.id, attribute_type.clone());
                 (new_map, attribute_type)
             },
+            Expr::Index{ref base, ref slices} => {
+                let (mut new_map, base_type) = base.resolve_types(context, type_map);
+                let mut slice_types = vec!();
+                for (start, stop, step) in slices {
+                    let a = match start {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    let b = match stop {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    let c = match step {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    slice_types.push((a, b, c));
+                }
+                let result_type = base_type.resolve_slice(&slice_types);
+                new_map.insert(self.id, result_type.clone());
+                (new_map, result_type)
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let creation = context.get_declaration(self.scope, name).unwrap();
+                let (mut new_map, t) = creation.resolve_types(context, type_map);
+                new_map.insert(self.id, t.clone());
+                (new_map, t)
+            },
+            Expr::String(_) => {
+                type_map.insert(self.id, Type::string);
+                (type_map, Type::string)
+            },
+            Expr::Float(_) => {
+                type_map.insert(self.id, Type::f32);
+                (type_map, Type::f32)
+            },
+            Expr::Bool(_) => {
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
+            },
+            Expr::Int(_) => {
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
+            },
             Expr::VecLiteral(exprs) => {
                 let mut vec_t = Type::Undetermined;
                 for expr in exprs {
@@ -578,10 +619,10 @@ impl Typed<Node<Expr>> for Node<Expr> {
                     type_map = res.0;
                     vec_t = vec_t.merge(&res.1);
                 }
+                type_map.insert(self.id, vec_t.clone());
 
                 (type_map, Type::Vector(Box::new(vec_t)))
             },
-            
             _ => panic!()
         };
     }

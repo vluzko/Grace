@@ -83,7 +83,7 @@ pub enum Expr {
     UnaryExpr       {operator: UnaryOperator, operand: Box<Node<Expr>>},
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
-    Index           {slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
+    Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     MapComprehension{keys: Box<Node<Expr>>, values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},

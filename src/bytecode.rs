@@ -187,6 +187,21 @@ impl ToBytecode for Node<Expr> {
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
             },
+            &Expr::Index{ref base, ref slices} => {
+                // For now, nested slices are not possible.
+                assert_eq!(slices.len(), 1);
+                let slice = slices.get(0).unwrap();
+                let t_size = type_map.get(&self.id).unwrap().size();
+                let index_bytecode = match &slice {
+                    // For now, ranges are not possible.
+                    (Some(start), None, None) => {
+                        start.generate_bytecode(context, type_map)
+                    },
+                    _ => panic!()
+                };
+                let base_bytecode = base.generate_bytecode(context, type_map);
+                format!("{}\n{}\ni32.local {}\ncall $.arrays.get_value", base_bytecode, index_bytecode, t_size)
+            },
             &Expr::IdentifierExpr (ref ident) => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
@@ -315,6 +330,15 @@ mod tests {
             let input = "let x = [1, 2, 3]".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
             let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x".to_string();
+            assert_eq!(bytecode, expected);
+        }
+
+        #[test]
+        fn test_array_access() {
+            let input = "let x = [1, 2, 3]\nlet y = x[0]".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            println!("{:?}", _stmt);
+            let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x\nget_local $x\ni32.const 0\ni32.local 1\ncall $.arrays.get_value\nset_local $y".to_string();
             assert_eq!(bytecode, expected);
         }
         

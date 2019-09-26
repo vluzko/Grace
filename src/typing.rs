@@ -170,6 +170,13 @@ impl Type {
         }
         return t.clone();
     }
+
+    pub fn resolve_slice(&self, slices: &Vec<(Option<Type>, Option<Type>, Option<Type>)>) -> Type {
+        return match self {
+            Type::Vector(ref t) => (**t).clone(),
+            _ => panic!()
+        };
+    }
 }
 
 impl Add for Type {
@@ -529,28 +536,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 let (mut new_map, new_type) = operand.resolve_types(context, type_map);
                 new_map.insert(self.id, new_type.clone());
                 (new_map, new_type)
-            }
-            Expr::IdentifierExpr(ref name) => {
-                let creation = context.get_declaration(self.scope, name).unwrap();
-                let (mut new_map, t) = creation.resolve_types(context, type_map);
-                new_map.insert(self.id, t.clone());
-                (new_map, t)
-            }
-            Expr::String(_) => {
-                type_map.insert(self.id, Type::string);
-                (type_map, Type::string)
-            },
-            Expr::Float(_) => {
-                type_map.insert(self.id, Type::f32);
-                (type_map, Type::f32)
-            },
-            Expr::Bool(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
-            },
-            Expr::Int(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
                 let (mut new_map, t) = function.resolve_types(context, type_map);
@@ -570,6 +555,62 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 new_map.insert(self.id, attribute_type.clone());
                 (new_map, attribute_type)
             },
+            Expr::Index{ref base, ref slices} => {
+                let (mut new_map, base_type) = base.resolve_types(context, type_map);
+                let mut slice_types = vec!();
+                for (start, stop, step) in slices {
+                    let a = match start {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    let b = match stop {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    let c = match step {
+                        Some(x) => {
+                            let res = x.resolve_types(context, new_map);
+                            new_map = res.0;
+                            Some(res.1) 
+                        },
+                        None => None
+                    };
+                    slice_types.push((a, b, c));
+                }
+                let result_type = base_type.resolve_slice(&slice_types);
+                new_map.insert(self.id, result_type.clone());
+                (new_map, result_type)
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let creation = context.get_declaration(self.scope, name).unwrap();
+                let (mut new_map, t) = creation.resolve_types(context, type_map);
+                new_map.insert(self.id, t.clone());
+                (new_map, t)
+            },
+            Expr::String(_) => {
+                type_map.insert(self.id, Type::string);
+                (type_map, Type::string)
+            },
+            Expr::Float(_) => {
+                type_map.insert(self.id, Type::f32);
+                (type_map, Type::f32)
+            },
+            Expr::Bool(_) => {
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
+            },
+            Expr::Int(_) => {
+                type_map.insert(self.id, Type::i32);
+                (type_map, Type::i32)
+            },
             Expr::VecLiteral(exprs) => {
                 let mut vec_t = Type::Undetermined;
                 for expr in exprs {
@@ -581,7 +622,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
 
                 (type_map, Type::Vector(Box::new(vec_t)))
             },
-            
             _ => panic!()
         };
     }

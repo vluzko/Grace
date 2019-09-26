@@ -387,6 +387,11 @@ impl Scoped<Node<Expr>> for Node<Expr> {
 
                 usages
             },
+            Expr::Index{ref base, ref slices} => {
+                let first_slice = slices.get(0).unwrap().clone();
+                let first_usages = first_slice.0.unwrap().get_usages();
+                general_utils::m_union(base.get_usages(), first_usages)
+            },
             Expr::IdentifierExpr(ref name) => {
                 let mut usages = HashSet::new();
                 usages.insert(name.clone());
@@ -403,16 +408,19 @@ impl Scoped<Node<Expr>> for Node<Expr> {
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
         let new_context = match &mut self.data {
-            Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
+            Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
                 let mut new_context = Context::empty();
                 new_context.extend(left.gen_scopes(parent_id, context));
                 new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
                 new_context
             },
-            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::String(_) | Expr::IdentifierExpr(_) => {
+            Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
+                let mut new_context = Context::empty();
+                new_context.extend(left.gen_scopes(parent_id, context));
+                new_context.extend(right.gen_scopes(parent_id, context));
                 self.scope = parent_id;
-                Context::empty()
+                new_context
             },
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
                 let mut new_context = Context::empty();
@@ -426,12 +434,18 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 self.scope = parent_id;
                 new_context
             },
-            Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
+            Expr::Index{ref mut base, ref mut slices} => {
                 let mut new_context = Context::empty();
-                new_context.extend(left.gen_scopes(parent_id, context));
-                new_context.extend(right.gen_scopes(parent_id, context));
+                new_context.extend(base.gen_scopes(parent_id, context));
                 self.scope = parent_id;
+                let first_slice = slices.get(0).unwrap().clone();
+                let index_context = first_slice.0.unwrap().gen_scopes(parent_id, context);
+                new_context.extend(index_context);
                 new_context
+            },
+            Expr::Int(_) | Expr::Float(_) | Expr::Bool(_) | Expr::String(_) | Expr::IdentifierExpr(_) => {
+                self.scope = parent_id;
+                Context::empty()
             },
             Expr::VecLiteral(exprs) | Expr::SetLiteral(exprs) | Expr::TupleLiteral(exprs) => {
                 let mut new_context = Context::empty();

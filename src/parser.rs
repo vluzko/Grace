@@ -138,6 +138,7 @@ pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
+    use self::type_parser::any_type;
 
     /// Match any statement.
     pub fn statement<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
@@ -148,6 +149,7 @@ pub mod stmt_parsers {
             call!(for_in, indent) |
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
+            call!(struct_declaration_stmt, indent) |
             call!(try_except, indent) |
             return_stmt |
             break_stmt |
@@ -302,6 +304,59 @@ pub mod stmt_parsers {
                 None => Type::empty
             }
         });
+    }
+
+    pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+        let header = tuple!(input,
+            delimited!(
+                STRUCT,
+                IDENTIFIER,
+                terminated!(
+                    COLON,
+                    between_statement
+                )
+            ),
+            many0c!(inline_whitespace_char)
+        );
+
+        // Horrifying? Yes.
+        let result = match header {
+            Ok((i, o)) => {
+                let new_indent = o.1.len();
+                if new_indent > indent {
+                    let rest = tuple!(i,
+                         terminated!(
+                            tuple!(
+                                IDENTIFIER,
+                                preceded!(COLON, any_type)
+                            ),
+                            between_statement
+                        ), many1c!(
+                            terminated!(
+                                indented!(tuple!(
+                                    IDENTIFIER,
+                                    preceded!(COLON, any_type)
+                                ), new_indent),
+                                between_statement
+                            )
+                        )
+                    );
+                    match rest {
+                        Ok((i, mut r)) => {
+                            r.1.insert(0, r.0);
+                            Ok((i, (o.0, r.1)))
+                        },
+                        Err(x) => Err(x)
+                    }
+                } else {
+                    // TODO: Return an indentation error.
+                    panic!()
+                }
+            },
+            Err(x) => Err(x)
+        };
+
+        return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 
     /// Match an if statement.
@@ -509,6 +564,18 @@ pub mod stmt_parsers {
                 varkwarg: None,
                 block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
                 return_type: Type::i32
+            });
+        }
+
+        #[test]
+        fn parse_struct_dec() {
+            let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
+            check_data(input, |x| struct_declaration_stmt(x, 1), Stmt::StructDec{
+                name: Identifier::from("A"),
+                fields: vec!(
+                    (Identifier::from("x"), Type::i32),
+                    (Identifier::from("y"), Type::i32)
+                )
             });
         }
         

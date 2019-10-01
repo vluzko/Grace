@@ -860,6 +860,21 @@ pub mod expr_parsers {
         return parse_result;
     }
 
+    fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
+        let result = tuple!(input, 
+            separated_nonempty_list_complete!(
+                DOT,
+                IDENTIFIER
+            ),
+            delimited!(
+                OPEN_BRACE,
+                args_list,
+                CLOSE_BRACE
+            )
+        );
+        panic!()
+    }
+
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
     fn expr_with_trailer<'a>(input: PosStr<'a>) -> ExprRes {
         let ident_as_expr = |x| fmap_iresult(
@@ -867,9 +882,15 @@ pub mod expr_parsers {
             |y: Identifier| Node::from(Expr::IdentifierExpr (y))
         );
 
-        let parse_result = tuple!(input,
-            alt!(ident_as_expr | wrapped_expr),
-            many0c!(trailer)
+        let parse_result = alt_complete!(input, 
+            tuple!(
+                alt_complete!(ident_as_expr | wrapped_expr),
+                many0c!(trailer)
+            ) |
+            tuple!(
+                struct_expr,
+                value!(vec!())
+            )
         );
 
         // Convert the vector of post identifiers into a single usable expression.

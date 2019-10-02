@@ -861,17 +861,28 @@ pub mod expr_parsers {
     }
 
     fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
-        let result = tuple!(input, 
-            separated_nonempty_list_complete!(
-                DOT,
-                IDENTIFIER
-            ),
-            delimited!(
-                OPEN_BRACE,
-                args_list,
-                CLOSE_BRACE
+        let map_ident = |x| Expr::IdentifierExpr(x);
+        let map_
+        let result = alt_complete!(input,
+            IDENTIFIER |
+            tuple!(
+                preceded!(
+                    DOT,
+                    IDENTIFIER
+                ),
+                delimited!(
+                    OPEN_BRACE,
+                    args_list,
+                    CLOSE_BRACE
+                )
             )
         );
+        // let map = |x: (Vec<Identifier>, i32)| {
+        //     let mut tree_base = Expr::IdentifierExpr(x.0.get(1).unwrap().clone());
+        //     for attribute in x.0[1..].iter() {
+        //         tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attribute: attribute.clone()};
+        //     };
+        // };
         panic!()
     }
 

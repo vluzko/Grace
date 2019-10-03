@@ -317,6 +317,13 @@ mod tests {
 
     #[cfg(test)]
     mod statements {
+        use super::*;
+
+        #[test]
+        fn test_struct_declaration() {
+            let input = "struct A:\n a: i32\n b: i32".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+        }
     }
 
     #[cfg(test)]

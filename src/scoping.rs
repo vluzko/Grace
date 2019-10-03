@@ -354,7 +354,12 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
 
                 self.scope = parent_id;
                 condition_context
-            }
+            },
+            Stmt::StructDec{..} => {
+                self.scope = parent_id;
+                Context::empty()
+
+            },
             _ => panic!()
         };
 
@@ -497,6 +502,11 @@ impl Node<Block> {
                     scope.declaration_order.insert(typed_name.name.clone(), i);
                     let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
                     scope.declarations.insert(typed_name.name.clone(), scope_mod);
+                },
+                Stmt::StructDec{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    scope.declarations.insert(name.clone(), scope_mod);
                 },
                 _ => {}
             };

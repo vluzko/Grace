@@ -68,8 +68,8 @@ impl ToBytecode for Node<Block> {
 
 impl ToBytecode for Node<Stmt> {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
-        let bytecode = match &self.data {
-            &Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
+        let bytecode = match self.data {
+            Stmt::FunctionDecStmt {ref name, ref args, ref block, ..} => {
 
                 let (_, ret) = match type_map.get(&self.id).unwrap() {
                     typing::Type::Function(x, y) => (x.clone(), y.clone()),
@@ -103,7 +103,7 @@ impl ToBytecode for Node<Stmt> {
                 );
                 func_dec
             },
-            &Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
+            Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
                 match operator {
                     Assignment::Normal => {
                         let identifier_bytecode = name.generate_bytecode(context, type_map);
@@ -117,7 +117,7 @@ impl ToBytecode for Node<Stmt> {
                 }
 	        },
 	        // Only handles if x {foo}, no elifs or else
-	        &Stmt::IfStmt {ref condition, ref block, ref else_block, ..} => {
+	        Stmt::IfStmt {ref condition, ref block, ref else_block, ..} => {
 	            let condition_bytecode = condition.generate_bytecode(context, type_map);
 	            let main_block_bytecode = block.generate_bytecode(context, type_map);
 	            let else_block_bytecode = match else_block {
@@ -129,10 +129,10 @@ impl ToBytecode for Node<Stmt> {
 	            else_block_bytecode = else_block_bytecode);
 	            if_bytecode
 	        },
-            &Stmt::ReturnStmt (ref value) => {
+            Stmt::ReturnStmt (ref value) => {
                 value.generate_bytecode(context, type_map)
             },
-            &Stmt::LetStmt {ref typed_name, ref expression, ..} => {
+            Stmt::LetStmt {ref typed_name, ref expression, ..} => {
 	        let identifier_bytecode = typed_name.name.generate_bytecode(context, type_map);
                 let expression_bytecode = expression.generate_bytecode(context, type_map);
                 let assignment_bytecode = format!("{value}\nset_local ${identifier}",
@@ -140,12 +140,13 @@ impl ToBytecode for Node<Stmt> {
                 identifier = identifier_bytecode);
                 assignment_bytecode
             },
-            &Stmt::WhileStmt {ref condition, ref block, ..} => {
+            Stmt::WhileStmt {ref condition, ref block, ..} => {
                 let block_bytecode = block.generate_bytecode(context, type_map);
                 let condition_bytecode = condition.generate_bytecode(context, type_map);
                 let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
                 while_bytecode
             },
+            
 	        _ => panic!()
         };
 

@@ -623,6 +623,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
 
                 (type_map, Type::Vector(Box::new(vec_t)))
             },
+            Expr::StructLiteral{ref base, ref fields} => {
+                let (mut new_type_map, base_t) = base.resolve_types(context, type_map);
+                for field in fields {
+                    let res = field.resolve_types(context, new_type_map);
+                    new_type_map = res.0;
+                }
+                new_type_map.insert(self.id, base_t.clone());
+                (new_type_map, base_t.clone())
+            },
             _ => panic!()
         };
     }

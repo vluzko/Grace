@@ -451,10 +451,25 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 let mut new_context = Context::empty();
                 for expr in exprs {
                     new_context.extend(expr.gen_scopes(parent_id, context));
-                    self.scope = parent_id;
                 }
+                self.scope = parent_id;
                 new_context
             },
+            Expr::StructLiteral{ref mut base, ref mut fields} => {
+                let mut new_context = Context::empty();
+                new_context.extend(base.gen_scopes(parent_id, context));
+                for field in fields {
+                    new_context.extend(field.gen_scopes(parent_id, context));
+                }
+                self.scope = parent_id;
+                new_context
+            },
+            Expr::AttributeAccess{ref mut base, ref mut attribute} => {
+                let mut new_context = Context::empty();
+                new_context.extend(base.gen_scopes(parent_id, context));
+                self.scope = parent_id;
+                new_context
+            }
             
             _ => panic!()
         };

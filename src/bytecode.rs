@@ -339,6 +339,11 @@ mod tests {
             assert_eq!(bytecode, expected);
         }
         
+        #[test]
+        fn test_struct_literal() {
+            let input = "a.b{1,2,3}".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Expr>>(input);
+        }
     }
 
     #[test]

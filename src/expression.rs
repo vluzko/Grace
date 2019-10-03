@@ -83,7 +83,7 @@ pub enum Expr {
     BinaryExpr      {operator: BinaryOperator, left: Box<Node<Expr>>, right: Box<Node<Expr>>},
     UnaryExpr       {operator: UnaryOperator, operand: Box<Node<Expr>>},
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
-    StructLiteral   {base: Box<Node<Expr>>, fields: Vec<(Identifier, Node<Expr>)>},
+    StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},

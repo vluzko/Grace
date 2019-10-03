@@ -860,30 +860,21 @@ pub mod expr_parsers {
         return parse_result;
     }
 
+// identifier.[recurse] or identifier{args_list}
     fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
-        let map_ident = |x| Expr::IdentifierExpr(x);
-        let map_
-        let result = alt_complete!(input,
-            IDENTIFIER |
-            tuple!(
-                preceded!(
-                    DOT,
-                    IDENTIFIER
-                ),
-                delimited!(
-                    OPEN_BRACE,
-                    args_list,
-                    CLOSE_BRACE
-                )
-            )
+        let result = tuple!(input,
+            separated_nonempty_list_complete!(DOT, IDENTIFIER), 
+            delimited!(OPEN_BRACE, args_list, CLOSE_BRACE)
         );
-        // let map = |x: (Vec<Identifier>, i32)| {
-        //     let mut tree_base = Expr::IdentifierExpr(x.0.get(1).unwrap().clone());
-        //     for attribute in x.0[1..].iter() {
-        //         tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), attribute: attribute.clone()};
-        //     };
-        // };
-        panic!()
+        let map = |(idents, args): (Vec<Identifier>, Vec<Node<Expr>>)| {
+            let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
+            for attribute in idents[1..].iter() {
+                tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
+                attribute: attribute.clone()};
+            };
+            return Expr::StructLiteral{base: Box::new(Node::from(tree_base)), fields: args};
+        };
+        return fmap_node(result, map);
     }
 
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
@@ -895,12 +886,12 @@ pub mod expr_parsers {
 
         let parse_result = alt_complete!(input, 
             tuple!(
-                alt_complete!(ident_as_expr | wrapped_expr),
-                many0c!(trailer)
-            ) |
-            tuple!(
                 struct_expr,
                 value!(vec!())
+            ) |
+            tuple!(
+                alt_complete!(ident_as_expr | wrapped_expr),
+                many0c!(trailer)
             )
         );
 
@@ -1574,6 +1565,17 @@ pub mod expr_parsers {
                     left: Box::new(Node::from(Expr::from(1))),
                     right: Box::new(Node::from(Expr::from(3)))
                 }))
+            });
+        }
+
+        #[test]
+        fn parse_struct_literal() {
+            check_data("a.b{1,2,3}", expression, Expr::StructLiteral{
+                base: Box::new(Node::from(Expr::AttributeAccess{
+                    base: Box::new(Node::from(Expr::IdentifierExpr(Identifier::from("a")))),
+                    attribute: Identifier::from("b")
+                })), 
+                fields: vec!(Node::from(1), Node::from(2), Node::from(3))
             });
         }
 

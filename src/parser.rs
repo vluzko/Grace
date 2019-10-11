@@ -138,6 +138,7 @@ pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
+    use self::type_parser::any_type;
 
     /// Match any statement.
     pub fn statement<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
@@ -148,6 +149,7 @@ pub mod stmt_parsers {
             call!(for_in, indent) |
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
+            call!(struct_declaration_stmt, indent) |
             call!(try_except, indent) |
             return_stmt |
             break_stmt |
@@ -302,6 +304,59 @@ pub mod stmt_parsers {
                 None => Type::empty
             }
         });
+    }
+
+    pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+        let header = tuple!(input,
+            delimited!(
+                STRUCT,
+                IDENTIFIER,
+                terminated!(
+                    COLON,
+                    between_statement
+                )
+            ),
+            many0c!(inline_whitespace_char)
+        );
+
+        // Horrifying? Yes.
+        let result = match header {
+            Ok((i, o)) => {
+                let new_indent = o.1.len();
+                if new_indent > indent {
+                    let rest = tuple!(i,
+                         terminated!(
+                            tuple!(
+                                IDENTIFIER,
+                                preceded!(COLON, any_type)
+                            ),
+                            between_statement
+                        ), many1c!(
+                            terminated!(
+                                indented!(tuple!(
+                                    IDENTIFIER,
+                                    preceded!(COLON, any_type)
+                                ), new_indent),
+                                between_statement
+                            )
+                        )
+                    );
+                    match rest {
+                        Ok((i, mut r)) => {
+                            r.1.insert(0, r.0);
+                            Ok((i, (o.0, r.1)))
+                        },
+                        Err(x) => Err(x)
+                    }
+                } else {
+                    // TODO: Return an indentation error.
+                    panic!()
+                }
+            },
+            Err(x) => Err(x)
+        };
+
+        return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 
     /// Match an if statement.
@@ -509,6 +564,18 @@ pub mod stmt_parsers {
                 varkwarg: None,
                 block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
                 return_type: Type::i32
+            });
+        }
+
+        #[test]
+        fn parse_struct_dec() {
+            let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
+            check_data(input, |x| struct_declaration_stmt(x, 1), Stmt::StructDec{
+                name: Identifier::from("A"),
+                fields: vec!(
+                    (Identifier::from("x"), Type::i32),
+                    (Identifier::from("y"), Type::i32)
+                )
             });
         }
         
@@ -793,6 +860,23 @@ pub mod expr_parsers {
         return parse_result;
     }
 
+// identifier.[recurse] or identifier{args_list}
+    fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
+        let result = tuple!(input,
+            separated_nonempty_list_complete!(DOT, IDENTIFIER), 
+            delimited!(OPEN_BRACE, args_list, CLOSE_BRACE)
+        );
+        let map = |(idents, args): (Vec<Identifier>, Vec<Node<Expr>>)| {
+            let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
+            for attribute in idents[1..].iter() {
+                tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
+                attribute: attribute.clone()};
+            };
+            return Expr::StructLiteral{base: Box::new(Node::from(tree_base)), fields: args};
+        };
+        return fmap_node(result, map);
+    }
+
     /// An expression that can be followed by an arbitrary number of function calls or attribute accesses.
     fn expr_with_trailer<'a>(input: PosStr<'a>) -> ExprRes {
         let ident_as_expr = |x| fmap_iresult(
@@ -800,9 +884,15 @@ pub mod expr_parsers {
             |y: Identifier| Node::from(Expr::IdentifierExpr (y))
         );
 
-        let parse_result = tuple!(input,
-            alt!(ident_as_expr | wrapped_expr),
-            many0c!(trailer)
+        let parse_result = alt_complete!(input, 
+            tuple!(
+                struct_expr,
+                value!(vec!())
+            ) |
+            tuple!(
+                alt_complete!(ident_as_expr | wrapped_expr),
+                many0c!(trailer)
+            )
         );
 
         // Convert the vector of post identifiers into a single usable expression.
@@ -1475,6 +1565,17 @@ pub mod expr_parsers {
                     left: Box::new(Node::from(Expr::from(1))),
                     right: Box::new(Node::from(Expr::from(3)))
                 }))
+            });
+        }
+
+        #[test]
+        fn parse_struct_literal() {
+            check_data("a.b{1,2,3}", expression, Expr::StructLiteral{
+                base: Box::new(Node::from(Expr::AttributeAccess{
+                    base: Box::new(Node::from(Expr::IdentifierExpr(Identifier::from("a")))),
+                    attribute: Identifier::from("b")
+                })), 
+                fields: vec!(Node::from(1), Node::from(2), Node::from(3))
             });
         }
 

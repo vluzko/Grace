@@ -1,5 +1,7 @@
 use std::iter::Enumerate;
 use std::slice::Iter;
+use std::str::from_utf8;
+use std::fmt;
 use std::ops::{
     Range,
     RangeFrom,
@@ -23,7 +25,7 @@ use self::nom::{
     InputTake
 };
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct PosStr<'a> {
     /// The offset represents the position of the slice relatively to
     /// the input of the parser. It starts at offset 0.
@@ -72,6 +74,12 @@ impl<'a> PosStr<'a> {
     // pub fn from_str(input: &'a str) -> Self {
     //     return PosStr::new(input.as_bytes());
     // }
+}
+
+impl <'a> fmt::Debug for PosStr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PosStr {{slice: {:?}, line: {}, column: {} }}", from_utf8(self.slice), self.line, self.column)
+    }
 }
 
 impl <'a> From<&'a [u8]> for PosStr<'a> {

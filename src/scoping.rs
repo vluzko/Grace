@@ -354,7 +354,12 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
 
                 self.scope = parent_id;
                 condition_context
-            }
+            },
+            Stmt::StructDec{..} => {
+                self.scope = parent_id;
+                Context::empty()
+
+            },
             _ => panic!()
         };
 
@@ -451,10 +456,25 @@ impl Scoped<Node<Expr>> for Node<Expr> {
                 let mut new_context = Context::empty();
                 for expr in exprs {
                     new_context.extend(expr.gen_scopes(parent_id, context));
-                    self.scope = parent_id;
                 }
+                self.scope = parent_id;
                 new_context
             },
+            Expr::StructLiteral{ref mut base, ref mut fields} => {
+                let mut new_context = Context::empty();
+                new_context.extend(base.gen_scopes(parent_id, context));
+                for field in fields {
+                    new_context.extend(field.gen_scopes(parent_id, context));
+                }
+                self.scope = parent_id;
+                new_context
+            },
+            Expr::AttributeAccess{ref mut base, ref mut attribute} => {
+                let mut new_context = Context::empty();
+                new_context.extend(base.gen_scopes(parent_id, context));
+                self.scope = parent_id;
+                new_context
+            }
             
             _ => panic!()
         };
@@ -482,6 +502,11 @@ impl Node<Block> {
                     scope.declaration_order.insert(typed_name.name.clone(), i);
                     let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
                     scope.declarations.insert(typed_name.name.clone(), scope_mod);
+                },
+                Stmt::StructDec{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    scope.declarations.insert(name.clone(), scope_mod);
                 },
                 _ => {}
             };

@@ -122,6 +122,7 @@ impl Type {
             Type::boolean => 1,
             Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
+            Type::Record(ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }
@@ -408,7 +409,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
+    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self.data {
             Stmt::LetStmt{ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
@@ -464,6 +465,15 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 
                 (block_map, t)
             }
+            Stmt::StructDec{ref fields, ..} => {
+                let mut records = BTreeMap::new();
+                for (n, t) in fields {
+                    records.insert(n.clone(), t.clone());
+                }
+                let record = Type::Record(records);
+                type_map.insert(self.id, record.clone());
+                (type_map, record)
+            },
             _ => panic!()
         };
     }
@@ -622,6 +632,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 type_map.insert(self.id, vec_t.clone());
 
                 (type_map, Type::Vector(Box::new(vec_t)))
+            },
+            Expr::StructLiteral{ref base, ref fields} => {
+                let (mut new_type_map, base_t) = base.resolve_types(context, type_map);
+                for field in fields {
+                    let res = field.resolve_types(context, new_type_map);
+                    new_type_map = res.0;
+                }
+                new_type_map.insert(self.id, base_t.clone());
+                (new_type_map, base_t.clone())
             },
             _ => panic!()
         };

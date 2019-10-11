@@ -328,6 +328,7 @@ pub mod tokens {
 
     // Keywords
     keyword!(FN, "fn");
+    keyword!(STRUCT, "struct");
     keyword!(IF, "if");
     keyword!(ELIF, "elif");
     keyword!(ELSE, "else");
@@ -441,7 +442,6 @@ pub mod tokens {
         }
     }
 }
-
 
 pub mod iresult_helpers {
 
@@ -572,7 +572,7 @@ pub mod iresult_helpers {
                 assert_eq!(o.data, expected);
             },
             Result::Err(e) => {
-                panic!("Error: {:?}. Input was: {:?}", e, input)
+                panic!("Error: {:?}.", e)
             }
         };
     }

@@ -185,14 +185,14 @@ impl ToBytecode for Node<Stmt> {
 
 impl ToBytecode for Node<Expr> {
     fn generate_bytecode(&self, context: &Context, type_map: &mut HashMap<usize, typing::Type>) -> String {
-        let bytecode_rep = match &self.data {
-            &Expr::ComparisonExpr {ref operator, ref left, ref right, ..} => {
+        let bytecode_rep = match self.data {
+            Expr::ComparisonExpr {ref operator, ref left, ref right, ..} => {
                 let first = left.generate_bytecode(context, type_map);
                 let second = right.generate_bytecode(context, type_map);
                 let operator = operator.generate_bytecode(context, type_map);
                 format!("{}\n{}\n{}", first, second, operator)
             },
-            &Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
+            Expr::BinaryExpr {ref operator, ref left, ref right, ..} => {
                 let return_type = typing::choose_return_type(type_map.get(&self.id).unwrap());
                 // TODO: This should probably be handled in type rewrites?
                 let operator_bytecode = operator.generate_typed_bytecode(&return_type);
@@ -200,13 +200,13 @@ impl ToBytecode for Node<Expr> {
                 let second = right.generate_bytecode(context, type_map);
                 format!("{}\n{}\n{}", first, second, operator_bytecode)
             },
-            &Expr::UnaryExpr {ref operator, ref operand, ..} => {
+            Expr::UnaryExpr {ref operator, ref operand, ..} => {
                 let operand_type = typing::choose_return_type(&type_map.get(&operand.id).unwrap().clone());
                 let operator_bytecode = operator.generate_typed_bytecode(&operand_type);
                 let operand_bytecode = operand.generate_bytecode(context, type_map);
                 format!("{}\n{}", operand_bytecode, operator_bytecode)
             },
-            &Expr::FunctionCall {ref function, ref args, ..} => {
+            Expr::FunctionCall {ref function, ref args, ..} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
                 let call = match &function.data {
                     &Expr::IdentifierExpr (ref ident) => format!("call ${func_name}", func_name=ident.to_string()),
@@ -214,7 +214,7 @@ impl ToBytecode for Node<Expr> {
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
             },
-            &Expr::Index{ref base, ref slices} => {
+            Expr::Index{ref base, ref slices} => {
                 // For now, nested slices are not possible.
                 assert_eq!(slices.len(), 1);
                 let slice = slices.get(0).unwrap();
@@ -229,24 +229,24 @@ impl ToBytecode for Node<Expr> {
                 let base_bytecode = base.generate_bytecode(context, type_map);
                 format!("{}\n{}\ni32.local {}\ncall $.arrays.get_value", base_bytecode, index_bytecode, t_size)
             },
-            &Expr::IdentifierExpr (ref ident) => {
+            Expr::IdentifierExpr (ref ident) => {
                 format!("get_local ${ident}", ident=ident.to_string())
             },
-            &Expr::Int(ref int_lit) => {
+            Expr::Int(ref int_lit) => {
                 let t = type_map.get(&self.id).unwrap();
                 format!("{}.const {}", t.wast_name(), int_lit)
             },
-            &Expr::Float(ref float_lit) => {
+            Expr::Float(ref float_lit) => {
                 let t = type_map.get(&self.id).unwrap();
                 format!("{}.const {}", t.wast_name(), float_lit)
             },
-            &Expr::Bool(ref bool_lit) => {
+            Expr::Bool(ref bool_lit) => {
                 match bool_lit {
                     true => "1".to_string(),
                     false => "0".to_string()
                 }
             },
-            &Expr::VecLiteral(ref exprs) => {
+            Expr::VecLiteral(ref exprs) => {
                 let size = exprs.len();
                 let t_size = type_map.get(&self.id).unwrap().size();
 
@@ -265,6 +265,13 @@ impl ToBytecode for Node<Expr> {
                 format!("{}\n{}\n{}", itertools::join(values.iter(), "\n"), 
                     create_array, itertools::join(calls.iter(), "\n")
                 ) 
+            },
+            Expr::StructLiteral{ref base, ref fields} => {
+                let args = itertools::join(fields.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
+                format!("{}\ncall ${}", args, match base.data {
+                    Expr::IdentifierExpr(ref ident) => ident.name.clone(),
+                    _ => panic!()
+                })
             },
             _ => panic!()
         };
@@ -350,7 +357,7 @@ mod tests {
 
         #[test]
         fn test_struct_declaration() {
-            let input = "struct A:\n a: i32\n b: i32".as_bytes();
+            let input = "struct A:\n a: i32\n b: i32\n".as_bytes();
             let (_, _, _, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
             let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
             i32.const 2\n\
@@ -408,8 +415,29 @@ mod tests {
         
         #[test]
         fn test_struct_literal() {
-            let input = "a.b{1,2,3}".as_bytes();
-            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Expr>>(input);
+            let input = "struct A:\n a: i32\n b: i32\n\
+            let x = A{1,2}".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
+            i32.const 2\n\
+            call $.memory_management.alloc_words\n\
+            tee_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
+            get_local $a\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            i32.const 12\n\
+            i32.add\n\
+            get_local $b\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            (export \"A\" (func $A)\n\
+            i32.const 1\n\
+            i32.const 2\n\
+            call $A\n\
+            set_local $x";
+            assert_eq!(bytecode, expected);
         }
     }
 

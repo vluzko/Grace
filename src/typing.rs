@@ -122,6 +122,7 @@ impl Type {
             Type::boolean => 1,
             Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
+            Type::Record(ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }

@@ -146,7 +146,35 @@ impl ToBytecode for Node<Stmt> {
                 let while_bytecode = format!("loop $void\nblock $void1\n{condition}\ni32.eqz\nbr_if 0\n\n{block}\nbr 1\nend\nend\n", condition=condition_bytecode, block=block_bytecode);
                 while_bytecode
             },
-            
+            // StructDecs are actually function calls that create the relevant tuple
+            Stmt::StructDec{ref name, ref fields} => {
+                let res = "(result i32)";
+                let params = fields.iter().map(|(i, t)| format!("(param ${} {})", i.name, t.wast_name()));
+                let param_str = itertools::join(params, " ");
+                let size = type_map.get(&self.id).unwrap().size();
+                let init_str = format!("i32.const {}\n\
+                call $.memory_management.alloc_words\n\
+                tee_local $.x", size);
+                let param_stores = fields.iter().enumerate().map(|(i, (ident, _))| 
+                    format!("i32.const {}\n\
+                    i32.add\n\
+                    get_local ${}\n\
+                    call $.memory_management.set\n\
+                    get_local $.x", (i + 2) * 4, ident.name));
+                let param_store_str = itertools::join(param_stores, "\n");
+                let full = format!("(func ${name} {params} {res} (local $.x i32)\n\
+                {init}\n\
+                {param_store}\n\
+                (export \"{name}\" (func ${name})",
+                    name=name,
+                    params=param_str,
+                    res = res,
+                    init=init_str,
+                    param_store=param_store_str
+                );
+                full
+                
+            },
 	        _ => panic!()
         };
 
@@ -323,7 +351,23 @@ mod tests {
         #[test]
         fn test_struct_declaration() {
             let input = "struct A:\n a: i32\n b: i32".as_bytes();
-            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            let (_, _, _, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
+            i32.const 2\n\
+            call $.memory_management.alloc_words\n\
+            tee_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
+            get_local $a\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            i32.const 12\n\
+            i32.add\n\
+            get_local $b\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            (export \"A\" (func $A)";
+            assert_eq!(expected, bytecode);
         }
     }
 
@@ -335,7 +379,22 @@ mod tests {
         fn test_generate_array() {
             let input = "let x = [1, 2, 3]".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Stmt>>(input);
-            let expected = "i32.const 3\ni32.const 2\ni32.const 1\ni32.const 3\ni32.const 1\ncall $.arrays.create_array\ni32.local 0\ni32.local 1\ncall $.arrays.set_value\ni32.local 1\ni32.local 1\ncall $.arrays.set_value\ni32.local 2\ni32.local 1\ncall $.arrays.set_value\nset_local $x".to_string();
+            let expected = "i32.const 3\n\
+            i32.const 2\n\
+            i32.const 1\n\
+            i32.const 3\n\
+            i32.const 1\n\
+            call $.arrays.create_array\n\
+            i32.local 0\n\
+            i32.local 1\n\
+            call $.arrays.set_value\n\
+            i32.local 1\n\
+            i32.local 1\n\
+            call $.arrays.set_value\n\
+            i32.local 2\n\
+            i32.local 1\n\
+            call $.arrays.set_value\n\
+            set_local $x".to_string();
             assert_eq!(bytecode, expected);
         }
 

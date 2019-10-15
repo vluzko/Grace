@@ -50,12 +50,14 @@ pub struct CompiledModule {
 impl CompiledModule {
     pub fn get_type(&self) -> Type {
         let mut attribute_map = BTreeMap::new();
+        let mut attribute_order = vec!();
         for func_dec in &self.ast.data.declarations {
             let func_type = self.type_map.get(&func_dec.id).unwrap().clone();
+            attribute_order.push(func_dec.data.get_name());
             attribute_map.insert(func_dec.data.get_name(), func_type);
         }
 
-        return Type::Record(attribute_map);
+        return Type::Record(attribute_order, attribute_map);
     }
 
     pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {

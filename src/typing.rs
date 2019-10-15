@@ -27,7 +27,7 @@ pub enum Type {
     Function(Vec<Type>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
-    Record(BTreeMap<Identifier, Type>),
+    Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Undetermined
 }
 
@@ -122,7 +122,7 @@ impl Type {
             Type::boolean => 1,
             Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
-            Type::Record(ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
+            Type::Record(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }
@@ -142,7 +142,7 @@ impl Type {
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
-            Type::Record (attributes) => {
+            Type::Record (_, attributes) => {
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         return attr_type.clone();
@@ -155,11 +155,13 @@ impl Type {
     }
 
     pub fn flatten_to_record(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
-        let mut rec = Type::Record(base);
+        let mut rec = Type::Record(base.keys().map(|x| x.clone()).collect(), base);
         for ident in idents[1..].iter().rev() {
             let mut map = BTreeMap::new();
+            let mut order = vec!();
             map.insert(ident.clone(), rec);
-            rec = Type::Record(map);
+            order.push(ident.clone());
+            rec = Type::Record(order, map);
         }
         return rec;
     }
@@ -177,6 +179,24 @@ impl Type {
             Type::Vector(ref t) => match slices.get(0).unwrap() {
                 (Some(_x), None, None) => (**t).clone(),
                 _ => panic!()
+            },
+            _ => panic!()
+        };
+    }
+
+    pub fn identifier_to_index(&self, ident: &Identifier) -> usize {
+        return match self {
+            Type::Record(ref order, ref fields) => {
+                let mut words = 0;
+                for i in order {
+                    if i == ident {
+                        break;
+                    } else {
+                        let size = fields.get(&i).unwrap().size();
+                        words += size;
+                    }
+                }
+                words
             },
             _ => panic!()
         };
@@ -466,11 +486,13 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 (block_map, t)
             }
             Stmt::StructDec{ref fields, ..} => {
+                let mut order = vec!();
                 let mut records = BTreeMap::new();
                 for (n, t) in fields {
+                    order.push(n.clone());
                     records.insert(n.clone(), t.clone());
                 }
-                let record = Type::Record(records);
+                let record = Type::Record(order, records);
                 type_map.insert(self.id, record.clone());
                 (type_map, record)
             },
@@ -737,9 +759,9 @@ mod test {
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap!{
-                Identifier::from("b") => Type::Record(bottom_map),
+                Identifier::from("b") => Type::Record(vec!(Identifier::from("c")), bottom_map),
             };
-            assert_eq!(Type::Record(second_map), record_type);
+            assert_eq!(record_type, Type::Record(vec!(Identifier::from("b")), second_map));
         }
     }
 

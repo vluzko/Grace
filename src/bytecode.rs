@@ -165,6 +165,8 @@ impl ToBytecode for Node<Stmt> {
                 let full = format!("(func ${name} {params} {res} (local $.x i32)\n\
                 {init}\n\
                 {param_store}\n\
+                i32.const 8\n\
+                i32.add\n\
                 (export \"{name}\" (func ${name})",
                     name=name,
                     params=param_str,
@@ -180,7 +182,6 @@ impl ToBytecode for Node<Stmt> {
 
         return bytecode;
     }
-
 }
 
 impl ToBytecode for Node<Expr> {
@@ -272,6 +273,19 @@ impl ToBytecode for Node<Expr> {
                     Expr::IdentifierExpr(ref ident) => ident.name.clone(),
                     _ => panic!()
                 })
+            },
+            Expr::AttributeAccess{ref base, ref attribute} => {
+                let pointer_code = base.generate_bytecode(context, type_map);
+                let t = type_map.get(&base.id).unwrap();
+                let return_t = type_map.get(&self.id).unwrap();
+                let wast_type = return_t.wast_name();
+                // The number of bytes 
+                let byte_index = 4 * t.identifier_to_index(attribute);
+                format!("{pointer}\n\
+                i32.const {index}\n\
+                i32.add\n\
+                {ret}.load", 
+                pointer=pointer_code, index=byte_index, ret=wast_type)
             },
             _ => panic!()
         };
@@ -373,6 +387,8 @@ mod tests {
             get_local $b\n\
             call $.memory_management.set\n\
             get_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
             (export \"A\" (func $A)";
             assert_eq!(expected, bytecode);
         }
@@ -432,11 +448,48 @@ mod tests {
             get_local $b\n\
             call $.memory_management.set\n\
             get_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
             (export \"A\" (func $A)\n\
             i32.const 1\n\
             i32.const 2\n\
             call $A\n\
             set_local $x";
+            assert_eq!(bytecode, expected);
+        }
+
+        #[test]
+        fn test_struct_access() {
+            let input = "struct A:\n a: i32\n b: i32\n\
+            let x = A{1,2}\n\
+            let y = x.a".as_bytes();
+            let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
+            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
+            i32.const 2\n\
+            call $.memory_management.alloc_words\n\
+            tee_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
+            get_local $a\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            i32.const 12\n\
+            i32.add\n\
+            get_local $b\n\
+            call $.memory_management.set\n\
+            get_local $.x\n\
+            i32.const 8\n\
+            i32.add\n\
+            (export \"A\" (func $A)\n\
+            i32.const 1\n\
+            i32.const 2\n\
+            call $A\n\
+            set_local $x\n\
+            get_local $x\n\
+            i32.const 0\n\
+            i32.add\n\
+            i32.load\n\
+            set_local $y";
             assert_eq!(bytecode, expected);
         }
     }

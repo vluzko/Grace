@@ -365,6 +365,26 @@ mod tests {
     use super::*;
     use compiler_layers;
 
+    fn struct_dec_fixture() -> String {
+        return "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
+        i32.const 2\n\
+        call $.memory_management.alloc_words\n\
+        tee_local $.x\n\
+        i32.const 8\n\
+        i32.add\n\
+        get_local $a\n\
+        call $.memory_management.set\n\
+        get_local $.x\n\
+        i32.const 12\n\
+        i32.add\n\
+        get_local $b\n\
+        call $.memory_management.set\n\
+        get_local $.x\n\
+        i32.const 8\n\
+        i32.add\n\
+        (export \"A\" (func $A)".to_string();
+    }
+
     #[cfg(test)]
     mod statements {
         use super::*;
@@ -373,23 +393,7 @@ mod tests {
         fn test_struct_declaration() {
             let input = "struct A:\n a: i32\n b: i32\n".as_bytes();
             let (_, _, _, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
-            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
-            i32.const 2\n\
-            call $.memory_management.alloc_words\n\
-            tee_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            get_local $a\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 12\n\
-            i32.add\n\
-            get_local $b\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            (export \"A\" (func $A)";
+            let expected = struct_dec_fixture();
             assert_eq!(expected, bytecode);
         }
     }
@@ -434,27 +438,11 @@ mod tests {
             let input = "struct A:\n a: i32\n b: i32\n\
             let x = A{1,2}".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
-            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
-            i32.const 2\n\
-            call $.memory_management.alloc_words\n\
-            tee_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            get_local $a\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 12\n\
-            i32.add\n\
-            get_local $b\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            (export \"A\" (func $A)\n\
+            let expected = format!("{}\n\
             i32.const 1\n\
             i32.const 2\n\
             call $A\n\
-            set_local $x";
+            set_local $x", struct_dec_fixture());
             assert_eq!(bytecode, expected);
         }
 
@@ -464,23 +452,7 @@ mod tests {
             let x = A{1,2}\n\
             let y = x.a".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Block>>(input);
-            let expected = "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
-            i32.const 2\n\
-            call $.memory_management.alloc_words\n\
-            tee_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            get_local $a\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 12\n\
-            i32.add\n\
-            get_local $b\n\
-            call $.memory_management.set\n\
-            get_local $.x\n\
-            i32.const 8\n\
-            i32.add\n\
-            (export \"A\" (func $A)\n\
+            let expected = format!("{}\n\
             i32.const 1\n\
             i32.const 2\n\
             call $A\n\
@@ -489,7 +461,7 @@ mod tests {
             i32.const 0\n\
             i32.add\n\
             i32.load\n\
-            set_local $y";
+            set_local $y", struct_dec_fixture());
             assert_eq!(bytecode, expected);
         }
     }
@@ -555,25 +527,24 @@ mod tests {
     }
 
     #[test]
-   fn test_generate_module() {
-       let (module, context, mut type_map) = 
-       compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
-       let mod_bytecode = r#"(module
-(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
-(import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
-(import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
-(import "memory_management" "mem" (memory (;0;) 1))
-
-(func $a (param $b i32) (result i32) (local $x i32)
-i32.const 5
-i32.const 6
-i32.add
-set_local $x
-get_local $x
-)
-(export "a" (func $a))
-)
-"#;
+    fn test_generate_module() {
+        let (module, context, mut type_map) = 
+        compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
+        let mod_bytecode = "(module\n\
+        (import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))\n\
+        (import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))\n\
+        (import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))\n\
+        (import \"memory_management\" \"mem\" (memory (;0;) 1))\n\
+        \n\
+        (func $a (param $b i32) (result i32) (local $x i32)\n\
+        i32.const 5\n\
+        i32.const 6\n\
+        i32.add\n\
+        set_local $x\n\
+        get_local $x\n\
+        )\n\
+        (export \"a\" (func $a))\n\
+        )\n";
        assert_eq!(module.generate_bytecode(&context, &mut type_map), mod_bytecode);
    }
 
@@ -582,13 +553,14 @@ get_local $x
         let (func_stmt, context, mut type_map) = 
         compiler_layers::to_type_rewrites::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
         let bytecode = func_stmt.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, r#"(func $a (param $b i32) (result i32) (local $x i32)
-i32.const 5
-i32.const 6
-i32.add
-set_local $x
-get_local $x
-)
-(export "a" (func $a))"#);
+        let expected = "(func $a (param $b i32) (result i32) (local $x i32)\n\
+        i32.const 5\n\
+        i32.const 6\n\
+        i32.add\n\
+        set_local $x\n\
+        get_local $x\n\
+        )\n\
+        (export \"a\" (func $a))";
+        assert_eq!(bytecode, expected);
     }
 }

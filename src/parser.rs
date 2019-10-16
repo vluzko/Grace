@@ -16,7 +16,8 @@ use general_utils::get_next_id;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
-    function_declaration_stmt
+    function_declaration_stmt,
+    struct_declaration_stmt
 };
 
 type StmtNode = Node<Stmt>;
@@ -66,10 +67,12 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
             ),
             many1c!(
                 terminated!(
-                    alt_complete!(call!(function_declaration_stmt, 0)),
+                    alt_complete!(call!(function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
+                    
                     between_statement
                 )
-            )
+            ),
+            alt_complete!(eof!() | EMPTY)
         )
     );
 
@@ -149,7 +152,6 @@ pub mod stmt_parsers {
             call!(for_in, indent) |
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
-            call!(struct_declaration_stmt, indent) |
             call!(try_except, indent) |
             return_stmt |
             break_stmt |

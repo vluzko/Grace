@@ -365,6 +365,15 @@ mod tests {
     use super::*;
     use compiler_layers;
 
+    fn module_dec_fixture() -> String {
+        return "(module\n\
+        (import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))\n\
+        (import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))\n\
+        (import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))\n\
+        (import \"memory_management\" \"mem\" (memory (;0;) 1))\n\
+        \n".to_string();
+    }
+
     fn struct_dec_fixture() -> String {
         return "(func $A (param $a i32) (param $b i32) (result i32) (local $.x i32)\n\
         i32.const 2\n\
@@ -436,14 +445,18 @@ mod tests {
         #[test]
         fn test_struct_literal() {
             let input = "struct A:\n a: i32\n b: i32\n\
-            (func )
-            let x = A{1,2}".as_bytes();
+            fn B():
+             let x = A{1,2}".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Module>>(input);
-            let expected = format!("{}\n\
+            let expected = format!("{}{}\n\
+            (func $B   (local $x i32)\n\
             i32.const 1\n\
             i32.const 2\n\
             call $A\n\
-            set_local $x", struct_dec_fixture());
+            set_local $x\n\
+            )\n\
+            (export \"B\" (func $B))\n\
+            )\n", module_dec_fixture(), struct_dec_fixture());
             assert_eq!(bytecode, expected);
         }
 
@@ -538,7 +551,7 @@ mod tests {
     fn test_generate_module() {
         let (module, context, mut type_map) = 
         compiler_layers::to_type_rewrites::<Node<Module>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
-        let mod_bytecode = "(module\n\
+        let expected = "(module\n\
         (import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))\n\
         (import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))\n\
         (import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))\n\
@@ -553,7 +566,7 @@ mod tests {
         )\n\
         (export \"a\" (func $a))\n\
         )\n";
-       assert_eq!(module.generate_bytecode(&context, &mut type_map), mod_bytecode);
+       assert_eq!(module.generate_bytecode(&context, &mut type_map), expected);
    }
 
     #[test]

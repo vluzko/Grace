@@ -100,14 +100,12 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
-        // println!("Name: {:?}\nScope: {:?}\n", name, self.scopes.get(&scope_id));
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
-            panic!("Reached scope id 0");
+            panic!("Reached scope id 0 searching for {}", name);
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
-            // println!("Scope reached: {:?}", initial_scope.parent_id);
             return match initial_scope.parent_id {
                 Some(id) => {
                     self.get_declaration(id, name)
@@ -527,12 +525,12 @@ impl Node<Module> {
                     scope.declarations.insert(name.clone(), scope_mod);
                     scope.declaration_order.insert(name.clone(), i);
                 },
-                Stmt::ReturnStmt(..) => {
-                    // TODO: Add module
-                },
-                _ => {
-                    //TODO: panic
-                }
+                Stmt::StructDec{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                    scope.declaration_order.insert(name.clone(), i);
+                }, 
+                _ => panic!()
             };
         }
         

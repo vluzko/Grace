@@ -77,6 +77,9 @@ impl Type {
             &Type::Function(ref _args, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
+            &Type::Record(..) => {
+                "i32".to_string()
+            },
             _ => panic!()
         }
     }

@@ -44,7 +44,7 @@ pub struct Scope {
 }
 
 /// Any object that has a scope.
-pub trait Scoped<T> {
+pub trait Scoped {
     /// Get the scope of the object.
 
     fn get_usages(&self) -> HashSet<Identifier>;
@@ -162,7 +162,7 @@ impl CanModifyScope {
     }
 }
 
-impl Scoped<Node<Module>> for Node<Module> {
+impl Scoped for Node<Module> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         panic!();
@@ -198,7 +198,7 @@ impl Scoped<Node<Module>> for Node<Module> {
     }
 }
 
-impl Scoped<Node<Block>> for Node<Block> {
+impl Scoped for Node<Block> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         let mut usages = HashSet::new();
@@ -237,7 +237,7 @@ impl Scoped<Node<Block>> for Node<Block> {
     }
 }
 
-impl Scoped<Node<Stmt>> for Node<Stmt> {
+impl Scoped for Node<Stmt> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {
@@ -344,7 +344,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
     }
 }
 
-impl Scoped<Node<Expr>> for Node<Expr> {
+impl Scoped for Node<Expr> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {

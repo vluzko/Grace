@@ -260,7 +260,7 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<u
 }
 
 pub fn to_scopes<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: Scoped<T> {
+where T: Parseable, T: Scoped {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
     let (id, mut init) = initial_context();
@@ -270,21 +270,21 @@ where T: Parseable, T: Scoped<T> {
 }
 
 pub fn to_types<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped<T>, T: Typed<T> {
+where T: Parseable, T: Scoped, T: Typed<T> {
     let (result, context): (T, Context) = to_scopes(input);
     let (type_map, _) = result.resolve_types(&context, HashMap::new());
     return (result, context, type_map);
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
+where T: Parseable, T: Scoped, T: Typed<T>, T: Debug {
     let (result, mut context, mut type_map): (T, Context, HashMap<usize, Type>) = to_types(input);
     let rewritten = result.type_based_rewrite(&mut context, &mut type_map);
     return (rewritten, context, type_map);
 }
 
 pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>, String) 
-where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
+where T: Parseable, T: Scoped, T: Typed<T>, T: ToBytecode, T: Debug {
     let (result, context, mut type_map): (T, Context, HashMap<usize, Type>) = to_type_rewrites(input);
     let bytecode = result.generate_bytecode(&context, &mut type_map);
     return (result, context, type_map, bytecode);

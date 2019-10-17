@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use expression::*;
 use general_utils;
@@ -50,7 +51,7 @@ pub trait Scoped {
     fn get_usages(&self) -> HashSet<Identifier>;
 
     /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier>;
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier>;
 
     /// Generate scopes recursively. Returns all scopes.
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
@@ -170,10 +171,10 @@ impl Scoped for Node<Module> {
         panic!();
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
-        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
+        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.declarations {
-            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
         }
         return top_level;
     }
@@ -210,10 +211,10 @@ impl Scoped for Node<Block> {
         return usages;
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
-        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
+        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.statements {
-            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
         }
         return top_level;
     }
@@ -265,12 +266,12 @@ impl Scoped for Node<Stmt> {
         };
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
         return match self.data {
             Stmt::FunctionDecStmt{ref block, ..} => {
                 block.get_true_declarations(context)
             },
-            _ => HashSet::new()
+            _ => BTreeSet::new()
         };
     }
 
@@ -386,7 +387,7 @@ impl Scoped for Node<Expr> {
         };
     }
 
-    fn get_true_declarations(&self, _context: &Context) -> HashSet<Identifier> {
+    fn get_true_declarations(&self, _context: &Context) -> BTreeSet<Identifier> {
         panic!()
     }
 

@@ -438,15 +438,23 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
         return match self.data {
             Stmt::LetStmt{ref type_annotation, ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
+
+                // Type check
                 match type_annotation {
                     Some(ta) => assert_eq!(ta, &expr_type),
                     None => {}
                 };
+
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)
             },
-            Stmt::AssignmentStmt{ref expression, ..} => {
+            Stmt::AssignmentStmt{ref name, ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
+
+                // Type check
+                let expected_type = type_map.get(&context.get_declaration(self.scope, name).unwrap().get_id()).unwrap();
+                assert_eq!(expected_type, &expr_type);
+
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)                
             },

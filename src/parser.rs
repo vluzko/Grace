@@ -820,7 +820,6 @@ pub mod expr_parsers {
         return parse_result;
     }
 
-// identifier.[recurse] or identifier{args_list}
     fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
         let result = tuple!(input,
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
@@ -899,7 +898,8 @@ pub mod expr_parsers {
                         kwargs_list
                     ))
                 ) |
-                map!(kwargs_list, |x| (vec![], Some(x)))
+                map!(kwargs_list, |x| (vec!(), Some(x))) |
+                map!(peek!(CLOSE_PAREN), |x| (vec!(), None))
             ),
             CLOSE_PAREN
         );
@@ -1215,7 +1215,10 @@ pub mod expr_parsers {
                 kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
             });
 
-
+            check_match("()", trailer, PostIdent::Call {
+                args: vec!(),
+                kwargs: vec!()
+            });
 
             simple_check_failed("(a | b=false)", trailer);
             simple_check_failed("(a   b=false)", trailer);

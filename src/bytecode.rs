@@ -402,7 +402,7 @@ mod tests {
         fn test_struct_declaration() {
             let input = "struct A:\n a: i32\n b: i32\n".as_bytes();
             let (_, _, _, bytecode) = compiler_layers::to_bytecode::<Node<Module>>(input);
-            let expected = struct_dec_fixture();
+            let expected = format!("{}{}\n)\n", module_dec_fixture(), struct_dec_fixture());
             assert_eq!(expected, bytecode);
         }
     }
@@ -463,10 +463,12 @@ mod tests {
         #[test]
         fn test_struct_access() {
             let input = "struct A:\n a: i32\n b: i32\n\
-            let x = A{1,2}\n\
-            let y = x.a".as_bytes();
+            fn B():
+             let x = A{1,2}
+             let y = x.a".as_bytes();
             let (_stmt, _context, _type_map, bytecode) = compiler_layers::to_bytecode::<Node<Module>>(input);
-            let expected = format!("{}\n\
+            let expected = format!("{}{}\n\
+            (func $B   (local $x i32) (local $y i32)\n\
             i32.const 1\n\
             i32.const 2\n\
             call $A\n\
@@ -475,7 +477,10 @@ mod tests {
             i32.const 0\n\
             i32.add\n\
             i32.load\n\
-            set_local $y", struct_dec_fixture());
+            set_local $y\n\
+            )\n\
+            (export \"B\" (func $B))\n\
+            )\n", module_dec_fixture(), struct_dec_fixture());
             assert_eq!(bytecode, expected);
         }
 

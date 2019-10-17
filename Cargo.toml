@@ -16,6 +16,7 @@ cached = "*"
 lazy_static = "1.3.0"
 bytecount = "*"
 memchr = "*"
+pretty_assertions = "*"
 
 [lib]
 name = "grace_lib"

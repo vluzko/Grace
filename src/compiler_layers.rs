@@ -109,7 +109,7 @@ impl Compilation {
         }
 
         // The type of the full module (including all the parent modules).
-        let module_type = Type::flatten_to_record(&import.path, record_type);
+        let module_type = Type::flatten_to_module(&import.path, record_type);
 
         return module_type;
     }
@@ -331,17 +331,6 @@ mod tests {
     #[test]
     fn simple_imports_compile_test() {
         compile_folder("simple_imports_test");
-        // let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
-        // let compiled = Compilation::compile(file_path);
-        // let outpath = Path::new("./test_data/simple_imports_test/outputs");
-        // let _ = compiled.generate_wast_files(&Box::from(outpath));
-        // for i in (1..4).rev() {
-        //     let actual_file = format!("./test_data/simple_imports_test/outputs/file_{}.wat", i);
-        //     let expected_file = format!("./test_data/simple_imports_test/outputs/file_{}_expected.wat", i);
-        //     let actual = read_to_string(actual_file).unwrap();
-        //     let expected = read_to_string(expected_file).unwrap();
-        //     assert_eq!(actual, expected);
-        // }
     }
 
     #[test]

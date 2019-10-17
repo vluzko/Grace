@@ -211,7 +211,8 @@ impl ToBytecode for Node<Expr> {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
                 let call = match &function.data {
                     &Expr::IdentifierExpr (ref ident) => format!("call ${func_name}", func_name=ident.to_string()),
-                    _ => panic!()
+                    &Expr::AttributeAccess{..} => function.data.flatten_to_module(),
+                    x => panic!("{:?}", x)
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
             },
@@ -271,6 +272,7 @@ impl ToBytecode for Node<Expr> {
                 let args = itertools::join(fields.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
                 format!("{}\ncall ${}", args, match &base.data {
                     &Expr::IdentifierExpr(ref ident) => ident.name.clone(),
+                    &Expr::AttributeAccess{..} => base.data.flatten_to_module(),
                     x => panic!("{:?}", &x)
                 })
             },

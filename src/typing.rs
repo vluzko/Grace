@@ -28,6 +28,7 @@ pub enum Type {
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Undetermined
 }
 
@@ -125,7 +126,7 @@ impl Type {
             Type::boolean => 1,
             Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
-            Type::Record(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
+            Type::Record(_, ref fields)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }
@@ -145,7 +146,7 @@ impl Type {
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
-            Type::Record (_, attributes) => {
+            Type::Record (_, attributes) | Type::Module(_, attributes) => {
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         return attr_type.clone();
@@ -165,6 +166,18 @@ impl Type {
             map.insert(ident.clone(), rec);
             order.push(ident.clone());
             rec = Type::Record(order, map);
+        }
+        return rec;
+    }
+
+    pub fn flatten_to_module(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
+        let mut rec = Type::Module(base.keys().map(|x| x.clone()).collect(), base);
+        for ident in idents[1..].iter().rev() {
+            let mut map = BTreeMap::new();
+            let mut order = vec!();
+            map.insert(ident.clone(), rec);
+            order.push(ident.clone());
+            rec = Type::Module(order, map);
         }
         return rec;
     }
@@ -316,16 +329,6 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
             scoping::CanModifyScope::Argument(..) => {
                 // Hack: assume all arguments are i32s for now
                 (type_map, Type::i32)
-                // let arg = unsafe {
-                //     &**ptr
-                // };
-                // // This can't be done in a match statement because Rust's borrow checker is wrong.
-                // if type_map.contains_key(&arg.id) {
-                //     let t = type_map.get(&arg.id).unwrap().clone();
-                //     (type_map, t)
-                // } else {
-                //     arg.resolve_types(context, type_map)
-                // }                
             },
             scoping::CanModifyScope::ImportedModule(id) => {
                 let func_type = type_map.get(id).unwrap().clone();

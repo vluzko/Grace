@@ -86,6 +86,7 @@ pub enum Expr {
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
     StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
+    ModuleAccess    {idents: Vec<Identifier>},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     VecComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     GenComprehension{values: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
@@ -100,6 +101,19 @@ pub enum Expr {
     SetLiteral      (Vec<Node<Expr>>),
     TupleLiteral    (Vec<Node<Expr>>),
     MapLiteral      (Vec<(Identifier, Node<Expr>)>)
+}
+
+impl Expr {
+    pub fn flatten_to_module(&self) -> String {
+        return match self {
+            Expr::IdentifierExpr(ref ident) => ident.name.clone(),
+            Expr::AttributeAccess {ref base, ref attribute} => {
+                let base_str = base.data.flatten_to_module();
+                format!("{}.{}", base_str, attribute.name)
+            },
+            _ => panic!()
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

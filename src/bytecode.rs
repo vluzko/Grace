@@ -269,9 +269,9 @@ impl ToBytecode for Node<Expr> {
             },
             Expr::StructLiteral{ref base, ref fields} => {
                 let args = itertools::join(fields.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
-                format!("{}\ncall ${}", args, match base.data {
-                    Expr::IdentifierExpr(ref ident) => ident.name.clone(),
-                    _ => panic!()
+                format!("{}\ncall ${}", args, match &base.data {
+                    &Expr::IdentifierExpr(ref ident) => ident.name.clone(),
+                    x => panic!("{:?}", &x)
                 })
             },
             Expr::AttributeAccess{ref base, ref attribute} => {

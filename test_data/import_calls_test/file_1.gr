@@ -1,0 +1,6 @@
+import file_2
+
+
+fn func_1() -> i32:
+    let x = file_2.A{1, 2}
+    return file_2.func_2()

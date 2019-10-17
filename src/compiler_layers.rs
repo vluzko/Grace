@@ -298,28 +298,54 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read_to_string;
-  
-    #[test]
-    fn simple_imports_test() {
-        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
+    use std::ffi::OsStr;
+    use std::fs::{
+        read_to_string, FileType, read_dir
+    };
+
+    fn compile_folder(subfolder: &str) {
+        let folder_path = format!("./test_data/{}", subfolder);
+        let output_path = format!("./test_data/{}/outputs", subfolder);
+        let file_path = format!("{}/file_1.gr", folder_path);
         let compiled = Compilation::compile(file_path);
-        // println!("{:?}", compiled);
-        assert_eq!(compiled.modules.len(), 3);
+        let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
+        let paths = read_dir(folder_path).unwrap();
+        for path in paths {
+            let p = path.unwrap().path();
+            let is_gr = match p.extension() {
+                Some(s) => s == "gr",
+                None => false
+            };
+            if is_gr {
+                let name = p.file_stem();
+                let output_file = format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
+                let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
+                println!("{:?}", output_file);
+                let actual = read_to_string(output_file).unwrap();
+                let expected = read_to_string(expected_file).unwrap();
+                assert_eq!(actual, expected);
+            }
+        }
     }
 
     #[test]
     fn simple_imports_compile_test() {
-        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
-        let compiled = Compilation::compile(file_path);
-        let outpath = Path::new("./test_data/outputs/simple_imports_test/");
-        let _ = compiled.generate_wast_files(&Box::from(outpath));
-        for i in (1..4).rev() {
-            let actual_file = format!("./test_data/outputs/simple_imports_test/file_{}.wat", i);
-            let expected_file = format!("./test_data/outputs/simple_imports_test/file_{}_expected.wat", i);
-            let actual = read_to_string(actual_file).unwrap();
-            let expected = read_to_string(expected_file).unwrap();
-            assert_eq!(actual, expected);
-        }
+        compile_folder("simple_imports_test");
+        // let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
+        // let compiled = Compilation::compile(file_path);
+        // let outpath = Path::new("./test_data/simple_imports_test/outputs");
+        // let _ = compiled.generate_wast_files(&Box::from(outpath));
+        // for i in (1..4).rev() {
+        //     let actual_file = format!("./test_data/simple_imports_test/outputs/file_{}.wat", i);
+        //     let expected_file = format!("./test_data/simple_imports_test/outputs/file_{}_expected.wat", i);
+        //     let actual = read_to_string(actual_file).unwrap();
+        //     let expected = read_to_string(expected_file).unwrap();
+        //     assert_eq!(actual, expected);
+        // }
+    }
+
+    #[test]
+    fn import_calls_test() {
+        compile_folder("import_calls_test");
     }
 }

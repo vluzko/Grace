@@ -327,11 +327,10 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
                 //     arg.resolve_types(context, type_map)
                 // }                
             },
-            scoping::CanModifyScope::ImportedFunction(id) => {
+            scoping::CanModifyScope::ImportedModule(id) => {
                 let func_type = type_map.get(id).unwrap().clone();
                 (type_map, func_type)
-            },
-            _ => panic!()
+            }
         };
     }
 }

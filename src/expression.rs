@@ -71,6 +71,7 @@ impl Stmt {
             Stmt::AssignmentStmt{ref name, ..} => name.clone(),
             Stmt::LetStmt{ref typed_name, ..} => typed_name.name.clone(),
             Stmt::FunctionDecStmt{ref name, ..} => name.clone(),
+            Stmt::StructDec{ref name, ..} => name.clone(),
             x => panic!("get_name called on an enum value that doesn't have a name: {:?}", x)
         }
     }

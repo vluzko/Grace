@@ -157,9 +157,9 @@ impl CanModifyScope {
     pub fn get_id(&self) -> usize {
         return match self {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
+            CanModifyScope::Expression(ref _ptr, ref id) => *id,
             CanModifyScope::Argument(ref _name, ref id) => *id,
-            CanModifyScope::ImportedModule(ref id) => *id,
-            _ => panic!()
+            CanModifyScope::ImportedModule(ref id) => *id
         };
     }
 }

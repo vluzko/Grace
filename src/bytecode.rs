@@ -400,6 +400,17 @@ mod tests {
     mod statements {
         use super::*;
 
+            #[test]
+            fn test_generate_assignment() {
+                // let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
+                let (stmt, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Block>>("let foo = 2\nfoo = 3".as_bytes());
+                let bytecode = stmt.generate_bytecode(&context, &mut type_map);
+                assert_eq!(bytecode, "i32.const 2\n\
+                set_local $foo\n\
+                i32.const 3\n\
+                set_local $foo".to_string());
+            }
+
         #[test]
         fn test_struct_declaration() {
             let input = "struct A:\n a: i32\n b: i32\n".as_bytes();
@@ -544,14 +555,6 @@ mod tests {
             "fn a(b:i32) -> i32:\n return 1\nlet x = a(1)".as_bytes());
         let bytecode = "(func $a (param $b i32) (result i32) \ni32.const 1\n)\n(export \"a\" (func $a))\ni32.const 1\ncall $a\nset_local $x".to_string();
         assert_eq!(function_call.generate_bytecode(&context, &mut type_map), bytecode);
-    }
-
-    #[test]
-    fn test_generate_assignment() {
-        // let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
-        let (stmt, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Stmt>>("foo = 3".as_bytes());
-        let bytecode = stmt.generate_bytecode(&context, &mut type_map);
-        assert_eq!(bytecode, "i32.const 3\nset_local $foo".to_string());
     }
 
     #[test]

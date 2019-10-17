@@ -302,25 +302,25 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 
     fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self {
-            scoping::CanModifyScope::Statement(ref ptr) => {
+            scoping::CanModifyScope::Statement(ref ptr, ref id) => {
                 let stmt = unsafe {
                     &**ptr
                 };
                 // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(&stmt.id) {
-                    let t = type_map.get(&stmt.id).unwrap().clone();
+                if type_map.contains_key(id) {
+                    let t = type_map.get(id).unwrap().clone();
                     (type_map, t)
                 } else {
                     stmt.resolve_types(context, type_map)
                 }
             },
-            scoping::CanModifyScope::Expression(ref ptr) => {
+            scoping::CanModifyScope::Expression(ref ptr, ref id) => {
                 let expr = unsafe {
                     &**ptr
                 };
                 // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(&expr.id) {
-                    let t = type_map.get(&expr.id).unwrap().clone();
+                if type_map.contains_key(id) {
+                    let t = type_map.get(id).unwrap().clone();
                     (type_map, t)
                 } else {
                     expr.resolve_types(context, type_map)

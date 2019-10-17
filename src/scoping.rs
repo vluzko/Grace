@@ -25,8 +25,8 @@ pub struct Context {
 /// * comprehensions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CanModifyScope {
-    Statement(*const Node<Stmt>),
-    Expression(*const Node<Expr>),
+    Statement(*const Node<Stmt>, usize),
+    Expression(*const Node<Expr>, usize),
     Argument(*const Node<Stmt>, usize),
     ImportedModule(usize)
 }
@@ -118,7 +118,7 @@ impl Context {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = unsafe {
             match scope_mod {
-                CanModifyScope::Statement(ptr) => {
+                CanModifyScope::Statement(ptr, _) => {
                     type_map.get(&(**ptr).id).unwrap().clone()
                 },
                 _ => panic!()
@@ -148,7 +148,7 @@ impl CanModifyScope {
     pub fn extract_stmt(&self) -> Stmt {
         return unsafe {
             match self {
-                CanModifyScope::Statement(stmt_ptr) => (**stmt_ptr).data.clone(),
+                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
                 _ => panic!()
             }
         };
@@ -291,7 +291,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
                     declaration_order.insert(arg.0.clone(), i+1);
-                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, i));
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, self.id));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -299,7 +299,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+1));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, self.id));
                     },
                     None => {}
                 };
@@ -309,7 +309,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+2));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, self.id));
                     }, 
                     None => {}
                 };
@@ -492,17 +492,17 @@ impl Node<Block> {
             match &stmt.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
                     scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                 },
                 Stmt::LetStmt{ref typed_name, ..} => {
                     scope.declaration_order.insert(typed_name.name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(typed_name.name.clone(), scope_mod);
                 },
                 Stmt::StructDec{ref name, ..} => {
                     scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                 },
                 _ => {}
@@ -520,12 +520,12 @@ impl Node<Module> {
         for (i, dec) in self.data.declarations.iter().enumerate() {
             match &dec.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                     scope.declaration_order.insert(name.clone(), i);
                 },
                 Stmt::StructDec{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                     scope.declaration_order.insert(name.clone(), i);
                 }, 
@@ -640,7 +640,7 @@ mod test {
             unsafe {
                 let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 match stmt1_pointer {
-                    CanModifyScope::Statement(x) => {
+                    CanModifyScope::Statement(x, _) => {
                         match (**x).data {
                             Stmt::LetStmt{ref typed_name, ..} => {
                                 assert_eq!(typed_name.clone(), TypedIdent::from("a"))
@@ -653,7 +653,7 @@ mod test {
 
                 let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
                 match stmt1_pointer {
-                    CanModifyScope::Statement(x) => {
+                    CanModifyScope::Statement(x, _) => {
                         match (**x).data {
                             Stmt::LetStmt{ref typed_name, ..} => {
                                 assert_eq!(typed_name.clone(), TypedIdent::from("b"))

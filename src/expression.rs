@@ -100,7 +100,7 @@ pub enum Expr {
     VecLiteral      (Vec<Node<Expr>>),
     SetLiteral      (Vec<Node<Expr>>),
     TupleLiteral    (Vec<Node<Expr>>),
-    MapLiteral      (Vec<(Identifier, Node<Expr>)>)
+    MapLiteral      (Vec<(Node<Expr>, Node<Expr>)>)
 }
 
 impl Expr {

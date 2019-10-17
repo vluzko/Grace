@@ -402,7 +402,6 @@ mod tests {
 
             #[test]
             fn test_generate_assignment() {
-                // let assignment_stmt = parser::assignment_stmt("foo = 3".as_bytes());
                 let (stmt, context, mut type_map) = compiler_layers::to_type_rewrites::<Node<Block>>("let foo = 2\nfoo = 3".as_bytes());
                 let bytecode = stmt.generate_bytecode(&context, &mut type_map);
                 assert_eq!(bytecode, "i32.const 2\n\

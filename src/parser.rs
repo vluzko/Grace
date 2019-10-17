@@ -1060,7 +1060,7 @@ pub mod expr_parsers {
         let parse_result = separated_nonempty_list_complete!(input,
             COMMA,
             separated_pair!(
-                IDENTIFIER,
+                logical_binary_expr,
                 COLON,
                 logical_binary_expr
             )
@@ -1467,7 +1467,7 @@ pub mod expr_parsers {
             let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
             check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
 
-            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Identifier::from("x"), Node::from("y"))))));
+            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Node::from("x"), Node::from("y"))))));
             check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
@@ -1503,7 +1503,7 @@ pub mod expr_parsers {
 
 
             check_data("{a: 2}", expression, Expr::MapLiteral(
-                vec!((Identifier::from("a"), Node::from(2)))
+                vec!((Node::from("a"), Node::from(2)))
             ));
         }
 

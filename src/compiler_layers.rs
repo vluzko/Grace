@@ -76,24 +76,19 @@ pub struct Compilation {
 
 impl Compilation {
     pub fn compile(file_name: String) -> Compilation {
-        let original_path = env::current_dir();
         let path = Path::new(&file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
-        match env::set_current_dir(path.parent().unwrap()) {
-            Ok(_) => {},
-            Err(x) => panic!("{:?}", x)
-        };
+
+        // Panics if the file_name ends in ".."
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
+
         let mut compilation = Compilation{
-            main_path: Some(absolute_path),
+            main_path: Some(absolute_path.clone()),
             modules: HashMap::new(),
             root_name: Some(path_to_module_reference(&boxed))
         };
-        compilation.compile_tree(&boxed);
-        match env::set_current_dir(original_path.unwrap()) {
-            Ok(_) => {},
-            Err(x) => panic!("{:?}", x)
-        }
+        let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
+        compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
         return compilation;
     }
 
@@ -125,8 +120,8 @@ impl Compilation {
     }
 
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(&mut self, file_name: &Box<Path>) {
-        let mut f = File::open(file_name).expect("File not found");
+    pub fn compile_tree(&mut self, base_dir: &Box<Path>, file_name: &Box<Path>) {
+        let mut f = File::open(base_dir.join(file_name)).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
@@ -148,7 +143,7 @@ impl Compilation {
             let submodule = match self.modules.get(&submodule_name) {
                 Some(x) => x,
                 None => {
-                    self.compile_tree(&path);
+                    self.compile_tree(base_dir, &path);
                     self.modules.get(&submodule_name).unwrap()
                 }
             };
@@ -298,9 +293,8 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi::OsStr;
     use std::fs::{
-        read_to_string, FileType, read_dir
+        read_to_string, read_dir
     };
 
     fn compile_folder(subfolder: &str) {
@@ -320,7 +314,6 @@ mod tests {
                 let name = p.file_stem();
                 let output_file = format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
                 let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
-                println!("{:?}", output_file);
                 let actual = read_to_string(output_file).unwrap();
                 let expected = read_to_string(expected_file).unwrap();
                 assert_eq!(actual, expected);

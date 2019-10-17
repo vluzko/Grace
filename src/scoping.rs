@@ -283,7 +283,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 self.scope = parent_id;
                 expression.gen_scopes(parent_id, context)
             },
-            Stmt::FunctionDecStmt{args, vararg, varkwarg, ref mut block, ..} => {
+            Stmt::FunctionDecStmt{args, ref mut block, ..} => {
                 // TODO: Handle keyword args expressions. They should receive just the parent scope.
                 let mut declarations = BTreeMap::new();
                 let mut declaration_order = BTreeMap::new();
@@ -293,26 +293,6 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     declaration_order.insert(arg.0.clone(), i+1);
                     declarations.insert(arg.0.clone(), CanModifyScope::Argument(arg.0.clone(), self.id));
                 }
-
-                // Add the variable length arguments to declarations.
-                match vararg {
-                    Some(ref x) => {
-                        let index = declaration_order.len() - 1;
-                        declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(x.clone(), self.id));
-                    },
-                    None => {}
-                };
-
-                // Add the variable length keyword arguments to declarations.
-                match varkwarg {
-                    Some(ref x) => {
-                        let index = declaration_order.len() - 1;
-                        declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(x.clone(), self.id));
-                    }, 
-                    None => {}
-                };
                 
                 let mut new_context = Context::empty();
                 let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};

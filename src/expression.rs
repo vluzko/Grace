@@ -51,8 +51,8 @@ pub struct Block {
 pub enum Stmt {
     AssignmentStmt  {name: Identifier, operator: Assignment, expression: Node<Expr>},
     LetStmt         {typed_name: TypedIdent, expression: Node<Expr>},
-    FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, vararg: Option<Identifier>,
-        kwargs: Vec<(Identifier, Type, Node<Expr>)>, varkwarg: Option<Identifier>, block: Node<Block>, return_type: Type},
+    FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, kwargs: Vec<(Identifier, Type, Node<Expr>)>,
+                     block: Node<Block>, return_type: Type},
     StructDec       {name: Identifier, fields: Vec<(Identifier, Type)>},
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},

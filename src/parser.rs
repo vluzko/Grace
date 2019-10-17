@@ -227,18 +227,6 @@ pub mod stmt_parsers {
         return result;
     }
 
-    // TODO: Deprecate
-    /// Match the variable length argument in a function declaration.
-    fn vararg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
-        return optc!(input, preceded!(
-            tuple!(
-                COMMA,
-                STAR
-            ),
-            IDENTIFIER
-        ));
-    }
-
     /// Match all keyword arguments in a function declaration.
     fn keyword_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
         let parse_result = optc!(input, preceded!(
@@ -259,18 +247,6 @@ pub mod stmt_parsers {
         });
     }
 
-    // TODO: Deprecate
-    /// Match the variable length keyword arguments in a function declaration.
-    fn varkwarg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
-        return optc!(input, preceded!(
-            tuple!(
-                COMMA,
-                EXP
-            ),
-            IDENTIFIER
-        ));
-    }
-
     /// Parse a function declaration.
     /// Must be public because it's used by module.
     pub fn function_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
@@ -280,12 +256,7 @@ pub mod stmt_parsers {
                 OPEN_PAREN,
                 fn_dec_args
             ),
-            vararg,
-            keyword_args,
-            terminated!(
-                varkwarg,
-                CLOSE_PAREN
-            ),
+            terminated!(keyword_args, CLOSE_PAREN),
             optc!(preceded!(
                 TARROW,
                 type_parser::any_type
@@ -294,12 +265,10 @@ pub mod stmt_parsers {
 
         let parse_result = line_and_block!(input, preceded!(FN, arg_parser), indent);
 
-        return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
+        return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| Stmt::FunctionDecStmt{
             name: name,
             args: args,
-            vararg: vararg,
             kwargs: keyword_args,
-            varkwarg: varkwarg,
             block: body,
             return_type: match return_type {
                 Some(x) => x,
@@ -518,11 +487,6 @@ pub mod stmt_parsers {
                 (Identifier::from("b"), Type::i64)
             ));
 
-            // Vararg
-            let expected = Some(Identifier::from("args"));
-            let actual = output(vararg(PosStr::from(", *args")));
-            assert_eq!(expected, actual);
-
             // Kwargs.
             let expected = vec!(
                    (Identifier::from("c"), Type::i32, Node::from(5)),
@@ -533,15 +497,13 @@ pub mod stmt_parsers {
        
         #[test]
         fn parse_func_dec() {
-            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn wvars(a: i32, b: i32, c: i32=5, d: i32 = 7):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wvars"),
                 args: vec!((Identifier::from("a"), Type::i32), (Identifier::from("b"), Type::i32)),
-                vararg: Some(Identifier::from("args")),
                 kwargs: vec!(
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                     (Identifier::from("d"), Type::i32, output(expression(PosStr::from("7"))))
                 ),
-                varkwarg: Some(Identifier::from("kwargs")),
                 block: output(block(PosStr::from("let val =  5\n"), 0)),
                 return_type: Type::empty
             });
@@ -549,11 +511,9 @@ pub mod stmt_parsers {
             check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wkwargs"),
                 args: vec![(Identifier::from("a"), Type::i32)],
-                vararg: None,
                 kwargs: vec!(
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                 ),
-                varkwarg: None,
                 block: output(block(PosStr::from("let val=5\n"), 0)),
                 return_type: Type::empty
             });
@@ -561,9 +521,7 @@ pub mod stmt_parsers {
             check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
                 args: vec!((Identifier::from("b"), Type::i32)),
-                vararg: None,
                 kwargs: vec!(),
-                varkwarg: None,
                 block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
                 return_type: Type::i32
             });

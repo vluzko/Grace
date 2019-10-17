@@ -401,8 +401,8 @@ impl Typed<Node<Block>> for Node<Block> {
 impl Typed<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
         let new_stmt = match self.data {
-            Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, vararg, kwargs, varkwarg, return_type}
+            Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, kwargs, return_type}
             },
             Stmt::AssignmentStmt {mut expression, name, operator} => {
                 expression = expression.type_based_rewrite(context, type_map);

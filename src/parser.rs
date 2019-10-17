@@ -1730,4 +1730,15 @@ mod tests {
 
         check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
     }
+
+    #[cfg(test)]
+    mod from_failures {
+        use super::*;
+
+        #[test]
+        fn parse_solitary_expression() {
+            simple_check_failed("1 + 3", module);
+            simple_check_failed("1 + 3", |x| block(x, 0));
+        }
+    }
 }

@@ -416,8 +416,8 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 };
                 Stmt::IfStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map), elifs: new_elifs, else_block: new_else_block}
             },
-            Stmt::LetStmt {typed_name, expression} => {
-                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite(context, type_map)}
+            Stmt::LetStmt {name, type_annotation, expression} => {
+                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map)}

@@ -126,18 +126,6 @@ pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<B
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
-// TODO: Deprecate
-/// Match a typed identifier
-pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent> {
-    let parse_result = tuple!(input,
-        IDENTIFIER,
-        optc!(preceded!(COLON, type_parser::any_type))
-    );
-
-    return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
-}
-
-
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
@@ -165,16 +153,19 @@ pub mod stmt_parsers {
 
     /// Match a let statement.
     fn let_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = separated_pair!(input,
+        let parse_result = tuple!(input,
             preceded!(
                 LET,
-                typed_identifier
+                IDENTIFIER
             ),
-            EQUALS,
-            expression
+            optc!(preceded!(COLON, type_parser::any_type)),
+            preceded!(
+                EQUALS,
+                expression
+            )
         );
 
-        return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
+        return fmap_node(parse_result, |x| Stmt::LetStmt {name: x.0, type_annotation: x.1, expression: x.2});
     }
 
     /// Match an assignment statement.
@@ -435,18 +426,14 @@ pub mod stmt_parsers {
         #[test]
         fn parse_let_stmt() {
             check_data("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: None
-                },
+                name: Identifier::from("x"),
+                type_annotation: None,
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
 
             check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: Some(Type::f32)
-                },
+                name: Identifier::from("x"),
+                type_annotation: Some(Type::f32),
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
         }

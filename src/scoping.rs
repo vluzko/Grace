@@ -475,10 +475,10 @@ impl Node<Block> {
                     let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                 },
-                Stmt::LetStmt{ref typed_name, ..} => {
-                    scope.declaration_order.insert(typed_name.name.clone(), i);
+                Stmt::LetStmt{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
                     let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
-                    scope.declarations.insert(typed_name.name.clone(), scope_mod);
+                    scope.declarations.insert(name.clone(), scope_mod);
                 },
                 Stmt::StructDec{ref name, ..} => {
                     scope.declaration_order.insert(name.clone(), i);
@@ -607,8 +607,8 @@ mod test {
             let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
             let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
 
-            let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
-            let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
+            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
+            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
 
             let mut block = Node::from(Block{
                 statements: vec!(Box::new(Node::from(s1)), Box::new(Node::from(s2)))
@@ -622,8 +622,8 @@ mod test {
                 match stmt1_pointer {
                     CanModifyScope::Statement(x, _) => {
                         match (**x).data {
-                            Stmt::LetStmt{ref typed_name, ..} => {
-                                assert_eq!(typed_name.clone(), TypedIdent::from("a"))
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("a"))
                             },
                             _ => panic!()
                         }
@@ -635,8 +635,8 @@ mod test {
                 match stmt1_pointer {
                     CanModifyScope::Statement(x, _) => {
                         match (**x).data {
-                            Stmt::LetStmt{ref typed_name, ..} => {
-                                assert_eq!(typed_name.clone(), TypedIdent::from("b"))
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("b"))
                             },
                             _ => panic!()
                         }

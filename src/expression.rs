@@ -50,7 +50,7 @@ pub struct Block {
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Stmt {
     AssignmentStmt  {name: Identifier, operator: Assignment, expression: Node<Expr>},
-    LetStmt         {typed_name: TypedIdent, expression: Node<Expr>},
+    LetStmt         {name: Identifier, type_annotation: Option<Type>, expression: Node<Expr>},
     FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, kwargs: Vec<(Identifier, Type, Node<Expr>)>,
                      block: Node<Block>, return_type: Type},
     StructDec       {name: Identifier, fields: Vec<(Identifier, Type)>},
@@ -69,7 +69,7 @@ impl Stmt {
     pub fn get_name(&self) -> Identifier {
         return match self {
             Stmt::AssignmentStmt{ref name, ..} => name.clone(),
-            Stmt::LetStmt{ref typed_name, ..} => typed_name.name.clone(),
+            Stmt::LetStmt{ref name, ..} => name.clone(),
             Stmt::FunctionDecStmt{ref name, ..} => name.clone(),
             Stmt::StructDec{ref name, ..} => name.clone(),
             x => panic!("get_name called on an enum value that doesn't have a name: {:?}", x)
@@ -192,12 +192,6 @@ pub struct Identifier {
     pub name: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypedIdent {
-    pub name: Identifier,
-    pub type_annotation: Option<Type>
-}
-
 pub mod trait_impls {
     use super::*;
     /// Impl for Nodes
@@ -212,11 +206,11 @@ pub mod trait_impls {
     }
 
     /// Display implementations
-    impl Display for TypedIdent {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{} (typed)", self.name)
-        }
-    }
+    // impl Display for TypedIdent {
+    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    //         write!(f, "{} (typed)", self.name)
+    //     }
+    // }
 
     impl Display for Identifier {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -481,12 +475,12 @@ pub mod trait_impls {
         }
     }
 
-    /// From for TypedIdent
-    impl <'a> From<&'a str> for TypedIdent {
-        fn from(input: &'a str) -> Self {
-            return TypedIdent{name: Identifier::from(input), type_annotation: None};
-        }
-    }
+    // /// From for TypedIdent
+    // impl <'a> From<&'a str> for TypedIdent {
+    //     fn from(input: &'a str) -> Self {
+    //         return TypedIdent{name: Identifier::from(input), type_annotation: None};
+    //     }
+    // }
 
     /// From for Identifier
     impl <'a> From<&'a str> for Identifier {

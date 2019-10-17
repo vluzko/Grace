@@ -132,8 +132,8 @@ impl ToBytecode for Node<Stmt> {
             Stmt::ReturnStmt (ref value) => {
                 value.generate_bytecode(context, type_map)
             },
-            Stmt::LetStmt {ref typed_name, ref expression, ..} => {
-	        let identifier_bytecode = typed_name.name.generate_bytecode(context, type_map);
+            Stmt::LetStmt {ref name, ref expression, ..} => {
+	            let identifier_bytecode = name.generate_bytecode(context, type_map);
                 let expression_bytecode = expression.generate_bytecode(context, type_map);
                 let assignment_bytecode = format!("{value}\nset_local ${identifier}",
                 value = expression_bytecode,

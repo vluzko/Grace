@@ -555,6 +555,8 @@ pub mod stmt_parsers {
                 condition: Node::from(true),
                 block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt(PosStr::from("x=true")))))})
             });
+
+            simple_check_failed("while true\n x = true", |x| statement(x, 0));
         }
 
         #[test]

@@ -27,7 +27,7 @@ pub struct Context {
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>, usize),
     Expression(*const Node<Expr>, usize),
-    Argument(*const Node<Stmt>, usize),
+    Argument(Identifier, usize),
     ImportedModule(usize)
 }
 
@@ -291,7 +291,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
                     declaration_order.insert(arg.0.clone(), i+1);
-                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, self.id));
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(arg.0.clone(), self.id));
                 }
 
                 // Add the variable length arguments to declarations.
@@ -299,7 +299,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, self.id));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(x.clone(), self.id));
                     },
                     None => {}
                 };
@@ -309,7 +309,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                     Some(ref x) => {
                         let index = declaration_order.len() - 1;
                         declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, self.id));
+                        declarations.insert(x.clone(), CanModifyScope::Argument(x.clone(), self.id));
                     }, 
                     None => {}
                 };

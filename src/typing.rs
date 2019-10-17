@@ -24,7 +24,7 @@ pub enum Type {
     Sum(Vec<Type>),
     Product(Vec<Type>),
     Vector(Box<Type>),
-    Function(Vec<Type>, Box<Type>),
+    Function(Vec<(Identifier, Type)>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
@@ -456,8 +456,10 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 
                 // let total_args = args.len() + kwargs.len();
                 // let argument_type = vec![Type::Undetermined; total_args];
-                let mut arg_types = c![x.1.clone(), for x in args];
-                arg_types.append(&mut c![x.1.clone(), for x in kwargs]);
+                let mut arg_types = args.clone();
+                for x in kwargs {
+                    arg_types.push((x.0.clone(), x.1.clone()));
+                }
 
                 // TODO: Type check
                 // assert_eq!(return_type.clone().unwrap(), t);
@@ -760,7 +762,7 @@ mod test {
         fn test_flatten() {
             let idents = vec!(Identifier::from("a"), Identifier::from("b"));
             let bottom_map = btreemap!{
-                Identifier::from("c") => Type::Function(vec!(Type::i32), Box::new(Type::i64)),
+                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), Box::new(Type::i64)),
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap!{

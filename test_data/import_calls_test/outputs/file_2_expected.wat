@@ -21,7 +21,6 @@ get_local $.x
 i32.const 8
 i32.add
 (export "A" (func $A)
-
 (func $func_2  (result i32) 
 i32.const 2
 )

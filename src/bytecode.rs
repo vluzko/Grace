@@ -210,8 +210,8 @@ impl ToBytecode for Node<Expr> {
             Expr::FunctionCall {ref function, ref args, ..} => {
                 let arg_load = itertools::join(args.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
                 let call = match &function.data {
-                    &Expr::IdentifierExpr (ref ident) => format!("call ${func_name}", func_name=ident.to_string()),
-                    &Expr::AttributeAccess{..} => function.data.flatten_to_module(),
+                    &Expr::IdentifierExpr (ref ident) => format!("call ${}", ident.to_string()),
+                    &Expr::AttributeAccess{..} => format!("call $.{}", function.data.flatten_to_module()),
                     x => panic!("{:?}", x)
                 };
                 format!("{loads}\n{call}", loads=arg_load, call=call)
@@ -270,7 +270,7 @@ impl ToBytecode for Node<Expr> {
             },
             Expr::StructLiteral{ref base, ref fields} => {
                 let args = itertools::join(fields.iter().map(|x| x.generate_bytecode(context, type_map)), "\n");
-                format!("{}\ncall ${}", args, match &base.data {
+                format!("{}\ncall $.{}", args, match &base.data {
                     &Expr::IdentifierExpr(ref ident) => ident.name.clone(),
                     &Expr::AttributeAccess{..} => base.data.flatten_to_module(),
                     x => panic!("{:?}", &x)
@@ -464,7 +464,7 @@ mod tests {
             (func $B   (local $x i32)\n\
             i32.const 1\n\
             i32.const 2\n\
-            call $A\n\
+            call $.A\n\
             set_local $x\n\
             )\n\
             (export \"B\" (func $B))\n\
@@ -483,7 +483,7 @@ mod tests {
             (func $B   (local $x i32) (local $y i32)\n\
             i32.const 1\n\
             i32.const 2\n\
-            call $A\n\
+            call $.A\n\
             set_local $x\n\
             get_local $x\n\
             i32.const 0\n\

@@ -8,10 +8,10 @@
 (func $func_1  (result i32) (local $x i32)
 i32.const 1
 i32.const 2
-call $file_2.A
+call $.file_2.A
 set_local $x
 
-file_2.func_2
+call $.file_2.func_2
 )
 (export "func_1" (func $func_1))
 )

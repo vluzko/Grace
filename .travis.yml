@@ -6,7 +6,6 @@ rust:
   - nightly
 script:
   - cargo build --verbose --all
-  - cargo test --verbose --test-threads=1
 matrix:
   allow_failures:
     - rust: nightly

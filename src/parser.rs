@@ -16,7 +16,8 @@ use general_utils::get_next_id;
 use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
-    function_declaration_stmt
+    function_declaration_stmt,
+    struct_declaration_stmt
 };
 
 type StmtNode = Node<Stmt>;
@@ -66,10 +67,12 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
             ),
             many1c!(
                 terminated!(
-                    alt_complete!(call!(function_declaration_stmt, 0)),
+                    alt_complete!(call!(function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
+                    
                     between_statement
                 )
-            )
+            ),
+            alt_complete!(eof!() | EMPTY)
         )
     );
 
@@ -123,18 +126,6 @@ pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<B
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
 }
 
-// TODO: Deprecate
-/// Match a typed identifier
-pub fn typed_identifier<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, TypedIdent> {
-    let parse_result = tuple!(input,
-        IDENTIFIER,
-        optc!(preceded!(COLON, type_parser::any_type))
-    );
-
-    return fmap_iresult(parse_result, |x| TypedIdent{name: x.0, type_annotation: x.1});
-}
-
-
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
@@ -149,7 +140,6 @@ pub mod stmt_parsers {
             call!(for_in, indent) |
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
-            call!(struct_declaration_stmt, indent) |
             call!(try_except, indent) |
             return_stmt |
             break_stmt |
@@ -163,16 +153,19 @@ pub mod stmt_parsers {
 
     /// Match a let statement.
     fn let_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = separated_pair!(input,
+        let parse_result = tuple!(input,
             preceded!(
                 LET,
-                typed_identifier
+                IDENTIFIER
             ),
-            EQUALS,
-            expression
+            optc!(preceded!(COLON, type_parser::any_type)),
+            preceded!(
+                EQUALS,
+                expression
+            )
         );
 
-        return fmap_node(parse_result, |x| Stmt::LetStmt {typed_name: x.0, expression: x.1});
+        return fmap_node(parse_result, |x| Stmt::LetStmt {name: x.0, type_annotation: x.1, expression: x.2});
     }
 
     /// Match an assignment statement.
@@ -225,18 +218,6 @@ pub mod stmt_parsers {
         return result;
     }
 
-    // TODO: Deprecate
-    /// Match the variable length argument in a function declaration.
-    fn vararg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
-        return optc!(input, preceded!(
-            tuple!(
-                COMMA,
-                STAR
-            ),
-            IDENTIFIER
-        ));
-    }
-
     /// Match all keyword arguments in a function declaration.
     fn keyword_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
         let parse_result = optc!(input, preceded!(
@@ -257,18 +238,6 @@ pub mod stmt_parsers {
         });
     }
 
-    // TODO: Deprecate
-    /// Match the variable length keyword arguments in a function declaration.
-    fn varkwarg<'a>(input: PosStr<'a>) -> Res<'a, Option<Identifier>> {
-        return optc!(input, preceded!(
-            tuple!(
-                COMMA,
-                EXP
-            ),
-            IDENTIFIER
-        ));
-    }
-
     /// Parse a function declaration.
     /// Must be public because it's used by module.
     pub fn function_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
@@ -278,12 +247,7 @@ pub mod stmt_parsers {
                 OPEN_PAREN,
                 fn_dec_args
             ),
-            vararg,
-            keyword_args,
-            terminated!(
-                varkwarg,
-                CLOSE_PAREN
-            ),
+            terminated!(keyword_args, CLOSE_PAREN),
             optc!(preceded!(
                 TARROW,
                 type_parser::any_type
@@ -292,12 +256,10 @@ pub mod stmt_parsers {
 
         let parse_result = line_and_block!(input, preceded!(FN, arg_parser), indent);
 
-        return fmap_node(parse_result, |((name, args, vararg, keyword_args, varkwarg, return_type), body)| Stmt::FunctionDecStmt{
+        return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| Stmt::FunctionDecStmt{
             name: name,
             args: args,
-            vararg: vararg,
             kwargs: keyword_args,
-            varkwarg: varkwarg,
             block: body,
             return_type: match return_type {
                 Some(x) => x,
@@ -464,18 +426,14 @@ pub mod stmt_parsers {
         #[test]
         fn parse_let_stmt() {
             check_data("let x = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: None
-                },
+                name: Identifier::from("x"),
+                type_annotation: None,
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
 
             check_data("let x: f32 = 3.0", |x| statement(x, 0), Stmt::LetStmt {
-                typed_name: TypedIdent {
-                    name: Identifier::from("x"),
-                    type_annotation: Some(Type::f32)
-                },
+                name: Identifier::from("x"),
+                type_annotation: Some(Type::f32),
                 expression: Node::from(Expr::Float("3.0".to_string()))
             });
         }
@@ -516,11 +474,6 @@ pub mod stmt_parsers {
                 (Identifier::from("b"), Type::i64)
             ));
 
-            // Vararg
-            let expected = Some(Identifier::from("args"));
-            let actual = output(vararg(PosStr::from(", *args")));
-            assert_eq!(expected, actual);
-
             // Kwargs.
             let expected = vec!(
                    (Identifier::from("c"), Type::i32, Node::from(5)),
@@ -531,15 +484,13 @@ pub mod stmt_parsers {
        
         #[test]
         fn parse_func_dec() {
-            check_data("fn wvars(a: i32, b: i32, *args, c: i32=5, d: i32 = 7, **kwargs):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
+            check_data("fn wvars(a: i32, b: i32, c: i32=5, d: i32 = 7):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wvars"),
                 args: vec!((Identifier::from("a"), Type::i32), (Identifier::from("b"), Type::i32)),
-                vararg: Some(Identifier::from("args")),
                 kwargs: vec!(
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                     (Identifier::from("d"), Type::i32, output(expression(PosStr::from("7"))))
                 ),
-                varkwarg: Some(Identifier::from("kwargs")),
                 block: output(block(PosStr::from("let val =  5\n"), 0)),
                 return_type: Type::empty
             });
@@ -547,11 +498,9 @@ pub mod stmt_parsers {
             check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("wkwargs"),
                 args: vec![(Identifier::from("a"), Type::i32)],
-                vararg: None,
                 kwargs: vec!(
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                 ),
-                varkwarg: None,
                 block: output(block(PosStr::from("let val=5\n"), 0)),
                 return_type: Type::empty
             });
@@ -559,9 +508,7 @@ pub mod stmt_parsers {
             check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| statement(x, 0), Stmt::FunctionDecStmt {
                 name: Identifier::from("a"),
                 args: vec!((Identifier::from("b"), Type::i32)),
-                vararg: None,
                 kwargs: vec!(),
-                varkwarg: None,
                 block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
                 return_type: Type::i32
             });
@@ -608,6 +555,8 @@ pub mod stmt_parsers {
                 condition: Node::from(true),
                 block: Node::from(Block{statements: vec!(Box::new(output(assignment_stmt(PosStr::from("x=true")))))})
             });
+
+            simple_check_failed("while true\n x = true", |x| statement(x, 0));
         }
 
         #[test]
@@ -860,7 +809,6 @@ pub mod expr_parsers {
         return parse_result;
     }
 
-// identifier.[recurse] or identifier{args_list}
     fn struct_expr<'a>(input: PosStr<'a>) -> ExprRes<'a> {
         let result = tuple!(input,
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
@@ -939,7 +887,8 @@ pub mod expr_parsers {
                         kwargs_list
                     ))
                 ) |
-                map!(kwargs_list, |x| (vec![], Some(x)))
+                map!(kwargs_list, |x| (vec!(), Some(x))) |
+                map!(peek!(CLOSE_PAREN), |x| (vec!(), None))
             ),
             CLOSE_PAREN
         );
@@ -1111,7 +1060,7 @@ pub mod expr_parsers {
         let parse_result = separated_nonempty_list_complete!(input,
             COMMA,
             separated_pair!(
-                IDENTIFIER,
+                logical_binary_expr,
                 COLON,
                 logical_binary_expr
             )
@@ -1255,7 +1204,10 @@ pub mod expr_parsers {
                 kwargs: vec![(Identifier::from("a"), Node::from(true)), (Identifier::from("b"), Node::from(true))]
             });
 
-
+            check_match("()", trailer, PostIdent::Call {
+                args: vec!(),
+                kwargs: vec!()
+            });
 
             simple_check_failed("(a | b=false)", trailer);
             simple_check_failed("(a   b=false)", trailer);
@@ -1515,7 +1467,7 @@ pub mod expr_parsers {
             let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
             check_match("\"asdf\\\"\\\rasdf\"", expression, Node::from(expr));
 
-            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Identifier::from("x"), Node::from("y"))))));
+            check_match("{x : y}", expression, Node::from(Expr::MapLiteral(vec!((Node::from("x"), Node::from("y"))))));
             check_match("[true, false]", expression, Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("{true, false}", expression, Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
             check_match("(true, false)", expression, Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
@@ -1551,7 +1503,7 @@ pub mod expr_parsers {
 
 
             check_data("{a: 2}", expression, Expr::MapLiteral(
-                vec!((Identifier::from("a"), Node::from(2)))
+                vec!((Node::from("a"), Node::from(2)))
             ));
         }
 
@@ -1766,5 +1718,16 @@ mod tests {
         };
 
         check_match(" x=0\n y=true\n\n  \n", |x| block(x, 1), Node::from(exp_block));
+    }
+
+    #[cfg(test)]
+    mod from_failures {
+        use super::*;
+
+        #[test]
+        fn parse_solitary_expression() {
+            simple_check_failed("1 + 3", module);
+            simple_check_failed("1 + 3", |x| block(x, 0));
+        }
     }
 }

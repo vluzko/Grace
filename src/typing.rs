@@ -24,10 +24,11 @@ pub enum Type {
     Sum(Vec<Type>),
     Product(Vec<Type>),
     Vector(Box<Type>),
-    Function(Vec<Type>, Box<Type>),
+    Function(Vec<(Identifier, Type)>, Box<Type>),
     Named(Identifier),
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Undetermined
 }
 
@@ -77,6 +78,9 @@ impl Type {
             &Type::Function(ref _args, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
+            &Type::Record(..) => {
+                "i32".to_string()
+            },
             _ => panic!()
         }
     }
@@ -122,7 +126,7 @@ impl Type {
             Type::boolean => 1,
             Type::string => 1,
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
-            Type::Record(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
+            Type::Record(_, ref fields)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }
@@ -142,7 +146,7 @@ impl Type {
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
-            Type::Record (_, attributes) => {
+            Type::Record (_, attributes) | Type::Module(_, attributes) => {
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         return attr_type.clone();
@@ -162,6 +166,18 @@ impl Type {
             map.insert(ident.clone(), rec);
             order.push(ident.clone());
             rec = Type::Record(order, map);
+        }
+        return rec;
+    }
+
+    pub fn flatten_to_module(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
+        let mut rec = Type::Module(base.keys().map(|x| x.clone()).collect(), base);
+        for ident in idents[1..].iter().rev() {
+            let mut map = BTreeMap::new();
+            let mut order = vec!();
+            map.insert(ident.clone(), rec);
+            order.push(ident.clone());
+            rec = Type::Module(order, map);
         }
         return rec;
     }
@@ -286,25 +302,25 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 
     fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self {
-            scoping::CanModifyScope::Statement(ref ptr) => {
+            scoping::CanModifyScope::Statement(ref ptr, ref id) => {
                 let stmt = unsafe {
                     &**ptr
                 };
                 // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(&stmt.id) {
-                    let t = type_map.get(&stmt.id).unwrap().clone();
+                if type_map.contains_key(id) {
+                    let t = type_map.get(id).unwrap().clone();
                     (type_map, t)
                 } else {
                     stmt.resolve_types(context, type_map)
                 }
             },
-            scoping::CanModifyScope::Expression(ref ptr) => {
+            scoping::CanModifyScope::Expression(ref ptr, ref id) => {
                 let expr = unsafe {
                     &**ptr
                 };
                 // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(&expr.id) {
-                    let t = type_map.get(&expr.id).unwrap().clone();
+                if type_map.contains_key(id) {
+                    let t = type_map.get(id).unwrap().clone();
                     (type_map, t)
                 } else {
                     expr.resolve_types(context, type_map)
@@ -313,22 +329,11 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
             scoping::CanModifyScope::Argument(..) => {
                 // Hack: assume all arguments are i32s for now
                 (type_map, Type::i32)
-                // let arg = unsafe {
-                //     &**ptr
-                // };
-                // // This can't be done in a match statement because Rust's borrow checker is wrong.
-                // if type_map.contains_key(&arg.id) {
-                //     let t = type_map.get(&arg.id).unwrap().clone();
-                //     (type_map, t)
-                // } else {
-                //     arg.resolve_types(context, type_map)
-                // }                
             },
-            scoping::CanModifyScope::ImportedFunction(id) => {
+            scoping::CanModifyScope::ImportedModule(id) => {
                 let func_type = type_map.get(id).unwrap().clone();
                 (type_map, func_type)
-            },
-            _ => panic!()
+            }
         };
     }
 }
@@ -396,8 +401,8 @@ impl Typed<Node<Block>> for Node<Block> {
 impl Typed<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
         let new_stmt = match self.data {
-            Stmt::FunctionDecStmt {name, block, args, vararg, kwargs, varkwarg, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, vararg, kwargs, varkwarg, return_type}
+            Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, kwargs, return_type}
             },
             Stmt::AssignmentStmt {mut expression, name, operator} => {
                 expression = expression.type_based_rewrite(context, type_map);
@@ -411,8 +416,8 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 };
                 Stmt::IfStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map), elifs: new_elifs, else_block: new_else_block}
             },
-            Stmt::LetStmt {typed_name, expression} => {
-                Stmt::LetStmt {typed_name, expression: expression.type_based_rewrite(context, type_map)}
+            Stmt::LetStmt {name, type_annotation, expression} => {
+                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map)}
@@ -431,13 +436,25 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 
     fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         return match self.data {
-            Stmt::LetStmt{ref expression, ..} => {
+            Stmt::LetStmt{ref type_annotation, ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
+
+                // Type check
+                match type_annotation {
+                    Some(ta) => assert_eq!(ta, &expr_type),
+                    None => {}
+                };
+
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)
             },
-            Stmt::AssignmentStmt{ref expression, ..} => {
+            Stmt::AssignmentStmt{ref name, ref expression, ..} => {
                 let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
+
+                // Type check
+                let expected_type = type_map.get(&context.get_declaration(self.scope, name).unwrap().get_id()).unwrap();
+                assert_eq!(expected_type, &expr_type);
+
                 type_map.insert(self.id, expr_type.clone());
                 (type_map, expr_type)                
             },
@@ -451,8 +468,10 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 
                 // let total_args = args.len() + kwargs.len();
                 // let argument_type = vec![Type::Undetermined; total_args];
-                let mut arg_types = c![x.1.clone(), for x in args];
-                arg_types.append(&mut c![x.1.clone(), for x in kwargs]);
+                let mut arg_types = args.clone();
+                for x in kwargs {
+                    arg_types.push((x.0.clone(), x.1.clone()));
+                }
 
                 // TODO: Type check
                 // assert_eq!(return_type.clone().unwrap(), t);
@@ -755,7 +774,7 @@ mod test {
         fn test_flatten() {
             let idents = vec!(Identifier::from("a"), Identifier::from("b"));
             let bottom_map = btreemap!{
-                Identifier::from("c") => Type::Function(vec!(Type::i32), Box::new(Type::i64)),
+                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), Box::new(Type::i64)),
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap!{

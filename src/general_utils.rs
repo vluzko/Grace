@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::hash::Hash;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::fmt::Debug;
@@ -22,6 +23,14 @@ where T: Eq, T: Hash, T: Clone {
 /// Take the union of two hashsets, moving elements out of the second. Both original sets are consumed.
 pub fn m_union<T>(mut a: HashSet<T>,  b: HashSet<T>) -> HashSet<T>
 where T: Eq, T: Hash {
+    for element in b.into_iter() {
+        a.insert(element);
+    }
+    return a;
+}
+
+pub fn mb_union<T>(mut a: BTreeSet<T>,  b: BTreeSet<T>) -> BTreeSet<T>
+where T: Eq, T: Ord {
     for element in b.into_iter() {
         a.insert(element);
     }

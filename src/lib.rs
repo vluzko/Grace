@@ -6,6 +6,8 @@ extern crate cute;
 extern crate maplit;
 extern crate bytecount;
 extern crate memchr;
+#[macro_use]
+extern crate pretty_assertions;
 
 pub mod position_tracker;
 #[macro_use]

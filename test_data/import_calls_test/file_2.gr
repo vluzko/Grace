@@ -1,0 +1,7 @@
+
+struct A:
+    a: i32
+    b: i32
+
+fn func_2() -> i32:
+    return 2

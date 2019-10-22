@@ -76,24 +76,19 @@ pub struct Compilation {
 
 impl Compilation {
     pub fn compile(file_name: String) -> Compilation {
-        let original_path = env::current_dir();
         let path = Path::new(&file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
-        match env::set_current_dir(path.parent().unwrap()) {
-            Ok(_) => {},
-            Err(x) => panic!("{:?}", x)
-        };
+
+        // Panics if the file_name ends in ".."
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
+
         let mut compilation = Compilation{
-            main_path: Some(absolute_path),
+            main_path: Some(absolute_path.clone()),
             modules: HashMap::new(),
             root_name: Some(path_to_module_reference(&boxed))
         };
-        compilation.compile_tree(&boxed);
-        match env::set_current_dir(original_path.unwrap()) {
-            Ok(_) => {},
-            Err(x) => panic!("{:?}", x)
-        }
+        let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
+        compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
         return compilation;
     }
 
@@ -109,7 +104,7 @@ impl Compilation {
         }
 
         // The type of the full module (including all the parent modules).
-        let module_type = Type::flatten_to_record(&import.path, record_type);
+        let module_type = Type::flatten_to_module(&import.path, record_type);
 
         return module_type;
     }
@@ -125,8 +120,8 @@ impl Compilation {
     }
 
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(&mut self, file_name: &Box<Path>) {
-        let mut f = File::open(file_name).expect("File not found");
+    pub fn compile_tree(&mut self, base_dir: &Box<Path>, file_name: &Box<Path>) {
+        let mut f = File::open(base_dir.join(file_name)).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
@@ -148,7 +143,7 @@ impl Compilation {
             let submodule = match self.modules.get(&submodule_name) {
                 Some(x) => x,
                 None => {
-                    self.compile_tree(&path);
+                    self.compile_tree(base_dir, &path);
                     self.modules.get(&submodule_name).unwrap()
                 }
             };
@@ -265,7 +260,7 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<u
 }
 
 pub fn to_scopes<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: Scoped<T> {
+where T: Parseable, T: Scoped {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
     let (id, mut init) = initial_context();
@@ -275,21 +270,21 @@ where T: Parseable, T: Scoped<T> {
 }
 
 pub fn to_types<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped<T>, T: Typed<T> {
+where T: Parseable, T: Scoped, T: Typed<T> {
     let (result, context): (T, Context) = to_scopes(input);
     let (type_map, _) = result.resolve_types(&context, HashMap::new());
     return (result, context, type_map);
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped<T>, T: Typed<T>, T: Debug {
+where T: Parseable, T: Scoped, T: Typed<T>, T: Debug {
     let (result, mut context, mut type_map): (T, Context, HashMap<usize, Type>) = to_types(input);
     let rewritten = result.type_based_rewrite(&mut context, &mut type_map);
     return (rewritten, context, type_map);
 }
 
 pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>, String) 
-where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
+where T: Parseable, T: Scoped, T: Typed<T>, T: ToBytecode, T: Debug {
     let (result, context, mut type_map): (T, Context, HashMap<usize, Type>) = to_type_rewrites(input);
     let bytecode = result.generate_bytecode(&context, &mut type_map);
     return (result, context, type_map, bytecode);
@@ -298,28 +293,41 @@ where T: Parseable, T: Scoped<T>, T: Typed<T>, T: ToBytecode, T: Debug {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::fs::read_to_string;
-  
-    #[test]
-    fn simple_imports_test() {
-        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
+    use std::fs::{
+        read_to_string, read_dir
+    };
+
+    fn compile_folder(subfolder: &str) {
+        let folder_path = format!("./test_data/{}", subfolder);
+        let output_path = format!("./test_data/{}/outputs", subfolder);
+        let file_path = format!("{}/file_1.gr", folder_path);
         let compiled = Compilation::compile(file_path);
-        // println!("{:?}", compiled);
-        assert_eq!(compiled.modules.len(), 3);
+        let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
+        let paths = read_dir(folder_path).unwrap();
+        for path in paths {
+            let p = path.unwrap().path();
+            let is_gr = match p.extension() {
+                Some(s) => s == "gr",
+                None => false
+            };
+            if is_gr {
+                let name = p.file_stem();
+                let output_file = format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
+                let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
+                let actual = read_to_string(output_file).unwrap();
+                let expected = read_to_string(expected_file).unwrap();
+                assert_eq!(actual, expected);
+            }
+        }
     }
 
     #[test]
     fn simple_imports_compile_test() {
-        let file_path = "./test_data/simple_imports_test/file_1.gr".to_string();
-        let compiled = Compilation::compile(file_path);
-        let outpath = Path::new("./test_data/outputs/simple_imports_test/");
-        let _ = compiled.generate_wast_files(&Box::from(outpath));
-        for i in (1..4).rev() {
-            let actual_file = format!("./test_data/outputs/simple_imports_test/file_{}.wat", i);
-            let expected_file = format!("./test_data/outputs/simple_imports_test/file_{}_expected.wat", i);
-            let actual = read_to_string(actual_file).unwrap();
-            let expected = read_to_string(expected_file).unwrap();
-            assert_eq!(actual, expected);
-        }
+        compile_folder("simple_imports_test");
+    }
+
+    #[test]
+    fn import_calls_test() {
+        compile_folder("import_calls_test");
     }
 }

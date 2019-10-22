@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use expression::*;
 use general_utils;
@@ -25,11 +26,10 @@ pub struct Context {
 /// * comprehensions
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CanModifyScope {
-    Statement(*const Node<Stmt>),
-    Expression(*const Node<Expr>),
-    Argument(*const Node<Stmt>, usize),
-    ImportedModule(usize),
-    ImportedFunction(usize)
+    Statement(*const Node<Stmt>, usize),
+    Expression(*const Node<Expr>, usize),
+    Argument(Identifier, usize),
+    ImportedModule(usize)
 }
 
 /// A single layer of scope.
@@ -45,13 +45,13 @@ pub struct Scope {
 }
 
 /// Any object that has a scope.
-pub trait Scoped<T> {
+pub trait Scoped {
     /// Get the scope of the object.
 
     fn get_usages(&self) -> HashSet<Identifier>;
 
     /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier>;
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier>;
 
     /// Generate scopes recursively. Returns all scopes.
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
@@ -100,14 +100,12 @@ impl Context {
     }
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
-        // println!("Name: {:?}\nScope: {:?}\n", name, self.scopes.get(&scope_id));
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
-            panic!("Reached scope id 0");
+            panic!("Reached scope id 0 searching for {}", name);
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
-            // println!("Scope reached: {:?}", initial_scope.parent_id);
             return match initial_scope.parent_id {
                 Some(id) => {
                     self.get_declaration(id, name)
@@ -121,7 +119,7 @@ impl Context {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = unsafe {
             match scope_mod {
-                CanModifyScope::Statement(ptr) => {
+                CanModifyScope::Statement(ptr, _) => {
                     type_map.get(&(**ptr).id).unwrap().clone()
                 },
                 _ => panic!()
@@ -151,7 +149,7 @@ impl CanModifyScope {
     pub fn extract_stmt(&self) -> Stmt {
         return unsafe {
             match self {
-                CanModifyScope::Statement(stmt_ptr) => (**stmt_ptr).data.clone(),
+                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
                 _ => panic!()
             }
         };
@@ -159,22 +157,24 @@ impl CanModifyScope {
 
     pub fn get_id(&self) -> usize {
         return match self {
-            CanModifyScope::ImportedModule(val) => *val,
-            _ => panic!()
+            CanModifyScope::Statement(ref _ptr, ref id) => *id,
+            CanModifyScope::Expression(ref _ptr, ref id) => *id,
+            CanModifyScope::Argument(ref _name, ref id) => *id,
+            CanModifyScope::ImportedModule(ref id) => *id
         };
     }
 }
 
-impl Scoped<Node<Module>> for Node<Module> {
+impl Scoped for Node<Module> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         panic!();
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
-        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
+        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.declarations {
-            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
         }
         return top_level;
     }
@@ -201,7 +201,7 @@ impl Scoped<Node<Module>> for Node<Module> {
     }
 }
 
-impl Scoped<Node<Block>> for Node<Block> {
+impl Scoped for Node<Block> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         let mut usages = HashSet::new();
@@ -211,10 +211,10 @@ impl Scoped<Node<Block>> for Node<Block> {
         return usages;
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
-        let mut top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
+        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.statements {
-            top_level = general_utils::m_union(top_level, stmt.get_true_declarations(context));
+            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
         }
         return top_level;
     }
@@ -240,7 +240,7 @@ impl Scoped<Node<Block>> for Node<Block> {
     }
 }
 
-impl Scoped<Node<Stmt>> for Node<Stmt> {
+impl Scoped for Node<Stmt> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {
@@ -266,12 +266,12 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
         };
     }
 
-    fn get_true_declarations(&self, context: &Context) -> HashSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
         return match self.data {
             Stmt::FunctionDecStmt{ref block, ..} => {
                 block.get_true_declarations(context)
             },
-            _ => HashSet::new()
+            _ => BTreeSet::new()
         };
     }
 
@@ -286,7 +286,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 self.scope = parent_id;
                 expression.gen_scopes(parent_id, context)
             },
-            Stmt::FunctionDecStmt{args, vararg, varkwarg, ref mut block, ..} => {
+            Stmt::FunctionDecStmt{args, ref mut block, ..} => {
                 // TODO: Handle keyword args expressions. They should receive just the parent scope.
                 let mut declarations = BTreeMap::new();
                 let mut declaration_order = BTreeMap::new();
@@ -294,28 +294,8 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
                 // Add arguments to declarations.
                 for (i, arg) in args.iter().enumerate() {
                     declaration_order.insert(arg.0.clone(), i+1);
-                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(raw_pointer, i));
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(arg.0.clone(), self.id));
                 }
-
-                // Add the variable length arguments to declarations.
-                match vararg {
-                    Some(ref x) => {
-                        let index = declaration_order.len() - 1;
-                        declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+1));
-                    },
-                    None => {}
-                };
-
-                // Add the variable length keyword arguments to declarations.
-                match varkwarg {
-                    Some(ref x) => {
-                        let index = declaration_order.len() - 1;
-                        declaration_order.insert(x.clone(), index);
-                        declarations.insert(x.clone(), CanModifyScope::Argument(raw_pointer, args.len()+2));
-                    }, 
-                    None => {}
-                };
                 
                 let mut new_context = Context::empty();
                 let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
@@ -367,7 +347,7 @@ impl Scoped<Node<Stmt>> for Node<Stmt> {
     }
 }
 
-impl Scoped<Node<Expr>> for Node<Expr> {
+impl Scoped for Node<Expr> {
 
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {
@@ -407,7 +387,7 @@ impl Scoped<Node<Expr>> for Node<Expr> {
         };
     }
 
-    fn get_true_declarations(&self, _context: &Context) -> HashSet<Identifier> {
+    fn get_true_declarations(&self, _context: &Context) -> BTreeSet<Identifier> {
         panic!()
     }
 
@@ -495,17 +475,17 @@ impl Node<Block> {
             match &stmt.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
                     scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                 },
-                Stmt::LetStmt{ref typed_name, ..} => {
-                    scope.declaration_order.insert(typed_name.name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
-                    scope.declarations.insert(typed_name.name.clone(), scope_mod);
+                Stmt::LetStmt{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
                 },
                 Stmt::StructDec{ref name, ..} => {
                     scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                 },
                 _ => {}
@@ -523,16 +503,16 @@ impl Node<Module> {
         for (i, dec) in self.data.declarations.iter().enumerate() {
             match &dec.data {
                 Stmt::FunctionDecStmt{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _);
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
                     scope.declarations.insert(name.clone(), scope_mod);
                     scope.declaration_order.insert(name.clone(), i);
                 },
-                Stmt::ReturnStmt(..) => {
-                    // TODO: Add module
-                },
-                _ => {
-                    //TODO: panic
-                }
+                Stmt::StructDec{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                    scope.declaration_order.insert(name.clone(), i);
+                }, 
+                _ => panic!()
             };
         }
         
@@ -630,8 +610,8 @@ mod test {
             let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
             let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
 
-            let s1 = Stmt::LetStmt{typed_name: TypedIdent::from("a"), expression: Node::from(e1)};
-            let s2 = Stmt::LetStmt{typed_name: TypedIdent::from("b"), expression: Node::from(e2)};
+            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
+            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
 
             let mut block = Node::from(Block{
                 statements: vec!(Box::new(Node::from(s1)), Box::new(Node::from(s2)))
@@ -643,10 +623,10 @@ mod test {
             unsafe {
                 let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
                 match stmt1_pointer {
-                    CanModifyScope::Statement(x) => {
+                    CanModifyScope::Statement(x, _) => {
                         match (**x).data {
-                            Stmt::LetStmt{ref typed_name, ..} => {
-                                assert_eq!(typed_name.clone(), TypedIdent::from("a"))
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("a"))
                             },
                             _ => panic!()
                         }
@@ -656,10 +636,10 @@ mod test {
 
                 let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
                 match stmt1_pointer {
-                    CanModifyScope::Statement(x) => {
+                    CanModifyScope::Statement(x, _) => {
                         match (**x).data {
-                            Stmt::LetStmt{ref typed_name, ..} => {
-                                assert_eq!(typed_name.clone(), TypedIdent::from("b"))
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("b"))
                             },
                             _ => panic!()
                         }

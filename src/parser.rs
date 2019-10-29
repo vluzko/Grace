@@ -17,7 +17,8 @@ use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
     function_declaration_stmt,
-    struct_declaration_stmt
+    struct_declaration_stmt,
+    prelim_func_parser
 };
 
 type StmtNode = Node<Stmt>;
@@ -124,6 +125,14 @@ pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<B
         statements
     };
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
+}
+
+pub fn new_module<'a>(input: PosStr<'a>) {
+    let result = separated_list_complete!(input,
+        NEWLINE,
+        prelim_func_parser
+    );
+    println!("Result: {:?}", result);
 }
 
 /// All statement parsers.
@@ -236,6 +245,39 @@ pub mod stmt_parsers {
             Some(y) => y,
             None => vec!()
         });
+    }
+
+    /// Parse just the header of a function. Skip over everything else.
+    pub fn prelim_func_parser<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, 
+        ((Identifier, Vec<(Identifier, Type)>, Vec<(Identifier, Type, ExprNode)>, Option<Type>), PosStr<'a>)> {
+        let arg_parser = |i: PosStr<'a>| tuple!(i,
+            IDENTIFIER,
+            preceded!(
+                OPEN_PAREN,
+                fn_dec_args
+            ),
+            terminated!(keyword_args, CLOSE_PAREN),
+            optc!(preceded!(
+                TARROW,
+                type_parser::any_type
+            ))
+        );
+
+        let temp_result = tuple!(input, 
+            preceded!(FN, arg_parser),
+            optc!(take_until!(b"\nfn "))
+        );
+
+        let result = match temp_result {
+            Ok((i, o)) => {
+                match o.1 {
+                    Some(block) => Ok((i, (o.0, block))),
+                    None => Ok((PosStr::empty(), (o.0, i)))
+                }
+            }, 
+            Err(x) => Err(x)
+        };
+        return result;
     }
 
     /// Parse a function declaration.
@@ -1682,6 +1724,17 @@ mod tests {
            ),
            imports: vec!()
        }))
+    }
+
+    #[test]
+    fn parse_new_module() {
+        let input = PosStr::from("fn A(a: i32, b: i32, c: i32) -> i32:
+           return 1\n\
+        fn B() -> i32:
+           return 2\n\
+        ");
+        let _ = new_module(input);
+        panic!()
     }
 
     #[test]

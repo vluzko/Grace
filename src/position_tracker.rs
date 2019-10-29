@@ -22,7 +22,7 @@ use self::nom::{
     Offset,
     Slice,
     AtEof,
-    InputTake
+    InputTake,
 };
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -44,6 +44,7 @@ pub struct PosStr<'a> {
 }
 
 impl<'a> PosStr<'a> {
+    
 
     pub fn new(input: &'a [u8]) -> Self {
         PosStr {
@@ -261,52 +262,12 @@ impl <'a> InputTake for PosStr<'a> {
     }
 }
 
+
 impl <'a> Offset for PosStr<'a> {
     fn offset(&self, second: &Self) -> usize {
         return self.slice.offset(second.slice);
     }
 }
-
-// impl <'a> InputTakeAtPosition for PosStr<'a> {
-//   type Item = <Self as InputIter>::RawItem;
-
-//   fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
-//   where
-//     P: Fn(Self::Item) -> bool,
-//   {
-//     match self.position(predicate) {
-//       Some(n) => Ok(self.take_split(n)),
-//       None => {
-//         if self.at_eof() {
-//           Ok(self.take_split(self.input_len()))
-//         } else {
-//           Err(Err::Incomplete(Needed::Size(1)))
-//         }
-//       }
-//     }
-//   }
-//
-//   fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
-//   where
-//     P: Fn(Self::Item) -> bool,
-//   {
-//     match self.position(predicate) {
-//       Some(0) => Err(Err::Error(Context::Code(self.clone(), e))),
-//       Some(n) => Ok(self.take_split(n)),
-//       None => {
-//         if self.at_eof() {
-//           if self.input_len() == 0 {
-//             Err(Err::Error(Context::Code(self.clone(), e)))
-//           } else {
-//             Ok(self.take_split(self.input_len()))
-//           }
-//         } else {
-//           Err(Err::Incomplete(Needed::Size(1)))
-//         }
-//       }
-//     }
-//   }
-// }
 
 macro_rules! impl_slice_for_range {
     ($range:ty) => (

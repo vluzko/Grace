@@ -21,6 +21,10 @@ use self::stmt_parsers::{
     prelim_func_parser
 };
 
+use scoping::Context2;
+use scoping::initial_context;
+use scoping::Scope;
+
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
@@ -133,6 +137,32 @@ pub fn new_module<'a>(input: PosStr<'a>) {
         prelim_func_parser
     );
     println!("Result: {:?}", result);
+    let mut new_context = Context2::empty();
+    // empty scope
+    let mut base_scope = Scope::empty();
+    match result {
+        Ok((input, output)) => {
+            for (name, args, kwargs, return_type, pos_str) in output {
+                // get a node ID
+                let node_id = get_next_id();
+                // add the type to the type map
+                let mut arg_types = args.clone();
+                for x in kwargs {
+                    arg_types.push((x.0.clone(), x.1.clone()));
+                }
+                // TODO: Type check
+                // assert_eq!(return_type.clone().unwrap(), t);
+                let return_type_unpacked = match return_type {
+                    Some(t) => t,
+                    None => Type::empty
+                };
+                let function_type = Type::Function(arg_types, Box::new(return_type_unpacked));
+                // add the function to scoping
+                new_context.typ
+            }
+        },
+        _ => panic!()
+    }
 }
 
 /// All statement parsers.
@@ -249,9 +279,11 @@ pub mod stmt_parsers {
 
     /// Parse just the header of a function. Skip over everything else.
     pub fn prelim_func_parser<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, 
-        ((Identifier, Vec<(Identifier, Type)>, Vec<(Identifier, Type, ExprNode)>, Option<Type>), PosStr<'a>)> {
-        let arg_parser = |i: PosStr<'a>| tuple!(i,
-            IDENTIFIER,
+        (Identifier, Vec<(Identifier, Type)>, Vec<(Identifier, Type, ExprNode)>, Option<Type>, PosStr<'a>)> {
+        
+
+        let temp_result = tuple!(input, 
+            preceded!(FN, IDENTIFIER),
             preceded!(
                 OPEN_PAREN,
                 fn_dec_args
@@ -260,19 +292,15 @@ pub mod stmt_parsers {
             optc!(preceded!(
                 TARROW,
                 type_parser::any_type
-            ))
-        );
-
-        let temp_result = tuple!(input, 
-            preceded!(FN, arg_parser),
+            )),
             optc!(take_until!(b"\nfn "))
         );
 
         let result = match temp_result {
             Ok((i, o)) => {
-                match o.1 {
-                    Some(block) => Ok((i, (o.0, block))),
-                    None => Ok((PosStr::empty(), (o.0, i)))
+                match o.4 {
+                    Some(block) => Ok((i, (o.0, o.1, o.2, o.3, block))),
+                    None => Ok((PosStr::empty(), (o.0, o.1, o.2, o.3, i)))
                 }
             }, 
             Err(x) => Err(x)

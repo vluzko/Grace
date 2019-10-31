@@ -16,6 +16,7 @@ use scoping::{
     Scoped,
     Scope,
     Context,
+    Context2,
     CanModifyScope,
     initial_context,
     base_scope

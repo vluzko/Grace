@@ -8,7 +8,7 @@ use typing::Type;
 
 extern crate cute;
 
-/// The full scoping and typing context for a compilation.
+/// The full scoping context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
     // A map from Scope ids to Scopes.
@@ -16,6 +16,18 @@ pub struct Context {
     // A map from Node ids to Scope ids. Each node that modifies scope
     // maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>
+}
+
+/// The full scoping and typing context for a compilation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Context2 {
+    // A map from Scope IDs to Scopes.
+    pub scopes: HashMap<usize, Scope>,
+    // A map from Node IDs to Scope IDs. Each node that modifies scope
+    // maps to the scope it's contained in.
+    pub containing_scopes: HashMap<usize, usize>,
+    // A map from Node IDs to types.
+    pub type_map: HashMap<usize, Type>
 }
 
 /// A sum type for things that can modify scope.
@@ -74,6 +86,27 @@ pub fn initial_context() -> (usize, Context) {
     init_scopes.insert(id, empty);
     let context = Context{scopes: init_scopes, containing_scopes: HashMap::new()};
     return (id, context);
+}
+
+impl Scope {
+    /// Create an empty scope.
+    pub fn empty() -> Scope {
+        return Scope{
+            parent_id: None,
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new()
+        };
+    }
+}
+
+impl Context2 {
+    pub fn empty() -> Context2 {
+        return Context2{
+            scopes: HashMap::new(),
+            containing_scopes: HashMap::new(),
+            type_map: HashMap::new()
+            }
+    }
 }
 
 // pub fn empty_context() -> Context {

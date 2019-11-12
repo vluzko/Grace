@@ -3,7 +3,7 @@
 ## Architecture Rewrite
 * Flatten the AST to access everything by IDs
 * Perform a pre-parsing step to get function definitions
-* Perform scoping, typing, and parsing in the same step
+* Perform scoping and typing at the same time
 * Pass up number of anonymous declarations / declarations to functions
 
 ### Memory Safety
@@ -17,6 +17,7 @@
 * Javascript calling
 
 ### *Control Flow Graph*
+* What are the kinds of node in a control-flow graph?
 
 ### Low Level Representation
 

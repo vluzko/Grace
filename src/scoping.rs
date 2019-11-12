@@ -21,8 +21,10 @@ pub struct Context {
 /// The full scoping and typing context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context2 {
+    // The ID of the root scope of the context.
+    pub root_id: usize,
     // A map from Scope IDs to Scopes.
-    pub scopes: HashMap<usize, Scope>,
+    pub scopes: HashMap<usize, Scope2>,
     // A map from Node IDs to Scope IDs. Each node that modifies scope
     // maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>,
@@ -56,6 +58,17 @@ pub struct Scope {
     pub declaration_order: BTreeMap<Identifier, usize>
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Scope2 {
+    /// The id of the parent scope.
+    pub parent_id: Option<usize>,
+    // TODO: Consider replacing with an insertion ordered map.
+    /// The identifiers declared in this scope, and raw pointers to the statements that created them.
+    pub declarations: BTreeMap<Identifier, usize>,
+    /// The order in which each identifier was declared. (Important for blocks.)
+    pub declaration_order: BTreeMap<Identifier, usize>
+}
+
 /// Any object that has a scope.
 pub trait Scoped {
     /// Get the scope of the object.
@@ -78,6 +91,14 @@ pub fn base_scope() -> Scope {
     };
 }
 
+pub fn base_scope2() -> Scope2 {
+    return Scope2{
+        parent_id: None,
+        declarations: BTreeMap::new(),
+        declaration_order: BTreeMap::new()
+    };
+}
+
 /// Create a context containing only the empty scope.
 pub fn initial_context() -> (usize, Context) {
     let empty = base_scope();
@@ -86,6 +107,20 @@ pub fn initial_context() -> (usize, Context) {
     init_scopes.insert(id, empty);
     let context = Context{scopes: init_scopes, containing_scopes: HashMap::new()};
     return (id, context);
+}
+
+pub fn builtin_context() -> Context2 {
+    let empty = base_scope2();
+    let mut init_scopes = HashMap::new();
+    let id = general_utils::get_next_scope_id();
+    init_scopes.insert(id, empty);
+    let context = Context2{
+        root_id: id, 
+        scopes: init_scopes, 
+        containing_scopes: HashMap::new(),
+        type_map: HashMap::new()
+    };
+    return context;
 }
 
 impl Scope {
@@ -102,10 +137,11 @@ impl Scope {
 impl Context2 {
     pub fn empty() -> Context2 {
         return Context2{
+            root_id: general_utils::get_next_scope_id(),
             scopes: HashMap::new(),
             containing_scopes: HashMap::new(),
             type_map: HashMap::new()
-            }
+        };
     }
 }
 

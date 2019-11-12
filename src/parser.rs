@@ -17,13 +17,8 @@ use self::expr_parsers::expression;
 use self::stmt_parsers::{
     statement,
     function_declaration_stmt,
-    struct_declaration_stmt,
-    prelim_func_parser
+    struct_declaration_stmt
 };
-
-use scoping::Context2;
-use scoping::initial_context;
-use scoping::Scope;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -129,40 +124,6 @@ pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<B
         statements
     };
     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
-}
-
-pub fn new_module<'a>(input: PosStr<'a>) {
-    let result = separated_list_complete!(input,
-        NEWLINE,
-        prelim_func_parser
-    );
-    println!("Result: {:?}", result);
-    let mut new_context = Context2::empty();
-    // empty scope
-    let mut base_scope = Scope::empty();
-    match result {
-        Ok((input, output)) => {
-            for (name, args, kwargs, return_type, pos_str) in output {
-                // get a node ID
-                let node_id = get_next_id();
-                // add the type to the type map
-                let mut arg_types = args.clone();
-                for x in kwargs {
-                    arg_types.push((x.0.clone(), x.1.clone()));
-                }
-                // TODO: Type check
-                // assert_eq!(return_type.clone().unwrap(), t);
-                let return_type_unpacked = match return_type {
-                    Some(t) => t,
-                    None => Type::empty
-                };
-                let function_type = Type::Function(arg_types, Box::new(return_type_unpacked));
-                // add the function to scoping
-                new_context.typ
-            }
-        },
-        _ => panic!()
-    }
 }
 
 /// All statement parsers.
@@ -275,37 +236,6 @@ pub mod stmt_parsers {
             Some(y) => y,
             None => vec!()
         });
-    }
-
-    /// Parse just the header of a function. Skip over everything else.
-    pub fn prelim_func_parser<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, 
-        (Identifier, Vec<(Identifier, Type)>, Vec<(Identifier, Type, ExprNode)>, Option<Type>, PosStr<'a>)> {
-        
-
-        let temp_result = tuple!(input, 
-            preceded!(FN, IDENTIFIER),
-            preceded!(
-                OPEN_PAREN,
-                fn_dec_args
-            ),
-            terminated!(keyword_args, CLOSE_PAREN),
-            optc!(preceded!(
-                TARROW,
-                type_parser::any_type
-            )),
-            optc!(take_until!(b"\nfn "))
-        );
-
-        let result = match temp_result {
-            Ok((i, o)) => {
-                match o.4 {
-                    Some(block) => Ok((i, (o.0, o.1, o.2, o.3, block))),
-                    None => Ok((PosStr::empty(), (o.0, o.1, o.2, o.3, i)))
-                }
-            }, 
-            Err(x) => Err(x)
-        };
-        return result;
     }
 
     /// Parse a function declaration.
@@ -1752,17 +1682,6 @@ mod tests {
            ),
            imports: vec!()
        }))
-    }
-
-    #[test]
-    fn parse_new_module() {
-        let input = PosStr::from("fn A(a: i32, b: i32, c: i32) -> i32:
-           return 1\n\
-        fn B() -> i32:
-           return 2\n\
-        ");
-        let _ = new_module(input);
-        panic!()
     }
 
     #[test]

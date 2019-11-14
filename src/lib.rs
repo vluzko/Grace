@@ -8,6 +8,7 @@ extern crate bytecount;
 extern crate memchr;
 #[macro_use]
 extern crate pretty_assertions;
+extern crate petgraph;
 
 pub mod position_tracker;
 #[macro_use]

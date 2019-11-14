@@ -17,6 +17,7 @@ lazy_static = "1.3.0"
 bytecount = "*"
 memchr = "*"
 pretty_assertions = "*"
+petgraph = "*"
 
 [lib]
 name = "grace_lib"

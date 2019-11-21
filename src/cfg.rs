@@ -1,7 +1,7 @@
 extern crate petgraph;
 
-use petgraph::*;
-use expression::{Assignment, Identifier, Node};
+use petgraph::Graph;
+use expression::{Assignment, Identifier, Node, Expr};
 use typing::Type;
 
 pub struct CfgVertex {
@@ -15,4 +15,9 @@ pub enum CfgStmt {
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BranchStmt      (Node<Expr>),
+}
+
+fn empty_cfg() -> Graph::<CfgVertex, i64> {
+    let mut empty = Graph::<CfgVertex, i64>::new();
+    return empty;
 }

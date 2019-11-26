@@ -140,7 +140,6 @@ pub mod stmt_parsers {
             call!(for_in, indent) |
             call!(if_stmt, indent) |
             call!(function_declaration_stmt, indent) |
-            call!(try_except, indent) |
             return_stmt |
             break_stmt |
             pass_stmt |
@@ -402,23 +401,6 @@ pub mod stmt_parsers {
         return fmap_node(parse_result, |_| Stmt::ContinueStmt);
     }
 
-    /// Match a try except statement.
-    fn try_except<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let parse_result = tuple!(input,
-            keyword_and_block!(TRY, indent),
-            many1c!(keyword_and_block!(EXCEPT, indent)),
-            optc!(keyword_and_block!(ELSE, indent)),
-            optc!(keyword_and_block!(FINALLY, indent))
-        );
-
-        return fmap_node(parse_result, |x| Stmt::TryExceptStmt {
-            block: x.0,
-            exceptions: x.1,
-            else_block: x.2,
-            final_block: x.3
-        });
-    }
-
     #[cfg(test)]
     mod tests {
         use super::*;
@@ -565,17 +547,6 @@ pub mod stmt_parsers {
                 iter_vars: Identifier::from("x"),
                 iterator: Node::from("y"),
                 block: output(block(PosStr::from("a=true"), 0))
-            });
-        }
-
-        #[test]
-        fn parse_try_except() {
-            let blk = output(block(PosStr::from("x=0"), 0));
-            check_data("try    :     \n\n\n x = 0\n\n     \n\nexcept:\n x =      0     \nelse:\n x=0\nfinally:\n x=0     \n\n\n   \n\n", |x| try_except(x, 0), Stmt::TryExceptStmt {
-                block: blk.clone(),
-                exceptions: vec!(blk.clone()),
-                else_block: Some(blk.clone()),
-                final_block: Some(blk.clone())
             });
         }
 

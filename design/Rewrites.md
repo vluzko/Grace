@@ -9,6 +9,7 @@
 * Attribute access -> module access
 * First class function call -> indirect call
 * Struct declaration -> function declaration
-* Struct instantiation -> tuple instantiation
-* Struct access -> Tuple access
 * Method declaration -> function declaration
+* Method call -> function call
+
+Rewrite post-typing, but on the AST.

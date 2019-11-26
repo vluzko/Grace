@@ -57,7 +57,7 @@ pub enum Stmt {
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
-    TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
+    // TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,

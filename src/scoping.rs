@@ -8,6 +8,7 @@ use typing::Type;
 
 extern crate cute;
 
+
 /// The full scoping context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {

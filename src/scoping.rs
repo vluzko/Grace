@@ -346,7 +346,6 @@ impl Scoped for Node<Stmt> {
     }
 
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context {
-        let raw_pointer = self as *const Node<Stmt>;
         let new_context = match &mut self.data {
             Stmt::LetStmt{expression, ..} => {
                 self.scope = parent_id;
@@ -519,7 +518,7 @@ impl Scoped for Node<Expr> {
                 self.scope = parent_id;
                 new_context
             },
-            Expr::AttributeAccess{ref mut base, ref mut attribute} => {
+            Expr::AttributeAccess{ref mut base, ..} => {
                 let mut new_context = Context::empty();
                 new_context.extend(base.gen_scopes(parent_id, context));
                 self.scope = parent_id;

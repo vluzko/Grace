@@ -871,7 +871,7 @@ pub mod expr_parsers {
                     ))
                 ) |
                 map!(kwargs_list, |x| (vec!(), Some(x))) |
-                map!(peek!(CLOSE_PAREN), |x| (vec!(), None))
+                map!(peek!(CLOSE_PAREN), |_x| (vec!(), None))
             ),
             CLOSE_PAREN
         );

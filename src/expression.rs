@@ -57,7 +57,6 @@ pub enum Stmt {
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
-    // TryExceptStmt   {block: Node<Block>, exceptions: Vec<Node<Block>>, else_block: Option<Node<Block>>, final_block: Option<Node<Block>>},
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,
@@ -306,6 +305,11 @@ pub mod trait_impls {
             return Expr::Float(input.to_string());
         }
     }
+    impl From<Identifier> for Expr {
+        fn from(input: Identifier) -> Self {
+            return Expr::IdentifierExpr(input.clone());
+        }
+    }
 
     /// From for Assignment
     impl<'a> From<&'a str> for Assignment {
@@ -504,4 +508,14 @@ pub mod trait_impls {
             return Identifier::from(input.slice)
         }
     }
+
+    impl From<String> for Identifier {
+        fn from(input: String) -> Self {
+            return Identifier{name: input.clone()};
+        }
+    }
+}
+
+pub fn wrap<T>(data: T) -> Box<Node<T>> {
+    return Box::new(Node::from(data));
 }

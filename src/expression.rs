@@ -49,7 +49,7 @@ pub struct Block {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Stmt {
-    AssignmentStmt  {name: Identifier, operator: Assignment, expression: Node<Expr>},
+    AssignmentStmt  {name: Identifier, expression: Node<Expr>},
     LetStmt         {name: Identifier, type_annotation: Option<Type>, expression: Node<Expr>},
     FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, kwargs: Vec<(Identifier, Type, Node<Expr>)>,
                      block: Node<Block>, return_type: Type},

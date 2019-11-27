@@ -404,9 +404,9 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
             Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, kwargs, return_type}
             },
-            Stmt::AssignmentStmt {mut expression, name, operator} => {
+            Stmt::AssignmentStmt {mut expression, name} => {
                 expression = expression.type_based_rewrite(context, type_map);
-                Stmt::AssignmentStmt {name, operator, expression: expression.type_based_rewrite(context, type_map)}
+                Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::IfStmt {condition, block, elifs,  else_block} => {
                 let new_elifs =  c![(elif.0.type_based_rewrite(context, type_map), elif.1.type_based_rewrite(context, type_map)), for elif in elifs];

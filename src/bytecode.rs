@@ -103,18 +103,13 @@ impl ToBytecode for Node<Stmt> {
                 );
                 func_dec
             },
-            Stmt::AssignmentStmt {ref name, ref operator, ref expression, ..} => {
-                match operator {
-                    Assignment::Normal => {
-                        let identifier_bytecode = name.generate_bytecode(context, type_map);
-                        let expression_bytecode = expression.generate_bytecode(context, type_map);
-                        let assignment_bytecode = format!("{value}\nset_local ${identifier}",
-                        value = expression_bytecode,
-                        identifier = identifier_bytecode);
-                        assignment_bytecode
-                    },
-                    _ => panic!()
-                }
+            Stmt::AssignmentStmt {ref name, ref expression, ..} => {
+                let identifier_bytecode = name.generate_bytecode(context, type_map);
+                let expression_bytecode = expression.generate_bytecode(context, type_map);
+                let assignment_bytecode = format!("{value}\nset_local ${identifier}",
+                value = expression_bytecode,
+                identifier = identifier_bytecode);
+                assignment_bytecode
 	        },
 	        // Only handles if x {foo}, no elifs or else
 	        Stmt::IfStmt {ref condition, ref block, ref else_block, ..} => {

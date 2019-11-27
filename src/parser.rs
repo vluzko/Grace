@@ -198,7 +198,17 @@ pub mod stmt_parsers {
         );
 
         return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
-            name: x.0, operator: Assignment::from(x.1), expression: x.2
+            name: x.0.clone(), expression: match x.1.slice {
+                b"=" => x.2,
+                _ => {
+                    let subop = &x.1.slice[0..x.1.slice.len()-1];
+                    Node::from(Expr::BinaryExpr{
+                        operator: BinaryOperator::from(subop),
+                        left: Box::new(Node::from(Expr::IdentifierExpr(x.0))),
+                        right: Box::new(x.2)
+                    })
+                }
+            }
         });
     }
 
@@ -424,23 +434,24 @@ pub mod stmt_parsers {
         fn parse_assignment_stmt() {
             check_data("foo = true", assignment_stmt, Stmt::AssignmentStmt {
                 name: Identifier::from("foo"),
-                operator: Assignment::Normal,
                 expression: Node::from(true)
             });
 
             check_data("x = 0\n", assignment_stmt, Stmt::AssignmentStmt {
                 name: Identifier::from("x"),
-                operator: Assignment::Normal,
                 expression: Node::from(0)
             });
 
-            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**=", "="];
+            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**="];
             for op in all_ops {
                 let input = format!("x {} y", op);
                 check_data(input.as_str(), assignment_stmt, Stmt::AssignmentStmt {
                     name: Identifier::from("x"),
-                    operator: Assignment::from(op),
-                    expression: Node::from("y"),
+                    expression: Node::from(Expr::BinaryExpr{
+                        operator: BinaryOperator::from(&op[0..op.len()-1]),
+                        left: Box::new(Node::from(Expr::from("x"))),
+                        right: Box::new(Node::from(Expr::from("y")))
+                    })
                 });
             }
 
@@ -549,6 +560,7 @@ pub mod stmt_parsers {
                 block: output(block(PosStr::from("a=true"), 0))
             });
         }
+
 
         #[test]
         fn parse_simple_statements() {

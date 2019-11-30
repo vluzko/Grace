@@ -14,6 +14,7 @@ pub mod position_tracker;
 #[macro_use]
 pub mod parser_utils;
 pub mod parser;
+pub mod post_parser;
 pub mod general_utils;
 pub mod grace_error;
 pub mod expression;

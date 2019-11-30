@@ -86,6 +86,7 @@ where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static SCOPE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static MODULE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_VAR_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 // Return a unique node ID.
 pub fn get_next_id() -> usize {
@@ -102,6 +103,11 @@ pub fn get_next_scope_id() -> usize {
 /// Return a unique module ID.
 pub fn get_next_module_id() -> usize {
     let next_id = MODULE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    return next_id as usize;
+}
+
+pub fn get_next_var() -> usize {
+    let next_id = LOCAL_VAR_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as usize;
 }
 

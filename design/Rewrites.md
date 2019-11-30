@@ -10,9 +10,7 @@ Other wise it is type variant.
 * For loops
     * Stmt -> (Stmt, Stmt)
 * Comprehensions -> loops
-    * Expr -> (Tree<Vec<Stmt>>, Identifier, ui64)
-    * It is a Tree and not just a vector because comprehensions can be nested, or appear in multiple places in an expression.
-    * The ui64 is the number of hidden variables required.
+    * Expr -> (Vec<Stmt>, Identifier)
     * Each rewritten loop must appear *after* its descendants.
 
 ## Type invariant, post context
@@ -21,11 +19,9 @@ Other wise it is type variant.
 * Struct declaration -> function declaration
 * Method call -> function call
 
-## Type variant, post context
-* Method declaration -> function declaration
-
 ## Type variant, low level
 * First class function call -> indirect call
+* Method declaration -> function declaration
 
 
 

@@ -1125,7 +1125,7 @@ pub mod expr_parsers {
         );
 
         return fmap_node(parse_result, |x| Expr::VecComprehension {
-            values: Box::new(x.0),
+            value: Box::new(x.0),
             iterators: x.1
         });
     }
@@ -1138,7 +1138,7 @@ pub mod expr_parsers {
         );
 
         return fmap_node(parse_result, |x| Expr::GenComprehension {
-            values: Box::new(x.0),
+            value: Box::new(x.0),
             iterators: x.1
         });
     }
@@ -1154,14 +1154,14 @@ pub mod expr_parsers {
                 many1!(comprehension_for)
         );
 
-        return fmap_node(parse_result, |(keys_or_values, values, iters)| match values {
+        return fmap_node(parse_result, |(key_or_value, value, iters)| match value {
             Some(y) => Expr::MapComprehension {
-                keys: Box::new(keys_or_values),
-                values: Box::new(y),
+                key: Box::new(key_or_value),
+                value: Box::new(y),
                 iterators: iters
             },
             None => Expr::SetComprehension {
-                values: Box::new(keys_or_values),
+                value: Box::new(key_or_value),
                 iterators: iters
             }
         });
@@ -1362,7 +1362,7 @@ pub mod expr_parsers {
         fn parse_comprehensions() {
             check_match("{x for x in y}", expression, Node::from(Expr::SetComprehension {
                 
-                values: Box::new(Node::from("x")),
+                value: Box::new(Node::from("x")),
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
@@ -1372,8 +1372,8 @@ pub mod expr_parsers {
 
             check_match("{x:z for x in y}", expression, Node::from(Expr::MapComprehension {
                 
-                keys: Box::new(Node::from("x")),
-                values: Box::new(Node::from("z")),
+                key: Box::new(Node::from("x")),
+                value: Box::new(Node::from("z")),
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
@@ -1383,7 +1383,7 @@ pub mod expr_parsers {
 
             check_match("[x for x in y]", expression, Node::from(Expr::VecComprehension {
                 
-                values: Box::new(Node::from("x")),
+                value: Box::new(Node::from("x")),
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
@@ -1392,7 +1392,7 @@ pub mod expr_parsers {
             }));
 
             check_match("(x for x in y)", expression, Node::from(Expr::GenComprehension {
-                values: Box::new(Node::from("x")),
+                value: Box::new(Node::from("x")),
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
@@ -1401,7 +1401,7 @@ pub mod expr_parsers {
             }));
 
             check_match("[x for x in y for x in y]", expression, Node::from(Expr::VecComprehension {
-                values: Box::new(Node::from("x")),
+                value: Box::new(Node::from("x")),
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),

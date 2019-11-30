@@ -119,7 +119,7 @@ impl Expr {
 pub struct ComprehensionIter {
     pub iter_vars: Vec<Identifier>,
     pub iterator: Box<Node<Expr>>,
-    pub if_clauses: Vec<Node<Expr>>
+    pub if_clause: Option<Node<Expr>>
 }
 
 /// An assignment

@@ -1100,16 +1100,16 @@ pub mod expr_parsers {
             comprehension_if
         );
 
-        return fmap_iresult(parse_result, |(iter_vars, iterator, if_clauses)| ComprehensionIter{
+        return fmap_iresult(parse_result, |(iter_vars, iterator, if_clause)| ComprehensionIter{
             iter_vars: iter_vars,
             iterator: Box::new(iterator),
-            if_clauses: if_clauses
+            if_clause: if_clause
         });
     }
 
     /// Match the if part of a comprehension.
-    fn comprehension_if<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Node<Expr>>> {
-        return many0c!(input,
+    fn comprehension_if<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Option<Node<Expr>>> {
+        return optc!(input,
             preceded!(
                 IF,
                 logical_binary_expr
@@ -1366,7 +1366,7 @@ pub mod expr_parsers {
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 })
             }));
 
@@ -1377,7 +1377,7 @@ pub mod expr_parsers {
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 })
             }));
 
@@ -1387,7 +1387,7 @@ pub mod expr_parsers {
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 })
             }));
 
@@ -1396,7 +1396,7 @@ pub mod expr_parsers {
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 })
             }));
 
@@ -1405,18 +1405,18 @@ pub mod expr_parsers {
                 iterators: vec!(ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 }, ComprehensionIter {
                     iter_vars: vec![Identifier::from("x")],
                     iterator: Box::new(Node::from("y")),
-                    if_clauses: vec!()
+                    if_clause: None
                 })
             }));
 
-            check_match("for a, b in c if true if false", comprehension_for, ComprehensionIter{
+            check_match("for a, b in c if true", comprehension_for, ComprehensionIter{
                 iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
                 iterator: Box::new(Node::from("c")),
-                if_clauses: c![Node::from(x), for x in vec!(true, false)]
+                if_clause: Some(Node::from(true))
             });
         }
 

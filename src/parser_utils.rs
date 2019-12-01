@@ -16,6 +16,21 @@ use self::iresult_helpers::*;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
 
+/// A macro for calling methods.
+macro_rules! m (
+  ($i:expr, $self_:ident.$method:ident) => (
+    {
+      let res = $self_.$method($i);
+      res
+    }
+  );
+  ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
+    {
+      let res = $self_.$method($i, $($args),*);
+      res
+    }
+  );
+);
 
 /// Alias for opt!(complete!())
 macro_rules! optc (
@@ -141,6 +156,8 @@ macro_rules! w_followed (
         w_followed!($i, call!($f));
     );
 );
+
+
 
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
@@ -547,7 +564,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_match<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T)
+    pub fn check_match<'a, T>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
@@ -562,7 +579,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    pub fn check_data<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         return match res {

@@ -191,6 +191,38 @@ pub struct Identifier {
     pub name: String,
 }
 
+pub mod constructors {
+    use super::*;
+
+    impl Stmt {
+        /// Simple Let constructor
+        pub fn simple_let(name: Identifier, expr: Expr) -> Stmt {
+            return Stmt::LetStmt {
+                name: name,
+                type_annotation: None,
+                expression: Node::from(expr)
+            };
+        }
+    }
+
+    impl Expr {
+        pub fn access(&self, name: Identifier) -> Expr {
+            return Expr::AttributeAccess{
+                base: wrap(self.clone()),
+                attribute: name
+            };
+        }
+
+        pub fn call(&self) -> Expr {
+            return Expr::FunctionCall {
+                function: wrap(self.clone()),
+                args: vec!(),
+                kwargs: vec!()
+            };
+        }
+    }
+}
+
 pub mod trait_impls {
     use super::*;
     /// Impl for Nodes
@@ -512,6 +544,12 @@ pub mod trait_impls {
     impl From<String> for Identifier {
         fn from(input: String) -> Self {
             return Identifier{name: input.clone()};
+        }
+    }
+
+    impl From<usize> for Identifier {
+        fn from(input: usize) -> Self {
+            return Identifier{name: format!("{}", input)};
         }
     }
 }

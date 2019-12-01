@@ -1699,7 +1699,9 @@ pub mod type_parser {
 /// 
 /// # Arguments
 /// 
-/// * `loop_var`
+/// * `loop_var` - The name of the variable that contains the iterator results
+/// * `iterator` - The iterator expression
+/// * `inner_loop` - The contexts of loop.
 fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (StmtSeq, Stmt) {
    
     // The contents of the loop.

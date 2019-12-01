@@ -204,7 +204,6 @@ impl ASTRewrite <Node<Expr>> for Node<Expr> {
                     );
                     outer_stmts.append(&mut rewritten.0);
                     outer_stmts.push(wrap(rewritten.1));
-
                 }
                 outer_stmts.insert(0, wrap(new_let));
                 let new_expr = Expr::IdentifierExpr(vec_ident.clone());

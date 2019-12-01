@@ -25,7 +25,9 @@ type ExprNode = Node<Expr>;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
 type StmtSeq = Vec<Box<Node<Stmt>>>;
-type Update = Option<StmtSeq>;
+type Update = StmtSeq;
+type ExprU = (ExprNode, Update);
+type StmtU = (StmtNode, Update);
 type StmtRes<'a> = IResult<PosStr<'a>, StmtNode>;
 type ExprRes<'a> = IResult<PosStr<'a>, ExprNode>;
 type TypeRes<'a> = IResult<PosStr<'a>, Type>;
@@ -1009,72 +1011,107 @@ pub mod expr_parsers {
 
     /// Comprehensions
     impl ParserContext {
-
         /// Match the for part of a comprehension.
-        fn comprehension_for<'a>(&self, input: PosStr<'a>) -> Res<'a, ComprehensionIter> {
+        fn comprehension_for<'a>(&self, input: PosStr<'a>) -> Res<'a, (Vec<Identifier>, ExprU, Option<ExprU>)> {
             let parse_result = tuple!(input,
                 delimited!(FOR, variable_unpacking, IN),
-                m!(self.logical_binary_expr),
-                optc!(preceded!(IF, m!(self.logical_binary_expr)))
+                map!(m!(self.logical_binary_expr), |x| (x, vec!())),
+                optc!(preceded!(IF, map!(m!(self.logical_binary_expr), |x| (x, vec!()))))
             );
 
-            return fmap_iresult(parse_result, |(iter_vars, iterator, if_clause)| ComprehensionIter{
-                iter_vars: iter_vars,
-                iterator: Box::new(iterator),
-                if_clause: if_clause
-            });
+            return parse_result;
         }
 
         /// Match a vector comprehension.
         fn vector_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
+
             let parse_result = tuple!(input,
-                m!(self.logical_binary_expr),
+                map!(m!(self.logical_binary_expr), |x: ExprNode| -> (ExprNode, StmtSeq) {(x, vec!())} ),
                 many1!(m!(self.comprehension_for))
             );
 
-            return fmap_node(parse_result, |(value, iterators)| {
-                return Expr::VecComprehension {
-                    value: Box::new(value),
-                    iterators: iterators
-                };
+            return fmap_node(parse_result, |((value, v_update), iterators)| {
+                let coll_name = next_hidden();
+                // The statement to create the vector.
+                let coll_create = coll_name.simple_let(Expr::from("vec").call());
+
+                // The statement to push the next element onto the vector.
+                let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec!(value)));
+
+                let mut outer_stmts = v_update;
+                outer_stmts.push(wrap(push));
+
+                for (iter_vars, (iterator, mut iter_u), if_clause) in iterators.into_iter().rev() {
+
+                    // The contents of the loop.
+                    let (inner_stmts, new_outer) = match if_clause {
+                        None => (outer_stmts, vec!()),
+                        Some((cond, u)) => {
+
+                            let if_stmt = Stmt::simple_if(cond, Block{statements: outer_stmts});
+                            let new_stmts = vec!(wrap(if_stmt));
+                            (new_stmts, u)
+                        }
+                    };
+
+                    outer_stmts = new_outer;
+
+                    outer_stmts.append(&mut iter_u);
+
+                    let mut rewritten = for_to_while(
+                        iter_vars.get(0).unwrap().clone(), 
+                        &iterator, 
+                        inner_stmts
+                    );
+                    outer_stmts.append(&mut rewritten.0);
+                    outer_stmts.push(wrap(rewritten.1));
+                }
+
+                outer_stmts.insert(0, wrap(coll_create));
+                let new_expr = Expr::IdentifierExpr(coll_name.clone());
+
+                return new_expr;
             });
+            
         }
 
         /// Match a generator comprehension.
         fn generator_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-            let parse_result = tuple!(input,
-                m!(self.logical_binary_expr),
-                many1!(m!(self.comprehension_for))
-            );
+            // let parse_result = tuple!(input,
+            //     m!(self.logical_binary_expr),
+            //     many1!(m!(self.comprehension_for))
+            // );
 
-            return fmap_node(parse_result, |x| Expr::GenComprehension {
-                value: Box::new(x.0),
-                iterators: x.1
-            });
+            // return fmap_node(parse_result, |x| Expr::GenComprehension {
+            //     value: Box::new(x.0),
+            //     iterators: x.1
+            // });
+            panic!()
         }
 
         /// Match a map or a set.
         fn map_or_set_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-            let parse_result = tuple!(input,
-                    m!(self.logical_binary_expr),
-                    opt!(complete!(preceded!(
-                        COLON,
-                        m!(self.logical_binary_expr)
-                    ))),
-                    many1!(m!(self.comprehension_for))
-            );
+            // let parse_result = tuple!(input,
+            //         m!(self.logical_binary_expr),
+            //         opt!(complete!(preceded!(
+            //             COLON,
+            //             m!(self.logical_binary_expr)
+            //         ))),
+            //         many1!(m!(self.comprehension_for))
+            // );
 
-            return fmap_node(parse_result, |(key_or_value, value, iters)| match value {
-                Some(y) => Expr::MapComprehension {
-                    key: Box::new(key_or_value),
-                    value: Box::new(y),
-                    iterators: iters
-                },
-                None => Expr::SetComprehension {
-                    value: Box::new(key_or_value),
-                    iterators: iters
-                }
-            });
+            // return fmap_node(parse_result, |(key_or_value, value, iters)| match value {
+            //     Some(y) => Expr::MapComprehension {
+            //         key: Box::new(key_or_value),
+            //         value: Box::new(y),
+            //         iterators: iters
+            //     },
+            //     None => Expr::SetComprehension {
+            //         value: Box::new(key_or_value),
+            //         iterators: iters
+            //     }
+            // });
+            panic!()
         }
 
     }
@@ -1445,11 +1482,11 @@ pub mod expr_parsers {
                 })
             }));
 
-            check_match("for a, b in c if true", |x| e.comprehension_for(x), ComprehensionIter{
-                iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
-                iterator: Box::new(Node::from("c")),
-                if_clause: Some(Node::from(true))
-            });
+            // check_match("for a, b in c if true", |x| e.comprehension_for(x), ComprehensionIter{
+            //     iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
+            //     iterator: Box::new(Node::from("c")),
+            //     if_clause: Some(Node::from(true))
+            // });
         }
 
         #[test]
@@ -1681,6 +1718,11 @@ pub mod type_parser {
         }
     }
 
+}
+
+/// Get the next hidden variable.
+fn next_hidden() -> Identifier {
+    return Identifier::from(format!(".{}", get_next_var()));
 }
 
 /// Rewrite a for loop as a while loop.

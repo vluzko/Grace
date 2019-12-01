@@ -191,24 +191,31 @@ pub mod constructors {
     use super::*;
 
     impl Stmt {
-        /// Simple Let constructor
-        pub fn simple_let(name: Identifier, expr: Expr) -> Stmt {
-            return Stmt::LetStmt {
-                name: name,
-                type_annotation: None,
-                expression: Node::from(expr)
+        pub fn simple_if<T>(condition: T, block: Block) -> Stmt 
+        where Node<Expr>: From<T> {
+            return Stmt::IfStmt {
+                condition: Node::from(condition),
+                block: Node{
+                    id: general_utils::get_next_id(),
+                    data: block,
+                    scope: 0
+                },
+                elifs: vec!(),
+                else_block: None
             };
         }
     }
 
     impl Expr {
-        pub fn access(&self, name: Identifier) -> Expr {
+        pub fn access<T>(&self, name: &T) -> Expr 
+            where Identifier: From<T>, T: Clone {
             return Expr::AttributeAccess{
                 base: wrap(self.clone()),
-                attribute: name
+                attribute: Identifier::from(name.clone())
             };
         }
 
+        /// Create an empty call expression.
         pub fn call(&self) -> Expr {
             return Expr::FunctionCall {
                 function: wrap(self.clone()),
@@ -216,9 +223,43 @@ pub mod constructors {
                 kwargs: vec!()
             };
         }
+
+        /// Create a call with the passed arguments.
+        pub fn callw(&self, args: Vec<Node<Expr>>) -> Expr {
+            return Expr::FunctionCall {
+                function: wrap(self.clone()),
+                args: args,
+                kwargs: vec!()
+            };
+        }
+    }
+
+    impl Identifier {
+        /// Create a LetStmt assigning `expr` to `self`.
+        pub fn simple_let(&self, expr: Expr) -> Stmt {
+            return Stmt::LetStmt {
+                name: self.clone(),
+                type_annotation: None,
+                expression: Node::from(expr)
+            };
+        }
+
+        /// Create an AssignmentStmt assigning `expr` to `self`.
+        pub fn assn(&self, expr: Expr) -> Stmt {
+            return Stmt::AssignmentStmt {
+                name: self.clone(),
+                expression: Node::from(expr)
+            };
+        }
+
+        /// Create an `IdentifierExpr` referring to `self`.
+        pub fn as_expr(&self) -> Expr {
+            return Expr::IdentifierExpr(self.clone());
+        }
     }
 }
 
+/// Implementations of common traits.
 pub mod trait_impls {
     use super::*;
     

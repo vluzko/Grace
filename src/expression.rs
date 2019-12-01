@@ -14,10 +14,13 @@ pub struct Node<T> {
     pub scope: usize
 }
 
-/// We don't compare the ids of Nodes.
-impl <T> PartialEq for Node<T> where T:PartialEq {
-    fn eq(&self, other: &Node<T>) -> bool {
-        return self.data == other.data && self.scope == other.scope;
+impl <T> Node<T> {
+    pub fn replace(&self, new_data: T) -> Node<T> {
+        return Node {
+            id: self.id,
+            data: new_data,
+            scope: self.scope.clone()
+        };
     }
 }
 
@@ -33,13 +36,6 @@ pub struct Import {
     pub path: Vec<Identifier>,
     pub alias: Option<Identifier>,
     pub values: Vec<Identifier>
-}
-
-/// We don't compare the ids of import statements.
-impl PartialEq for Import {
-    fn eq(&self, other: &Import) -> bool {
-        return self.path == other.path && self.alias == other.alias && self.values == other.values;
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -225,23 +221,24 @@ pub mod constructors {
 
 pub mod trait_impls {
     use super::*;
-    /// Impl for Nodes
-    impl <T> Node<T> {
-        pub fn replace(&self, new_data: T) -> Node<T> {
-            return Node {
-                id: self.id,
-                data: new_data,
-                scope: self.scope.clone()
-            };
+    
+    /// PartialEq implementations
+
+    /// We don't compare the ids of Nodes.
+    impl <T> PartialEq for Node<T> where T:PartialEq {
+        fn eq(&self, other: &Node<T>) -> bool {
+            return self.data == other.data && self.scope == other.scope;
+        }
+    }
+
+    /// We don't compare the ids of import statements.
+    impl PartialEq for Import {
+        fn eq(&self, other: &Import) -> bool {
+            return self.path == other.path && self.alias == other.alias && self.values == other.values;
         }
     }
 
     /// Display implementations
-    // impl Display for TypedIdent {
-    //     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-    //         write!(f, "{} (typed)", self.name)
-    //     }
-    // }
 
     impl Display for Identifier {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -511,13 +508,6 @@ pub mod trait_impls {
         }
     }
 
-    // /// From for TypedIdent
-    // impl <'a> From<&'a str> for TypedIdent {
-    //     fn from(input: &'a str) -> Self {
-    //         return TypedIdent{name: Identifier::from(input), type_annotation: None};
-    //     }
-    // }
-
     /// From for Identifier
     impl <'a> From<&'a str> for Identifier {
         fn from(input: &'a str) -> Self {
@@ -547,11 +537,6 @@ pub mod trait_impls {
         }
     }
 
-    impl From<usize> for Identifier {
-        fn from(input: usize) -> Self {
-            return Identifier{name: format!("{}", input)};
-        }
-    }
 }
 
 pub fn wrap<T>(data: T) -> Box<Node<T>> {

@@ -511,11 +511,27 @@ pub mod iresult_helpers {
         };
     }
 
+    pub fn fmap_update<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (T, U)>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, (o, u))) => Ok((i, (func(o), u))),
+            Err(e) => Err(e)
+        };
+    }
+
     /// Map the contents and wrap a Node around it.
     pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
         where F: Fn(X) -> T {
         return match res {
             Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_updaten<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, (o, u))) => Ok((i, (Node::from(func(o)), u))),
             Err(e) => Err(e)
         };
     }

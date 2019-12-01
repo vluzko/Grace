@@ -12,7 +12,10 @@ use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
 use typing::Type;
-use general_utils::get_next_id;
+use general_utils::{
+    get_next_id,
+    get_next_var
+};
 
 // use self::expr_parsers::expression;
 use self::stmt_parsers::struct_declaration_stmt;
@@ -21,7 +24,8 @@ type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
-type Update = Option<Vec<Box<Node<Stmt>>>>;
+type StmtSeq = Vec<Box<Node<Stmt>>>;
+type Update = Option<StmtSeq>;
 type StmtRes<'a> = IResult<PosStr<'a>, StmtNode>;
 type ExprRes<'a> = IResult<PosStr<'a>, ExprNode>;
 type TypeRes<'a> = IResult<PosStr<'a>, Type>;
@@ -1689,6 +1693,83 @@ pub mod type_parser {
         }
     }
 
+}
+
+/// Rewrite a for loop as a while loop.
+/// 
+/// # Arguments
+/// 
+/// * `loop_var`
+fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (StmtSeq, Stmt) {
+   
+    // The contents of the loop.
+
+    let mut outer_stmts = vec!();
+
+    // Expression to create the iterator.
+    let iter_call = Node::from(Expr::FunctionCall{
+        function: wrap(Expr::AttributeAccess{
+            base: Box::new(iterator.clone()),
+            attribute: Identifier::from("iter")
+        }),
+        args: vec!(),
+        kwargs: vec!()
+    });
+
+    // The name of the iterator
+    let loop_iter_name = Identifier::from(format!(".{}", get_next_var()));
+    // The name of the iterator values.
+    let loop_var_name =  Identifier::from(format!(".{}", get_next_var()));
+
+    // Statement to store the iterator
+    let loop_iter = Stmt::LetStmt{
+        name: loop_iter_name.clone(),
+        type_annotation: Some(Type::Undetermined),
+        expression: iter_call
+    };
+    outer_stmts.push(wrap(loop_iter));
+
+    // The next value of the iterator
+    let iter_next = Stmt::LetStmt{
+        name: loop_var_name.clone(),
+        type_annotation: Some(Type::Undetermined),
+        expression: Node::from(Expr::FunctionCall{
+            function: wrap(Expr::AttributeAccess{
+                base: wrap(Expr::from(loop_iter_name)),
+                attribute: Identifier::from("next")
+            }),
+            args: vec!(),
+            kwargs: vec!()
+        })
+    };
+    // Add the first iteration outside the loop.
+    outer_stmts.push(wrap(iter_next.clone()));
+    // Call next at the end of every loop.
+    inner_loop.push(wrap(iter_next));
+
+    // The contents of the first value.
+    let iter_var = Stmt::LetStmt{
+        name: loop_var,
+        type_annotation: Some(Type::Undetermined),
+        expression: Node::from(Expr::Index{
+            base: wrap(Expr::from(loop_var_name.clone())),
+            slices: vec!((Some(Node::from(Expr::from(0))), None, None))
+        })
+    };
+    outer_stmts.push(wrap(iter_var));
+
+    let iter_state = Node::from(Expr::Index{
+        base: wrap(Expr::from(loop_var_name)),
+        slices: vec!((Some(Node::from(Expr::from(1))), None, None))
+    });
+
+    let while_loop = Stmt::WhileStmt{
+        condition: iter_state, 
+        block: Node::from(Block{statements: inner_loop})
+    };
+
+
+    return (outer_stmts, while_loop);
 }
 
 #[cfg(test)]

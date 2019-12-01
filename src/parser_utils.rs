@@ -129,6 +129,43 @@ macro_rules! line_and_block (
     );
 );
 
+macro_rules! line_and_block2 (
+    ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                $submac!($($args)*),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            m!($self_.block, $indent + 1)
+        )
+    );
+
+    ($i:expr, $self_:ident, $f: expr, $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                call!($f),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            m!($self_.block, $indent + 1)
+        )
+    );
+);
+
+macro_rules! keyword_and_block2 (
+    ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
+        match line_and_block2!($i, $self_, $keyword, $indent) {
+            Ok((remaining, (_,o))) => Ok((remaining, o)),
+            Err(e) => Err(e)
+        }
+    );
+);
+
 macro_rules! keyword_and_block (
     ($i:expr, $keyword: expr, $indent: expr) => (
         match line_and_block!($i, $keyword, $indent) {
@@ -536,7 +573,7 @@ pub mod iresult_helpers {
         };
     }
 
-    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
+    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
@@ -550,7 +587,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
+    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
@@ -594,7 +631,7 @@ pub mod iresult_helpers {
         };
     }
 
-    pub fn simple_check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>) {
+    pub fn simple_check_failed<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>) {
         let res = parser(PosStr::from(input));
         match res {
             Result::Err(_) => {},
@@ -620,7 +657,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
+    pub fn check_failed<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
     where T: Debug {
         let res = parser(PosStr::from(input));
         unwrap_and_check_error(res, expected);

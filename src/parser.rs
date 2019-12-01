@@ -1013,13 +1013,9 @@ pub mod expr_parsers {
         /// Match the for part of a comprehension.
         fn comprehension_for<'a>(&self, input: PosStr<'a>) -> Res<'a, ComprehensionIter> {
             let parse_result = tuple!(input,
-                delimited!(
-                    FOR,
-                    variable_unpacking,
-                    IN
-                ),
+                delimited!(FOR, variable_unpacking, IN),
                 m!(self.logical_binary_expr),
-                m!(self.comprehension_if)
+                optc!(preceded!(IF, m!(self.logical_binary_expr)))
             );
 
             return fmap_iresult(parse_result, |(iter_vars, iterator, if_clause)| ComprehensionIter{
@@ -1027,16 +1023,6 @@ pub mod expr_parsers {
                 iterator: Box::new(iterator),
                 if_clause: if_clause
             });
-        }
-
-        /// Match the if part of a comprehension.
-        fn comprehension_if<'a>(&self, input: PosStr<'a>) -> Res<'a, Option<Node<Expr>>> {
-            return optc!(input,
-                preceded!(
-                    IF,
-                    m!(self.logical_binary_expr)
-                )
-            );
         }
 
         /// Match a vector comprehension.

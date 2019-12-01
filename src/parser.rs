@@ -1032,9 +1032,11 @@ pub mod expr_parsers {
                 many1!(m!(self.comprehension_for))
             );
 
-            return fmap_node(parse_result, |x| Expr::VecComprehension {
-                value: Box::new(x.0),
-                iterators: x.1
+            return fmap_node(parse_result, |(value, iterators)| {
+                return Expr::VecComprehension {
+                    value: Box::new(value),
+                    iterators: iterators
+                };
             });
         }
 

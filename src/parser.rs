@@ -15,11 +15,7 @@ use typing::Type;
 use general_utils::get_next_id;
 
 use self::expr_parsers::expression;
-use self::stmt_parsers::{
-    statement,
-    function_declaration_stmt,
-    struct_declaration_stmt
-};
+use self::stmt_parsers::struct_declaration_stmt;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -50,19 +46,22 @@ impl Parseable for Node<Module> {
 
 impl Parseable for Node<Block> {
     fn parse<'a>(input: PosStr<'a>) -> Node<Block> {
-        return output(block(PosStr::from(input), 0));
+        let e = ParserContext::empty();
+        return output(e.block(PosStr::from(input), 0));
     }
 }
 
 impl Parseable for Node<Stmt> {
     fn parse<'a>(input: PosStr<'a>) -> Node<Stmt> {
-        return output(statement(PosStr::from(input), 0));
+        let e = ParserContext::empty();
+        return output(e.statement(PosStr::from(input), 0));
     }
 }
 
 impl Parseable for Node<Expr> {
     fn parse<'a>(input: PosStr<'a>) -> Node<Expr> {
-        return output(expression(PosStr::from(input)));
+        let e = ParserContext::empty();
+        return output(e.expression(PosStr::from(input)));
     }
 }
 
@@ -149,37 +148,37 @@ fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
 }
 
 /// Match a block.
-pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<Block>> {
-    let first_indent_parse = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
-    let full_indent = match first_indent_parse {
-        Ok((i, o)) => (i, o),
-        _ => panic!()
-    };
+// pub fn block<'a>(input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<Block>> {
+//     let first_indent_parse = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
+//     let full_indent = match first_indent_parse {
+//         Ok((i, o)) => (i, o),
+//         _ => panic!()
+//     };
 
-    // Break if the block is not indented enough.
-    let parse_result = if full_indent.1.len() < indent {
-        // TODO: This will happen if the indentation level is too low. Throw a proper error.
-        Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
-    } else {
-        let expected_indent = full_indent.1.len();
-        // We end up reparsing the initial indent, but that's okay. The alternative is joining two
-        // vectors, which is much slower.
-        // TODO: See if we can clean this up with a separated_list_complete.
-        let statements = preceded!(input,
-            opt!(between_statement),
-            many1!(
-                complete!(
-                    terminated!(
-                        indented!(call!(statement, expected_indent), expected_indent),
-                        between_statement
-                    )
-                )
-            )
-        );
-        statements
-    };
-    return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
-}
+//     // Break if the block is not indented enough.
+//     let parse_result = if full_indent.1.len() < indent {
+//         // TODO: This will happen if the indentation level is too low. Throw a proper error.
+//         Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
+//     } else {
+//         let expected_indent = full_indent.1.len();
+//         // We end up reparsing the initial indent, but that's okay. The alternative is joining two
+//         // vectors, which is much slower.
+//         // TODO: See if we can clean this up with a separated_list_complete.
+//         let statements = preceded!(input,
+//             opt!(between_statement),
+//             many1!(
+//                 complete!(
+//                     terminated!(
+//                         indented!(call!(statement, expected_indent), expected_indent),
+//                         between_statement
+//                     )
+//                 )
+//             )
+//         );
+//         statements
+//     };
+//     return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
+// }
 
 /// All statement parsers.
 pub mod stmt_parsers {
@@ -361,85 +360,85 @@ pub mod stmt_parsers {
     }
 
     /// Match any statement.
-    pub fn statement<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let node = alt_complete!(input,
-            let_stmt |
-            assignment_stmt |
-            call!(while_stmt, indent) |
-            call!(for_in, indent) |
-            call!(if_stmt, indent) |
-            call!(function_declaration_stmt, indent) |
-            return_stmt |
-            break_stmt |
-            pass_stmt |
-            continue_stmt |
-            yield_stmt
-        );
+    // pub fn statement<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    //     let node = alt_complete!(input,
+    //         let_stmt |
+    //         assignment_stmt |
+    //         call!(while_stmt, indent) |
+    //         call!(for_in, indent) |
+    //         call!(if_stmt, indent) |
+    //         call!(function_declaration_stmt, indent) |
+    //         return_stmt |
+    //         break_stmt |
+    //         pass_stmt |
+    //         continue_stmt |
+    //         yield_stmt
+    //     );
 
-        return fmap_iresult(node, |x| x);
-    }
+    //     return fmap_iresult(node, |x| x);
+    // }
 
-    /// Match a let statement.
-    fn let_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = tuple!(input,
-            preceded!(
-                LET,
-                IDENTIFIER
-            ),
-            optc!(preceded!(COLON, type_parser::any_type)),
-            preceded!(
-                EQUALS,
-                expression
-            )
-        );
+    // /// Match a let statement.
+    // fn let_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    //     let parse_result = tuple!(input,
+    //         preceded!(
+    //             LET,
+    //             IDENTIFIER
+    //         ),
+    //         optc!(preceded!(COLON, type_parser::any_type)),
+    //         preceded!(
+    //             EQUALS,
+    //             expression
+    //         )
+    //     );
 
-        return fmap_node(parse_result, |x| Stmt::LetStmt {name: x.0, type_annotation: x.1, expression: x.2});
-    }
+    //     return fmap_node(parse_result, |x| Stmt::LetStmt {name: x.0, type_annotation: x.1, expression: x.2});
+    // }
 
-    /// Match an assignment statement.
-    fn assignment_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    // /// Match an assignment statement.
+    // fn assignment_stmt<'a>(input: PosStr<'a>) -> StmtRes {
 
-        /// Match an assignment operator.
-        fn assignments<'a>(input: PosStr<'a>) -> IO<'a> {
-            return alt_complete!(input, 
-                EQUALS | 
-                ADDASN |
-                SUBASN |
-                MULASN |
-                DIVASN |
-                MODASN |
-                EXPASN |
-                RSHASN |
-                LSHASN |
-                BORASN |
-                BANDASN |
-                BXORASN 
-            );
-        }
+    //     /// Match an assignment operator.
+    //     fn assignments<'a>(input: PosStr<'a>) -> IO<'a> {
+    //         return alt_complete!(input, 
+    //             EQUALS | 
+    //             ADDASN |
+    //             SUBASN |
+    //             MULASN |
+    //             DIVASN |
+    //             MODASN |
+    //             EXPASN |
+    //             RSHASN |
+    //             LSHASN |
+    //             BORASN |
+    //             BANDASN |
+    //             BXORASN 
+    //         );
+    //     }
 
-        let parse_result = terminated!(input,
-            tuple!(
-                IDENTIFIER,
-                assignments,
-                expression
-            ),
-            alt_complete!(NEWLINE | eof!() | EMPTY)
-        );
+    //     let parse_result = terminated!(input,
+    //         tuple!(
+    //             IDENTIFIER,
+    //             assignments,
+    //             expression
+    //         ),
+    //         alt_complete!(NEWLINE | eof!() | EMPTY)
+    //     );
 
-        return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
-            name: x.0.clone(), expression: match x.1.slice {
-                b"=" => x.2,
-                _ => {
-                    let subop = &x.1.slice[0..x.1.slice.len()-1];
-                    Node::from(Expr::BinaryExpr{
-                        operator: BinaryOperator::from(subop),
-                        left: Box::new(Node::from(Expr::IdentifierExpr(x.0))),
-                        right: Box::new(x.2)
-                    })
-                }
-            }
-        });
-    }
+    //     return fmap_node(parse_result, |x| Stmt::AssignmentStmt{
+    //         name: x.0.clone(), expression: match x.1.slice {
+    //             b"=" => x.2,
+    //             _ => {
+    //                 let subop = &x.1.slice[0..x.1.slice.len()-1];
+    //                 Node::from(Expr::BinaryExpr{
+    //                     operator: BinaryOperator::from(subop),
+    //                     left: Box::new(Node::from(Expr::IdentifierExpr(x.0))),
+    //                     right: Box::new(x.2)
+    //                 })
+    //             }
+    //         }
+    //     });
+    // }
 
     /// Match the standard arguments in a function declaration.
     fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
@@ -449,7 +448,7 @@ pub mod stmt_parsers {
                 IDENTIFIER,
                 preceded!(
                     COLON,
-                    terminated!(type_parser::any_type, not!(complete!(EQUALS)))
+                    terminated!(any_type, not!(complete!(EQUALS)))
                 )
             )
         );
@@ -457,54 +456,54 @@ pub mod stmt_parsers {
     }
 
     /// Match all keyword arguments in a function declaration.
-    fn keyword_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
-        let parse_result = optc!(input, preceded!(
-            COMMA,
-            separated_list_complete!(
-                COMMA,
-                tuple!(
-                    IDENTIFIER,
-                    preceded!(COLON, type_parser::any_type),
-                    preceded!(EQUALS, expression)
-                )
-            )
-        ));
+    // fn keyword_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
+    //     let parse_result = optc!(input, preceded!(
+    //         COMMA,
+    //         separated_list_complete!(
+    //             COMMA,
+    //             tuple!(
+    //                 IDENTIFIER,
+    //                 preceded!(COLON, type_parser::any_type),
+    //                 preceded!(EQUALS, expression)
+    //             )
+    //         )
+    //     ));
 
-        return fmap_iresult(parse_result, |x| match x {
-            Some(y) => y,
-            None => vec!()
-        });
-    }
+    //     return fmap_iresult(parse_result, |x| match x {
+    //         Some(y) => y,
+    //         None => vec!()
+    //     });
+    // }
 
     /// Parse a function declaration.
     /// Must be public because it's used by module.
-    pub fn function_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let arg_parser = |i: PosStr<'a>| tuple!(i,
-            IDENTIFIER,
-            preceded!(
-                OPEN_PAREN,
-                fn_dec_args
-            ),
-            terminated!(keyword_args, CLOSE_PAREN),
-            optc!(preceded!(
-                TARROW,
-                type_parser::any_type
-            ))
-        );
+    // pub fn function_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    //     let arg_parser = |i: PosStr<'a>| tuple!(i,
+    //         IDENTIFIER,
+    //         preceded!(
+    //             OPEN_PAREN,
+    //             fn_dec_args
+    //         ),
+    //         terminated!(keyword_args, CLOSE_PAREN),
+    //         optc!(preceded!(
+    //             TARROW,
+    //             type_parser::any_type
+    //         ))
+    //     );
 
-        let parse_result = line_and_block!(input, preceded!(FN, arg_parser), indent);
+    //     let parse_result = line_and_block!(input, preceded!(FN, arg_parser), indent);
 
-        return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| Stmt::FunctionDecStmt{
-            name: name,
-            args: args,
-            kwargs: keyword_args,
-            block: body,
-            return_type: match return_type {
-                Some(x) => x,
-                None => Type::empty
-            }
-        });
-    }
+    //     return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| Stmt::FunctionDecStmt{
+    //         name: name,
+    //         args: args,
+    //         kwargs: keyword_args,
+    //         block: body,
+    //         return_type: match return_type {
+    //             Some(x) => x,
+    //             None => Type::empty
+    //         }
+    //     });
+    // }
 
     pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
         let header = tuple!(input,
@@ -559,53 +558,53 @@ pub mod stmt_parsers {
         return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 
-    /// Match an if statement.
-    fn if_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let parse_result = tuple!(input,
-            line_and_block!(preceded!(IF, expression), indent),
-            many0c!(indented!(line_and_block!(preceded!(ELIF, expression), indent), indent)),
-            opt!(complete!(indented!(keyword_and_block!(ELSE, indent), indent)))
-        );
+    // /// Match an if statement.
+    // fn if_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    //     let parse_result = tuple!(input,
+    //         line_and_block!(preceded!(IF, expression), indent),
+    //         many0c!(indented!(line_and_block!(preceded!(ELIF, expression), indent), indent)),
+    //         opt!(complete!(indented!(keyword_and_block!(ELSE, indent), indent)))
+    //     );
 
-        return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
-    }
+    //     return fmap_node(parse_result, |x|Stmt::IfStmt{condition: (x.0).0, block: (x.0).1, elifs: x.1, else_block: x.2});
+    // }
 
-    /// Parse a while loop.
-    fn while_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
-        return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
-    }
+    // /// Parse a while loop.
+    // fn while_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    //     let parse_result = line_and_block!(input, preceded!(WHILE, expression), indent);
+    //     return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
+    // }
 
-    /// Parse a for in loop.
-    fn for_in<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
-        let parse_result = line_and_block!(input, tuple!(
-            preceded!(
-                FOR,
-                IDENTIFIER
-            ),
-            preceded!(
-                IN,
-                expression
-            )
-        ), indent);
+    // /// Parse a for in loop.
+    // fn for_in<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    //     let parse_result = line_and_block!(input, tuple!(
+    //         preceded!(
+    //             FOR,
+    //             IDENTIFIER
+    //         ),
+    //         preceded!(
+    //             IN,
+    //             expression
+    //         )
+    //     ), indent);
 
-        return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
-    }
+    //     return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
+    // }
 
-    /// Match a return statement.
-    fn return_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = preceded!(input, RETURN, expression);
-        return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
-    }
+    // /// Match a return statement.
+    // fn return_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    //     let parse_result = preceded!(input, RETURN, expression);
+    //     return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
+    // }
 
-    /// Match a yield statement.
-    fn yield_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = preceded!(input, YIELD, expression);
-        return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
-    }
+    // /// Match a yield statement.
+    // fn yield_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    //     let parse_result = preceded!(input, YIELD, expression);
+    //     return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
+    // }
 
     /// Match a break statement.
-    fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             BREAK,
             peek!(alt_complete!(
@@ -617,7 +616,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a pass statement.
-    fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             PASS,
             peek!(alt_complete!(
@@ -629,7 +628,7 @@ pub mod stmt_parsers {
     }
 
     /// Match a continue statement.
-    fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+    pub fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             CONTINUE,
             peek!(alt_complete!(
@@ -717,7 +716,7 @@ pub mod stmt_parsers {
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                     (Identifier::from("d"), Type::i32, output(expression(PosStr::from("7"))))
                 ),
-                block: output(block(PosStr::from("let val =  5\n"), 0)),
+                block: output(e.block(PosStr::from("let val =  5\n"), 0)),
                 return_type: Type::empty
             });
 
@@ -727,7 +726,7 @@ pub mod stmt_parsers {
                 kwargs: vec!(
                     (Identifier::from("c"), Type::i32, output(expression(PosStr::from("5")))),
                 ),
-                block: output(block(PosStr::from("let val=5\n"), 0)),
+                block: output(e.block(PosStr::from("let val=5\n"), 0)),
                 return_type: Type::empty
             });
 
@@ -735,7 +734,7 @@ pub mod stmt_parsers {
                 name: Identifier::from("a"),
                 args: vec!((Identifier::from("b"), Type::i32)),
                 kwargs: vec!(),
-                block: output(block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
+                block: output(e.block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
                 return_type: Type::i32
             });
         }
@@ -768,7 +767,7 @@ pub mod stmt_parsers {
 
             check_failed("ifa and b:\n x = true", |x| e.statement(x, 0), ErrorKind::Alt);
 
-            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| if_stmt(x, 1), Stmt::IfStmt {
+            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
                 condition: Node::from(true),
                 block: output(e.block(PosStr::from("x = true"), 0)),
                 elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
@@ -793,26 +792,27 @@ pub mod stmt_parsers {
             check_data("for x in y:\n a=true", |x| e.statement(x, 0), Stmt::ForInStmt {
                 iter_vars: Identifier::from("x"),
                 iterator: Node::from("y"),
-                block: output(block(PosStr::from("a=true"), 0))
+                block: output(e.block(PosStr::from("a=true"), 0))
             });
         }
 
 
         #[test]
         fn parse_simple_statements() {
-            check_data("pass", |x| statement(x, 0), Stmt::PassStmt);
-            check_data_and_leftover("pass   \n  ", |x| statement(x, 0), Stmt::PassStmt, "\n  ");
-            check_data("continue", |x| statement(x, 0), Stmt::ContinueStmt);
-            check_data_and_leftover("continue   \n  ", |x| statement(x, 0), Stmt::ContinueStmt, "\n  ");
-            check_data("break", |x| statement(x, 0), Stmt::BreakStmt);
-            check_data_and_leftover("break   \n  ", |x| statement(x, 0), Stmt::BreakStmt, "\n  ");
+            let e = ParserContext::empty();
+            check_data("pass", |x| e.statement(x, 0), Stmt::PassStmt);
+            check_data_and_leftover("pass   \n  ", |x| e.statement(x, 0), Stmt::PassStmt, "\n  ");
+            check_data("continue", |x| e.statement(x, 0), Stmt::ContinueStmt);
+            check_data_and_leftover("continue   \n  ", |x| e.statement(x, 0), Stmt::ContinueStmt, "\n  ");
+            check_data("break", |x| e.statement(x, 0), Stmt::BreakStmt);
+            check_data_and_leftover("break   \n  ", |x| e.statement(x, 0), Stmt::BreakStmt, "\n  ");
         }
 
         #[test]
         fn parse_return_and_yield_stmts() {
             let e = ParserContext::empty();
             check_data("return true", |x| e.statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
-            check_data_and_leftover("return 1  \n  ", |x| statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
+            check_data_and_leftover("return 1  \n  ", |x| e.statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
 
             check_data("yield true", |x| e.statement(x, 0), Stmt::YieldStmt (Node::from(true)));
         }
@@ -933,7 +933,7 @@ pub mod expr_parsers {
                 |
                 tuple!(
                     value!(None, tag!("")),
-                    power_expr
+                    m!(self.power_expr)
                 )
             );
 
@@ -956,15 +956,15 @@ pub mod expr_parsers {
                 string_expr |
                 delimited!(
                     OPEN_BRACE,
-                    alt_complete!( map_or_set_comprehension  | map_literal | set_literal),
+                    alt_complete!(m!(self.map_or_set_comprehension)  | m!(self.map_literal) | m!(self.set_literal)),
                     CLOSE_BRACE
                 ) |
                 delimited!(
                     OPEN_BRACKET,
-                    alt_complete!(vector_comprehension | vec_literal),
+                    alt_complete!(m!(self.vector_comprehension) | m!(self.vec_literal)),
                     CLOSE_BRACKET
                 ) |
-                expr_with_trailer
+                m!(self.expr_with_trailer)
             ));
             return node;
         }
@@ -973,7 +973,7 @@ pub mod expr_parsers {
         fn wrapped_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let node = delimited!(input,
                 OPEN_PAREN,
-                alt_complete!(generator_comprehension | tuple_literal | expression),
+                alt_complete!(m!(self.generator_comprehension) | m!(self.tuple_literal) | m!(self.expression)),
                 CLOSE_PAREN
             );
 
@@ -981,11 +981,11 @@ pub mod expr_parsers {
         }
 
         /// Match a list of arguments in a function call.
-        fn args_list<'a>(&self, input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Node<Expr>>> {
+        fn args_list<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<Node<Expr>>> {
             let parse_result = separated_nonempty_list_complete!(input,
                 COMMA,
                 terminated!(
-                    logical_binary_expr,
+                    m!(self.logical_binary_expr),
                     not!(EQUALS)
                 )
             );
@@ -993,14 +993,14 @@ pub mod expr_parsers {
         }
 
         /// Match a list of keyword arguments in a function call.
-        fn kwargs_list<'a>(&self, input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<(Identifier, Node<Expr>)>> {
+        fn kwargs_list<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Node<Expr>)>> {
             let parse_result = separated_list!(input,
                 COMMA,
                 tuple!(
                     IDENTIFIER,
                     preceded!(
                         EQUALS,
-                        logical_binary_expr
+                        m!(self.logical_binary_expr)
                     )
                 )
             );
@@ -1010,7 +1010,7 @@ pub mod expr_parsers {
         fn struct_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let result = tuple!(input,
                 separated_nonempty_list_complete!(DOT, IDENTIFIER), 
-                delimited!(OPEN_BRACE, args_list, CLOSE_BRACE)
+                delimited!(OPEN_BRACE, m!(self.args_list), CLOSE_BRACE)
             );
             let map = |(idents, args): (Vec<Identifier>, Vec<Node<Expr>>)| {
                 let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
@@ -1032,12 +1032,12 @@ pub mod expr_parsers {
 
             let parse_result = alt_complete!(input, 
                 tuple!(
-                    struct_expr,
+                    m!(self.struct_expr),
                     value!(vec!())
                 ) |
                 tuple!(
-                    alt_complete!(ident_as_expr | wrapped_expr),
-                    many0c!(trailer)
+                    alt_complete!(ident_as_expr | m!(self.wrapped_expr)),
+                    many0c!(m!(self.trailer))
                 )
             );
 
@@ -1065,27 +1065,27 @@ pub mod expr_parsers {
         }
 
         /// Parse an expression trailer.
-        fn trailer<'a>(&self, input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
+        fn trailer<'a>(&self, input: PosStr<'a>) -> Res<'a, PostIdent> {
             return alt_complete!(input,
-                post_call |
+                m!(self.post_call) |
                 post_access |
-                post_index
+                m!(self.post_index)
             );
         }
 
         /// Match a function call following an expression.
-        fn post_call<'a>(&self, input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
+        fn post_call<'a>(&self, input: PosStr<'a>) -> Res<'a, PostIdent> {
             let parse_result = delimited!(input,
                 OPEN_PAREN,
                 alt_complete!(
                     tuple!(
-                        args_list,
+                        m!(self.args_list),
                         opt!(preceded!(
                             COMMA,
-                            kwargs_list
+                            m!(self.kwargs_list)
                         ))
                     ) |
-                    map!(kwargs_list, |x| (vec!(), Some(x))) |
+                    map!(m!(self.kwargs_list), |x| (vec!(), Some(x))) |
                     map!(peek!(CLOSE_PAREN), |_x| (vec!(), None))
                 ),
                 CLOSE_PAREN
@@ -1100,18 +1100,18 @@ pub mod expr_parsers {
         }
 
         /// Match an indexing operation following an expression.
-        fn post_index<'a>(&self, input: PosStr<'a>) -> IResult<PosStr<'a>, PostIdent> {
+        fn post_index<'a>(&self, input: PosStr<'a>) -> Res<'a, PostIdent> {
             let parse_result = delimited!(input,
                 OPEN_BRACKET,
                 separated_nonempty_list_complete!(
                     COMMA,
                     alt_complete!(
                         tuple!(
-                            map!(logical_binary_expr, |x| Some(x)),
+                            map!(m!(self.logical_binary_expr), |x| Some(x)),
                             optc!(tuple!(
                                 preceded!(
                                     COLON,
-                                    logical_binary_expr
+                                    m!(self.logical_binary_expr)
                                 ),
                                 optc!(preceded!(
                                     COLON,
@@ -1143,12 +1143,12 @@ pub mod expr_parsers {
         // Collection literals.
 
         /// Match a vector literal.
-        fn vec_literal<'a>(input: PosStr<'a>) -> ExprRes {
+        fn vec_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
             let parse_result = terminated!(input,
                 separated_nonempty_list_complete!(
                     COMMA,
-                    logical_binary_expr
+                    m!(self.logical_binary_expr)
                 ),
                 peek!(CLOSE_BRACKET)
             );
@@ -1157,25 +1157,25 @@ pub mod expr_parsers {
         }
 
         /// Match a set literal.
-        fn set_literal<'a>(input: PosStr<'a>) -> ExprRes {
+        fn set_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = 
                 separated_nonempty_list_complete!(input,
                     COMMA,
-                    logical_binary_expr
+                    m!(self.logical_binary_expr)
                 );
 
             return fmap_node(parse_result, |x| Expr::SetLiteral(x));
         }
 
         /// Match a map literal.
-        fn map_literal<'a>(input: PosStr<'a>) -> ExprRes {
+        fn map_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
             let parse_result = separated_nonempty_list_complete!(input,
                 COMMA,
                 separated_pair!(
-                    logical_binary_expr,
+                    m!(self.logical_binary_expr),
                     COLON,
-                    logical_binary_expr
+                    m!(self.logical_binary_expr)
                 )
             );
 
@@ -1184,7 +1184,7 @@ pub mod expr_parsers {
 
         /// Match a tuple literal
         /// e.g. (), (1, ), (1,2,3), (1,2,3,)
-        fn tuple_literal<'a>(input: PosStr<'a>) -> ExprRes {
+        fn tuple_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
             let parse_result = alt_complete!(input,
                 // Empty input
@@ -1192,7 +1192,7 @@ pub mod expr_parsers {
                 // Single element tuple.
                 map!(
                     terminated!(
-                        logical_binary_expr,
+                        m!(self.logical_binary_expr),
                         tuple!(
                             COMMA,
                             peek!(CLOSE_PAREN)
@@ -1200,7 +1200,7 @@ pub mod expr_parsers {
                     ), |x| vec!(x)
                 ) |
                 terminated!(
-                    separated_at_least_m!(2, COMMA, logical_binary_expr),
+                    separated_at_least_m!(2, COMMA, m!(self.logical_binary_expr)),
                     optc!(COMMA)
                 )
             );
@@ -1208,26 +1208,20 @@ pub mod expr_parsers {
             return fmap_node(parse_result, |x| Expr::TupleLiteral(x));
         }
 
-        // Collection comprehensions
+        // END LITERALS
 
-        /// Match a split variable.
-        fn variable_unpacking<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Identifier>> {
-            return separated_nonempty_list_complete!(input,
-                COMMA,
-                IDENTIFIER
-            );
-        }
+        // BEGIN COMPREHENSIONS
 
         /// Match the for part of a comprehension.
-        fn comprehension_for<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ComprehensionIter> {
+        fn comprehension_for<'a>(&self, input: PosStr<'a>) -> Res<'a, ComprehensionIter> {
             let parse_result = tuple!(input,
                 delimited!(
                     FOR,
                     variable_unpacking,
                     IN
                 ),
-                logical_binary_expr,
-                comprehension_if
+                m!(self.logical_binary_expr),
+                m!(self.comprehension_if)
             );
 
             return fmap_iresult(parse_result, |(iter_vars, iterator, if_clause)| ComprehensionIter{
@@ -1238,20 +1232,20 @@ pub mod expr_parsers {
         }
 
         /// Match the if part of a comprehension.
-        fn comprehension_if<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Option<Node<Expr>>> {
+        fn comprehension_if<'a>(&self, input: PosStr<'a>) -> Res<'a, Option<Node<Expr>>> {
             return optc!(input,
                 preceded!(
                     IF,
-                    logical_binary_expr
+                    m!(self.logical_binary_expr)
                 )
             );
         }
 
         /// Match a vector comprehension.
-        fn vector_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
+        fn vector_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = tuple!(input,
-                logical_binary_expr,
-                many1!(comprehension_for)
+                m!(self.logical_binary_expr),
+                many1!(m!(self.comprehension_for))
             );
 
             return fmap_node(parse_result, |x| Expr::VecComprehension {
@@ -1261,10 +1255,10 @@ pub mod expr_parsers {
         }
 
         /// Match a generator comprehension.
-        fn generator_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
+        fn generator_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = tuple!(input,
-                logical_binary_expr,
-                many1!(comprehension_for)
+                m!(self.logical_binary_expr),
+                many1!(m!(self.comprehension_for))
             );
 
             return fmap_node(parse_result, |x| Expr::GenComprehension {
@@ -1274,14 +1268,14 @@ pub mod expr_parsers {
         }
 
         /// Match a map or a set.
-        fn map_or_set_comprehension<'a>(input: PosStr<'a>) -> ExprRes {
+        fn map_or_set_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = tuple!(input,
-                    logical_binary_expr,
+                    m!(self.logical_binary_expr),
                     opt!(complete!(preceded!(
                         COLON,
-                        logical_binary_expr
+                        m!(self.logical_binary_expr)
                     ))),
-                    many1!(comprehension_for)
+                    many1!(m!(self.comprehension_for))
             );
 
             return fmap_node(parse_result, |(key_or_value, value, iters)| match value {
@@ -1296,6 +1290,8 @@ pub mod expr_parsers {
                 }
             });
         }
+
+        // END COMPREHENSIONS
     }
 
     pub fn expression<'a>(input: PosStr<'a>) -> ExprRes {
@@ -2368,26 +2364,28 @@ mod tests {
     use super::*;
     #[test]
     fn parse_module() {
-       let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
-       check_match(module_str, module, Node::from(Module{
-           declarations: vec!(
-               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
-               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           ),
-           imports: vec!()
-       }))
+        let e = ParserContext::empty();
+        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+        check_match(module_str, module, Node::from(Module{
+            declarations: vec!(
+                Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0))),
+                Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)))
+            ),
+            imports: vec!()
+        }))
     }
 
     #[test]
     fn parse_module_with_import() {
-       let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
-       check_match(module_str, module, Node::from(Module{
-           declarations: vec!(
-               Box::new(output(statement(PosStr::from("fn a():\n return 0"), 0))),
-               Box::new(output(statement(PosStr::from("fn b():\n return 1"), 0)))
-           ),
-           imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
-       }))
+        let e = ParserContext::empty();
+        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
+        check_match(module_str, module, Node::from(Module{
+            declarations: vec!(
+                Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0))),
+                Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)))
+            ),
+            imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
+        }))
     }        
     #[test]
     fn parse_imports() {
@@ -2407,8 +2405,8 @@ mod tests {
         let e = ParserContext::empty();
         let exp_block = Block {
             statements: vec![
-                Box::new(output(statement(PosStr::from("x=0\n"), 0))),
-                Box::new(output(statement(PosStr::from("y=true"), 0)))
+                Box::new(output(e.statement(PosStr::from("x=0\n"), 0))),
+                Box::new(output(e.statement(PosStr::from("y=true"), 0)))
             ]
         };
 
@@ -2421,8 +2419,9 @@ mod tests {
 
         #[test]
         fn parse_solitary_expression() {
+            let e = ParserContext::empty();
             simple_check_failed("1 + 3", module);
-            simple_check_failed("1 + 3", |x| block(x, 0));
+            simple_check_failed("1 + 3", |x| e.block(x, 0));
         }
     }
 }

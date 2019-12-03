@@ -19,7 +19,6 @@ use general_utils::{
     unzip_vec
 };
 
-// use self::expr_parsers::expression;
 use self::stmt_parsers::struct_declaration_stmt;
 
 type StmtNode = Node<Stmt>;
@@ -34,13 +33,6 @@ type StmtRes<'a> = IResult<PosStr<'a>, StmtU>;
 type ExprRes<'a> = IResult<PosStr<'a>, ExprU>;
 type TypeRes<'a> = IResult<PosStr<'a>, Type>;
 
-
-// #[derive(Debug, Clone, PartialEq, Eq)]
-/// The available context at every step of the parser.
-// pub struct ParserContext {
-//     pub imported_names: HashSet<Identifier>,
-//     pub indent: usize
-// }
 
 pub trait Parseable {
     fn parse<'a>(input: PosStr<'a>) -> Self;
@@ -1925,69 +1917,69 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
     return (while_loop, outer_stmts);
 }
 
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-//     #[test]
-//     fn parse_module() {
-//         let e = ParserContext::empty();
-//         let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
-//         check_match(module_str, module, Node::from(Module{
-//             declarations: vec!(
-//                 Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0))),
-//                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)))
-//             ),
-//             imports: vec!()
-//         }))
-//     }
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn parse_module() {
+        let e = ParserContext::empty();
+        let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
+        check_match(module_str, module, Node::from(Module{
+            declarations: vec!(
+                Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0)).0),
+                Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
+            ),
+            imports: vec!()
+        }))
+    }
 
-//     #[test]
-//     fn parse_module_with_import() {
-//         let e = ParserContext::empty();
-//         let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
-//         check_match(module_str, module, Node::from(Module{
-//             declarations: vec!(
-//                 Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0))),
-//                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)))
-//             ),
-//             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
-//         }))
-//     }        
-//     #[test]
-//     fn parse_imports() {
-//         check_match("import foo.bar.baz", import, Import{
-//             id: 0,
-//             path: vec!(
-//                 Identifier::from("foo"), 
-//                 Identifier::from("bar"), 
-//                 Identifier::from("baz")), 
-//             alias: None,
-//             values: vec!()
-//         });
-//     }
+    #[test]
+    fn parse_module_with_import() {
+        let e = ParserContext::empty();
+        let module_str = "import foo\nfn a():\n return 0\n\nfn b():\n return 1";
+        check_match(module_str, module, Node::from(Module{
+            declarations: vec!(
+                Box::new(output(e.statement(PosStr::from("fn a() -> i64:\n return 0"), 0)).0),
+                Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
+            ),
+            imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
+        }))
+    }        
+    #[test]
+    fn parse_imports() {
+        check_match("import foo.bar.baz", import, Import{
+            id: 0,
+            path: vec!(
+                Identifier::from("foo"), 
+                Identifier::from("bar"), 
+                Identifier::from("baz")), 
+            alias: None,
+            values: vec!()
+        });
+    }
 
-//     #[test]
-//     fn parse_block() {
-//         let e = ParserContext::empty();
-//         let exp_block = Block {
-//             statements: vec![
-//                 Box::new(output(e.statement(PosStr::from("x=0\n"), 0))),
-//                 Box::new(output(e.statement(PosStr::from("y=true"), 0)))
-//             ]
-//         };
+    #[test]
+    fn parse_block() {
+        let e = ParserContext::empty();
+        let exp_block = Block {
+            statements: vec![
+                wrap(Stmt::assn("x", 0)),
+                wrap(Stmt::assn("y", true))
+            ]
+        };
 
-//         check_match(" x=0\n y=true\n\n  \n", |x| e.block(x, 1), Node::from(exp_block));
-//     }
+        check_match(" x=0\n y=true\n\n  \n", |x| e.block(x, 1), Node::from(exp_block));
+    }
 
-//     #[cfg(test)]
-//     mod from_failures {
-//         use super::*;
+    #[cfg(test)]
+    mod from_failures {
+        use super::*;
 
-//         #[test]
-//         fn parse_solitary_expression() {
-//             let e = ParserContext::empty();
-//             simple_check_failed("1 + 3", module);
-//             simple_check_failed("1 + 3", |x| e.block(x, 0));
-//         }
-//     }
-// }
+        #[test]
+        fn parse_solitary_expression() {
+            let e = ParserContext::empty();
+            simple_check_failed("1 + 3", module);
+            simple_check_failed("1 + 3", |x| e.block(x, 0));
+        }
+    }
+}

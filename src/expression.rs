@@ -204,6 +204,30 @@ pub mod constructors {
                 else_block: None
             };
         }
+
+        pub fn assn<T, S>(name: T, expr: S) -> Stmt
+        where Identifier: From<T>, Expr: From<S> {
+            return Stmt::AssignmentStmt {
+                name: Identifier::from(name),
+                expression: Node::from(Expr::from(expr))
+            };
+        }
+
+        pub fn no_args<T>(name: T, block: Block, ret: Type) -> Stmt 
+        where Identifier: From<T> {
+            return Stmt::FunctionDecStmt{
+                name: Identifier::from(name),
+                args: vec!(),
+                kwargs: vec!(),
+                block: Node::from(block),
+                return_type: ret
+            };
+        }
+
+        pub fn ret<T>(expr: T) -> Stmt
+        where Expr: From<T> {
+            return Stmt::ReturnStmt(Node::from(Expr::from(expr)));
+        }
     }
 
     impl Expr {

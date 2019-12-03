@@ -1085,7 +1085,7 @@ pub mod expr_parsers {
                 let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
                 v_update.append(&mut rewritten);
 
-                return ref_expr
+                return ref_expr;
             });
             
         }
@@ -1107,33 +1107,43 @@ pub mod expr_parsers {
                 let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
                 v_update.append(&mut rewritten);
 
-                return ref_expr
+                return ref_expr;
             });
         }
 
         /// Match a map or a set.
         fn map_or_set_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-            // let parse_result = tuple!(input,
-            //         m!(self.logical_binary_expr),
-            //         opt!(complete!(preceded!(
-            //             COLON,
-            //             m!(self.logical_binary_expr)
-            //         ))),
-            //         many1!(m!(self.comprehension_for))
-            // );
+            let parse_result = tuple!(input,
+                    map!(m!(self.logical_binary_expr), |x: ExprNode| -> (ExprNode, StmtSeq) {(x, vec!())} ),
+                    opt!(complete!(preceded!(
+                        COLON,
+                        map!(m!(self.logical_binary_expr), |x: ExprNode| -> (ExprNode, StmtSeq) {(x, vec!())} )
+                    ))),
+                    many1!(m!(self.comprehension_for))
+            );
+            
+            return fmap_iresult(parse_result, |((key_or_value, mut kv_update), opt_value, iterators)| {
+                
+                let coll_name = next_hidden();
+                let (create, add) = match opt_value {
+                    Some((value, mut v_update)) => {
+                        let create = coll_name.simple_let(Expr::from("map").call());
+                        let add = coll_name.assn(coll_name.as_expr().access(&"add").callw(vec!(key_or_value, value)));
+                        kv_update.append(&mut v_update);
+                        (create, add)
+                    },
+                    None => {
+                        let create = coll_name.simple_let(Expr::from("set").call());
+                        let add = coll_name.assn(coll_name.as_expr().access(&"add").callw(vec!(key_or_value)));
+                        (create, add)
+                    }
+                };
 
-            // return fmap_node(parse_result, |(key_or_value, value, iters)| match value {
-            //     Some(y) => Expr::MapComprehension {
-            //         key: Box::new(key_or_value),
-            //         value: Box::new(y),
-            //         iterators: iters
-            //     },
-            //     None => Expr::SetComprehension {
-            //         value: Box::new(key_or_value),
-            //         iterators: iters
-            //     }
-            // });
-            panic!()
+                let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, create, add);
+                kv_update.append(&mut rewritten);
+
+                return ref_expr;
+            });
         }
 
     }
@@ -1451,64 +1461,42 @@ pub mod expr_parsers {
         #[test]
         fn parse_comprehensions() {
             let e = ParserContext::empty();
-            check_match("{x for x in y}", |x| e.expression(x), Node::from(Expr::SetComprehension {
-                
-                value: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                })
-            }));
 
-            check_match("{x:z for x in y}", |x| e.expression(x), Node::from(Expr::MapComprehension {
-                
-                key: Box::new(Node::from("x")),
-                value: Box::new(Node::from("z")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                })
-            }));
+            let set = e.expression(PosStr::from("{x for x in y}"));
+            match output(set).data {
+                Expr::IdentifierExpr(_) => {},
+                _ => panic!()
+            };
+            
+            let map = e.expression(PosStr::from("{x:1 for x in y}"));
+            match output(map).data {
+                Expr::IdentifierExpr(_) => {},
+                _ => panic!()
+            };
 
-            check_match("[x for x in y]", |x| e.expression(x), Node::from(Expr::VecComprehension {
-                
-                value: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                })
-            }));
+            let vec_c = e.expression(PosStr::from("[x for x in y]"));
+            match output(vec_c).data {
+                Expr::IdentifierExpr(_) => {},
+                _ => panic!()
+            };
 
-            check_match("(x for x in y)", |x| e.expression(x), Node::from(Expr::GenComprehension {
-                value: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                })
-            }));
+            let gen = e.expression(PosStr::from("(x for x in y)"));
+            match output(gen).data {
+                Expr::IdentifierExpr(_) => {},
+                _ => panic!()
+            };
 
-            check_match("[x for x in y for x in y]", |x| e.expression(x), Node::from(Expr::VecComprehension {
-                value: Box::new(Node::from("x")),
-                iterators: vec!(ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                }, ComprehensionIter {
-                    iter_vars: vec![Identifier::from("x")],
-                    iterator: Box::new(Node::from("y")),
-                    if_clause: None
-                })
-            }));
+            let vec_c = e.expression(PosStr::from("[x for x in y for x in y]]"));
+            match output(vec_c).data {
+                Expr::IdentifierExpr(_) => {},
+                _ => panic!()
+            };
 
-            // check_match("for a, b in c if true", |x| e.comprehension_for(x), ComprehensionIter{
-            //     iter_vars: c![Identifier::from(x), for x in vec!("a", "b")],
-            //     iterator: Box::new(Node::from("c")),
-            //     if_clause: Some(Node::from(true))
-            // });
+            check_match("for a, b in c if true", |x| e.comprehension_for(x), (
+                vec!(Identifier::from("a"), Identifier::from("b")),
+                (Node::from("c"), vec!()),
+                Some((Node::from(true), vec!()))
+            ));
         }
 
         #[test]

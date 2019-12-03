@@ -14,7 +14,9 @@ use parser_utils::tokens::*;
 use typing::Type;
 use general_utils::{
     get_next_id,
-    get_next_var
+    get_next_var,
+    join,
+    unzip_vec
 };
 
 // use self::expr_parsers::expression;
@@ -60,14 +62,14 @@ impl Parseable for Node<Block> {
 impl Parseable for Node<Stmt> {
     fn parse<'a>(input: PosStr<'a>) -> Node<Stmt> {
         let e = ParserContext::empty();
-        return output(e.statement(PosStr::from(input), 0));
+        return output(e.statement(PosStr::from(input), 0)).0;
     }
 }
 
 impl Parseable for Node<Expr> {
     fn parse<'a>(input: PosStr<'a>) -> Node<Expr> {
         let e = ParserContext::empty();
-        return output(e.expression(PosStr::from(input)));
+        return output(e.expression(PosStr::from(input))).0;
     }
 }
 
@@ -106,7 +108,16 @@ impl ParserContext {
             );
             statements
         };
-        return fmap_node(parse_result, |x| Block{statements: x.into_iter().map(Box::new).collect()});
+
+        return fmap_node(parse_result, |x| {
+            let mut statements = vec!();
+            // Add all the updates to the block. Updates always go before the statement that created them.
+            for (stmt, mut update) in x {
+                statements.append(&mut update);
+                statements.push(Box::new(stmt));
+            }
+            Block{statements}
+        });
     }
 
     pub fn empty() -> ParserContext {
@@ -138,7 +149,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
     return fmap_node(parse_result, |x| Module{
         imports: x.0.into_iter().map(Box::new).collect(), 
-        declarations: x.1.into_iter().map(Box::new).collect()
+        declarations: x.1.into_iter().map(|(y, _)| Box::new(y)).collect()
     });
 }
 
@@ -192,7 +203,9 @@ pub mod stmt_parsers {
                 )
             );
 
-            return fmap_node(parse_result, |x| (Stmt::LetStmt {name: x.0, type_annotation: x.1, expression: (x.2).0}, (x.2).1));
+            return fmap_nodeu(parse_result, |(name, type_annotation, (expression, u))| 
+                (Stmt::LetStmt {name, type_annotation, expression}, u)
+            );
         }
 
         /// Match an assignment statement.
@@ -226,7 +239,7 @@ pub mod stmt_parsers {
             );
 
             return fmap_nodeu(parse_result, |(name, assn, (expr, u))| (Stmt::AssignmentStmt{
-                name: name, 
+                name: name.clone(), 
                 expression: match assn.slice {
                     b"=" => expr,
                     _ => {
@@ -255,8 +268,14 @@ pub mod stmt_parsers {
 
             let parse_result = line_and_block2!(input, self, preceded!(FN, arg_parser), indent);
 
-            return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| {
-                let res_kwargs = keyword_args.iter().map(|x| x.0);
+            return fmap_nodeu(parse_result, |((name, args, keyword_args, return_type), body)| {
+                let mut res_kwargs = vec!();
+                for (ident, t, (expr, mut u)) in keyword_args {
+                    // No comprehensions or match expressions in keywords.
+                    assert_eq!(u.len(), 0);
+                    res_kwargs.push((ident, t, expr));
+                }
+                
                 let stmt = Stmt::FunctionDecStmt{
                     name: name,
                     args: args,
@@ -280,24 +299,15 @@ pub mod stmt_parsers {
                 opt!(complete!(indented!(keyword_and_block2!(self, ELSE, indent), indent)))
             );
 
-            return fmap_node(parse_result, |(((cond, mut cond_u), (block, mut block_u)), elifs, eb)| {
-                cond_u.append(&mut block_u);
+            return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, else_block)| {
                 let mut just_elifs = vec!();
 
-                for ((c, mut c_u), (b, mut b_u)) in elifs.into_iter() {
+                for ((c, mut c_u), b) in elifs.into_iter() {
                     cond_u.append(&mut c_u);
-                    cond_u.append(&mut b_u);
                     just_elifs.push((c, b));
                 }
 
-                let else_block = match eb {
-                    Some((b, mut u)) => {
-                        cond_u.append(&mut u);
-                        b
-                    },
-                    None => None
-                };
-                let stmt = Stmt::IfStmt{condition: cond, block: block, elifs: just_elifs, else_block: b};
+                let stmt = Stmt::IfStmt{condition: cond, block: block, elifs: just_elifs, else_block};
                 return (stmt, cond_u);
             });
         }
@@ -305,7 +315,7 @@ pub mod stmt_parsers {
         /// Parse a while loop.
         fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
             let parse_result = line_and_block2!(input, self, preceded!(WHILE, m!(self.expression)), indent);
-            return fmap_node(parse_result, |x| Stmt::WhileStmt {condition: x.0, block: x.1});
+            return fmap_nodeu(parse_result, |((cond, cu), block)| (Stmt::WhileStmt {condition: cond, block: block}, cu));
         }
 
         /// Parse a for in loop.
@@ -321,23 +331,26 @@ pub mod stmt_parsers {
                 )
             ), indent);
 
-            return fmap_node(parse_result, |x| Stmt::ForInStmt {iter_vars: (x.0).0, iterator: (x.0).1, block: x.1});
+            return fmap_nodeu(parse_result, |((iter_var, (iterator, iu)), block)| {
+                let (stmt, update) = for_to_while(iter_var, &iterator, block.data.statements);
+                (stmt, join(iu, update))
+            });
         }
 
         /// Match a return statement.
         fn return_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
             let parse_result = preceded!(input, RETURN, m!(self.expression));
-            return fmap_node(parse_result,|x| Stmt::ReturnStmt (x));
+            return fmap_pass(parse_result,|x| Stmt::ReturnStmt (x));
         }
 
         /// Match a yield statement.
         fn yield_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
             let parse_result = preceded!(input, YIELD, m!(self.expression));
-            return fmap_node(parse_result, |x| Stmt::YieldStmt(x))
+            return fmap_pass(parse_result, |x| Stmt::YieldStmt(x))
         }
 
         /// Match all keyword arguments in a function declaration.
-        fn keyword_args<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, Node<Expr>)>> {
+        fn keyword_args<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, ExprU)>> {
             let parse_result = optc!(input, preceded!(
                 COMMA,
                 separated_list_complete!(
@@ -422,7 +435,7 @@ pub mod stmt_parsers {
             Err(x) => Err(x)
         };
 
-        return fmap_node(result, |x| (Stmt::StructDec{name: x.0, fields: x.1}, vec!()));
+        return fmap_nodeu(result, |x| (Stmt::StructDec{name: x.0, fields: x.1}, vec!()));
     }
 
     /// Match a break statement.
@@ -1019,9 +1032,9 @@ pub mod expr_parsers {
                 for (expr, mut update) in x {
                     exprs.push(expr);
                     updates.append(&mut update);
-                }  
+                }
                 return (Expr::VecLiteral(exprs), updates);
-            }
+            });
         }
 
         /// Match a set literal.
@@ -1040,7 +1053,7 @@ pub mod expr_parsers {
                     updates.append(&mut update);
                 }  
                 return (Expr::SetLiteral(exprs), updates);
-            }
+            });
         }
 
         /// Match a map literal.
@@ -1059,7 +1072,7 @@ pub mod expr_parsers {
                 let mut mappings = vec!();
                 let mut updates = vec!();
 
-                for ((key, ku), (value, vu)) in x {
+                for ((key, mut ku), (value, mut vu)) in x {
                     mappings.push((key, value));
                     updates.append(&mut ku);
                     updates.append(&mut vu);
@@ -1100,7 +1113,7 @@ pub mod expr_parsers {
                     updates.append(&mut update);
                 }
                 return (Expr::TupleLiteral(exprs), updates);
-            }
+            });
         }
 
     }
@@ -1140,8 +1153,8 @@ pub mod expr_parsers {
                 &iterator, 
                 inner_stmts
             );
-            outer_stmts.append(&mut rewritten.0);
-            outer_stmts.push(wrap(rewritten.1));
+            outer_stmts.append(&mut rewritten.1);
+            outer_stmts.push(wrap(rewritten.0));
         }
 
         outer_stmts.insert(0, wrap(coll_create));
@@ -1840,7 +1853,7 @@ fn next_hidden() -> Identifier {
 /// * `loop_var` - The name of the variable that contains the iterator results
 /// * `iterator` - The iterator expression
 /// * `inner_loop` - The contexts of loop.
-fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (StmtSeq, Stmt) {
+fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (Stmt, Update) {
    
     // The contents of the loop.
 
@@ -1909,7 +1922,7 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
     };
 
 
-    return (outer_stmts, while_loop);
+    return (while_loop, outer_stmts);
 }
 
 // #[cfg(test)]

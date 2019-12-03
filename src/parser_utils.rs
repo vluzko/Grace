@@ -528,10 +528,18 @@ pub mod iresult_helpers {
         };
     }
 
+    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, (Node::from(func(o.0)), o.1))),
+            Err(e) => Err(e)
+        };
+    }
+
     pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F) -> Res<'a, (Node<T>, U)>
         where F: Fn(X) -> (T, U) {
         return match res {
-            Ok((i, o) => {
+            Ok((i, o)) => {
                 let (v, u) = func(o);
                 Ok((i, (Node::from(v), u)))
             },

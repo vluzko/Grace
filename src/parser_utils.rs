@@ -528,10 +528,13 @@ pub mod iresult_helpers {
         };
     }
 
-    pub fn fmap_updaten<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
-        where F: Fn(X) -> T {
+    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F) -> Res<'a, (Node<T>, U)>
+        where F: Fn(X) -> (T, U) {
         return match res {
-            Ok((i, (o, u))) => Ok((i, (Node::from(func(o)), u))),
+            Ok((i, o) => {
+                let (v, u) = func(o);
+                Ok((i, (Node::from(v), u)))
+            },
             Err(e) => Err(e)
         };
     }

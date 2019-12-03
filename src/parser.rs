@@ -1009,6 +1009,51 @@ pub mod expr_parsers {
 
     }
 
+    /// Rewrite a comprehension into an expression and a for loop.
+    /// 
+    /// # Arguments
+    /// * `iterators` - The iterators in each for clause of the comprehension (in order)
+    /// * `coll_create` - The statement to create the collection.
+    /// * `add_value` - The statement to add a value to the collection.
+    fn rewrite_comprehension(iterators: Vec<(Vec<Identifier>, ExprU, Option<ExprU>)>, coll_create: Stmt, add_value: Stmt) -> ExprU {
+        let coll_name = next_hidden();
+        // The statement to create the vector.
+
+        let mut outer_stmts = vec!();
+        outer_stmts.push(wrap(add_value));
+
+        for (iter_vars, (iterator, mut iter_u), if_clause) in iterators.into_iter().rev() {
+
+            // The contents of the loop.
+            let (inner_stmts, new_outer) = match if_clause {
+                None => (outer_stmts, vec!()),
+                Some((cond, u)) => {
+
+                    let if_stmt = Stmt::simple_if(cond, Block{statements: outer_stmts});
+                    let new_stmts = vec!(wrap(if_stmt));
+                    (new_stmts, u)
+                }
+            };
+
+            outer_stmts = new_outer;
+
+            outer_stmts.append(&mut iter_u);
+
+            let mut rewritten = for_to_while(
+                iter_vars.get(0).unwrap().clone(), 
+                &iterator, 
+                inner_stmts
+            );
+            outer_stmts.append(&mut rewritten.0);
+            outer_stmts.push(wrap(rewritten.1));
+        }
+
+        outer_stmts.insert(0, wrap(coll_create));
+        let new_expr = Expr::IdentifierExpr(coll_name.clone());
+
+        return (Node::from(new_expr), outer_stmts);
+    }
+
     /// Comprehensions
     impl ParserContext {
         /// Match the for part of a comprehension.
@@ -1030,63 +1075,40 @@ pub mod expr_parsers {
                 many1!(m!(self.comprehension_for))
             );
 
-            return fmap_node(parse_result, |((value, v_update), iterators)| {
+            return fmap_iresult(parse_result, |((value, mut v_update), iterators)| {
+                // The internal name for the collection.
                 let coll_name = next_hidden();
                 // The statement to create the vector.
                 let coll_create = coll_name.simple_let(Expr::from("vec").call());
-
                 // The statement to push the next element onto the vector.
                 let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec!(value)));
+                let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
+                v_update.append(&mut rewritten);
 
-                let mut outer_stmts = v_update;
-                outer_stmts.push(wrap(push));
-
-                for (iter_vars, (iterator, mut iter_u), if_clause) in iterators.into_iter().rev() {
-
-                    // The contents of the loop.
-                    let (inner_stmts, new_outer) = match if_clause {
-                        None => (outer_stmts, vec!()),
-                        Some((cond, u)) => {
-
-                            let if_stmt = Stmt::simple_if(cond, Block{statements: outer_stmts});
-                            let new_stmts = vec!(wrap(if_stmt));
-                            (new_stmts, u)
-                        }
-                    };
-
-                    outer_stmts = new_outer;
-
-                    outer_stmts.append(&mut iter_u);
-
-                    let mut rewritten = for_to_while(
-                        iter_vars.get(0).unwrap().clone(), 
-                        &iterator, 
-                        inner_stmts
-                    );
-                    outer_stmts.append(&mut rewritten.0);
-                    outer_stmts.push(wrap(rewritten.1));
-                }
-
-                outer_stmts.insert(0, wrap(coll_create));
-                let new_expr = Expr::IdentifierExpr(coll_name.clone());
-
-                return new_expr;
+                return ref_expr
             });
             
         }
 
         /// Match a generator comprehension.
         fn generator_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-            // let parse_result = tuple!(input,
-            //     m!(self.logical_binary_expr),
-            //     many1!(m!(self.comprehension_for))
-            // );
+            let parse_result = tuple!(input,
+                map!(m!(self.logical_binary_expr), |x: ExprNode| -> (ExprNode, StmtSeq) {(x, vec!())} ),
+                many1!(m!(self.comprehension_for))
+            );
 
-            // return fmap_node(parse_result, |x| Expr::GenComprehension {
-            //     value: Box::new(x.0),
-            //     iterators: x.1
-            // });
-            panic!()
+            return fmap_iresult(parse_result, |((value, mut v_update), iterators)| {
+                // The internal name for the collection.
+                let coll_name = next_hidden();
+                // The statement to create the vector.
+                let coll_create = coll_name.simple_let(Expr::from("gen").call());
+                // The statement to push the next element onto the vector.
+                let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec!(value)));
+                let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
+                v_update.append(&mut rewritten);
+
+                return ref_expr
+            });
         }
 
         /// Match a map or a set.

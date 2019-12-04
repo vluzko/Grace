@@ -466,183 +466,183 @@ pub mod stmt_parsers {
         return fmap_nodeu(parse_result, |_| (Stmt::ContinueStmt, vec!()));
     }
 
-    // #[cfg(test)]
-    // mod tests {
-    //     use super::*;
+    #[cfg(test)]
+    mod tests {
+        use super::*;
 
-    //     #[test]
-    //     fn parse_let_stmt() {
-    //         let e = ParserContext::empty();
-    //         check_data("let x = 3.0", |x| e.statement(x, 0), Stmt::LetStmt {
-    //             name: Identifier::from("x"),
-    //             type_annotation: None,
-    //             expression: Node::from(Expr::Float("3.0".to_string()))
-    //         });
+        #[test]
+        fn parse_let_stmt() {
+            let e = ParserContext::empty();
+            check_data("let x = 3.0", |x| e.statement(x, 0), Stmt::LetStmt {
+                name: Identifier::from("x"),
+                type_annotation: None,
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
 
-    //         check_data("let x: f32 = 3.0", |x| e.statement(x, 0), Stmt::LetStmt {
-    //             name: Identifier::from("x"),
-    //             type_annotation: Some(Type::f32),
-    //             expression: Node::from(Expr::Float("3.0".to_string()))
-    //         });
-    //     }
+            check_data("let x: f32 = 3.0", |x| e.statement(x, 0), Stmt::LetStmt {
+                name: Identifier::from("x"),
+                type_annotation: Some(Type::f32),
+                expression: Node::from(Expr::Float("3.0".to_string()))
+            });
+        }
 
-    //     #[test]
-    //     fn parse_assignment_stmt() {
-    //         let e = ParserContext::empty();
-    //         check_data("foo = true", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
-    //             name: Identifier::from("foo"),
-    //             expression: Node::from(true)
-    //         });
+        #[test]
+        fn parse_assignment_stmt() {
+            let e = ParserContext::empty();
+            check_data("foo = true", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
+                name: Identifier::from("foo"),
+                expression: Node::from(true)
+            });
 
-    //         check_data("x = 0\n", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
-    //             name: Identifier::from("x"),
-    //             expression: Node::from(0)
-    //         });
+            check_data("x = 0\n", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
+                name: Identifier::from("x"),
+                expression: Node::from(0)
+            });
 
-    //         let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**="];
-    //         for op in all_ops {
-    //             let input = format!("x {} y", op);
-    //             check_data(input.as_str(), |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
-    //                 name: Identifier::from("x"),
-    //                 expression: Node::from(Expr::BinaryExpr{
-    //                     operator: BinaryOperator::from(&op[0..op.len()-1]),
-    //                     left: Box::new(Node::from(Expr::from("x"))),
-    //                     right: Box::new(Node::from(Expr::from("y")))
-    //                 })
-    //             });
-    //         }
-    //     }
+            let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**="];
+            for op in all_ops {
+                let input = format!("x {} y", op);
+                check_data(input.as_str(), |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
+                    name: Identifier::from("x"),
+                    expression: Node::from(Expr::BinaryExpr{
+                        operator: BinaryOperator::from(&op[0..op.len()-1]),
+                        left: Box::new(Node::from(Expr::from("x"))),
+                        right: Box::new(Node::from(Expr::from("y")))
+                    })
+                });
+            }
+        }
 
-    //     #[test]
-    //     fn parse_func_dec_parts() {
-    //         // Args
-    //         let actual = output(fn_dec_args(PosStr::from("a: i32)")));
-    //         assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
-    //         check_match("a: i32, b: i64", fn_dec_args, vec!(
-    //             (Identifier::from("a"), Type::i32),
-    //             (Identifier::from("b"), Type::i64)
-    //         ));
+        #[test]
+        fn parse_func_dec_parts() {
+            // Args
+            let actual = output(fn_dec_args(PosStr::from("a: i32)")));
+            assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
+            check_match("a: i32, b: i64", fn_dec_args, vec!(
+                (Identifier::from("a"), Type::i32),
+                (Identifier::from("b"), Type::i64)
+            ));
 
-    //         // Kwargs.
-    //         let expected = vec!(
-    //                (Identifier::from("c"), Type::i32, Node::from(5)),
-    //                (Identifier::from("d"), Type::i32, Node::from(7))
-    //         );
+            // Kwargs.
+            let expected = vec!(
+                   (Identifier::from("c"), Type::i32, (Node::from(5), vec!())),
+                   (Identifier::from("d"), Type::i32, (Node::from(7), vec!()))
+            );
 
-    //         let e = ParserContext::empty();
-    //         check_match(", c: i32=5, d: i32=7", |x| e.keyword_args(x), expected);
-    //     }
+            let e = ParserContext::empty();
+            check_match(", c: i32=5, d: i32=7", |x| e.keyword_args(x), expected);
+        }
        
-    //     #[test]
-    //     fn parse_func_dec() {
-    //         let e = ParserContext::empty();
-    //         check_data("fn wvars(a: i32, b: i32, c: i32=5, d: i32 = 7):\n let val = 5", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
-    //             name: Identifier::from("wvars"),
-    //             args: vec!((Identifier::from("a"), Type::i32), (Identifier::from("b"), Type::i32)),
-    //             kwargs: vec!(
-    //                 (Identifier::from("c"), Type::i32, output(e.expression(PosStr::from("5")))),
-    //                 (Identifier::from("d"), Type::i32, output(e.expression(PosStr::from("7"))))
-    //             ),
-    //             block: output(e.block(PosStr::from("let val =  5\n"), 0)),
-    //             return_type: Type::empty
-    //         });
+        #[test]
+        fn parse_func_dec() {
+            let e = ParserContext::empty();
+            check_data("fn wvars(a: i32, b: i32, c: i32=5, d: i32 = 7):\n let val = 5", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wvars"),
+                args: vec!((Identifier::from("a"), Type::i32), (Identifier::from("b"), Type::i32)),
+                kwargs: vec!(
+                    (Identifier::from("c"), Type::i32, output(e.expression(PosStr::from("5"))).0),
+                    (Identifier::from("d"), Type::i32, output(e.expression(PosStr::from("7"))).0)
+                ),
+                block: output(e.block(PosStr::from("let val =  5\n"), 0)),
+                return_type: Type::empty
+            });
 
-    //         check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
-    //             name: Identifier::from("wkwargs"),
-    //             args: vec![(Identifier::from("a"), Type::i32)],
-    //             kwargs: vec!(
-    //                 (Identifier::from("c"), Type::i32, output(e.expression(PosStr::from("5")))),
-    //             ),
-    //             block: output(e.block(PosStr::from("let val=5\n"), 0)),
-    //             return_type: Type::empty
-    //         });
+            check_data("fn wkwargs(a: i32, c: i32=5):\n let val = 5", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("wkwargs"),
+                args: vec![(Identifier::from("a"), Type::i32)],
+                kwargs: vec!(
+                    (Identifier::from("c"), Type::i32, output(e.expression(PosStr::from("5"))).0),
+                ),
+                block: output(e.block(PosStr::from("let val=5\n"), 0)),
+                return_type: Type::empty
+            });
 
-    //         check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
-    //             name: Identifier::from("a"),
-    //             args: vec!((Identifier::from("b"), Type::i32)),
-    //             kwargs: vec!(),
-    //             block: output(e.block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
-    //             return_type: Type::i32
-    //         });
-    //     }
+            check_data("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n", |x| e.statement(x, 0), Stmt::FunctionDecStmt {
+                name: Identifier::from("a"),
+                args: vec!((Identifier::from("b"), Type::i32)),
+                kwargs: vec!(),
+                block: output(e.block(PosStr::from("let x = 5 + 6\nreturn x"), 0)),
+                return_type: Type::i32
+            });
+        }
 
-    //     #[test]
-    //     fn parse_struct_dec() {
-    //         let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
-    //         check_data(input, |x| struct_declaration_stmt(x, 1), Stmt::StructDec{
-    //             name: Identifier::from("A"),
-    //             fields: vec!(
-    //                 (Identifier::from("x"), Type::i32),
-    //                 (Identifier::from("y"), Type::i32)
-    //             )
-    //         });
-    //     }
+        #[test]
+        fn parse_struct_dec() {
+            let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
+            check_data(input, |x| struct_declaration_stmt(x, 1), Stmt::StructDec{
+                name: Identifier::from("A"),
+                fields: vec!(
+                    (Identifier::from("x"), Type::i32),
+                    (Identifier::from("y"), Type::i32)
+                )
+            });
+        }
         
-    //     #[test]
-    //     fn parse_if_stmt() {
-    //         let e = ParserContext::empty();
-    //         let good_input = "if (a and b):\n x = true";
+        #[test]
+        fn parse_if_stmt() {
+            let e = ParserContext::empty();
+            let good_input = "if (a and b):\n x = true";
 
-    //         let good_output = Stmt::IfStmt{
-    //             condition: output(e.expression(PosStr::from("a and b"))),
-    //             block: Node::from(Block{statements: vec!(Box::new(output(e.assignment_stmt(PosStr::from("x = true")))))}),
-    //             elifs: vec!(),
-    //             else_block: None
-    //         };
+            let good_output = Stmt::IfStmt{
+                condition: output(e.expression(PosStr::from("a and b"))).0,
+                block: Node::from(Block{statements: vec!(Box::new(output(e.assignment_stmt(PosStr::from("x = true"))).0))}),
+                elifs: vec!(),
+                else_block: None
+            };
 
-    //         check_data(good_input, |x| e.statement(x, 0), good_output);
+            check_data(good_input, |x| e.statement(x, 0), good_output);
 
-    //         check_failed("ifa and b:\n x = true", |x| e.statement(x, 0), ErrorKind::Alt);
+            check_failed("ifa and b:\n x = true", |x| e.statement(x, 0), ErrorKind::Alt);
 
-    //         check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
-    //             condition: Node::from(true),
-    //             block: output(e.block(PosStr::from("x = true"), 0)),
-    //             elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
-    //             else_block: Some(output(e.block(PosStr::from("z = true"), 0)))
-    //         });
-    //     }
+            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
+                condition: Node::from(true),
+                block: output(e.block(PosStr::from("x = true"), 0)),
+                elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
+                else_block: Some(output(e.block(PosStr::from("z = true"), 0)))
+            });
+        }
 
-    //     #[test]
-    //     fn parse_while_stmt() {
-    //         let e = ParserContext::empty();
-    //         check_data("while true:\n x=true", |x| e.statement(x, 0), Stmt::WhileStmt {
-    //             condition: Node::from(true),
-    //             block: Node::from(Block{statements: vec!(Box::new(output(e.assignment_stmt(PosStr::from("x=true")))))})
-    //         });
+        #[test]
+        fn parse_while_stmt() {
+            let e = ParserContext::empty();
+            check_data("while true:\n x=true", |x| e.statement(x, 0), Stmt::WhileStmt {
+                condition: Node::from(true),
+                block: Node::from(Block{statements: vec!(Box::new(output(e.assignment_stmt(PosStr::from("x=true"))).0))})
+            });
 
-    //         simple_check_failed("while true\n x = true", |x| e.statement(x, 0));
-    //     }
+            simple_check_failed("while true\n x = true", |x| e.statement(x, 0));
+        }
 
-    //     #[test]
-    //     fn parse_for_in_stmt() {
-    //         let e = ParserContext::empty();
-    //         check_data("for x in y:\n a=true", |x| e.statement(x, 0), Stmt::ForInStmt {
-    //             iter_vars: Identifier::from("x"),
-    //             iterator: Node::from("y"),
-    //             block: output(e.block(PosStr::from("a=true"), 0))
-    //         });
-    //     }
+        #[test]
+        fn parse_for_in_stmt() {
+            // let e = ParserContext::empty();
+            // check_data("for x in y:\n a=true", |x| e.statement(x, 0), Stmt::ForInStmt {
+            //     iter_vars: Identifier::from("x"),
+            //     iterator: Node::from("y"),
+            //     block: output(e.block(PosStr::from("a=true"), 0))
+            // });
+        }
 
-    //     #[test]
-    //     fn parse_simple_statements() {
-    //         let e = ParserContext::empty();
-    //         check_data("pass", |x| e.statement(x, 0), Stmt::PassStmt);
-    //         check_data_and_leftover("pass   \n  ", |x| e.statement(x, 0), Stmt::PassStmt, "\n  ");
-    //         check_data("continue", |x| e.statement(x, 0), Stmt::ContinueStmt);
-    //         check_data_and_leftover("continue   \n  ", |x| e.statement(x, 0), Stmt::ContinueStmt, "\n  ");
-    //         check_data("break", |x| e.statement(x, 0), Stmt::BreakStmt);
-    //         check_data_and_leftover("break   \n  ", |x| e.statement(x, 0), Stmt::BreakStmt, "\n  ");
-    //     }
+        #[test]
+        fn parse_simple_statements() {
+            let e = ParserContext::empty();
+            check_data("pass", |x| e.statement(x, 0), Stmt::PassStmt);
+            check_data_and_leftover("pass   \n  ", |x| e.statement(x, 0), Stmt::PassStmt, "\n  ");
+            check_data("continue", |x| e.statement(x, 0), Stmt::ContinueStmt);
+            check_data_and_leftover("continue   \n  ", |x| e.statement(x, 0), Stmt::ContinueStmt, "\n  ");
+            check_data("break", |x| e.statement(x, 0), Stmt::BreakStmt);
+            check_data_and_leftover("break   \n  ", |x| e.statement(x, 0), Stmt::BreakStmt, "\n  ");
+        }
 
-    //     #[test]
-    //     fn parse_return_and_yield_stmts() {
-    //         let e = ParserContext::empty();
-    //         check_data("return true", |x| e.statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
-    //         check_data_and_leftover("return 1  \n  ", |x| e.statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
+        #[test]
+        fn parse_return_and_yield_stmts() {
+            let e = ParserContext::empty();
+            check_data("return true", |x| e.statement(x, 0), Stmt::ReturnStmt (Node::from(true)));
+            check_data_and_leftover("return 1  \n  ", |x| e.statement(x, 0), Stmt::ReturnStmt(Node::from(1)), "\n  ");
 
-    //         check_data("yield true", |x| e.statement(x, 0), Stmt::YieldStmt (Node::from(true)));
-    //     }
-    // }
+            check_data("yield true", |x| e.statement(x, 0), Stmt::YieldStmt (Node::from(true)));
+        }
+    }
 }
 
 /// All expression parsers.

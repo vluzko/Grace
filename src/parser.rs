@@ -1616,105 +1616,105 @@ pub mod expr_parsers {
             ));
         }
 
-    //     #[test]
-    //     fn parse_match_expr() {
-    //         let e = ParserContext::empty();
-    //         check_match("match x:\n5 => 5", |x| e.expression(x), Node::from(Expr::MatchExpr {
-    //             value: Box::new(Node::from("x")),
-    //             cases: vec![(Node::from(5), Node::from(5))]
-    //         }));
-    //     }
+        // #[test]
+        // fn parse_match_expr() {
+        //     let e = ParserContext::empty();
+        //     check_match_no_update("match x:\n5 => 5", |x| e.expression(x), Node::from(Expr::MatchExpr {
+        //         value: Box::new(Node::from("x")),
+        //         cases: vec![(Node::from(5), Node::from(5))]
+        //     }));
+        // }
 
-    //     #[test]
-    //     fn parse_identifier_expr() {
-    //         let e = ParserContext::empty();
-    //         let expected: Node<Expr> = Node::from("words");
-    //         check_match("words", |x| e.expression(x), expected);
+        #[test]
+        fn parse_identifier_expr() {
+            let e = ParserContext::empty();
+            let expected: Node<Expr> = Node::from("words");
+            check_match_no_update("words", |x| e.expression(x), expected);
 
-    //         let expected = Node::from("abc_123");
-    //         check_match("abc_123", |x| e.expression(x), expected);
+            let expected = Node::from("abc_123");
+            check_match_no_update("abc_123", |x| e.expression(x), expected);
 
-    //         check_failed("(", |x| e.expression(x), ErrorKind::Alt);
-    //     }
+            check_failed("(", |x| e.expression(x), ErrorKind::Alt);
+        }
 
-    //     #[test]
-    //     fn parse_literals() {
-    //         let e = ParserContext::empty();
-    //         check_data_and_leftover("2]", |x| e.expression(x), Expr::from(2), "]");
+        #[test]
+        fn parse_literals() {
+            let e = ParserContext::empty();
+            check_data_and_leftover("2]", |x| e.expression(x), Expr::from(2), "]");
 
-    //         let int = rand::random::<i64>().abs();
-    //         check_match(&int.to_string(), int_expr, Node::from(int));
-    //         let rand_float = rand::random::<f64>().abs();
-    //         check_match(&rand_float.to_string(), float_expr, Node::from(rand_float));
-    //         let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
-    //         check_match("\"asdf\\\"\\\rasdf\"", |x| e.expression(x), Node::from(expr));
+            let int = rand::random::<i64>().abs();
+            check_match_no_update(&int.to_string(), int_expr, Node::from(int));
+            let rand_float = rand::random::<f64>().abs();
+            check_match_no_update(&rand_float.to_string(), float_expr, Node::from(rand_float));
+            let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
+            check_match_no_update("\"asdf\\\"\\\rasdf\"", |x| e.expression(x), Node::from(expr));
 
-    //         check_match("{x : y}", |x| e.expression(x), Node::from(Expr::MapLiteral(vec!((Node::from("x"), Node::from("y"))))));
-    //         check_match("[true, false]", |x| e.expression(x), Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
-    //         check_match("{true, false}", |x| e.expression(x), Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
-    //         check_match("(true, false)", |x| e.expression(x), Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
+            check_match_no_update("{x : y}", |x| e.expression(x), Node::from(Expr::MapLiteral(vec!((Node::from("x"), Node::from("y"))))));
+            check_match_no_update("[true, false]", |x| e.expression(x), Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
+            check_match_no_update("{true, false}", |x| e.expression(x), Node::from(Expr::SetLiteral(vec!(Node::from(true), Node::from(false)))));
+            check_match_no_update("(true, false)", |x| e.expression(x), Node::from(Expr::TupleLiteral(vec!(Node::from(true), Node::from(false)))));
 
-    //         check_failed(".", |x| e.expression(x), ErrorKind::Alt);
-    //     }
+            check_failed(".", |x| e.expression(x), ErrorKind::Alt);
+        }
 
-    //     #[test]
-    //     fn parse_collection_literals() {
-    //         let e = ParserContext::empty();
-    //         check_data("[1, 2]", |x| e.expression(x), Expr::VecLiteral(
-    //             vec!(Node::from(1), Node::from(2))
-    //         ));
+        #[test]
+        fn parse_collection_literals() {
+            let e = ParserContext::empty();
+            check_data("[1, 2]", |x| e.expression(x), Expr::VecLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
 
-    //         check_data("()", |x| e.expression(x), Expr::TupleLiteral(
-    //             vec!()
-    //         ));
+            check_data("()", |x| e.expression(x), Expr::TupleLiteral(
+                vec!()
+            ));
 
-    //         check_data("(  )", |x| e.expression(x), Expr::TupleLiteral(
-    //             vec!()
-    //         ));
+            check_data("(  )", |x| e.expression(x), Expr::TupleLiteral(
+                vec!()
+            ));
 
-    //         check_data("(1, )", |x| e.expression(x), Expr::TupleLiteral(
-    //             vec!(Node::from(1))
-    //         ));
+            check_data("(1, )", |x| e.expression(x), Expr::TupleLiteral(
+                vec!(Node::from(1))
+            ));
 
-    //         check_data("(1, 2)", |x| e.expression(x), Expr::TupleLiteral(
-    //             vec!(Node::from(1), Node::from(2))
-    //         ));
+            check_data("(1, 2)", |x| e.expression(x), Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
 
-    //         check_data("(1, 2,)", |x| e.expression(x), Expr::TupleLiteral(
-    //             vec!(Node::from(1), Node::from(2))
-    //         ));
+            check_data("(1, 2,)", |x| e.expression(x), Expr::TupleLiteral(
+                vec!(Node::from(1), Node::from(2))
+            ));
 
 
-    //         check_data("{a: 2}", |x| e.expression(x), Expr::MapLiteral(
-    //             vec!((Node::from("a"), Node::from(2)))
-    //         ));
-    //     }
+            check_data("{a: 2}", |x| e.expression(x), Expr::MapLiteral(
+                vec!((Node::from("a"), Node::from(2)))
+            ));
+        }
 
-    //     #[test]
-    //     fn parse_wrapped() {
-    //         let e = ParserContext::empty();
-    //         check_data("2 * (1 + (3))", |x| e.expression(x), Expr::BinaryExpr{
-    //             operator: BinaryOperator::Mult,
-    //             left: Box::new(Node::from(2)),
-    //             right: Box::new(Node::from(Expr::BinaryExpr{
-    //                 operator: BinaryOperator::Add,
-    //                 left: Box::new(Node::from(Expr::from(1))),
-    //                 right: Box::new(Node::from(Expr::from(3)))
-    //             }))
-    //         });
-    //     }
+        #[test]
+        fn parse_wrapped() {
+            let e = ParserContext::empty();
+            check_data("2 * (1 + (3))", |x| e.expression(x), Expr::BinaryExpr{
+                operator: BinaryOperator::Mult,
+                left: Box::new(Node::from(2)),
+                right: Box::new(Node::from(Expr::BinaryExpr{
+                    operator: BinaryOperator::Add,
+                    left: Box::new(Node::from(Expr::from(1))),
+                    right: Box::new(Node::from(Expr::from(3)))
+                }))
+            });
+        }
 
-    //     #[test]
-    //     fn parse_struct_literal() {
-    //         let e = ParserContext::empty();
-    //         check_data("a.b{1,2,3}", |x| e.expression(x), Expr::StructLiteral{
-    //             base: Box::new(Node::from(Expr::AttributeAccess{
-    //                 base: Box::new(Node::from(Expr::IdentifierExpr(Identifier::from("a")))),
-    //                 attribute: Identifier::from("b")
-    //             })), 
-    //             fields: vec!(Node::from(1), Node::from(2), Node::from(3))
-    //         });
-    //     }
+        #[test]
+        fn parse_struct_literal() {
+            let e = ParserContext::empty();
+            check_data("a.b{1,2,3}", |x| e.expression(x), Expr::StructLiteral{
+                base: Box::new(Node::from(Expr::AttributeAccess{
+                    base: Box::new(Node::from(Expr::IdentifierExpr(Identifier::from("a")))),
+                    attribute: Identifier::from("b")
+                })), 
+                fields: vec!(Node::from(1), Node::from(2), Node::from(3))
+            });
+        }
 
         #[test]
         fn parse_expr_with_trailer() {
@@ -1746,21 +1746,21 @@ pub mod expr_parsers {
                 simple_check_failed("[a:", |x| e.post_index(x));
             }
 
-    //         #[test]
-    //         fn parse_atomic() {
-    //             let e = ParserContext::empty();
-    //             check_data_and_leftover("1 ** 2", |x| e.atomic_expr(x), Expr::from(1), "** 2");
-    //             check_data("false", bool_expr, Expr::from(false));
-    //             check_data("false", |x| e.atomic_expr(x), Expr::from(false));
-    //         }
+            #[test]
+            fn parse_atomic() {
+                let e = ParserContext::empty();
+                check_data_and_leftover("1 ** 2", |x| e.atomic_expr(x), Expr::from(1), "** 2");
+                check_data("false", bool_expr, Expr::from(false));
+                check_data("false", |x| e.atomic_expr(x), Expr::from(false));
+            }
 
-    //         #[test]
-    //         fn parse_spec_literals() {
-    //             check_match("123", int_expr, Node::from(123));
-    //             check_failed("e10", float_expr, ErrorKind::Digit);
-    //             check_failed(".e10", float_expr, ErrorKind::Digit);
-    //             check_failed(".0", float_expr, ErrorKind::Digit);
-    //         }
+            #[test]
+            fn parse_spec_literals() {
+                check_match_no_update("123", int_expr, Node::from(123));
+                check_failed("e10", float_expr, ErrorKind::Digit);
+                check_failed(".e10", float_expr, ErrorKind::Digit);
+                check_failed(".0", float_expr, ErrorKind::Digit);
+            }
 
         }
     }

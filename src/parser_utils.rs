@@ -614,13 +614,13 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
+    pub fn check_data_and_leftover<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T, expected_leftover: &str)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
             Ok((i, o)) => {
                 assert_eq!(i.slice, expected_leftover.as_bytes());
-                assert_eq!(o.data, expected);
+                assert_eq!(o.0.data, expected);
             },
             Result::Err(e) => {
                 panic!("Error: {:?}. Input was: {:?}", e, input)

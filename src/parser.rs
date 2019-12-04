@@ -890,19 +890,7 @@ pub mod expr_parsers {
                     tree_base = match postval {
                         PostIdent::Call{args, kwargs} => Expr::FunctionCall {function: wrap(tree_base), args: args, kwargs: kwargs},
                         PostIdent::Index{slices} => Expr::Index {base: wrap(tree_base), slices: slices},
-                        PostIdent::Access{attribute} => {
-                            match tree_base {
-                                Expr::ModuleAccess(mut v) => {
-                                    v.push(attribute);
-                                    Expr::ModuleAccess(v)
-                                },
-                                Expr::IdentifierExpr(name) => match self.imported.contains(&name) {
-                                    true => Expr::ModuleAccess(vec!(name)),
-                                    false => Expr::IdentifierExpr(name)
-                                },
-                                x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
-                            }
-                        },
+                        PostIdent::Access{attribute} => self.rewrite_access(tree_base, attribute)
                     };
                 };
                 return (tree_base, update);
@@ -1025,17 +1013,25 @@ pub mod expr_parsers {
                 return (PostIdent::Index{slices: indices}, update);
             });
         }
+
+        /// Rewrite an AttributeAccess as a ModuleAccess if necessary
+        /// Will rewrite if the base expression is an identifier in the imports set, or if it's a ModuleExpression.
+        fn rewrite_access(&self, base: Expr, attribute: Identifier) -> Expr {
+            return match base {
+                Expr::ModuleAccess(mut v) => {
+                    v.push(attribute);
+                    Expr::ModuleAccess(v)
+                },
+                Expr::IdentifierExpr(name) => match self.imported.contains(&name) {
+                    true => Expr::ModuleAccess(vec!(name)),
+                    false => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
+                },
+                x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
+            };
+        }
     }
 
-    fn split_vec<S>(v: Vec<(S, Update)>) -> (Vec<S>, Update) {
-        let mut a = vec!();
-        let mut updates = vec!();
-        for (val, mut update) in v {
-            a.push(val);
-            updates.append(&mut update);
-        }
-        return (a, updates);
-    }
+
 
     /// Collection literals
     impl ParserContext {

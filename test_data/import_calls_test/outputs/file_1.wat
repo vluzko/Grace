@@ -11,7 +11,7 @@ i32.const 2
 call $.file_2.A
 set_local $x
 
-call $file_2
+call $.file_2.func_2
 )
 (export "func_1" (func $func_1))
 )

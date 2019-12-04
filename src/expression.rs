@@ -52,7 +52,6 @@ pub enum Stmt {
     StructDec       {name: Identifier, fields: Vec<(Identifier, Type)>},
     IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
-    ForInStmt       {iter_vars: Identifier, iterator: Node<Expr>, block: Node<Block>},
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
     BreakStmt,

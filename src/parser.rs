@@ -4,6 +4,9 @@ use std::collections::HashSet;
 extern crate nom;
 use self::nom::*;
 
+extern crate proptest;
+use self::proptest::prelude::*;
+
 use expression::*;
 use position_tracker::PosStr;
 use parser_utils::*;
@@ -1965,9 +1968,31 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
     return (while_loop, outer_stmts);
 }
 
+/// Strategies for use in property-based testing.
 pub(self) mod strategies {
     use super::*;
+
+    pub fn add_strat(a: i64) -> Expr {
+        return Expr::BinaryExpr{
+            operator: BinaryOperator::Add,
+            left: Box::new(Node::from(a)),
+            right: Box::new(Node::from(0 ))
+        };
+    }
 }
+
+#[cfg(test)]
+mod property_based_tests {
+    use super::*;
+
+    proptest! {
+        #[test]
+        fn strat_test(v in any::<i64>().prop_map(strategies::add_strat)) {
+            println!("{:?}", v);
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

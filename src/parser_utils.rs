@@ -643,14 +643,29 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    pub fn check_match_no_update<'a, T, U>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, (T, U)>, expected: T)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o.0, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    pub fn check_data<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         return match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0);
                 assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
-                assert_eq!(o.data, expected);
+                assert_eq!(o.0.data, expected);
             },
             Result::Err(e) => {
                 panic!("Error: {:?}.", e)

@@ -852,7 +852,13 @@ pub mod expr_parsers {
                     tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
                     attribute: attribute.clone()};
                 };
-                let (args, update) = split_vec(au);
+
+                let mut args = vec!();
+                let mut update = vec!();
+                for (val, mut u) in au {
+                    args.push(val);
+                    update.append(&mut u);
+                }
                 return (Expr::StructLiteral{base: Box::new(Node::from(tree_base)), fields: args}, update);
             };
             return fmap_nodeu(result, map);
@@ -883,8 +889,20 @@ pub mod expr_parsers {
                     update.append(&mut u);
                     tree_base = match postval {
                         PostIdent::Call{args, kwargs} => Expr::FunctionCall {function: wrap(tree_base), args: args, kwargs: kwargs},
-                        PostIdent::Access{attribute} => Expr::AttributeAccess {base: wrap(tree_base), attribute: attribute},
-                        PostIdent::Index{slices} => Expr::Index {base: wrap(tree_base), slices: slices}
+                        PostIdent::Index{slices} => Expr::Index {base: wrap(tree_base), slices: slices},
+                        PostIdent::Access{attribute} => {
+                            match tree_base {
+                                Expr::ModuleAccess(mut v) => {
+                                    v.push(attribute);
+                                    Expr::ModuleAccess(v)
+                                },
+                                Expr::IdentifierExpr(name) => match self.imported.contains(&name) {
+                                    true => Expr::ModuleAccess(vec!(name)),
+                                    false => Expr::IdentifierExpr(name)
+                                },
+                                x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
+                            }
+                        },
                     };
                 };
                 return (tree_base, update);

@@ -1,7 +1,6 @@
 use std::str::from_utf8;
 use std::collections::HashSet;
 
-extern crate cute;
 extern crate nom;
 use self::nom::*;
 
@@ -141,7 +140,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
     return fmap_node(parse_result, |x| Module{
         imports: x.0.into_iter().map(Box::new).collect(), 
-        declarations: x.1.into_iter().map(|(y, _)| Box::new(y)).collect()
+        declarations: x.1.into_iter().map(|y| Box::new(y)).collect()
     });
 }
 
@@ -170,7 +169,7 @@ pub mod stmt_parsers {
                 m!(self.while_stmt, indent) |
                 m!(self.for_in, indent) |
                 m!(self.if_stmt, indent) |
-                m!(self.function_declaration_stmt, indent) |
+                map!(m!(self.function_declaration_stmt, indent), |x| (x, vec!())) |
                 m!(self.return_stmt) |
                 m!(self.yield_stmt) |
                 break_stmt |
@@ -247,7 +246,7 @@ pub mod stmt_parsers {
         }
 
         /// Parse a function declaration.
-        pub fn function_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
+        pub fn function_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
             let arg_parser = |i: PosStr<'a>| tuple!(i,
                 IDENTIFIER,
                 preceded!(OPEN_PAREN, fn_dec_args),
@@ -260,9 +259,9 @@ pub mod stmt_parsers {
 
             let parse_result = line_and_block2!(input, self, preceded!(FN, arg_parser), indent);
 
-            return fmap_nodeu(parse_result, |((name, args, keyword_args, return_type), body)| {
+            return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| {
                 let mut res_kwargs = vec!();
-                for (ident, t, (expr, mut u)) in keyword_args {
+                for (ident, t, (expr, u)) in keyword_args {
                     // No comprehensions or match expressions in keywords.
                     assert_eq!(u.len(), 0);
                     res_kwargs.push((ident, t, expr));
@@ -279,7 +278,7 @@ pub mod stmt_parsers {
                     }
                 };
 
-                return (stmt, vec!());
+                return stmt;
             });
         }
 
@@ -377,7 +376,7 @@ pub mod stmt_parsers {
         return result;
     }
 
-    pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> StmtRes {
+    pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
         let header = tuple!(input,
             delimited!(
                 STRUCT,
@@ -427,7 +426,7 @@ pub mod stmt_parsers {
             Err(x) => Err(x)
         };
 
-        return fmap_nodeu(result, |x| (Stmt::StructDec{name: x.0, fields: x.1}, vec!()));
+        return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 
     /// Match a break statement.
@@ -569,13 +568,13 @@ pub mod stmt_parsers {
         #[test]
         fn parse_struct_dec() {
             let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
-            check_data(input, |x| struct_declaration_stmt(x, 1), Stmt::StructDec{
+            check_match(input, |x| struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
                 name: Identifier::from("A"),
                 fields: vec!(
                     (Identifier::from("x"), Type::i32),
                     (Identifier::from("y"), Type::i32)
                 )
-            });
+            }));
         }
         
         #[test]
@@ -1964,6 +1963,10 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
 
 
     return (while_loop, outer_stmts);
+}
+
+pub(self) mod strategies {
+    use super::*;
 }
 
 #[cfg(test)]

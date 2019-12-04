@@ -340,7 +340,7 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 
 impl Typed<Node<Module>> for Node<Module> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
-        let new_decs = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.declarations];
+        let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context, type_map))).collect();
         return Node{
             id: self.id,
             data: Module{declarations: new_decs, imports: self.data.imports},
@@ -360,7 +360,7 @@ impl Typed<Node<Module>> for Node<Module> {
 impl Typed<Node<Block>> for Node<Block> {
     fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
         // let mut new_stmts = vec![];
-        let new_stmts = c![Box::new(x.type_based_rewrite(context, type_map)), for x in self.data.statements];
+        let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context, type_map))).collect();
 
         let new_block = Node{
             id: self.id,
@@ -374,7 +374,7 @@ impl Typed<Node<Block>> for Node<Block> {
 
     fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
         let mut block_type = Type::Undetermined;
-        for stmt in self.data.statements.iter() {
+        for stmt in &self.data.statements {
             let res = stmt.resolve_types(context, type_map);
             type_map = res.0;
             let stmt_type = res.1;
@@ -409,7 +409,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context, type_map)}
             },
             Stmt::IfStmt {condition, block, elifs,  else_block} => {
-                let new_elifs =  c![(elif.0.type_based_rewrite(context, type_map), elif.1.type_based_rewrite(context, type_map)), for elif in elifs];
+                let new_elifs =  elifs.into_iter().map(|elif| (elif.0.type_based_rewrite(context, type_map), elif.1.type_based_rewrite(context, type_map))).collect();
                 let new_else_block = match else_block {
                     None => None,
                     Some(block) => Some(block.type_based_rewrite(context, type_map))

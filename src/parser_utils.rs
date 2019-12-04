@@ -658,6 +658,7 @@ pub mod iresult_helpers {
         }
     }
 
+    /// Check just the data of the result of a parser. Skips the containing node and the update.
     pub fn check_data<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));

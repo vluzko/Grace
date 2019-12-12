@@ -4,8 +4,6 @@ use std::collections::HashSet;
 extern crate nom;
 use self::nom::*;
 
-extern crate proptest;
-use self::proptest::prelude::*;
 
 use expression::*;
 use position_tracker::PosStr;
@@ -1966,27 +1964,51 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
     return (while_loop, outer_stmts);
 }
 
-/// Strategies for use in property-based testing.
-pub(self) mod strategies {
-    use super::*;
 
-    pub fn add_strat(a: i64) -> Expr {
-        return Expr::BinaryExpr{
-            operator: BinaryOperator::Add,
-            left: Box::new(Node::from(a)),
-            right: Box::new(Node::from(0 ))
-        };
-    }
-}
 
 #[cfg(test)]
 mod property_based_tests {
     use super::*;
+    use proptest::prelude::*;
 
     proptest! {
         #[test]
-        fn strat_test(v in any::<i64>().prop_map(strategies::add_strat)) {
+        fn strat_test(v in strategies::add_strat()) {
             println!("{:?}", v);
+        }
+    }
+
+    /// Strategies for use in property-based testing.
+    pub(super) mod strategies {
+        use super::*;
+
+        use proptest::strategy::{
+            Map
+        };
+        use proptest::arbitrary::{
+            StrategyFor
+        };
+
+        
+
+        type ExprStrategy = Map<(StrategyFor<i64>, StrategyFor<i64>), fn((i64, i64)) -> Expr>;
+
+        fn add_map(tup: (i64, i64)) -> Expr {
+            return Expr::BinaryExpr{
+                operator: BinaryOperator::Add,
+                left: Box::new(Node::from(tup.0)),
+                right: Box::new(Node::from(tup.1))
+            };
+        }
+
+        pub fn add_strat() -> ExprStrategy {
+            return (any::<i64>(), any::<i64>()).prop_map(add_map);
+        }
+
+        fn lit_map(tup: (usize))
+
+        pub fn literal_strategy() -> Expr {
+            panic!()
         }
     }
 }

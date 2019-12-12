@@ -17,8 +17,7 @@ use typing::Type;
 use general_utils::{
     get_next_id,
     get_next_var,
-    join,
-    unzip_vec
+    join
 };
 
 use self::stmt_parsers::struct_declaration_stmt;
@@ -28,9 +27,8 @@ type ExprNode = Node<Expr>;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
 type StmtSeq = Vec<Box<Node<Stmt>>>;
-type Update = StmtSeq;
-type ExprU = (ExprNode, Update);
-type StmtU = (StmtNode, Update);
+type ExprU = (ExprNode, StmtSeq);
+type StmtU = (StmtNode, StmtSeq);
 type StmtRes<'a> = IResult<PosStr<'a>, StmtU>;
 type ExprRes<'a> = IResult<PosStr<'a>, ExprU>;
 type TypeRes<'a> = IResult<PosStr<'a>, Type>;
@@ -885,7 +883,7 @@ pub mod expr_parsers {
             );
 
             // Convert the vector of post identifiers into a single usable expression.
-            let map = |((base, mut update), post): (ExprU, Vec<(PostIdent, Update)>)| {
+            let map = |((base, mut update), post): (ExprU, Vec<(PostIdent, StmtSeq)>)| {
                 let mut tree_base = base.data;
                 for (postval, mut u) in post {
                     update.append(&mut u);
@@ -903,7 +901,7 @@ pub mod expr_parsers {
         }
 
         /// Parse an expression trailer.
-        fn trailer<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, Update)> {
+        fn trailer<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
             
             return alt_complete!(input,
                 m!(self.post_call) |
@@ -913,7 +911,7 @@ pub mod expr_parsers {
         }
 
         /// Match a function call following an expression.
-        fn post_call<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, Update)> {
+        fn post_call<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
             let parse_result = delimited!(input,
                 OPEN_PAREN,
                 alt_complete!(
@@ -954,7 +952,7 @@ pub mod expr_parsers {
         }
 
         /// Match an indexing operation following an expression.
-        fn post_index<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, Update)> {
+        fn post_index<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
             let parse_result = delimited!(input,
                 OPEN_BRACKET,
                 separated_nonempty_list_complete!(
@@ -1032,8 +1030,6 @@ pub mod expr_parsers {
             };
         }
     }
-
-
 
     /// Collection literals
     impl ParserContext {
@@ -1165,7 +1161,7 @@ pub mod expr_parsers {
                     (new_stmts, u)
                 }
             };
-
+                
             outer_stmts = new_outer;
 
             outer_stmts.append(&mut iter_u);
@@ -1175,6 +1171,7 @@ pub mod expr_parsers {
                 &iterator, 
                 inner_stmts
             );
+            
             outer_stmts.append(&mut rewritten.1);
             outer_stmts.push(wrap(rewritten.0));
         }
@@ -1211,6 +1208,7 @@ pub mod expr_parsers {
                 let coll_name = next_hidden();
                 // The statement to create the vector.
                 let coll_create = coll_name.simple_let(Expr::from("vec").call());
+                
                 // The statement to push the next element onto the vector.
                 let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec!(value)));
                 let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
@@ -1288,7 +1286,7 @@ pub mod expr_parsers {
     }
 
     /// Match an access operation following an expression.
-    fn post_access<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, (PostIdent, Update)> {
+    fn post_access<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, (PostIdent, StmtSeq)> {
         let result = preceded!(input,
             DOT,
             IDENTIFIER
@@ -1896,7 +1894,7 @@ fn next_hidden() -> Identifier {
 /// * `loop_var` - The name of the variable that contains the iterator results
 /// * `iterator` - The iterator expression
 /// * `inner_loop` - The contexts of loop.
-fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (Stmt, Update) {
+fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: StmtSeq) -> (Stmt, StmtSeq) {
    
     // The contents of the loop.
 

@@ -81,10 +81,6 @@ pub enum Expr {
     StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-    VecComprehension{value: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
-    GenComprehension{value: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
-    MapComprehension{key: Box<Node<Expr>>, value: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
-    SetComprehension{value: Box<Node<Expr>>, iterators: Vec<ComprehensionIter>},
     ModuleAccess    (Vec<Identifier>),
     IdentifierExpr  (Identifier),
     Bool            (bool),
@@ -108,13 +104,6 @@ impl Expr {
             _ => panic!()
         };
     }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ComprehensionIter {
-    pub iter_vars: Vec<Identifier>,
-    pub iterator: Box<Node<Expr>>,
-    pub if_clause: Option<Node<Expr>>
 }
 
 /// An assignment

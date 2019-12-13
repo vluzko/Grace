@@ -45,7 +45,6 @@ pub struct PosStr<'a> {
 
 impl<'a> PosStr<'a> {
     
-
     pub fn new(input: &'a [u8]) -> Self {
         PosStr {
             offset: 0,
@@ -96,6 +95,12 @@ impl <'a> From<&'a [u8]> for PosStr<'a> {
 
 impl <'a> From<&'a str> for PosStr<'a> {
     fn from(input: &'a str) -> Self {
+        return PosStr::new(input.as_bytes());
+    }
+}
+
+impl <'a> From<&'a String> for PosStr<'a> {
+    fn from(input: &'a String) -> Self {
         return PosStr::new(input.as_bytes());
     }
 }

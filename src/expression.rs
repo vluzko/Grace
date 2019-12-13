@@ -175,6 +175,10 @@ pub struct Identifier {
     pub name: String,
 }
 
+pub fn wrap<T>(data: T) -> Box<Node<T>> {
+    return Box::new(Node::from(data));
+}
+
 pub mod constructors {
     use super::*;
 
@@ -272,7 +276,7 @@ pub mod constructors {
 }
 
 /// Implementations of common traits.
-pub mod trait_impls {
+pub mod rust_trait_impls {
     use super::*;
     
     /// PartialEq implementations
@@ -292,10 +296,47 @@ pub mod trait_impls {
     }
 
     /// Display implementations
-
+    
+    /// Display *just* the name of the identifier, without accompanying metadata.
     impl Display for Identifier {
         fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
             write!(f, "{}", self.name)
+        }
+    }
+
+    /// Display *just* the operator, without accompanying metadata.
+    impl Display for BinaryOperator {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", match self {
+                BinaryOperator::Or => "or",
+                BinaryOperator::And => "and",
+                BinaryOperator::Xor => "xor",
+                BinaryOperator::Add => "+",
+                BinaryOperator::Sub => "-",
+                BinaryOperator::Mult => "*",
+                BinaryOperator::Div => "/",
+                BinaryOperator::Mod => "%",
+                BinaryOperator::BitAnd => "&",
+                BinaryOperator::BitOr => "|",
+                BinaryOperator::BitXor => "^",
+                BinaryOperator::BitShiftL => "<<",
+                BinaryOperator::BitShiftR => ">>",
+                BinaryOperator::Exponent => "**",
+            })
+        }
+    }
+
+    /// Display *just* the operator, without accompanying metadata.
+    impl Display for ComparisonOperator {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", match self {
+                ComparisonOperator::Greater => ">",
+                ComparisonOperator::Less => "<",
+                ComparisonOperator::Equal => "==",
+                ComparisonOperator::Unequal => "!=",
+                ComparisonOperator::GreaterEqual => ">=",
+                ComparisonOperator::LessEqual => "<="
+            })
         }
     }
 
@@ -592,6 +633,3 @@ pub mod trait_impls {
 
 }
 
-pub fn wrap<T>(data: T) -> Box<Node<T>> {
-    return Box::new(Node::from(data));
-}

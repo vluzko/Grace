@@ -2016,6 +2016,7 @@ mod property_based_tests {
             return (any::<i64>(), any::<i64>()).prop_map(add_map);
         }
 
+        // Generate a random binary operator.
         fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
             prop_oneof![
                 Just(BinaryOperator::Add),
@@ -2035,6 +2036,7 @@ mod property_based_tests {
             ]
         }
 
+        // Generate a random identifier.
         pub fn ident_strat() -> Map<RegexGeneratorStrategy<String>, fn(String) -> Expr> {
             return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x)));
         }
@@ -2043,6 +2045,8 @@ mod property_based_tests {
             prop_oneof![
                 // i64 Strategy
                 any::<i64>().prop_map(Expr::from),
+                // f64 Strategy
+                any::<f64>().prop_map(Expr::from),
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy

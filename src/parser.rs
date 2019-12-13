@@ -2016,6 +2016,25 @@ mod property_based_tests {
             return (any::<i64>(), any::<i64>()).prop_map(add_map);
         }
 
+        fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
+            prop_oneof![
+                Just(BinaryOperator::Add),
+                Just(BinaryOperator::Sub),
+                Just(BinaryOperator::Div),
+                Just(BinaryOperator::Mult),
+                Just(BinaryOperator::Mod),
+                Just(BinaryOperator::And),
+                Just(BinaryOperator::Or),
+                Just(BinaryOperator::Xor),
+                Just(BinaryOperator::BitAnd),
+                Just(BinaryOperator::BitOr),
+                Just(BinaryOperator::BitXor),
+                Just(BinaryOperator::BitShiftL),
+                Just(BinaryOperator::BitShiftR),
+                Just(BinaryOperator::Exponent)
+            ]
+        }
+
         pub fn ident_strat() -> Map<RegexGeneratorStrategy<String>, fn(String) -> Expr> {
             return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x)));
         }

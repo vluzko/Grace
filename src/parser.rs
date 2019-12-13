@@ -1978,10 +1978,18 @@ mod property_based_tests {
         }
     }
 
+    proptest! {
+        #[test]
+        fn lit_test(v in strategies::literal_strategy()) {
+            println!("{:?}", v);
+        }
+    }
+
     /// Strategies for use in property-based testing.
     pub(super) mod strategies {
         use super::*;
 
+        use proptest::string::string_regex;
         use proptest::strategy::{
             Map
         };
@@ -2005,11 +2013,14 @@ mod property_based_tests {
             return (any::<i64>(), any::<i64>()).prop_map(add_map);
         }
 
-        fn lit_map(tup: (usize))
-
-        pub fn literal_strategy() -> Expr {
-            panic!()
+        pub fn literal_strategy() -> impl Strategy<Value = Expr> {
+            prop_oneof![
+                any::<i64>().prop_map(Expr::from),
+                string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x))),
+                string_regex(r"[[:alpha:]]*").unwrap().prop_map(|x| Expr::String(x))
+            ]
         }
+
     }
 }
 

@@ -1989,7 +1989,10 @@ mod property_based_tests {
     pub(super) mod strategies {
         use super::*;
 
-        use proptest::string::string_regex;
+        use proptest::string::{
+            string_regex,
+            RegexGeneratorStrategy
+        };
         use proptest::strategy::{
             Map
         };
@@ -2013,11 +2016,18 @@ mod property_based_tests {
             return (any::<i64>(), any::<i64>()).prop_map(add_map);
         }
 
+        pub fn ident_strat() -> Map<RegexGeneratorStrategy<String>, fn(String) -> Expr> {
+            return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x)));
+        }
+
         pub fn literal_strategy() -> impl Strategy<Value = Expr> {
             prop_oneof![
+                // i64 Strategy
                 any::<i64>().prop_map(Expr::from),
-                string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x))),
-                string_regex(r"[[:alpha:]]*").unwrap().prop_map(|x| Expr::String(x))
+                // Boolean strategy
+                any::<bool>().prop_map(Expr::from),
+                // ASCII string strategy
+                string_regex("[\"\'[:alpha:]\n\t 0-9]*").unwrap().prop_map(|x| Expr::String(x))
             ]
         }
 

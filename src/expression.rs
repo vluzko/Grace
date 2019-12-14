@@ -179,10 +179,12 @@ pub fn wrap<T>(data: T) -> Box<Node<T>> {
     return Box::new(Node::from(data));
 }
 
+/// Various helpful constructors for `Expr` and `Stmt`.
 pub mod constructors {
     use super::*;
 
     impl Stmt {
+        /// Construct an if statement from a condition and a block.
         pub fn simple_if<T>(condition: T, block: Block) -> Stmt 
         where Node<Expr>: From<T> {
             return Stmt::IfStmt {
@@ -197,6 +199,7 @@ pub mod constructors {
             };
         }
 
+        /// Construct an assignment statement from an identifier and an expression.
         pub fn assn<T, S>(name: T, expr: S) -> Stmt
         where Identifier: From<T>, Expr: From<S> {
             return Stmt::AssignmentStmt {
@@ -205,6 +208,7 @@ pub mod constructors {
             };
         }
 
+        /// Construct a no-argument function declaration from a name, a block, and a return type.
         pub fn no_args<T>(name: T, block: Block, ret: Type) -> Stmt 
         where Identifier: From<T> {
             return Stmt::FunctionDecStmt{
@@ -216,6 +220,7 @@ pub mod constructors {
             };
         }
 
+        /// Construct a return statement from an expression.
         pub fn ret<T>(expr: T) -> Stmt
         where Expr: From<T> {
             return Stmt::ReturnStmt(Node::from(Expr::from(expr)));

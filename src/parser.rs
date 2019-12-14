@@ -1998,6 +1998,7 @@ mod property_based_tests {
     use super::*;
     use proptest::prelude::*;
 
+    /// Check that literal expressions can parse at all.
     proptest! {
         #[test]
         fn lit_props(v in strategies::literal_strategy()) {
@@ -2008,16 +2009,30 @@ mod property_based_tests {
         }
     }
 
+    /// Check that exprs can parse at all.
     proptest! {
         #![proptest_config(ProptestConfig {
             cases: 50, .. ProptestConfig::default()
         })]
         #[test]
-        fn expr_props(v in strategies::expr_strategy()) {
+        fn prop_expr_parse_at_all(v in strategies::expr_strategy()) {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
             result.unwrap();
+        }
+    }
+
+    /// Check that turning an expression into a string and back again is the identity.
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 50, .. ProptestConfig::default()
+        })]
+        #[test]
+        fn prop_expr_identity(v in strategies::expr_strategy()) {
+            let expr_string = v.inverse_parse();
+            let e = ParserContext::empty();
+            check_data(expr_string.as_str(), |x| e.expression(x), v);
         }
     }
 
@@ -2116,7 +2131,13 @@ mod property_based_tests {
                 // i64 Strategy
                 any::<i64>().prop_map(Expr::from),
                 // f64 Strategy
-                any::<f64>().prop_map(Expr::from),
+                any::<f64>().prop_map(|x| {
+                    if x.fract() == 0.0 {
+                        Expr::Float(format!("{}.", x))
+                    } else {
+                        Expr::Float(format!("{}", x))
+                    }
+                }),
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy

@@ -1357,13 +1357,11 @@ pub mod expr_parsers {
     /// Match a string literal expression.
     fn string_expr<'a>(input: PosStr<'a>) -> ExprRes {
         let result = w_followed!(input, 
-            recognize!(
-                tuple!(
+                delimited!(
                     tag!("\""),
-                    many0c!(STRING_CHAR),
+                    recognize!(many0c!(STRING_CHAR)),
                     tag!("\"")
                 )
-            )
         );
         return fmap_nodeu(result, |x| (Expr::String(from_utf8(x.slice).unwrap().to_string()), vec!()))
     }
@@ -1799,7 +1797,6 @@ pub mod expr_parsers {
                 let input = "0+true    ";
                 let e = ParserContext::empty();
                 let result = e.additive_expr(PosStr::from(input));
-                println!("{:?}", result);
                 result.unwrap();
             }
 
@@ -1807,10 +1804,8 @@ pub mod expr_parsers {
             #[ignore]
             fn failure_2019_12_14_2() {
                 let input = "\"\\\"\\\"\"+-10446305       ";
-                println!("{}", input);
                 let e = ParserContext::empty();
                 let result = e.expression(PosStr::from(input));
-                println!("{:?}", result);
                 result.unwrap();
             }
 
@@ -2074,11 +2069,12 @@ mod property_based_tests {
     /// Check that turning an expression into a string and back again is the identity.
     proptest! {
         #![proptest_config(ProptestConfig {
-            cases: 50, .. ProptestConfig::default()
+            cases: 10, .. ProptestConfig::default()
         })]
         #[test]
         fn prop_expr_identity(v in strategies::expr_strategy()) {
             let expr_string = v.inverse_parse();
+            println!("\nSTRING: {:?}\n", expr_string);
             let e = ParserContext::empty();
             check_data(expr_string.as_str(), |x| e.expression(x), v);
         }
@@ -2189,8 +2185,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                // string_regex(r#""[( -~&&^["\\])|(\\\\")|(\\\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
-                // string_regex(r#"[[:alpha:]|(\\\\")|(\\\\')|(\\n)|(\\r)]*"#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

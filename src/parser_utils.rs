@@ -694,13 +694,12 @@ pub mod iresult_helpers {
         let res = parser(PosStr::from(input));
         return match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0);
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0.data);
                 assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
-                assert_eq!(o.0.data, expected);
+                assert_eq!(o.0.data, expected, "Results were: {}\nInput was: {}", l_r, input);
             },
             Result::Err(e) => {
-                println!("Error: {:?}.\nInput was: {}", e, input);
-                panic!()
+                panic!("Error: {:?}.\nInput was: {}", e, input)
             }
         };
     }

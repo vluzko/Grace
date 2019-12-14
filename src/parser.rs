@@ -2000,7 +2000,7 @@ mod property_based_tests {
 
     proptest! {
         #[test]
-        fn lit_test(v in strategies::literal_strategy()) {
+        fn lit_props(v in strategies::literal_strategy()) {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
@@ -2013,7 +2013,7 @@ mod property_based_tests {
             cases: 50, .. ProptestConfig::default()
         })]
         #[test]
-        fn expr_test(v in strategies::expr_strategy()) {
+        fn expr_props(v in strategies::expr_strategy()) {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
@@ -2126,7 +2126,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#""[ -~&&[^"']]*""#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#""[ -~&&[^"\\]|(\\")|(\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

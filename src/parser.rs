@@ -2039,7 +2039,6 @@ mod property_based_tests {
             StrategyFor
         };
 
-
         /// Generate a random binary operator.
         fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
             prop_oneof![
@@ -2097,11 +2096,6 @@ mod property_based_tests {
                     |(operand, operator)| Expr::UnaryExpr{operator, operand: wrap(operand)}
                 )
             ])
-        }
-
-        /// Generate a random identifier expression.
-        pub fn ident_strat() -> Map<RegexGeneratorStrategy<String>, fn(String) -> Expr> {
-            return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x)));
         }
 
         /// Generate a random expression.

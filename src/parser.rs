@@ -1780,6 +1780,15 @@ pub mod expr_parsers {
         mod discovered_failures {
             use super::*;
 
+            #[test]
+            #[ignore]
+            /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
+            fn failure_2019_12_14() {
+                let input = "0+true    ";
+                let e = ParserContext::empty();
+                let result = e.additive_expr(PosStr::from(input));
+                println!("{:?}", result);
+            }
         }
     }
 }
@@ -1980,7 +1989,11 @@ mod property_based_tests {
     proptest! {
         #[test]
         fn lit_test(v in strategies::literal_strategy()) {
-            println!("{:?}", v);
+            let expr_string = v.inverse_parse();
+            let e = ParserContext::empty();
+            let result = e.expression(PosStr::from(expr_string.as_bytes()));
+            // println!("{:?}", result);
+            result.unwrap();
         }
     }
 
@@ -1993,7 +2006,7 @@ mod property_based_tests {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
-            println!("{:?}", result);
+            // println!("{:?}", result);
             result.unwrap();
         }
     }
@@ -2062,8 +2075,8 @@ mod property_based_tests {
         /// Generate a recursive expression.
         fn complex_expression_strat() -> impl Strategy<Value = Expr> {
             let leaf = literal_strategy();
-            // Minimum 2 levels deep, aim for 6 levels deep, usually each level contains 2 branches.
-            leaf.prop_recursive(2, 3, 2, |inner| prop_oneof![
+            // Minimum 1 level deep, aim for 6 levels deep, usually each level contains 2 branches.
+            leaf.prop_recursive(1, 3, 2, |inner| prop_oneof![
                 (inner.clone(), inner.clone(), binary_operator_strat()).prop_map(
                     |(left, right, operator)| Expr::BinaryExpr{operator, left: wrap(left), right: wrap(right)}
                 ),
@@ -2103,7 +2116,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#"[ -~&&[^"']|(\\\\\\")|(\\\\\\')]*"#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#"[ -~&&[^"']]*"#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

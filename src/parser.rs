@@ -1775,6 +1775,12 @@ pub mod expr_parsers {
             }
 
         }
+
+        #[cfg(test)]
+        mod discovered_failures {
+            use super::*;
+
+        }
     }
 }
 
@@ -1978,6 +1984,20 @@ mod property_based_tests {
         }
     }
 
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 50, .. ProptestConfig::default()
+        })]
+        #[test]
+        fn expr_test(v in strategies::expr_strategy()) {
+            let expr_string = v.inverse_parse();
+            let e = ParserContext::empty();
+            let result = e.expression(PosStr::from(expr_string.as_bytes()));
+            println!("{:?}", result);
+            result.unwrap();
+        }
+    }
+
     /// Strategies for use in property-based testing.
     pub(super) mod strategies {
         use super::*;
@@ -1996,19 +2016,6 @@ mod property_based_tests {
             StrategyFor
         };
 
-        type ExprStrategy = Map<(StrategyFor<i64>, StrategyFor<i64>), fn((i64, i64)) -> Expr>;
-
-        fn add_map(tup: (i64, i64)) -> Expr {
-            return Expr::BinaryExpr{
-                operator: BinaryOperator::Add,
-                left: Box::new(Node::from(tup.0)),
-                right: Box::new(Node::from(tup.1))
-            };
-        }
-
-        pub fn add_strat() -> ExprStrategy {
-            return (any::<i64>(), any::<i64>()).prop_map(add_map);
-        }
 
         /// Generate a random binary operator.
         fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
@@ -2052,6 +2059,7 @@ mod property_based_tests {
             ]
         }
 
+        /// Generate a recursive expression.
         fn complex_expression_strat() -> impl Strategy<Value = Expr> {
             let leaf = literal_strategy();
             // Minimum 2 levels deep, aim for 6 levels deep, usually each level contains 2 branches.
@@ -2095,7 +2103,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex("[\"\'[:alpha:]\n\t 0-9]*").unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#"[ -~&&[^"']|(\\")|(\\')]*"#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 
@@ -2104,17 +2112,23 @@ mod property_based_tests {
             /// Whitespace is inserted randomly. Technically this breaks one of the assumptions of proptest,
             /// so if there are issues with parsing whitespace proptest will not be able to replicate failing tests,
             /// or at least won't be able to shrink test cases properly.
-            fn inverse_parse(&self) -> String {
+            pub fn inverse_parse(&self) -> String {
                 let mut rng = rand::thread_rng();
-                let pre_space: usize = rng.gen_range(0, 10);
                 let post_space: usize = rng.gen_range(0, 10);
                 return match self {
-                    Expr::BinaryExpr{ref operator, ref left, ref right} => format!("{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()),
-                    Expr::String(v) => format!("{}\"{}\"{}", " ".repeat(pre_space), v, " ".repeat(post_space)),
-                    Expr::Int(v) | Expr::Float(v) => format!("{}{}{}", " ".repeat(pre_space), v, " ".repeat(post_space)),
+                    Expr::BinaryExpr{ref operator, ref left, ref right} => format!(
+                        "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
+                    ),
+                    Expr::ComparisonExpr{ref operator, ref left, ref right} => format!(
+                        "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
+                    ),
+                    Expr::UnaryExpr{ref operator, ref operand} => format!("{}{}", operator.to_string(), operand.data.inverse_parse()),
+                    Expr::String(v) => format!("\"{}\"{}", v, " ".repeat(post_space)),
+                    Expr::Int(v) | Expr::Float(v) => format!("{}{}", v, " ".repeat(post_space)),
                     // Yes the code is exactly the same, but the type of `v` is different.
-                    Expr::Bool(v) => format!("{}{}{}", " ".repeat(pre_space), v, " ".repeat(post_space)),
-                    _ => panic!()
+                    Expr::Bool(v) => format!("{}{}", v, " ".repeat(post_space)),
+                    Expr::IdentifierExpr(v) => v.name.clone(),
+                    x => panic!("{:?}", x)
                 };
             }
         }

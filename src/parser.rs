@@ -2103,7 +2103,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#"[ -~&&[^"']|(\\")|(\\')]*"#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#"[ -~&&[^"']|(\\\\\\")|(\\\\\\')]*"#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

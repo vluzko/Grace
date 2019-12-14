@@ -352,7 +352,7 @@ pub mod rust_trait_impls {
                 write!(f, "{}", match self {
                     UnaryOperator::Positive => "+",
                     UnaryOperator::Negative => "-",
-                    UnaryOperator::Not => "!",
+                    UnaryOperator::Not => "not ",
                     UnaryOperator::BitNot => "~",
                     _ => panic!()
                 })

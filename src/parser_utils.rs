@@ -308,11 +308,11 @@ pub mod tokens {
 
     pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a>{
         return alt!(input,
-            tag!("\\\"") |
+            tag!("\\\\\"") |
             tag!("\\\\") |
             tag!("\\\n") |
             tag!("\\\r") |
-            recognize!(none_of!("\n\""))
+            recognize!(none_of!("\n\"\'"))
         );
     }
 

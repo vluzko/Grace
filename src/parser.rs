@@ -1792,14 +1792,25 @@ pub mod expr_parsers {
         mod discovered_failures {
             use super::*;
 
+            /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
             #[test]
             #[ignore]
-            /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
-            fn failure_2019_12_14() {
+            fn failure_2019_12_14_1() {
                 let input = "0+true    ";
                 let e = ParserContext::empty();
                 let result = e.additive_expr(PosStr::from(input));
                 println!("{:?}", result);
+                result.unwrap();
+            }
+
+            #[test]
+            fn failure_2019_12_14_2() {
+                let input = "\"\\\"\\\"\"+-10446305       ";
+                println!("{}", input);
+                let e = ParserContext::empty();
+                let result = e.expression(PosStr::from(input));
+                println!("{:?}", result);
+                result.unwrap();
             }
         }
     }
@@ -2141,7 +2152,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#""[ -~&&[^"\\]|(\\")|(\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#""[ -~&&^["\\]|(\\\\")|(\\\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

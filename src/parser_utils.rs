@@ -291,6 +291,7 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a sequence of valid internal identifier characters.
     pub fn IDENT_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
         let identifier_segment = input.position(|x| {
             let y = x.as_char();
@@ -306,13 +307,12 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a character in a string, or an escape sequence.
     pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a>{
         return alt!(input,
-            tag!("\\\\\"") |
-            tag!("\\\\") |
-            tag!("\\\n") |
-            tag!("\\\r") |
-            recognize!(none_of!("\n\"\'"))
+            tag!("\\\"") |
+            tag!("\\\'") |
+            recognize!(none_of!("\r\n\"\'"))
         );
     }
 

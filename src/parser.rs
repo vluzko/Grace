@@ -1394,6 +1394,9 @@ pub mod expr_parsers {
     #[cfg(test)]
     mod tests {
         use super::*;
+        use std::path::Path;
+        use std::fs::File;
+        use std::io::Read;
 
         #[test]
         fn parse_post_ident() {
@@ -1741,6 +1744,15 @@ pub mod expr_parsers {
             check_failed("123", |x| e.expr_with_trailer(x), ErrorKind::Alt);
         }
 
+        #[test]
+        fn parse_special_chars() {
+            let f_path = Path::new("./test_data/special_chars.txt");
+            let mut f = File::open(f_path).expect("File not found");
+            let mut file_contents = String::new();
+            f.read_to_string(&mut file_contents).unwrap();
+            check_data(file_contents.as_str(), string_expr, Expr::String("\"\\\"\\n\\\'\\\\\"".to_string()));
+        }
+
         #[cfg(test)]
         mod subparsers {
             use super::*;
@@ -1992,7 +2004,6 @@ mod property_based_tests {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
-            // println!("{:?}", result);
             result.unwrap();
         }
     }
@@ -2006,7 +2017,6 @@ mod property_based_tests {
             let expr_string = v.inverse_parse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
-            // println!("{:?}", result);
             result.unwrap();
         }
     }
@@ -2116,7 +2126,7 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#"[ -~&&[^"']]*"#).unwrap().prop_map(|x| Expr::String(x)),
+                string_regex(r#""[ -~&&[^"']]*""#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

@@ -2010,7 +2010,7 @@ mod property_based_tests {
             return (any::<i64>(), any::<i64>()).prop_map(add_map);
         }
 
-        // Generate a random binary operator.
+        /// Generate a random binary operator.
         fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
             prop_oneof![
                 Just(BinaryOperator::Add),
@@ -2030,6 +2030,7 @@ mod property_based_tests {
             ]
         }
 
+        /// Generate a random comparison operator.
         fn comparison_operator_strat() -> impl Strategy<Value = ComparisonOperator> {
             prop_oneof![
                 Just(ComparisonOperator::Greater),
@@ -2038,6 +2039,16 @@ mod property_based_tests {
                 Just(ComparisonOperator::Unequal),
                 Just(ComparisonOperator::GreaterEqual),
                 Just(ComparisonOperator::LessEqual)
+            ]
+        }
+
+        /// Generate a random unary operator.
+        fn unary_operator_strat() -> impl Strategy<Value = UnaryOperator> {
+            prop_oneof![
+                Just(UnaryOperator::Positive),
+                Just(UnaryOperator::Negative),
+                Just(UnaryOperator::Not),
+                Just(UnaryOperator::BitNot),
             ]
         }
 
@@ -2050,6 +2061,9 @@ mod property_based_tests {
                 ),
                 (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
                     |(left, right, operator)| Expr::ComparisonExpr{operator, left: wrap(left), right: wrap(right)}
+                ),
+                (inner.clone(), unary_operator_strat()).prop_map(
+                    |(operand, operator)| Expr::UnaryExpr{operator, operand: wrap(operand)}
                 )
             ])
         }

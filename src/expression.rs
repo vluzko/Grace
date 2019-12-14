@@ -340,6 +340,19 @@ pub mod rust_trait_impls {
         }
     }
 
+    /// Display *just* the operator, without accompanying metadata.
+    impl Display for UnaryOperator {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{}", match self {
+                UnaryOperator::Positive => "+",
+                UnaryOperator::Negative => "-",
+                UnaryOperator::Not => "!",
+                UnaryOperator::BitNot => "~",
+                _ => panic!()
+            })
+        }
+    }
+
     /// From implementations
 
     /// From for Node

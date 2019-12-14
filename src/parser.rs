@@ -684,7 +684,7 @@ pub mod expr_parsers {
         fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = alt!(input,
                 tuple!(
-                    map!(alt!(PLUS | MINUS | TILDE | NOT), Some),
+                    map!(alt!(PLUS | terminated!(MINUS, peek!(not!(NUM_START))) | TILDE | NOT), Some),
                     m!(self.unary_expr)
                 ) |
                 tuple!(
@@ -1804,6 +1804,7 @@ pub mod expr_parsers {
             }
 
             #[test]
+            #[ignore]
             fn failure_2019_12_14_2() {
                 let input = "\"\\\"\\\"\"+-10446305       ";
                 println!("{}", input);
@@ -1811,6 +1812,31 @@ pub mod expr_parsers {
                 let result = e.expression(PosStr::from(input));
                 println!("{:?}", result);
                 result.unwrap();
+            }
+
+            /// Resolved by preventing -{NUM_START} from being interpreted as a unary operator.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_3() {
+                let input = "-3       ";
+                let e = ParserContext::empty();
+                check_data(input, |x| e.expression(x), Expr::Int("-3".to_string()));
+            }
+
+            /// Resolved by allowing DIGIT0 to recognize the empty string.
+            /// Before "9." would break when checking if a digit sequence occured after the decimal.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_4() {
+                let input = "0<9.";
+                let e = ParserContext::empty();
+                let result = e.expression(PosStr::from(input));
+                println!("{:?}", result);
+                check_data(input, |x| e.expression(x), Expr::ComparisonExpr{
+                    operator: ComparisonOperator::Less,
+                    left: wrap(Expr::from(0)),
+                    right: wrap(Expr::Float("9.".to_string()))
+                });
             }
         }
     }
@@ -2152,7 +2178,8 @@ mod property_based_tests {
                 // Boolean strategy
                 any::<bool>().prop_map(Expr::from),
                 // ASCII string strategy
-                string_regex(r#""[ -~&&^["\\]|(\\\\")|(\\\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
+                // string_regex(r#""[( -~&&^["\\])|(\\\\")|(\\\\')|(\\n)|(\\r)]*""#).unwrap().prop_map(|x| Expr::String(x)),
+                // string_regex(r#"[[:alpha:]|(\\\\")|(\\\\')|(\\n)|(\\r)]*"#).unwrap().prop_map(|x| Expr::String(x)),
             ]
         }
 

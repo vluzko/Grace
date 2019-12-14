@@ -244,6 +244,19 @@ pub mod tokens {
         }
     }
 
+    pub fn NUM_START<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.slice.len() {
+            0 => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            _ => {
+                let x = input.slice[0];
+                match (x >= 0x30 && x <= 0x39) || x == 0x2e {
+                    true => Ok(input.take_split(1)),
+                    false => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit)))
+                }
+            }
+        };
+    }
+
     /// Recognize a non-empty sequence of decimal digits.
     pub fn DIGIT<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
@@ -260,10 +273,7 @@ pub mod tokens {
     pub fn DIGIT0<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(n) => Ok(input.take_split(n)),
-            None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
-                n => Ok(input.take_split(n))
-            }
+            None => Ok(input.take_split(input.input_len()))
         };
     }
 

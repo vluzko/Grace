@@ -1661,8 +1661,8 @@ pub mod expr_parsers {
             check_match_no_update(&int.to_string(), int_expr, Node::from(int));
             let rand_float = rand::random::<f64>().abs();
             check_match_no_update(&rand_float.to_string(), float_expr, Node::from(rand_float));
-            let expr = Expr::String("\"asdf\\\"\\\rasdf\"".to_string());
-            check_match_no_update("\"asdf\\\"\\\rasdf\"", |x| e.expression(x), Node::from(expr));
+            let expr = Expr::String("\"asdf\\\"\\\ra\'sdf\"".to_string());
+            check_match_no_update("\"asdf\\\"\\\ra\'sdf\"", |x| e.expression(x), Node::from(expr));
 
             check_match_no_update("{x : y}", |x| e.expression(x), Node::from(Expr::MapLiteral(vec!((Node::from("x"), Node::from("y"))))));
             check_match_no_update("[true, false]", |x| e.expression(x), Node::from(Expr::VecLiteral(vec!(Node::from(true), Node::from(false)))));
@@ -1750,7 +1750,7 @@ pub mod expr_parsers {
             let mut f = File::open(f_path).expect("File not found");
             let mut file_contents = String::new();
             f.read_to_string(&mut file_contents).unwrap();
-            check_data(file_contents.as_str(), string_expr, Expr::String("\"\\\"\\n\\\'\\\\\"".to_string()));
+            check_data(file_contents.as_str(), string_expr, Expr::String("\"\\\"\\n\'\\\\\\\'\"".to_string()));
         }
 
         #[cfg(test)]

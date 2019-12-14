@@ -312,7 +312,10 @@ pub mod tokens {
         return alt!(input,
             tag!("\\\"") |
             tag!("\\\'") |
-            recognize!(none_of!("\r\n\"\'"))
+            tag!("\\\\") |
+            tag!("\\n") |
+            tag!("\\\r") |
+            recognize!(none_of!("\r\n\"\\"))
         );
     }
 

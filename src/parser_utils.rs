@@ -405,6 +405,11 @@ pub mod tokens {
         return recognize!(input, alt!(tag!("+") | tag!("-")));
     }
 
+    /// Parser for the negative unary operator. Checks that it's not immediately followed by a digit.
+    pub fn NEG<'a>(input: PosStr<'a>) -> IO<'a> {
+        return w_followed!(input, terminated!(tag!("-"), peek!(not!(NUM_START))));
+    }
+
     // Keywords
     keyword!(FN, "fn");
     keyword!(STRUCT, "struct");
@@ -694,7 +699,8 @@ pub mod iresult_helpers {
                 assert_eq!(o.0.data, expected);
             },
             Result::Err(e) => {
-                panic!("Error: {:?}.\nInput was: {}", e, input)
+                println!("Error: {:?}.\nInput was: {}", e, input);
+                panic!()
             }
         };
     }

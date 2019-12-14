@@ -314,9 +314,9 @@ pub mod rust_trait_impls {
         impl Display for BinaryOperator {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 write!(f, "{}", match self {
-                    BinaryOperator::Or => "or",
-                    BinaryOperator::And => "and",
-                    BinaryOperator::Xor => "xor",
+                    BinaryOperator::Or => " or ",
+                    BinaryOperator::And => " and ",
+                    BinaryOperator::Xor => " xor ",
                     BinaryOperator::Add => "+",
                     BinaryOperator::Sub => "-",
                     BinaryOperator::Mult => "*",

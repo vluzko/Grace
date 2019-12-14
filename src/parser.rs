@@ -684,7 +684,7 @@ pub mod expr_parsers {
         fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let parse_result = alt!(input,
                 tuple!(
-                    map!(alt!(PLUS | terminated!(MINUS, peek!(not!(NUM_START))) | TILDE | NOT), Some),
+                    map!(alt!(PLUS | NEG | TILDE | NOT), Some),
                     m!(self.unary_expr)
                 ) |
                 tuple!(
@@ -1789,7 +1789,7 @@ pub mod expr_parsers {
         }
 
         #[cfg(test)]
-        mod discovered_failures {
+        mod failures {
             use super::*;
 
             /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
@@ -1830,12 +1830,23 @@ pub mod expr_parsers {
             fn failure_2019_12_14_4() {
                 let input = "0<9.";
                 let e = ParserContext::empty();
-                let result = e.expression(PosStr::from(input));
-                println!("{:?}", result);
                 check_data(input, |x| e.expression(x), Expr::ComparisonExpr{
                     operator: ComparisonOperator::Less,
                     left: wrap(Expr::from(0)),
                     right: wrap(Expr::Float("9.".to_string()))
+                });
+            }
+
+            /// Resolved by making a new token to recognize the negative unary operator specifically.
+            /// It checks that it's not followed by a digit.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_5() {
+                let input = "- 0   ";
+                let e = ParserContext::empty();
+                check_data(input, |x| e.expression(x), Expr::UnaryExpr{
+                    operator: UnaryOperator::Negative,
+                    operand: wrap(Expr::from(0))
                 });
             }
         }
@@ -2198,7 +2209,15 @@ mod property_based_tests {
                     Expr::ComparisonExpr{ref operator, ref left, ref right} => format!(
                         "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
                     ),
-                    Expr::UnaryExpr{ref operator, ref operand} => format!("{}{}", operator.to_string(), operand.data.inverse_parse()),
+                    Expr::UnaryExpr{ref operator, ref operand} => {
+                        match (operator, &operand.data) {
+                            (UnaryOperator::Negative, &Expr::Float(_)) | (UnaryOperator::Negative, &Expr::Int(_))=> format!("{} {}", 
+                                operator.to_string(), operand.data.inverse_parse()
+                            ),
+                            _ => format!("{}{}", operator.to_string(), operand.data.inverse_parse())
+                        }
+                        
+                    }
                     Expr::String(v) => format!("\"{}\"{}", v, " ".repeat(post_space)),
                     Expr::Int(v) | Expr::Float(v) => format!("{}{}", v, " ".repeat(post_space)),
                     // Yes the code is exactly the same, but the type of `v` is different.

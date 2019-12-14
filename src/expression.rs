@@ -296,353 +296,356 @@ pub mod rust_trait_impls {
     }
 
     /// Display implementations
-    
-    /// Display *just* the name of the identifier, without accompanying metadata.
-    impl Display for Identifier {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}", self.name)
+    mod display_impl {
+        use super::*;
+        /// Display *just* the name of the identifier, without accompanying metadata.
+        impl Display for Identifier {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", self.name)
+            }
         }
-    }
 
-    /// Display *just* the operator, without accompanying metadata.
-    impl Display for BinaryOperator {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}", match self {
-                BinaryOperator::Or => "or",
-                BinaryOperator::And => "and",
-                BinaryOperator::Xor => "xor",
-                BinaryOperator::Add => "+",
-                BinaryOperator::Sub => "-",
-                BinaryOperator::Mult => "*",
-                BinaryOperator::Div => "/",
-                BinaryOperator::Mod => "%",
-                BinaryOperator::BitAnd => "&",
-                BinaryOperator::BitOr => "|",
-                BinaryOperator::BitXor => "^",
-                BinaryOperator::BitShiftL => "<<",
-                BinaryOperator::BitShiftR => ">>",
-                BinaryOperator::Exponent => "**",
-            })
+        /// Display *just* the operator, without accompanying metadata.
+        impl Display for BinaryOperator {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", match self {
+                    BinaryOperator::Or => "or",
+                    BinaryOperator::And => "and",
+                    BinaryOperator::Xor => "xor",
+                    BinaryOperator::Add => "+",
+                    BinaryOperator::Sub => "-",
+                    BinaryOperator::Mult => "*",
+                    BinaryOperator::Div => "/",
+                    BinaryOperator::Mod => "%",
+                    BinaryOperator::BitAnd => "&",
+                    BinaryOperator::BitOr => "|",
+                    BinaryOperator::BitXor => "^",
+                    BinaryOperator::BitShiftL => "<<",
+                    BinaryOperator::BitShiftR => ">>",
+                    BinaryOperator::Exponent => "**",
+                })
+            }
         }
-    }
 
-    /// Display *just* the operator, without accompanying metadata.
-    impl Display for ComparisonOperator {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}", match self {
-                ComparisonOperator::Greater => ">",
-                ComparisonOperator::Less => "<",
-                ComparisonOperator::Equal => "==",
-                ComparisonOperator::Unequal => "!=",
-                ComparisonOperator::GreaterEqual => ">=",
-                ComparisonOperator::LessEqual => "<="
-            })
+        /// Display *just* the operator, without accompanying metadata.
+        impl Display for ComparisonOperator {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", match self {
+                    ComparisonOperator::Greater => ">",
+                    ComparisonOperator::Less => "<",
+                    ComparisonOperator::Equal => "==",
+                    ComparisonOperator::Unequal => "!=",
+                    ComparisonOperator::GreaterEqual => ">=",
+                    ComparisonOperator::LessEqual => "<="
+                })
+            }
         }
-    }
 
-    /// Display *just* the operator, without accompanying metadata.
-    impl Display for UnaryOperator {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            write!(f, "{}", match self {
-                UnaryOperator::Positive => "+",
-                UnaryOperator::Negative => "-",
-                UnaryOperator::Not => "!",
-                UnaryOperator::BitNot => "~",
-                _ => panic!()
-            })
+        /// Display *just* the operator, without accompanying metadata.
+        impl Display for UnaryOperator {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "{}", match self {
+                    UnaryOperator::Positive => "+",
+                    UnaryOperator::Negative => "-",
+                    UnaryOperator::Not => "!",
+                    UnaryOperator::BitNot => "~",
+                    _ => panic!()
+                })
+            }
         }
     }
 
     /// From implementations
-
-    /// From for Node
-    impl <T> From<T> for Node<T> {
-        fn from(input: T) -> Self {
-            return Node{
-                id: general_utils::get_next_id(),
-                data: input,
-                scope: 0
-            };
-        }
-    }
-
-    impl From<bool> for Node<Expr> {
-        fn from(input: bool) -> Self {
-            let expr = Expr::from(input);
-            return Node {
-                id: general_utils::get_next_id(),
-                data: expr,
-                scope: 0
+    mod from_impl {
+        use super::*;
+        /// From for Node
+        impl <T> From<T> for Node<T> {
+            fn from(input: T) -> Self {
+                return Node{
+                    id: general_utils::get_next_id(),
+                    data: input,
+                    scope: 0
+                };
             }
         }
-    }
 
-    impl <'a> From<&'a str> for Node<Expr> {
-        fn from(input: &'a str) -> Self {
-            let expr: Expr = Expr::from(input);
-            return Node {
-                id: general_utils::get_next_id(),
-                data: expr,
-                scope: 0
-            }
-        }
-    }
-
-    impl From<i64> for Node<Expr> {
-        fn from(input: i64) -> Self {
-            let expr: Expr = Expr::from(input);
-            return Node {
-                id: general_utils::get_next_id(),
-                data: expr,
-                scope: 0
-            }
-        }
-    }
-
-    impl From<f64> for Node<Expr> {
-        fn from(input: f64) -> Self {
-            let expr: Expr = Expr::from(input);
-            return Node {
-                id: general_utils::get_next_id(),
-                data: expr,
-                scope: 0
-            }
-        }
-    }
-
-    /// From for Expr
-    impl <'a> From<&'a str> for Expr {
-        fn from(input: &'a str) -> Self {
-            return Expr::IdentifierExpr(Identifier::from(input));
-        }
-    }
-    impl<'a> From<&'a [u8]> for Expr {
-        fn from(input: &'a [u8]) -> Self {
-            return Expr::IdentifierExpr (Identifier::from(input));
-        }
-    }
-    impl<'a> From<PosStr<'a>> for Expr {
-        fn from(input: PosStr<'a>) -> Self {
-            return Expr::from(input.slice);
-        }
-    }
-    impl From<bool> for Expr {
-        fn from(input: bool) -> Self {
-            return Expr::Bool(input);
-        }
-    }
-    impl From<i64> for Expr {
-        fn from(input: i64) -> Self {
-            return Expr::Int(input.to_string());
-        }
-    }
-    impl From<f64> for Expr {
-        fn from(input: f64) -> Self {
-            return Expr::Float(input.to_string());
-        }
-    }
-    impl From<Identifier> for Expr {
-        fn from(input: Identifier) -> Self {
-            return Expr::IdentifierExpr(input.clone());
-        }
-    }
-
-    /// From for Assignment
-    impl<'a> From<&'a str> for Assignment {
-        fn from(input: &'a str) -> Self {
-            return match input {
-                "=" => Assignment::Normal,
-                "+=" => Assignment::Add,
-                "-=" => Assignment::Sub,
-                "*=" => Assignment::Mult,
-                "/=" => Assignment::Div,
-                "%=" => Assignment::Mod,
-                "&=" => Assignment::BitAnd,
-                "|=" => Assignment::BitOr,
-                "^=" => Assignment::BitXor,
-                "<<=" => Assignment::BitShiftL,
-                ">>=" => Assignment::BitShiftR,
-                "**=" => Assignment::Exponent,
-                _ => {
-                    // TODO: Log
-                    panic!("Bad input to Assignment::from<&str>: {}", input)
+        impl From<bool> for Node<Expr> {
+            fn from(input: bool) -> Self {
+                let expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
                 }
-            };
+            }
         }
-    }
-    impl<'a> From<&'a [u8]> for Assignment {
-        fn from(input: &'a [u8]) -> Self {
-            return match input {
-                b"=" => Assignment::Normal,
-                b"+=" => Assignment::Add,
-                b"-=" => Assignment::Sub,
-                b"*=" => Assignment::Mult,
-                b"/=" => Assignment::Div,
-                b"%=" => Assignment::Mod,
-                b"&=" => Assignment::BitAnd,
-                b"|=" => Assignment::BitOr,
-                b"^=" => Assignment::BitXor,
-                b"<<=" => Assignment::BitShiftL,
-                b">>=" => Assignment::BitShiftR,
-                b"**=" => Assignment::Exponent,
-                _ => {
-                    panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
+
+        impl <'a> From<&'a str> for Node<Expr> {
+            fn from(input: &'a str) -> Self {
+                let expr: Expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
                 }
-            };
+            }
         }
-    }
-    impl<'a> From<PosStr<'a>> for Assignment {
-        fn from(input: PosStr<'a>) -> Self {
-            return Assignment::from(input.slice);
-        }
-    }
 
-    /// From for ComparisonOperator
-    impl <'a> From<&'a [u8]> for ComparisonOperator {
-        fn from(input: &'a [u8]) -> Self {
-            return match input {
-                b"==" => ComparisonOperator::Equal,
-                b">=" => ComparisonOperator::GreaterEqual,
-                b"<=" => ComparisonOperator::LessEqual,
-                b">"  => ComparisonOperator::Greater,
-                b"<"  => ComparisonOperator::Less,
-                b"!=" => ComparisonOperator::Unequal,
-                _ => panic!(),
-            };
-        }
-    }
-    impl <'a> From<PosStr<'a>> for ComparisonOperator {
-        fn from(input: PosStr<'a>) -> Self {
-            return ComparisonOperator::from(input.slice);
-        }
-    }
-
-    /// From for BinaryOperator
-    impl<'a> From<&'a str> for BinaryOperator {
-        fn from(input: &'a str) -> Self {
-            return match input {
-                "or" => BinaryOperator::Or,
-                "and" => BinaryOperator::And,
-                "xor" => BinaryOperator::Xor,
-                "+" => BinaryOperator::Add,
-                "-" => BinaryOperator::Sub,
-                "*" => BinaryOperator::Mult,
-                "/" => BinaryOperator::Div,
-                "%" => BinaryOperator::Mod,
-                "&" => BinaryOperator::BitAnd,
-                "|" => BinaryOperator::BitOr,
-                "^" => BinaryOperator::BitXor,
-                "<<" => BinaryOperator::BitShiftL,
-                ">>" => BinaryOperator::BitShiftR,
-                "**" => BinaryOperator::Exponent,
-                _ => {
-                    // TODO: Log
-                    println!("Bad input to BinaryOperator::from<&str>: {}", input);
-                    panic!()
+        impl From<i64> for Node<Expr> {
+            fn from(input: i64) -> Self {
+                let expr: Expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
                 }
-            };
+            }
         }
-    }
-    impl<'a> From<&'a [u8]> for BinaryOperator {
-        fn from(input: &'a [u8]) -> Self {
-            return match input {
-                b"or" => BinaryOperator::Or,
-                b"and" => BinaryOperator::And,
-                b"xor" => BinaryOperator::Xor,
-                b"+" => BinaryOperator::Add,
-                b"-" => BinaryOperator::Sub,
-                b"*" => BinaryOperator::Mult,
-                b"/" => BinaryOperator::Div,
-                b"%" => BinaryOperator::Mod,
-                b"&" => BinaryOperator::BitAnd,
-                b"|" => BinaryOperator::BitOr,
-                b"^" => BinaryOperator::BitXor,
-                b"<<" => BinaryOperator::BitShiftL,
-                b">>" => BinaryOperator::BitShiftR,
-                b"**" => BinaryOperator::Exponent,
-                _ => {
-                    panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
+
+        impl From<f64> for Node<Expr> {
+            fn from(input: f64) -> Self {
+                let expr: Expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
                 }
-            };
+            }
         }
-    }
-    impl<'a> From<PosStr<'a>> for BinaryOperator {
-        fn from(input: PosStr<'a>) -> Self {
-            return BinaryOperator::from(input.slice);
-        }
-    }
 
-    /// From for UnaryOperator
-    impl <'a> From<&'a str> for UnaryOperator {
-        fn from(input: &'a str) -> Self {
-            return match input {
-                "not" => UnaryOperator::Not,
-                "+" => UnaryOperator::Positive,
-                "-" => UnaryOperator::Negative,
-                "~" => UnaryOperator::BitNot,
-                _ => panic!()
-            };
+        /// From for Expr
+        impl <'a> From<&'a str> for Expr {
+            fn from(input: &'a str) -> Self {
+                return Expr::IdentifierExpr(Identifier::from(input));
+            }
         }
-    }
-    impl <'a> From<&'a [u8]> for UnaryOperator {
-        fn from(input: &'a [u8]) -> Self {
-            return match input {
-                b"not" => UnaryOperator::Not,
-                b"+" => UnaryOperator::Positive,
-                b"-" => UnaryOperator::Negative,
-                b"~" => UnaryOperator::BitNot,
-                _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input)
-            };
+        impl<'a> From<&'a [u8]> for Expr {
+            fn from(input: &'a [u8]) -> Self {
+                return Expr::IdentifierExpr (Identifier::from(input));
+            }
         }
-    }
-    impl <'a> From<PosStr<'a>> for UnaryOperator {
-        fn from(input: PosStr<'a>) -> Self {
-            return UnaryOperator::from(input.slice);
+        impl<'a> From<PosStr<'a>> for Expr {
+            fn from(input: PosStr<'a>) -> Self {
+                return Expr::from(input.slice);
+            }
         }
-    }
+        impl From<bool> for Expr {
+            fn from(input: bool) -> Self {
+                return Expr::Bool(input);
+            }
+        }
+        impl From<i64> for Expr {
+            fn from(input: i64) -> Self {
+                return Expr::Int(input.to_string());
+            }
+        }
+        impl From<f64> for Expr {
+            fn from(input: f64) -> Self {
+                return Expr::Float(input.to_string());
+            }
+        }
+        impl From<Identifier> for Expr {
+            fn from(input: Identifier) -> Self {
+                return Expr::IdentifierExpr(input.clone());
+            }
+        }
 
-    impl <'a> From<&'a Type> for UnaryOperator {
-        fn from(input: &'a Type) -> Self {
-            match input {
-                Type::i32 => UnaryOperator::ToI32,
-                Type::ui32 => UnaryOperator::ToF32,
-                Type::i64 => UnaryOperator::ToI64,
-                Type::f32 => UnaryOperator::ToF32,
-                Type::f64 => UnaryOperator::ToF64,
-                Type::boolean => UnaryOperator::ToBool,
-                _ => panic!()
+        /// From for Assignment
+        impl<'a> From<&'a str> for Assignment {
+            fn from(input: &'a str) -> Self {
+                return match input {
+                    "=" => Assignment::Normal,
+                    "+=" => Assignment::Add,
+                    "-=" => Assignment::Sub,
+                    "*=" => Assignment::Mult,
+                    "/=" => Assignment::Div,
+                    "%=" => Assignment::Mod,
+                    "&=" => Assignment::BitAnd,
+                    "|=" => Assignment::BitOr,
+                    "^=" => Assignment::BitXor,
+                    "<<=" => Assignment::BitShiftL,
+                    ">>=" => Assignment::BitShiftR,
+                    "**=" => Assignment::Exponent,
+                    _ => {
+                        // TODO: Log
+                        panic!("Bad input to Assignment::from<&str>: {}", input)
+                    }
+                };
+            }
+        }
+        impl<'a> From<&'a [u8]> for Assignment {
+            fn from(input: &'a [u8]) -> Self {
+                return match input {
+                    b"=" => Assignment::Normal,
+                    b"+=" => Assignment::Add,
+                    b"-=" => Assignment::Sub,
+                    b"*=" => Assignment::Mult,
+                    b"/=" => Assignment::Div,
+                    b"%=" => Assignment::Mod,
+                    b"&=" => Assignment::BitAnd,
+                    b"|=" => Assignment::BitOr,
+                    b"^=" => Assignment::BitXor,
+                    b"<<=" => Assignment::BitShiftL,
+                    b">>=" => Assignment::BitShiftR,
+                    b"**=" => Assignment::Exponent,
+                    _ => {
+                        panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
+                    }
+                };
+            }
+        }
+        impl<'a> From<PosStr<'a>> for Assignment {
+            fn from(input: PosStr<'a>) -> Self {
+                return Assignment::from(input.slice);
+            }
+        }
+
+        /// From for ComparisonOperator
+        impl <'a> From<&'a [u8]> for ComparisonOperator {
+            fn from(input: &'a [u8]) -> Self {
+                return match input {
+                    b"==" => ComparisonOperator::Equal,
+                    b">=" => ComparisonOperator::GreaterEqual,
+                    b"<=" => ComparisonOperator::LessEqual,
+                    b">"  => ComparisonOperator::Greater,
+                    b"<"  => ComparisonOperator::Less,
+                    b"!=" => ComparisonOperator::Unequal,
+                    _ => panic!(),
+                };
+            }
+        }
+        impl <'a> From<PosStr<'a>> for ComparisonOperator {
+            fn from(input: PosStr<'a>) -> Self {
+                return ComparisonOperator::from(input.slice);
+            }
+        }
+
+        /// From for BinaryOperator
+        impl<'a> From<&'a str> for BinaryOperator {
+            fn from(input: &'a str) -> Self {
+                return match input {
+                    "or" => BinaryOperator::Or,
+                    "and" => BinaryOperator::And,
+                    "xor" => BinaryOperator::Xor,
+                    "+" => BinaryOperator::Add,
+                    "-" => BinaryOperator::Sub,
+                    "*" => BinaryOperator::Mult,
+                    "/" => BinaryOperator::Div,
+                    "%" => BinaryOperator::Mod,
+                    "&" => BinaryOperator::BitAnd,
+                    "|" => BinaryOperator::BitOr,
+                    "^" => BinaryOperator::BitXor,
+                    "<<" => BinaryOperator::BitShiftL,
+                    ">>" => BinaryOperator::BitShiftR,
+                    "**" => BinaryOperator::Exponent,
+                    _ => {
+                        // TODO: Log
+                        println!("Bad input to BinaryOperator::from<&str>: {}", input);
+                        panic!()
+                    }
+                };
+            }
+        }
+        impl<'a> From<&'a [u8]> for BinaryOperator {
+            fn from(input: &'a [u8]) -> Self {
+                return match input {
+                    b"or" => BinaryOperator::Or,
+                    b"and" => BinaryOperator::And,
+                    b"xor" => BinaryOperator::Xor,
+                    b"+" => BinaryOperator::Add,
+                    b"-" => BinaryOperator::Sub,
+                    b"*" => BinaryOperator::Mult,
+                    b"/" => BinaryOperator::Div,
+                    b"%" => BinaryOperator::Mod,
+                    b"&" => BinaryOperator::BitAnd,
+                    b"|" => BinaryOperator::BitOr,
+                    b"^" => BinaryOperator::BitXor,
+                    b"<<" => BinaryOperator::BitShiftL,
+                    b">>" => BinaryOperator::BitShiftR,
+                    b"**" => BinaryOperator::Exponent,
+                    _ => {
+                        panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
+                    }
+                };
+            }
+        }
+        impl<'a> From<PosStr<'a>> for BinaryOperator {
+            fn from(input: PosStr<'a>) -> Self {
+                return BinaryOperator::from(input.slice);
+            }
+        }
+
+        /// From for UnaryOperator
+        impl <'a> From<&'a str> for UnaryOperator {
+            fn from(input: &'a str) -> Self {
+                return match input {
+                    "not" => UnaryOperator::Not,
+                    "+" => UnaryOperator::Positive,
+                    "-" => UnaryOperator::Negative,
+                    "~" => UnaryOperator::BitNot,
+                    _ => panic!()
+                };
+            }
+        }
+        impl <'a> From<&'a [u8]> for UnaryOperator {
+            fn from(input: &'a [u8]) -> Self {
+                return match input {
+                    b"not" => UnaryOperator::Not,
+                    b"+" => UnaryOperator::Positive,
+                    b"-" => UnaryOperator::Negative,
+                    b"~" => UnaryOperator::BitNot,
+                    _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input)
+                };
+            }
+        }
+        impl <'a> From<PosStr<'a>> for UnaryOperator {
+            fn from(input: PosStr<'a>) -> Self {
+                return UnaryOperator::from(input.slice);
+            }
+        }
+
+        impl <'a> From<&'a Type> for UnaryOperator {
+            fn from(input: &'a Type) -> Self {
+                match input {
+                    Type::i32 => UnaryOperator::ToI32,
+                    Type::ui32 => UnaryOperator::ToF32,
+                    Type::i64 => UnaryOperator::ToI64,
+                    Type::f32 => UnaryOperator::ToF32,
+                    Type::f64 => UnaryOperator::ToF64,
+                    Type::boolean => UnaryOperator::ToBool,
+                    _ => panic!()
+                }
+            }
+        }
+
+        /// From for Identifier
+        impl <'a> From<&'a str> for Identifier {
+            fn from(input: &'a str) -> Self {
+                return Identifier{name: input.to_string()};
+            }
+        }
+
+        impl <'a> From<&'a [u8]> for Identifier {
+            fn from(input: &'a [u8]) -> Self {
+                let val = match from_utf8(input) {
+                    Ok(v) => v,
+                    _ => panic!()
+                };
+                return Identifier{name: val.to_string()};
+            }
+        }
+        
+        impl <'a> From<PosStr<'a>> for Identifier {
+            fn from(input: PosStr<'a>) -> Self {
+                return Identifier::from(input.slice)
+            }
+        }
+
+        impl From<String> for Identifier {
+            fn from(input: String) -> Self {
+                return Identifier{name: input.clone()};
             }
         }
     }
-
-    /// From for Identifier
-    impl <'a> From<&'a str> for Identifier {
-        fn from(input: &'a str) -> Self {
-            return Identifier{name: input.to_string()};
-        }
-    }
-
-    impl <'a> From<&'a [u8]> for Identifier {
-        fn from(input: &'a [u8]) -> Self {
-            let val = match from_utf8(input) {
-                Ok(v) => v,
-                _ => panic!()
-            };
-            return Identifier{name: val.to_string()};
-        }
-    }
-    
-    impl <'a> From<PosStr<'a>> for Identifier {
-        fn from(input: PosStr<'a>) -> Self {
-            return Identifier::from(input.slice)
-        }
-    }
-
-    impl From<String> for Identifier {
-        fn from(input: String) -> Self {
-            return Identifier{name: input.clone()};
-        }
-    }
-
 }
 

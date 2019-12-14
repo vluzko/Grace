@@ -680,11 +680,11 @@ pub mod iresult_helpers {
         return match res {
             Ok((i, o)) => {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0);
-                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
                 assert_eq!(o.0.data, expected);
             },
             Result::Err(e) => {
-                panic!("Error: {:?}.", e)
+                panic!("Error: {:?}.\nInput was: {}", e, input)
             }
         };
     }

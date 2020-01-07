@@ -4,7 +4,11 @@ use std::collections::BTreeSet;
 use std::collections::HashMap;
 use expression::*;
 use general_utils;
-use typing::Type;
+use typing::{
+    Type,
+    Numeric,
+    FloatingPoint,
+};
 
 
 /// The full scoping context for a compilation.
@@ -28,7 +32,9 @@ pub struct Context2 {
     // maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>,
     // A map from Node IDs to types.
-    pub type_map: HashMap<usize, Type>
+    pub type_map: HashMap<usize, Type>, 
+    // The user-defined types
+    pub defined_types: HashMap<String, Type>
 }
 
 /// A sum type for things that can modify scope.
@@ -81,6 +87,10 @@ pub trait Scoped {
     fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
 }
 
+pub trait GetContext {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type);
+}
+
 /// Create an empty scope.
 pub fn base_scope() -> Scope {
     return Scope{
@@ -113,11 +123,12 @@ pub fn builtin_context() -> Context2 {
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
-    let context = Context2{
+    let context = Context2 {
         root_id: id, 
         scopes: init_scopes, 
         containing_scopes: HashMap::new(),
-        type_map: HashMap::new()
+        type_map: HashMap::new(), 
+        defined_types: HashMap::new()
     };
     return context;
 }
@@ -139,14 +150,16 @@ impl Context2 {
             root_id: general_utils::get_next_scope_id(),
             scopes: HashMap::new(),
             containing_scopes: HashMap::new(),
-            type_map: HashMap::new()
+            type_map: HashMap::new(),
+            defined_types: HashMap::new()
         };
     }
-}
 
-// pub fn empty_context() -> Context {
-//     return Context{scopes: HashMap::new(), containing_scopes: HashMap::new()};
-// }
+    /// Record the type of a node.
+    pub fn add_type(&mut self, id: usize, t: Type) {
+        self.type_map.insert(id, t);
+    }
+}
 
 impl Context {
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
@@ -527,6 +540,105 @@ impl Scoped for Node<Expr> {
         };
 
         return new_context;
+    }
+}
+
+impl GetContext for Node<Expr> {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+        self.scope = parent_id;
+        return match self.data {
+            Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
+                let (left_c, left_t) = left.scopes_and_types(parent_id, context);
+                let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c);
+                let return_type = operator.get_return_types(&left_t, &right_t);
+                right_c.add_type(self.id, return_type.clone());
+                (right_c, return_type)
+            },
+            Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
+                let (mut new_c, t) = function.scopes_and_types(parent_id, context);
+                for arg in args {
+                    let res = arg.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    let _arg_t = res.1;
+                    // TODO: Check argument types.
+                }
+
+                for (_, value) in kwargs {
+                    let res = value.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    let _kwarg_t = res.1;
+                    // TODO: Check keyword argument types.
+                }
+                new_c.add_type(self.id, t.clone());
+                (new_c, t)
+            },
+            Expr::StructLiteral{ref mut base, ref mut fields} => {
+                let (mut new_c, base_t) = base.scopes_and_types(parent_id, context);
+                for field in fields {
+                    let res = field.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    let _field_t = res.1;
+                    // TODO: Check field types.
+                }
+                new_c.add_type(self.id, base_t.clone());
+                (new_c, base_t.clone())
+            },
+            Expr::Int(_) => {
+                let t = Numeric();
+                context.add_type(self.id, t.clone());
+                (context, t)
+            },
+            Expr::Float(_) => {
+                let t = FloatingPoint();
+                context.add_type(self.id, t.clone());
+                (context, t)
+            },
+            Expr::String(_) => {
+                let t = Type::string;
+                context.add_type(self.id, t.clone());
+                (context, t)
+            },
+            Expr::Bool(_) => {
+                let t = Type::boolean;
+                context.add_type(self.id, t.clone());
+                (context, t)
+            },
+            Expr::VecLiteral(ref mut exprs) => {
+                let mut vec_t = Type::Undetermined;
+                let mut new_c = context;
+                for expr in exprs {
+                    let res = expr.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    vec_t = vec_t.merge(&res.1);
+                }
+                new_c.add_type(self.id, vec_t.clone());
+                (new_c, Type::Vector(Box::new(vec_t)))
+            },
+            Expr::SetLiteral(ref mut exprs) => {
+                let mut set_t = Type::Undetermined;
+                let mut new_c = context;
+                for expr in exprs {
+                    let res = expr.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    set_t = set_t.merge(&res.1);
+                }
+                new_c.add_type(self.id, set_t.clone());
+                (new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))
+            },
+            Expr::TupleLiteral(ref mut exprs) => {
+                let mut types = vec!();
+                let mut new_c = context;
+                for expr in exprs {
+                    let res = expr.scopes_and_types(parent_id, new_c);
+                    new_c = res.0;
+                    types.push(res.1);
+                }
+                let t = Type::Product(types);
+                new_c.add_type(self.id, t.clone());
+                (new_c, t)
+            },
+            _ => panic!()
+        };
     }
 }
 

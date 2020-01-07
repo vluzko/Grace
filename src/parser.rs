@@ -2074,7 +2074,6 @@ mod property_based_tests {
         #[test]
         fn prop_expr_identity(v in strategies::expr_strategy()) {
             let expr_string = v.inverse_parse();
-            println!("\nSTRING: {:?}\n", expr_string);
             let e = ParserContext::empty();
             check_data(expr_string.as_str(), |x| e.expression(x), v);
         }

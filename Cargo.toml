@@ -18,6 +18,7 @@ memchr = "*"
 pretty_assertions = "*"
 petgraph = "*"
 proptest = "*"
+indexmap = "*"
 
 [lib]
 name = "grace_lib"

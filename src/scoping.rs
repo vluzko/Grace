@@ -546,32 +546,40 @@ impl Scoped for Node<Expr> {
 impl GetContext for Node<Expr> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         self.scope = parent_id;
-        return match self.data {
+        let (mut final_c, final_t) = match self.data {
+            Expr::ComparisonExpr{ref operator, ref mut left, ref mut right} => {
+                let (left_c, left_t) = left.scopes_and_types(parent_id, context);
+                let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c);
+                assert_eq!(left_t, right_t);
+                (right_c, Type::boolean)
+            },
+            // TODO: Type checking
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c);
                 let return_type = operator.get_return_types(&left_t, &right_t);
-                right_c.add_type(self.id, return_type.clone());
                 (right_c, return_type)
             },
+            Expr::UnaryExpr{ref mut operand, ..} => {
+                operand.scopes_and_types(parent_id, context)
+            }
+            // TODO: Type checking
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
                 let (mut new_c, t) = function.scopes_and_types(parent_id, context);
                 for arg in args {
                     let res = arg.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
                     let _arg_t = res.1;
-                    // TODO: Check argument types.
                 }
 
                 for (_, value) in kwargs {
                     let res = value.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
                     let _kwarg_t = res.1;
-                    // TODO: Check keyword argument types.
                 }
-                new_c.add_type(self.id, t.clone());
                 (new_c, t)
             },
+            // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
                 let (mut new_c, base_t) = base.scopes_and_types(parent_id, context);
                 for field in fields {
@@ -580,8 +588,18 @@ impl GetContext for Node<Expr> {
                     let _field_t = res.1;
                     // TODO: Check field types.
                 }
-                new_c.add_type(self.id, base_t.clone());
                 (new_c, base_t.clone())
+            },
+            Expr::AttributeAccess{ref mut base, ref attribute} => {
+                let (new_c, base_t) = base.scopes_and_types(parent_id, context);
+                let attr_t = base_t.resolve_attribute(attribute);
+                (new_c, attr_t)
+            },
+            Expr::ModuleAccess(ref mut names) => {
+                panic!()
+            },
+            Expr::Index{ref mut base, ref mut slices} => {
+                panic!()
             },
             Expr::Int(_) => {
                 let t = Numeric();
@@ -611,7 +629,6 @@ impl GetContext for Node<Expr> {
                     new_c = res.0;
                     vec_t = vec_t.merge(&res.1);
                 }
-                new_c.add_type(self.id, vec_t.clone());
                 (new_c, Type::Vector(Box::new(vec_t)))
             },
             Expr::SetLiteral(ref mut exprs) => {
@@ -622,7 +639,6 @@ impl GetContext for Node<Expr> {
                     new_c = res.0;
                     set_t = set_t.merge(&res.1);
                 }
-                new_c.add_type(self.id, set_t.clone());
                 (new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))
             },
             Expr::TupleLiteral(ref mut exprs) => {
@@ -634,11 +650,12 @@ impl GetContext for Node<Expr> {
                     types.push(res.1);
                 }
                 let t = Type::Product(types);
-                new_c.add_type(self.id, t.clone());
                 (new_c, t)
             },
             _ => panic!()
         };
+        final_c.add_type(self.id, final_t.clone());
+        return (final_c, final_t);
     }
 }
 

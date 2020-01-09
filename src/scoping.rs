@@ -542,8 +542,6 @@ impl Scoped for Node<Expr> {
     }
 }
 
-
-
 impl Node<Block> {
     /// Update a context with the declarations in this block.
     /// All declarations will be either functions or let statements.
@@ -651,45 +649,60 @@ impl GetContext for Node<Stmt> {
                 assert_eq!(*return_type, block_type);
                 (block_context, block_type)
             },
-            Stmt::ReturnStmt(ref mut expression) => {
-                expression.scopes_and_types(parent_id, context)
-            },
             Stmt::WhileStmt{ref mut condition, ref mut block} => {
                 let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                assert_eq!(condition_type, Type::boolean);
+
                 let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
+                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
+                };
                 let scope_id = condition_context.new_scope(block_scope);
                 block.scopes_and_types(scope_id, condition_context)
             },
-            Stmt::IfStmt{condition, block, elifs, else_block} => {
-                // TODO: fix context reference errors
-                let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
+            Stmt::IfStmt{ref mut condition, ref mut block, ref mut elifs, ref mut else_block} => {
+                let (mut new_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                assert_eq!(condition_type, Type::boolean);
+
                 let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
-                let scope_id = condition_context.new_scope(block_scope);
-                let (mut block_context, block_type) = block.scopes_and_types(scope_id, condition_context);
+                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
+                };
+                let scope_id = new_context.new_scope(block_scope);
+                let res = block.scopes_and_types(scope_id, new_context);
+                new_context = res.0;
+                let mut if_type = res.1;
 
                 for (elif_cond, elif_block) in elifs {
-                    let (mut condition_context, condition_type) = elif_cond.scopes_and_types(parent_id, context);
+                    let cond_res = elif_cond.scopes_and_types(parent_id, new_context);
+                    new_context = cond_res.0;
+
+                    // elif condition must be a boolean.
+                    assert_eq!(cond_res.1, Type::boolean);
+                   
                     let elif_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
-                    let elif_scope_id = condition_context.new_scope(elif_scope);
-                    let (mut block_context, block_type) = elif_block.scopes_and_types(elif_scope_id, condition_context);
+                        parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
+                    };
+                    let elif_scope_id = new_context.new_scope(elif_scope);
+                    let block_res = elif_block.scopes_and_types(elif_scope_id, new_context);
+                    new_context = block_res.0;
+
+                    // Merge the main block type with the elif block type.
+                    if_type = if_type.merge(&block_res.1);
                 }
 
                 match else_block {
                     Some(b) => {
                         let else_scope = Scope{
-                        parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
-                        let scope_id = condition_context.new_scope(block_scope);
-                        b.scopes_and_types(parent_id, context)
+                            parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
+                        };
+                        let else_scope_id = new_context.new_scope(else_scope);
+                        let (else_context, else_type) = b.scopes_and_types(else_scope_id, new_context);
+                        if_type = if_type.merge(&else_type);
+                        (else_context, if_type)
                     },
-                    None => {}
-                };
-
-                condition_context
+                    None => (new_context, if_type)
+                }
             },
-            Stmt::StructDec{..} => {
+            Stmt::StructDec{ref fields, ..} => {
                 let mut order = vec!();
                 let mut records = BTreeMap::new();
                 for (n, t) in fields {
@@ -699,6 +712,9 @@ impl GetContext for Node<Stmt> {
                 let record = Type::Record(order, records);
                 (context, record)
 
+            },
+            Stmt::ReturnStmt(ref mut expression) => {
+                expression.scopes_and_types(parent_id, context)
             },
             _ => panic!()
         };

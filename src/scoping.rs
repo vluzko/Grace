@@ -586,7 +586,6 @@ impl GetContext for Node<Expr> {
                     let res = field.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
                     let _field_t = res.1;
-                    // TODO: Check field types.
                 }
                 (new_c, base_t.clone())
             },

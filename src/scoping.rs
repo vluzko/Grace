@@ -131,6 +131,15 @@ impl Scope {
             declaration_order: BTreeMap::new()
         };
     }
+
+    /// Create a child of the given parent
+    pub fn child(parent_id: usize) -> Scope {
+        return return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new()
+        };
+    }
 }
 
 impl Context2 {
@@ -157,6 +166,14 @@ impl Context2 {
         let scope_id = general_utils::get_next_scope_id();
         self.scopes.insert(scope_id, scope);
         return scope_id;
+    }
+
+    /// Add the
+    pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Box<Node<Stmt>>) {
+        let mut scope = self.scopes.get_mut(&scope_id).unwrap();
+        scope.declaration_order.insert(name.clone(), scope.declaration_order.len() + 1);
+        let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+        scope.declarations.insert(name.clone(), scope_mod);
     }
 }
 
@@ -600,13 +617,65 @@ impl Node<Module> {
 
 impl GetContext for Node<Module> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
-        panic!()
+        let new_scope = Scope::child(parent_id);
+        let scope_id = context.new_scope(new_scope);
+        self.scope = scope_id;
+
+        let mut new_context = context;
+
+        for stmt in self.data.declarations.iter_mut() {
+            new_context = stmt.scopes_and_types(scope_id, new_context).0;
+
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} | Stmt::StructDec{ref name, ..}  => {
+                    new_context.append_declaration(self.scope, name, &stmt);
+                },
+                _ => {}
+            };
+        }
+
+        return (new_context, Type::empty);
     }
 }
 
 impl GetContext for Node<Block> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
-        panic!()
+        let new_scope = Scope::child(parent_id);
+        let scope_id = context.new_scope(new_scope);
+        self.scope = scope_id;
+
+        let mut block_type = Type::Undetermined;
+
+        let mut new_context = context;
+        for stmt in self.data.statements.iter_mut() {
+
+            // Get scopes and types for the current statement.
+            let res = stmt.scopes_and_types(scope_id, new_context);
+            new_context = res.0;
+
+            // Update the block type if it's a return statement.
+            block_type = match stmt.data {
+                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1),
+                _ => block_type
+            };
+
+            // Add declarations to scope.
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} | Stmt::LetStmt{ref name, ..} | Stmt::StructDec{ref name, ..}  => {
+                    new_context.append_declaration(self.scope, name, &stmt);
+                },
+                _ => {}
+            };
+        }
+
+        // Blocks with no return statement have the empty type.
+        if block_type == Type::Undetermined {
+            block_type = Type::empty;
+        }
+
+        new_context.add_type(self.id, block_type.clone());
+
+        return (new_context, block_type);
     }
 }
 

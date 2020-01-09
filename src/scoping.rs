@@ -27,7 +27,7 @@ pub struct Context2 {
     // The ID of the root scope of the context.
     pub root_id: usize,
     // A map from Scope IDs to Scopes.
-    pub scopes: HashMap<usize, Scope2>,
+    pub scopes: HashMap<usize, Scope>,
     // A map from Node IDs to Scope IDs. Each node that modifies scope
     // maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>,
@@ -63,17 +63,6 @@ pub struct Scope {
     pub declaration_order: BTreeMap<Identifier, usize>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Scope2 {
-    /// The id of the parent scope.
-    pub parent_id: Option<usize>,
-    // TODO: Consider replacing with an insertion ordered map.
-    /// The identifiers declared in this scope, and raw pointers to the statements that created them.
-    pub declarations: BTreeMap<Identifier, usize>,
-    /// The order in which each identifier was declared. (Important for blocks.)
-    pub declaration_order: BTreeMap<Identifier, usize>
-}
-
 /// Any object that has a scope.
 pub trait Scoped {
     /// Get the scope of the object.
@@ -100,8 +89,8 @@ pub fn base_scope() -> Scope {
     };
 }
 
-pub fn base_scope2() -> Scope2 {
-    return Scope2{
+pub fn base_Scope() -> Scope {
+    return Scope{
         parent_id: None,
         declarations: BTreeMap::new(),
         declaration_order: BTreeMap::new()
@@ -119,7 +108,7 @@ pub fn initial_context() -> (usize, Context) {
 }
 
 pub fn builtin_context() -> Context2 {
-    let empty = base_scope2();
+    let empty = base_Scope();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
@@ -158,6 +147,16 @@ impl Context2 {
     /// Record the type of a node.
     pub fn add_type(&mut self, id: usize, t: Type) {
         self.type_map.insert(id, t);
+    }
+
+    pub fn add_scope(&mut self, scope_id: usize, scope: Scope) {
+        self.scopes.insert(scope_id, scope);
+    }
+
+    pub fn new_scope(&mut self, scope: Scope) -> usize {
+        let scope_id = general_utils::get_next_scope_id();
+        self.scopes.insert(scope_id, scope);
+        return scope_id;
     }
 }
 
@@ -543,6 +542,171 @@ impl Scoped for Node<Expr> {
     }
 }
 
+
+
+impl Node<Block> {
+    /// Update a context with the declarations in this block.
+    /// All declarations will be either functions or let statements.
+    pub fn update_scope(&self, context: &mut Context) {
+
+        let scope = context.get_mut_scope(self.scope);
+        for (i, stmt) in self.data.statements.iter().enumerate() {
+            // Make updates to the current scope based on the child nodes. 
+            // Only function declarations and lets can modify scope.
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                },
+                Stmt::LetStmt{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                },
+                Stmt::StructDec{ref name, ..} => {
+                    scope.declaration_order.insert(name.clone(), i);
+                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                },
+                _ => {}
+            };
+        }
+
+    }
+}
+
+impl Node<Module> {
+    /// Update a context with the declarations in this module.
+    /// All declarations will be either functions or import statements.
+    pub fn update_scope(&self, context: &mut Context) {
+        let scope = context.get_mut_scope(self.scope);
+        for (i, dec) in self.data.declarations.iter().enumerate() {
+            match &dec.data {
+                Stmt::FunctionDecStmt{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                    scope.declaration_order.insert(name.clone(), i);
+                },
+                Stmt::StructDec{ref name, ..} => {
+                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
+                    scope.declarations.insert(name.clone(), scope_mod);
+                    scope.declaration_order.insert(name.clone(), i);
+                }, 
+                _ => panic!()
+            };
+        }
+        
+    }
+}
+
+impl GetContext for Node<Module> {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+        panic!()
+    }
+}
+
+impl GetContext for Node<Block> {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+        panic!()
+    }
+}
+
+impl GetContext for Node<Stmt> {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+        self.scope = parent_id;
+        let (mut final_c, final_t) = match self.data {
+            Stmt::LetStmt{ref mut expression, ..} => {
+                // TODO: Type checking
+                expression.scopes_and_types(parent_id, context)
+            },
+            Stmt::AssignmentStmt{ref mut expression, ..} => {
+                // TODO: Type checking
+                expression.scopes_and_types(parent_id, context)
+            },
+            Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
+                // TODO: Type checking
+                // TODO: Handle keyword args expressions. They should receive just the parent scope.
+                let mut declarations = BTreeMap::new();
+                let mut declaration_order = BTreeMap::new();
+
+                // Add arguments to declarations.
+                for (i, arg) in args.iter().enumerate() {
+                    declaration_order.insert(arg.0.clone(), i+1);
+                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(arg.0.clone(), self.id));
+                }
+                for (i, (key, t, ref mut val)) in kwargs.iter_mut().enumerate() {
+                    declaration_order.insert(key.clone(), i+1);
+                    declarations.insert(key.clone(), CanModifyScope::Argument(key.clone(), self.id));
+                    let res = val.scopes_and_types(parent_id, context);
+                    context = res.0;
+                    assert_eq!(*t, res.1)
+                }
+                
+                let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
+                let scope_id = context.new_scope(new_scope);
+                self.scope = scope_id;
+
+                let (block_context, block_type) = block.scopes_and_types(scope_id, context);
+                assert_eq!(*return_type, block_type);
+                (block_context, block_type)
+            },
+            Stmt::ReturnStmt(ref mut expression) => {
+                expression.scopes_and_types(parent_id, context)
+            },
+            Stmt::WhileStmt{ref mut condition, ref mut block} => {
+                let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                let block_scope = Scope{
+                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
+                let scope_id = condition_context.new_scope(block_scope);
+                block.scopes_and_types(scope_id, condition_context)
+            },
+            Stmt::IfStmt{condition, block, elifs, else_block} => {
+                // TODO: fix context reference errors
+                let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                let block_scope = Scope{
+                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
+                let scope_id = condition_context.new_scope(block_scope);
+                let (mut block_context, block_type) = block.scopes_and_types(scope_id, condition_context);
+
+                for (elif_cond, elif_block) in elifs {
+                    let (mut condition_context, condition_type) = elif_cond.scopes_and_types(parent_id, context);
+                    let elif_scope = Scope{
+                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
+                    let elif_scope_id = condition_context.new_scope(elif_scope);
+                    let (mut block_context, block_type) = elif_block.scopes_and_types(elif_scope_id, condition_context);
+                }
+
+                match else_block {
+                    Some(b) => {
+                        let else_scope = Scope{
+                        parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()};
+                        let scope_id = condition_context.new_scope(block_scope);
+                        b.scopes_and_types(parent_id, context)
+                    },
+                    None => {}
+                };
+
+                condition_context
+            },
+            Stmt::StructDec{..} => {
+                let mut order = vec!();
+                let mut records = BTreeMap::new();
+                for (n, t) in fields {
+                    order.push(n.clone());
+                    records.insert(n.clone(), t.clone());
+                }
+                let record = Type::Record(order, records);
+                (context, record)
+
+            },
+            _ => panic!()
+        };
+        final_c.add_type(self.id, final_t.clone());
+        return (final_c, final_t);
+    }
+}
+
 impl GetContext for Node<Expr> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         self.scope = parent_id;
@@ -655,62 +819,6 @@ impl GetContext for Node<Expr> {
         };
         final_c.add_type(self.id, final_t.clone());
         return (final_c, final_t);
-    }
-}
-
-impl Node<Block> {
-    /// Update a context with the declarations in this block.
-    /// All declarations will be either functions or let statements.
-    pub fn update_scope(&self, context: &mut Context) {
-
-        let scope = context.get_mut_scope(self.scope);
-        for (i, stmt) in self.data.statements.iter().enumerate() {
-            // Make updates to the current scope based on the child nodes. 
-            // Only function declarations and lets can modify scope.
-            match &stmt.data {
-                Stmt::FunctionDecStmt{ref name, ..} => {
-                    scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
-                    scope.declarations.insert(name.clone(), scope_mod);
-                },
-                Stmt::LetStmt{ref name, ..} => {
-                    scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
-                    scope.declarations.insert(name.clone(), scope_mod);
-                },
-                Stmt::StructDec{ref name, ..} => {
-                    scope.declaration_order.insert(name.clone(), i);
-                    let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
-                    scope.declarations.insert(name.clone(), scope_mod);
-                },
-                _ => {}
-            };
-        }
-
-    }
-}
-
-impl Node<Module> {
-    /// Update a context with the declarations in this module.
-    /// All declarations will be either functions or import statements.
-    pub fn update_scope(&self, context: &mut Context) {
-        let scope = context.get_mut_scope(self.scope);
-        for (i, dec) in self.data.declarations.iter().enumerate() {
-            match &dec.data {
-                Stmt::FunctionDecStmt{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
-                    scope.declarations.insert(name.clone(), scope_mod);
-                    scope.declaration_order.insert(name.clone(), i);
-                },
-                Stmt::StructDec{ref name, ..} => {
-                    let scope_mod = CanModifyScope::Statement(dec.as_ref() as *const _, dec.id);
-                    scope.declarations.insert(name.clone(), scope_mod);
-                    scope.declaration_order.insert(name.clone(), i);
-                }, 
-                _ => panic!()
-            };
-        }
-        
     }
 }
 

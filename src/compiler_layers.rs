@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::{File, canonicalize, create_dir_all};
-use std::env;
 
 extern crate itertools;
 
@@ -13,12 +12,13 @@ use parser::Parseable;
 use position_tracker::PosStr;
 // use scoping;
 use scoping::{
-    Scoped,
     Scope,
     Context,
     Context2,
     CanModifyScope,
+    GetContext,
     initial_context,
+    builtin_context,
     base_scope
 };
 // use typing;
@@ -38,8 +38,7 @@ use general_utils::extend_map;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
-    pub context: Context,
-    pub type_map: HashMap<usize, Type>,
+    pub context: Context2,
     // The path to the module file.
     pub path: Box<Path>,
     // The dependencies of this module.
@@ -53,7 +52,7 @@ impl CompiledModule {
         let mut attribute_map = BTreeMap::new();
         let mut attribute_order = vec!();
         for func_dec in &self.ast.data.declarations {
-            let func_type = self.type_map.get(&func_dec.id).unwrap().clone();
+            let func_type = self.context.type_map.get(&func_dec.id).unwrap().clone();
             attribute_order.push(func_dec.data.get_name());
             attribute_map.insert(func_dec.data.get_name(), func_type);
         }
@@ -100,7 +99,7 @@ impl Compilation {
         // Add the types of all the imported functions to the record type.
         let mut record_type = BTreeMap::new();
         for func_dec in &sub_module.ast.data.declarations {
-            let func_type = sub_module.type_map.get(&func_dec.id).unwrap().clone();
+            let func_type = sub_module.context.type_map.get(&func_dec.id).unwrap().clone();
             record_type.insert(func_dec.data.get_name(), func_type);
         }
 
@@ -171,22 +170,16 @@ impl Compilation {
         parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
-        let mut init_context = Context::empty();
+        let mut init_context = Context2::empty();
         let scope_id = init_context.new_scope(init_scope);
 
-        // Calculate all scopes for the current module.
-        let context = parsed_module.gen_scopes(scope_id, &init_context);
-        init_context.extend(context);
-
-        // Get the types for the module and do type_rewrites.
-        let (mut type_map, _) = parsed_module.resolve_types(&init_context, init_type_map);
-        let rewritten = parsed_module.type_based_rewrite(&mut init_context, &mut type_map);
+        // 
+        let context = parsed_module.scopes_and_types(scope_id, init_context).0;
 
         // Put the results in the tree.
         let compiled = CompiledModule {
-            ast: rewritten,
-            context: init_context,
-            type_map: type_map,
+            ast: parsed_module,
+            context: context,
             path: file_name.clone(),
             dependencies: dependencies,
             hash: 0
@@ -200,7 +193,7 @@ impl Compilation {
         for (k, v) in self.modules.iter() {
             let path_str = k.replace(".", "/");
             let relative_path = &Path::new(&path_str);
-            let bytecode = v.ast.generate_bytecode(&v.context, &mut v.type_map.clone());
+            let bytecode = v.ast.generate_bytecode(&v.context);
             let mut output_path = output_dir.join(relative_path);
             output_path.set_extension("wat");
             match create_dir_all(output_path.parent().unwrap()) {
@@ -253,42 +246,35 @@ fn path_to_module_reference(path: &Box<Path>) -> String {
     return itertools::join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
 }
 
-pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<usize, Type>, String){
+pub fn compile_from_file(file_name: String) -> (Node<Module>, Context2, String){
     let mut f = File::open(file_name).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
     return to_bytecode::<Node<Module>>(file_contents.as_bytes());
 }
 
-pub fn to_scopes<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: Scoped {
+pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context2)
+where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
-    let (id, mut init) = initial_context();
-    let context = result.gen_scopes(id, &init);
-    init.extend(context);
-    return (result, init);
+    let (id, mut init) = builtin_context();
+    let context = result.scopes_and_types(id, init).0;
+    return (result, context);
 }
 
-pub fn to_types<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped, T: Typed<T> {
-    let (result, context): (T, Context) = to_scopes(input);
-    let (type_map, _) = result.resolve_types(&context, HashMap::new());
-    return (result, context, type_map);
+pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context2) 
+where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
+    let (result, mut context): (T, Context2) = to_context(input);
+    // let rewritten = result.type_based_rewrite(&mut context);
+    panic!()
+    // return (rewritten, context, type_map);
 }
 
-pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped, T: Typed<T>, T: Debug {
-    let (result, mut context, mut type_map): (T, Context, HashMap<usize, Type>) = to_types(input);
-    let rewritten = result.type_based_rewrite(&mut context, &mut type_map);
-    return (rewritten, context, type_map);
-}
-
-pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>, String) 
-where T: Parseable, T: Scoped, T: Typed<T>, T: ToBytecode, T: Debug {
-    let (result, context, mut type_map): (T, Context, HashMap<usize, Type>) = to_type_rewrites(input);
-    let bytecode = result.generate_bytecode(&context, &mut type_map);
-    return (result, context, type_map, bytecode);
+pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context2, String) 
+where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
+    let (result, context): (T, Context2) = to_type_rewrites(input);
+    let bytecode = result.generate_bytecode(&context);
+    return (result, context, bytecode);
 }
 
 #[cfg(test)]

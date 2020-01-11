@@ -290,13 +290,13 @@ impl From<Identifier> for Type {
 }
 
 pub trait Typed<T> {
-    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> T;
+    fn type_based_rewrite(self, context: &mut scoping::Context2) -> T;
 
     fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, _context: &mut scoping::Context, _type_map: &mut HashMap<usize, Type>) -> scoping::CanModifyScope {
+    fn type_based_rewrite(self, _context: &mut scoping::Context2) -> scoping::CanModifyScope {
         panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
     }
 
@@ -339,8 +339,8 @@ impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Module> {
-        let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context, type_map))).collect();
+    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Module> {
+        let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
         return Node{
             id: self.id,
             data: Module{declarations: new_decs, imports: self.data.imports},
@@ -358,9 +358,9 @@ impl Typed<Node<Module>> for Node<Module> {
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Block> {
+    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Block> {
         // let mut new_stmts = vec![];
-        let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context, type_map))).collect();
+        let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
 
         let new_block = Node{
             id: self.id,
@@ -368,7 +368,15 @@ impl Typed<Node<Block>> for Node<Block> {
             scope: self.scope
         };
 
-        new_block.update_scope(context);
+        for stmt in &new_block.data.statements {
+            match &stmt.data {
+                Stmt::FunctionDecStmt{ref name, ..} | Stmt::LetStmt{ref name, ..} | Stmt::StructDec{ref name, ..}  => {
+                    context.append_declaration(self.scope, name, &stmt);
+                },
+                _ => {}
+            };
+        }
+        // new_block.update_scope(context);
         return new_block;
     }
 
@@ -399,31 +407,31 @@ impl Typed<Node<Block>> for Node<Block> {
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Stmt> {
+    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context, type_map), name, args, kwargs, return_type}
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, kwargs, return_type}
             },
             Stmt::AssignmentStmt {mut expression, name} => {
-                expression = expression.type_based_rewrite(context, type_map);
-                Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context, type_map)}
+                expression = expression.type_based_rewrite(context);
+                Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context)}
             },
             Stmt::IfStmt {condition, block, elifs,  else_block} => {
-                let new_elifs =  elifs.into_iter().map(|elif| (elif.0.type_based_rewrite(context, type_map), elif.1.type_based_rewrite(context, type_map))).collect();
+                let new_elifs =  elifs.into_iter().map(|elif| (elif.0.type_based_rewrite(context), elif.1.type_based_rewrite(context))).collect();
                 let new_else_block = match else_block {
                     None => None,
-                    Some(block) => Some(block.type_based_rewrite(context, type_map))
+                    Some(block) => Some(block.type_based_rewrite(context))
                 };
-                Stmt::IfStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map), elifs: new_elifs, else_block: new_else_block}
+                Stmt::IfStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), elifs: new_elifs, else_block: new_else_block}
             },
             Stmt::LetStmt {name, type_annotation, expression} => {
-                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context, type_map)}
+                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context)}
             },
             Stmt::WhileStmt {condition, block} => {
-                Stmt::WhileStmt {condition: condition.type_based_rewrite(context, type_map), block: block.type_based_rewrite(context, type_map)}
+                Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
             },
             Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite(context, type_map))
+                Stmt::ReturnStmt (value.type_based_rewrite(context))
             },
             _ => self.data
         };
@@ -521,26 +529,26 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self, context: &mut scoping::Context, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
+    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {left, right, operator} => {
-                let left = Box::new(left.type_based_rewrite(context, type_map));
-                let right = Box::new(right.type_based_rewrite(context, type_map));
+                let left = Box::new(left.type_based_rewrite(context));
+                let right = Box::new(right.type_based_rewrite(context));
                 Expr::ComparisonExpr {left, right, operator}
             },
             Expr::BinaryExpr {operator, left, right} => {
-                let left_type = type_map.get(&left.id).unwrap().clone();
-                let right_type = type_map.get(&right.id).unwrap().clone();
-                let new_left = left.type_based_rewrite(context, type_map);
-                let new_right = right.type_based_rewrite(context, type_map);
+                let left_type = context.g_type(left.id);
+                let right_type = context.g_type(right.id);
+                let new_left = left.type_based_rewrite(context);
+                let new_right = right.type_based_rewrite(context);
 
                 // TODO: Once typeclasses are implemented, call the typeclass method with
                 // the operator, the left type, and the right type to figure out what all
                 // the other types need to be.
                 if Numeric().super_type(&left_type) && Numeric().super_type(&right_type) {
                     let merged_type = operator.get_return_types(&left_type, &right_type);
-                    let converted_left = convert_expr(&new_left, &merged_type, type_map);
-                    let converted_right = convert_expr(&new_right, &merged_type, type_map);
+                    let converted_left = convert_expr(&new_left, &merged_type, &mut context.type_map);
+                    let converted_right = convert_expr(&new_right, &merged_type, &mut context.type_map);
                     Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
                 } else {
                     // TODO: Update this once typeclasses are implemented
@@ -549,14 +557,14 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 }
             },
             Expr::FunctionCall {function, args, kwargs} => {
-                let new_func_expr = Box::new(function.type_based_rewrite(context, type_map));
-                let new_args = args.into_iter().map(|x| x.type_based_rewrite(context, type_map)).collect();
-                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context, type_map))).collect();
+                let new_func_expr = Box::new(function.type_based_rewrite(context));
+                let new_args = args.into_iter().map(|x| x.type_based_rewrite(context)).collect();
+                let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context))).collect();
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
             Expr::Int(_) | Expr::Float(_) => {
-                let current_type = type_map.get(&self.id).unwrap().clone();
-                type_map.insert(self.id, choose_return_type(&current_type));
+                let current_type = context.g_type(self.id);
+                context.add_type(self.id, choose_return_type(&current_type));
                 self.data
             },
             _ => self.data
@@ -787,13 +795,6 @@ mod test {
     #[cfg(test)]
     mod expressions {
         use super::*;
-
-        #[test]
-        fn binary_expr_types() {
-            let (expr, context) = compiler_layers::to_scopes::<Node<Expr>>("5 + 6".as_bytes());
-            let (types, _) = expr.resolve_types(&context, HashMap::new());
-            assert_eq!(types.get(&expr.id).unwrap(), &Type::i32);
-        }
     }
 
     #[cfg(test)]
@@ -802,9 +803,9 @@ mod test {
         use compiler_layers;
         #[test]
         fn if_stmt_typing() {
-            let (block, _, type_map) = compiler_layers::to_types::<Node<Block>>(if_stmt_fixture());
+            let (block, context) = compiler_layers::to_context::<Node<Block>>(if_stmt_fixture());
             let if_stmt = block.data.statements.get(2).unwrap();
-            assert_eq!(type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
         }
     }
 
@@ -815,10 +816,10 @@ mod test {
         // let (id, init) = scoping::initial_context();
         // let context = parsed.gen_scopes(id, &init);
         // let (types, _) = parsed.resolve_types(&context, HashMap::new());
-        let (parsed, _, types) = compiler_layers::to_types::<Node<Block>>(block_str.as_bytes());
-        assert_eq!(types.get(&parsed.id), Some(&Type::empty));
+        let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
+        assert_eq!(context.g_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(types.get(&id2), Some(&Type::i32));
+        assert_eq!(context.g_type(id2), Type::i32);
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {

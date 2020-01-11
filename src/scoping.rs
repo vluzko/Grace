@@ -830,7 +830,8 @@ impl GetContext for Node<Stmt> {
                 self.scope = scope_id;
 
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
-                assert_eq!(*return_type, block_type);
+                // TODO: Type checking
+                return_type.merge(&block_type);
 
                 (block_context, function_type)
             },
@@ -1200,10 +1201,10 @@ mod test {
             #[test]
             fn test_function_decl() {
                 let block_str = r#"
-                fn a():
+                fn a() -> i32:
                     return 0
 
-                fn b():
+                fn b() -> i32:
                     return 1
                 "#;
                 let (block, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());

@@ -111,7 +111,18 @@ impl Type {
                 Type::Undetermined => {
                     other.clone()
                 },
-                _ => panic!()
+                x => {
+                    match other {
+                        Type::Sum(ref other_types) => {
+                            if other_types.contains(&x) {
+                                return x.clone();
+                            } else {
+                                panic!()
+                            }
+                        }, 
+                        _ => panic!()
+                    }
+                }
             }
         }
     }

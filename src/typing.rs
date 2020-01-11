@@ -832,7 +832,7 @@ mod test {
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
         assert_eq!(context.g_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(context.g_type(id2), Type::i32);
+        assert_eq!(context.g_type(id2), Numeric());
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {

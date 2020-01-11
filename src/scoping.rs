@@ -47,7 +47,7 @@ pub struct Context2 {
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>, usize),
     Expression(*const Node<Expr>, usize),
-    Argument(Identifier, usize),
+    Argument(Type),
     ImportedModule(usize)
 }
 
@@ -143,6 +143,11 @@ impl Scope {
         let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
         self.declarations.insert(name.clone(), scope_mod);
     }
+
+    pub fn append_modification(&mut self, name: &Identifier, modification: CanModifyScope) {
+        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
+        self.declarations.insert(name.clone(), modification);
+    }
 }
 
 impl Context2 {
@@ -164,10 +169,11 @@ impl Context2 {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) | CanModifyScope::Argument(_, ref id) => {
-                return self.type_map.get(id).unwrap().clone();
+            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) => {
+                self.type_map.get(id).unwrap().clone()
             },
-            CanModifyScope::ImportedModule(ref id) => panic!()
+            CanModifyScope::Argument(ref t) => t.clone(),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
         };
         return t;
     }
@@ -296,8 +302,8 @@ impl CanModifyScope {
         return match self {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
             CanModifyScope::Expression(ref _ptr, ref id) => *id,
-            CanModifyScope::Argument(ref _name, ref id) => *id,
-            CanModifyScope::ImportedModule(ref id) => *id
+            CanModifyScope::ImportedModule(ref id) => *id,
+            CanModifyScope::Argument(..) => panic!()
         };
     }
 }
@@ -784,30 +790,49 @@ impl GetContext for Node<Stmt> {
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
                 // TODO: Type checking
-                // TODO: Handle keyword args expressions. They should receive just the parent scope.
-                let mut declarations = BTreeMap::new();
-                let mut declaration_order = BTreeMap::new();
+                let mut new_scope = Scope::child(parent_id);
 
-                // Add arguments to declarations.
-                for (i, arg) in args.iter().enumerate() {
-                    declaration_order.insert(arg.0.clone(), i+1);
-                    declarations.insert(arg.0.clone(), CanModifyScope::Argument(arg.0.clone(), self.id));
-                }
-                for (i, (key, t, ref mut val)) in kwargs.iter_mut().enumerate() {
-                    declaration_order.insert(key.clone(), i+1);
-                    declarations.insert(key.clone(), CanModifyScope::Argument(key.clone(), self.id));
+                // Copy the types for non-keyword arguments
+                let mut arg_types = args.clone();
+
+                // Evaluate scopes and types for all keyword expressions.
+                // This must be done *before* any arguments are actually added to scope,
+                // because the expressions cannot references the arguments.
+                for (key, t, ref mut val) in kwargs.iter_mut() {
+
+                    // Get context for each expression
                     let res = val.scopes_and_types(parent_id, context);
                     context = res.0;
-                    assert_eq!(*t, res.1)
+
+                    // Check kwarg expression type matches annotation
+                    assert_eq!(*t, res.1);
+
+                    // Add the type to the function type.
+                    arg_types.push((key.clone(), t.clone()));
+                }
+
+                let function_type = Type::Function(arg_types, Box::new(return_type.clone()));
+
+                context.add_type(self.id, function_type.clone());
+
+                // Add arguments to declarations.
+                for (key, t) in args {
+                    let modification = CanModifyScope::Argument(t.clone());
+                    new_scope.append_modification(key, modification);
+                }
+
+                for (key, t, _) in kwargs {
+                    let modification = CanModifyScope::Argument(t.clone());
+                    new_scope.append_modification(key, modification);
                 }
                 
-                let new_scope = Scope{parent_id: Some(parent_id), declarations, declaration_order};
                 let scope_id = context.new_scope(new_scope);
                 self.scope = scope_id;
 
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
                 assert_eq!(*return_type, block_type);
-                (block_context, block_type)
+
+                (block_context, function_type)
             },
             Stmt::WhileStmt{ref mut condition, ref mut block} => {
                 let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
@@ -1066,7 +1091,6 @@ mod test {
         return b + c
         "#;
         let (func_stmt, context) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
-        println!("Context: {:?}", context);
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));

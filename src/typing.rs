@@ -818,7 +818,7 @@ mod test {
         fn if_stmt_typing() {
             let (block, context) = compiler_layers::to_context::<Node<Block>>(if_stmt_fixture());
             let if_stmt = block.data.statements.get(2).unwrap();
-            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Numeric());
         }
     }
 
@@ -839,7 +839,7 @@ mod test {
         let if_stmt = r#"
         let a = 1
         let b = 1
-        if 0:
+        if false:
             return a
         else:
             return b"#;

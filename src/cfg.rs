@@ -18,6 +18,6 @@ pub enum CfgStmt {
 }
 
 fn empty_cfg() -> Graph::<CfgVertex, i64> {
-    let mut empty = Graph::<CfgVertex, i64>::new();
+    let empty = Graph::<CfgVertex, i64>::new();
     return empty;
 }

@@ -257,7 +257,7 @@ pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context2)
 where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
-    let (id, mut init) = builtin_context();
+    let (id, init) = builtin_context();
     let context = result.scopes_and_types(id, init).0;
     return (result, context);
 }
@@ -265,9 +265,8 @@ where T: Parseable, T: GetContext {
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context2) 
 where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
     let (result, mut context): (T, Context2) = to_context(input);
-    // let rewritten = result.type_based_rewrite(&mut context);
-    panic!()
-    // return (rewritten, context, type_map);
+    let rewritten = result.type_based_rewrite(&mut context);
+    return (rewritten, context);
 }
 
 pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context2, String) 

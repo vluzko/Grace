@@ -697,6 +697,8 @@ impl Typed<Node<Expr>> for Node<Expr> {
 }
 
 pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
+    println!("Left: {:?}", left_type);
+    println!("Right: {:?}", right_type);
     // Topological ordering of numeric types.
     // i32, f32, i64, f64
     let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
@@ -742,7 +744,7 @@ impl BinaryOperator {
     pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => numeric_join(left, right),
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => left.merge(right),
             BinaryOperator::Div => Type::f64,
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
             _ => panic!()

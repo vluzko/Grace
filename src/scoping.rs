@@ -77,6 +77,8 @@ pub trait Scoped {
 }
 
 pub trait GetContext {
+    fn get_usages(&self) -> HashSet<Identifier>;
+
     fn scopes_and_types(&mut self, parent_id: usize, context: Context2) -> (Context2, Type);
 
     /// Get all *non-Argument* declarations.
@@ -161,13 +163,11 @@ impl Context2 {
 
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
-        let t = unsafe {
-            match scope_mod {
-                CanModifyScope::Statement(ptr, _) => {
-                    self.type_map.get(&(**ptr).id).unwrap().clone()
-                },
-                _ => panic!()
-            }
+        let t = match scope_mod {
+            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) | CanModifyScope::Argument(_, ref id) => {
+                return self.type_map.get(id).unwrap().clone();
+            },
+            CanModifyScope::ImportedModule(ref id) => panic!()
         };
         return t;
     }
@@ -656,6 +656,11 @@ impl CanModifyScope {
 // }
 
 impl GetContext for Node<Module> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        panic!();
+    }
+
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         let mut new_scope = Scope::child(parent_id);
         
@@ -684,6 +689,14 @@ impl GetContext for Node<Module> {
 }
 
 impl GetContext for Node<Block> {
+    fn get_usages(&self) -> HashSet<Identifier> {
+        let mut usages = HashSet::new();
+        for stmt in &self.data.statements {
+            usages = general_utils::m_union(usages, stmt.get_usages());
+        }
+        return usages;
+    }
+
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         let new_scope = Scope::child(parent_id);
         let scope_id = context.new_scope(new_scope);
@@ -733,6 +746,31 @@ impl GetContext for Node<Block> {
 }
 
 impl GetContext for Node<Stmt> {
+    
+    fn get_usages(&self) -> HashSet<Identifier> {
+        return match self.data {
+            Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+                let mut usages = general_utils::m_union(condition.get_usages(), block.get_usages());
+                for (cond, blck) in elifs {
+                    usages = general_utils::m_union(usages, cond.get_usages());
+                    usages = general_utils::m_union(usages, blck.get_usages());
+                }
+                match else_block {
+                    Some(y) => general_utils::m_union(usages, y.get_usages()),
+                    None => usages
+                }
+            },
+            Stmt::WhileStmt{ref condition, ref block} => general_utils::m_union(condition.get_usages(), block.get_usages()),
+            Stmt::FunctionDecStmt{ref block, ..} => block.get_usages(),
+            Stmt::ReturnStmt(ref expression) | 
+            Stmt::YieldStmt(ref expression) | 
+            Stmt::LetStmt{ref expression, ..} |
+            Stmt::AssignmentStmt{ref expression, ..} => expression.get_usages(),
+            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::PassStmt => HashSet::new(),
+            _ => panic!()
+        };
+    }
+
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
@@ -855,10 +893,49 @@ impl GetContext for Node<Stmt> {
 }
 
 impl GetContext for Node<Expr> {
+
+    fn get_usages(&self) -> HashSet<Identifier> {
+        return match self.data {
+            Expr::BinaryExpr{ref left, ref right, ..} => {
+                general_utils::m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::ComparisonExpr{ref left, ref right, ..} => {
+                general_utils::m_union(left.get_usages(), right.get_usages())
+            },
+            Expr::UnaryExpr{ref operand, ..} => {
+                operand.get_usages()
+            },
+            Expr::FunctionCall{ref args, ref kwargs, ..} => {
+                let mut usages = HashSet::new();
+                for expr in args {
+                    usages = general_utils::m_union(usages, expr.get_usages());
+                }
+
+                for (_, expr) in kwargs {
+                    usages = general_utils::m_union(usages, expr.get_usages());
+                }
+
+                usages
+            },
+            Expr::Index{ref base, ref slices} => {
+                let first_slice = slices.get(0).unwrap().clone();
+                let first_usages = first_slice.0.unwrap().get_usages();
+                general_utils::m_union(base.get_usages(), first_usages)
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let mut usages = HashSet::new();
+                usages.insert(name.clone());
+                usages
+            },
+            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
+            _ => panic!()
+        };
+    }
+
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
-            Expr::ComparisonExpr{ref operator, ref mut left, ref mut right} => {
+            Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c);
                 assert_eq!(left_t, right_t);
@@ -910,6 +987,11 @@ impl GetContext for Node<Expr> {
             },
             Expr::Index{ref mut base, ref mut slices} => {
                 panic!()
+            },
+            Expr::IdentifierExpr(ref name) => {
+                let t = context.get_type(self.scope, name);
+                context.add_type(self.id, t.clone());
+                (context, t)
             },
             Expr::Int(_) => {
                 let t = Numeric();
@@ -983,17 +1065,79 @@ mod test {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
-        let (func_stmt, _) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
-        panic!()
-        // let usages = func_stmt.get_usages();
-        // assert!(usages.contains(&Identifier::from("b")));
-        // assert!(usages.contains(&Identifier::from("c")));
+        let (func_stmt, context) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
+        println!("Context: {:?}", context);
+        let usages = func_stmt.get_usages();
+        assert!(usages.contains(&Identifier::from("b")));
+        assert!(usages.contains(&Identifier::from("c")));
+    }
+
+    #[test]
+    fn test_get_declarations() {
+        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
+        let new_ident = Identifier::from("x");
+        let actual = func_dec.get_true_declarations(&context);
+        for ptr in actual {
+            assert_eq!(ptr, new_ident);
+        }
     }
 
     #[cfg(test)]
     mod scope_generation {
         use super::*;
+        
+        #[test]
+        fn test_block_scope() {
+            // Block is:
+            // let a = 5 + -1
+            // let b = true and false
+            let l1 = Node::from(Expr::Int("5".to_string()));
+            let r1 = Node::from(Expr::Int("-1".to_string()));
+            let l2 = Node::from(true);
+            let r2 = Node::from(false);
 
+            let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
+            let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
+
+            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
+            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
+
+            let mut block = Node::from(Block{
+                statements: vec!(Box::new(Node::from(s1.clone())), Box::new(Node::from(s2.clone())))
+            });
+            let (id, init) = builtin_context();
+            let context = block.scopes_and_types(id, init).0;
+            let scope = context.get_scope(block.scope);
+            assert_eq!(scope.declarations.len(), 2);
+            unsafe {
+                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
+                match stmt1_pointer {
+                    CanModifyScope::Statement(x, _) => {
+                        match (**x).data {
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("a"))
+                            },
+                            _ => panic!()
+                        };
+                    },
+                    _ => panic!()
+                }
+
+                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
+                match stmt1_pointer {
+                    CanModifyScope::Statement(x, _) => {
+                        match (**x).data {
+                            Stmt::LetStmt{ref name, ..} => {
+                                assert_eq!(name, &Identifier::from("b"))
+                            },
+                            _ => panic!()
+                        };
+                    },
+                    _ => panic!()
+                }
+            }
+        }
+        
         #[cfg(test)]
         mod exprs {
             use super::*;
@@ -1002,11 +1146,16 @@ mod test {
             /// All should be empty.
             #[test]
             fn test_literal_scope() {
-                let mut literals: Vec<Node<Expr>> = vec![Node::from(1), Node::from(0.5), Node::from(Expr::String("asdf".to_string())), Node::from(true)];
-                let (id, mut context) = builtin_context();
+                let mut literals: Vec<Node<Expr>> = vec![
+                    Node::from(1), 
+                    Node::from(0.5), 
+                    Node::from(Expr::String("asdf".to_string())), 
+                    Node::from(true)
+                ];
                 for literal in literals.iter_mut() {
+                    let (id, mut context) = builtin_context();
                     context = literal.scopes_and_types(id, context).0;
-                    assert_eq!(context, Context2::empty());
+                    assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
                 }
             }
         }
@@ -1052,66 +1201,6 @@ mod test {
             }
         }
 
-        #[test]
-        fn test_block_scope() {
-            // Block is:
-            // let a = 5 + -1
-            // let b = true and false
-            let l1 = Node::from(Expr::Int("5".to_string()));
-            let r1 = Node::from(Expr::Int("-1".to_string()));
-            let l2 = Node::from(true);
-            let r2 = Node::from(false);
-
-            let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
-            let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
-
-            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
-            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
-
-            let mut block = Node::from(Block{
-                statements: vec!(Box::new(Node::from(s1)), Box::new(Node::from(s2)))
-            });
-            let (id, init) = builtin_context();
-            let context = block.scopes_and_types(id, init).0;
-            let scope = context.get_scope(block.scope);
-            assert_eq!(scope.declarations.len(), 2);
-            unsafe {
-                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
-                match stmt1_pointer {
-                    CanModifyScope::Statement(x, _) => {
-                        match (**x).data {
-                            Stmt::LetStmt{ref name, ..} => {
-                                assert_eq!(name, &Identifier::from("a"))
-                            },
-                            _ => panic!()
-                        }
-                    },
-                    _ => panic!()
-                }
-
-                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
-                match stmt1_pointer {
-                    CanModifyScope::Statement(x, _) => {
-                        match (**x).data {
-                            Stmt::LetStmt{ref name, ..} => {
-                                assert_eq!(name, &Identifier::from("b"))
-                            },
-                            _ => panic!()
-                        }
-                    },
-                    _ => panic!()
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn test_get_declarations() {
-        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
-        let new_ident = Identifier::from("x");
-        let actual = func_dec.get_true_declarations(&context);
-        for ptr in actual {
-            assert_eq!(ptr, new_ident);
-        }
+        
     }
 }

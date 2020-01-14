@@ -1,3 +1,5 @@
+// DEPRECATED //
+
 use std::collections::HashMap;
 extern crate itertools;
 
@@ -359,6 +361,7 @@ impl ToBytecode for Identifier {
 
 }
 
+/*
 #[cfg(test)]
 mod tests {
 
@@ -592,3 +595,4 @@ mod tests {
         assert_eq!(bytecode, expected);
     }
 }
+*/

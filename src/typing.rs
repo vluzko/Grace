@@ -103,9 +103,15 @@ impl Type {
                 Type::Sum(ref types) => {
                     match other {
                         Type::Sum(ref other_types) => {
-                            return Type::Sum(general_utils::vec_c_int(types, other_types))
+                            Type::Sum(general_utils::vec_c_int(types, other_types))
                         }, 
-                        _ => panic!()
+                        x => {
+                            if types.contains(&x) {
+                                x.clone()
+                            } else {
+                                panic!()
+                            }
+                        }
                     }
                 }, 
                 Type::Undetermined => {
@@ -115,7 +121,7 @@ impl Type {
                     match other {
                         Type::Sum(ref other_types) => {
                             if other_types.contains(&x) {
-                                return x.clone();
+                                x.clone()
                             } else {
                                 panic!()
                             }

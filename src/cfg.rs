@@ -199,7 +199,7 @@ impl Node<Block> {
 
                     match else_block {
                         Some(b) => {
-                            
+                            panic!()
                         },
                         None => {}
                     }

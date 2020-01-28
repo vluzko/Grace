@@ -719,7 +719,14 @@ impl GetContext for Node<Block> {
 
             // Update the block type if it's a return statement.
             block_type = match stmt.data {
-                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1),
+                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => {
+                    block_type.merge(&res.1);
+                    break;
+                },
+                Stmt::BreakStmt | Stmt::ContinueStmt => {
+                    block_type.merge(&Type::empty);
+                    break;
+                },
                 _ => block_type
             };
 

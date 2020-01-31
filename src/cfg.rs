@@ -5,17 +5,27 @@ extern crate petgraph;
 
 use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
-
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use general_utils::get_next_id;
 use scoping::Context2;
-use typing::Type;
 
-// type Cfg = Graph::<CfgVertex, bool>;
 
-pub struct CfgVertex {
-    pub node_id: usize,
-    pub statements: Vec<Node<CfgStmt>>
+// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+// pub struct CfgVertex {
+//     pub node_id: usize,
+//     pub statements: Vec<Node<CfgStmt>>
+// }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CfgVertex {
+    Entry,
+    Block(Vec<Node<CfgStmt>>),
+    LoopStart(Node<Expr>),
+    IfStart(Node<Expr>),
+    Break(Vec<Node<CfgStmt>>),
+    Continue(Vec<Node<CfgStmt>>),
+    End,
+    Exit
 }
 
 pub struct Cfg {
@@ -61,23 +71,24 @@ impl Cfg {
     }
 
     /// Add a node containing a single branch statement.
-    pub fn add_branch(&mut self, scope: usize, condition: &Node<Expr>) -> NodeIndex {
-        let condition_stmt = Node {
-            id: get_next_id(),
-            scope: scope,
-            data: CfgStmt::Branch(condition.clone())
-        };
+    // pub fn add_branch(&mut self, scope: usize, condition: &Node<Expr>) -> NodeIndex {
+    //     // let condition_stmt = Node {
+    //     //     id: get_next_id(),
+    //     //     scope: scope,
+    //     //     data: CfgStmt::Branch(condition.clone())
+    //     // };
 
-        let condition_node = CfgVertex {
-            node_id: condition_stmt.id,
-            statements: vec!(condition_stmt)
-        };
+    //     // let condition_node = CfgVertex {
+    //     //     node_id: condition_stmt.id,
+    //     //     statements: vec!(condition_stmt)
+    //     // };
 
-        let condition_index = self.add_node(condition_node);
-        return condition_index;
-    }
+    //     let condition_index = self.add_node(AltVertex::Branch(condition.clone()));
+    //     return condition_index;
+    // }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgStmt {
     Assignment  {name: Identifier, expression: Node<Expr>},
     Let         {name: Identifier, expression: Node<Expr>},
@@ -156,7 +167,7 @@ impl Node<Block> {
 
                     // Create a vertex containing just the while loop condition.
                     // The loop body passes back to here, as do all continue statements.
-                    let condition_index = new_cfg.add_branch(self.scope, condition);
+                    let condition_index = new_cfg.add_node(CfgVertex::LoopStart(condition.clone()));
                     new_cfg.add_edge(new_index, condition_index, true);
                     
                     // Add the while loop block to the CFG.
@@ -185,10 +196,7 @@ impl Node<Block> {
                     statements = vec!();
                 },
                 Stmt::BreakStmt => {
-                    let new_node = CfgVertex {
-                        node_id: stmt.id,
-                        statements: statements
-                    };
+                    let new_node = CfgVertex::Break(statements)
 
                     let new_index = new_cfg.add_node(new_node);
                     need_edge_to_next_block.push(new_index.clone());

@@ -22,6 +22,7 @@ pub enum CfgVertex {
     Block(Vec<Node<CfgStmt>>),
     LoopStart(Node<Expr>),
     IfStart(Node<Expr>),
+    Else,
     Break(Vec<Node<CfgStmt>>),
     Continue(Vec<Node<CfgStmt>>),
     End,
@@ -41,10 +42,6 @@ impl Cfg {
         };
     }
 
-    pub fn add_empty_node(&mut self, node_id: usize) -> NodeIndex {
-        return self.add_node(CfgVertex{node_id: node_id, statements: vec!()});
-    }
-
     pub fn add_node(&mut self, node: CfgVertex) -> NodeIndex {
         let index = self.graph.add_node(node);
         match self.entry_index {
@@ -60,7 +57,7 @@ impl Cfg {
 
     /// Add a node containing the given statements.
     pub fn add_block(&mut self, node_id: usize, statements: Vec<Node<CfgStmt>>, previous: Option<NodeIndex>) -> NodeIndex {
-        let new_node = CfgVertex {node_id, statements};
+        let new_node = CfgVertex::Block(statements);
         let new_index = self.add_node(new_node);
         match previous {
             Some(x) => {self.add_edge(x, new_index, false);},
@@ -187,7 +184,7 @@ impl Node<Block> {
 
                     // We create an empty vertex to serve as a placeholder for the next vertex.
                     // All break statements in the while loop and the while loop exit have an edge to it.
-                    let empty_index = new_cfg.add_empty_node(self.id);
+                    let empty_index = new_cfg.add_node(CfgVertex::End);
                     new_cfg = add_edges_to_next(new_cfg, need_edge_to_next_block, empty_index);
 
                     // Reset for the next iteration.
@@ -196,7 +193,7 @@ impl Node<Block> {
                     statements = vec!();
                 },
                 Stmt::BreakStmt => {
-                    let new_node = CfgVertex::Break(statements)
+                    let new_node = CfgVertex::Break(statements);
 
                     let new_index = new_cfg.add_node(new_node);
                     need_edge_to_next_block.push(new_index.clone());
@@ -223,7 +220,7 @@ impl Node<Block> {
                     let new_index = new_cfg.add_block(self.id, statements, previous_index);
 
                     // A block for the initial if condition.
-                    let mut condition_index = new_cfg.add_branch(self.scope, condition);
+                    let mut condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
                     // Attach the condition to the previous block.
                     new_cfg.add_edge(new_index, condition_index, false);
 
@@ -236,10 +233,14 @@ impl Node<Block> {
                     need_edge_to_next_block.append(&mut res.2);
 
                     for (elif_cond, elif_block) in elifs {
+                        // Create a new else block
+                        let sub_else = new_cfg.add_node(CfgVertex::Else);
+                        new_cfg.add_edge(condition_index, sub_else, false);
                         // Add the elif condition to the CFG.
-                        let elif_cond_index = new_cfg.add_branch(self.scope, elif_cond);
+                        let elif_cond_index = new_cfg.add_node(CfgVertex::IfStart(elif_cond.clone()));
+                        new_cfg.add_edge(sub_else, elif_cond_index, false);
                         // Attach the elif condition to the previous branch.
-                        new_cfg.add_edge(condition_index, elif_cond_index, false);
+                        // new_cfg.add_edge(condition_index, elif_cond_index, false);
                         condition_index = elif_cond_index;
 
                         let mut res = elif_block.to_cfg(context, new_cfg, loop_start);
@@ -252,6 +253,7 @@ impl Node<Block> {
 
                     match else_block {
                         Some(b) => {
+                            let final_else = 
                             // Add the else block to the CFG.
                             let mut res = b.to_cfg(context, new_cfg, loop_start);
                             new_cfg = res.0;

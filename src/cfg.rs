@@ -7,7 +7,7 @@ use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use general_utils::get_next_id;
-use scoping::Context2;
+use scoping::Context;
 
 
 // #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -80,7 +80,7 @@ pub enum CfgStmt {
 
 impl Node<Module> {
     /// Add the contents of a module to a CFG
-    fn to_cfg(&self, context: &Context2) -> HashMap<Identifier, Cfg> {
+    fn to_cfg(&self, context: &Context) -> HashMap<Identifier, Cfg> {
         let mut cfg_map = HashMap::new();
         for decl in &self.data.declarations {
             match decl.data {
@@ -104,7 +104,7 @@ impl Node<Block> {
     /// * `context` - 
     /// * `current` - 
     /// * `loop_start` - 
-    fn to_cfg(&self, context: &Context2, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
+    fn to_cfg(&self, context: &Context, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
         let mut new_cfg = current;
         // The set of statements in the current CFG block.
         let mut statements = vec!();

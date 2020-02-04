@@ -1,7 +1,7 @@
 /// Low-level representation of WebAssembly.
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Expr, BinaryOperator};
-use scoping::Context2;
+use scoping::Context;
 use typing::Type;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -55,11 +55,11 @@ pub struct WASMModule {
 }
 
 pub trait ToLLR {
-    fn to_llr(&self, context: &Context2) -> Vec<WASM>;
+    fn to_llr(&self, context: &Context) -> Vec<WASM>;
 }
 
 impl ToLLR for CfgVertex {
-    fn to_llr(&self, context: &Context2) -> Vec<WASM> {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match &self {
             CfgVertex::Block(statements) => {
                 let mut wasm = vec!();
@@ -77,7 +77,7 @@ impl ToLLR for CfgVertex {
 }
 
 impl ToLLR for Node<CfgStmt> {
-    fn to_llr(&self, context: &Context2) -> Vec<WASM> {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match self.data {
             CfgStmt::Assignment {ref name, ref expression} | CfgStmt::Let {ref name, ref expression} => {
                 let mut expr_wasm = expression.to_llr(context);
@@ -92,7 +92,7 @@ impl ToLLR for Node<CfgStmt> {
 }
 
 impl ToLLR for Node<Expr> {
-    fn to_llr(&self, context: &Context2) -> Vec<WASM> {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match self.data {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);

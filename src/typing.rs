@@ -307,17 +307,17 @@ impl From<Identifier> for Type {
 }
 
 pub trait Typed<T> {
-    fn type_based_rewrite(self, context: &mut scoping::Context2) -> T;
+    fn type_based_rewrite(self, context: &mut scoping::Context) -> T;
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, _context: &mut scoping::Context2) -> scoping::CanModifyScope {
+    fn type_based_rewrite(self, _context: &mut scoping::Context) -> scoping::CanModifyScope {
         panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
     }
 }
 
 impl Typed<Node<Module>> for Node<Module> {
-    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Module> {
+    fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Module> {
         let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
         return Node{
             id: self.id,
@@ -328,7 +328,7 @@ impl Typed<Node<Module>> for Node<Module> {
 }
 
 impl Typed<Node<Block>> for Node<Block> {
-    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Block> {
+    fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Block> {
         // let mut new_stmts = vec![];
         let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
 
@@ -352,7 +352,7 @@ impl Typed<Node<Block>> for Node<Block> {
 }
 
 impl Typed<Node<Stmt>> for Node<Stmt> {
-    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Stmt> {
+    fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, kwargs, return_type}
@@ -390,7 +390,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
 }
 
 impl Typed<Node<Expr>> for Node<Expr> {
-    fn type_based_rewrite(self, context: &mut scoping::Context2) -> Node<Expr> {
+    fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {left, right, operator} => {
                 let left = Box::new(left.type_based_rewrite(context));

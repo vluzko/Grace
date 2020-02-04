@@ -13,7 +13,7 @@ use position_tracker::PosStr;
 // use scoping;
 use scoping::{
     Scope,
-    Context2,
+    Context,
     CanModifyScope,
     GetContext,
     builtin_context,
@@ -36,7 +36,7 @@ use general_utils::extend_map;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
-    pub context: Context2,
+    pub context: Context,
     // The path to the module file.
     pub path: Box<Path>,
     // The dependencies of this module.
@@ -168,7 +168,7 @@ impl Compilation {
         parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
-        let mut init_context = Context2::empty();
+        let mut init_context = Context::empty();
         let scope_id = init_context.new_scope(init_scope);
 
         // 
@@ -245,7 +245,7 @@ fn path_to_module_reference(path: &Box<Path>) -> String {
     return itertools::join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
 }
 
-pub fn compile_from_file(file_name: String) -> (Node<Module>, Context2, String){
+pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String){
     let mut f = File::open(file_name).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
@@ -253,7 +253,7 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context2, String){
     // return to_bytecode::<Node<Module>>(file_contents.as_bytes());
 }
 
-pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context2)
+pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context)
 where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
@@ -262,18 +262,18 @@ where T: Parseable, T: GetContext {
     return (result, context);
 }
 
-pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context2) 
+pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context) 
 where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
-    let (result, mut context): (T, Context2) = to_context(input);
+    let (result, mut context): (T, Context) = to_context(input);
     let rewritten = result.type_based_rewrite(&mut context);
     return (rewritten, context);
 }
 
 
 
-// pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context2, String) 
+// pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, String) 
 // where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
-//     let (result, context): (T, Context2) = to_type_rewrites(input);
+//     let (result, context): (T, Context) = to_type_rewrites(input);
 //     let bytecode = result.generate_bytecode(&context);
 //     return (result, context, bytecode);
 // }

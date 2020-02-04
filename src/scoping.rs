@@ -12,7 +12,7 @@ use typing::{
 
 /// The full scoping and typing context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context2 {
+pub struct Context {
     // The ID of the root scope of the context.
     pub root_id: usize,
     // A map from Scope IDs to Scopes.
@@ -55,10 +55,10 @@ pub struct Scope {
 pub trait GetContext {
     fn get_usages(&self) -> HashSet<Identifier>;
 
-    fn scopes_and_types(&mut self, parent_id: usize, context: Context2) -> (Context2, Type);
+    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
 
     /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context2) -> BTreeSet<Identifier>;
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier>;
 }
 
 /// Create an empty scope.
@@ -70,12 +70,12 @@ pub fn base_scope() -> Scope {
     };
 }
 
-pub fn builtin_context() -> (usize, Context2) {
+pub fn builtin_context() -> (usize, Context) {
     let empty = base_scope();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
-    let context = Context2 {
+    let context = Context {
         root_id: id, 
         scopes: init_scopes, 
         containing_scopes: HashMap::new(),
@@ -116,9 +116,9 @@ impl Scope {
     }
 }
 
-impl Context2 {
-    pub fn empty() -> Context2 {
-        return Context2{
+impl Context {
+    pub fn empty() -> Context {
+        return Context{
             root_id: general_utils::get_next_scope_id(),
             scopes: HashMap::new(),
             containing_scopes: HashMap::new(),
@@ -215,7 +215,7 @@ impl GetContext for Node<Module> {
         panic!();
     }
 
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let mut new_scope = Scope::child(parent_id);
         
         for stmt in &self.data.declarations {
@@ -233,7 +233,7 @@ impl GetContext for Node<Module> {
         return (new_context, Type::empty);
     }
 
-    fn get_true_declarations(&self, context: &Context2) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
         let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.declarations {
             top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
@@ -251,7 +251,7 @@ impl GetContext for Node<Block> {
         return usages;
     }
 
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let new_scope = Scope::child(parent_id);
         let scope_id = context.new_scope(new_scope);
         self.scope = scope_id;
@@ -297,7 +297,7 @@ impl GetContext for Node<Block> {
         return (new_context, block_type);
     }
 
-    fn get_true_declarations(&self, context: &Context2) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
         let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
         for stmt in &self.data.statements {
             top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
@@ -328,7 +328,7 @@ impl GetContext for Node<Stmt> {
         };
     }
 
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Stmt::LetStmt{ref mut expression, ..} => {
@@ -441,7 +441,7 @@ impl GetContext for Node<Stmt> {
         return (final_c, final_t);
     }
 
-    fn get_true_declarations(&self, context: &Context2) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
         return match self.data {
             Stmt::FunctionDecStmt{ref block, ..} => {
                 block.get_true_declarations(context)
@@ -491,7 +491,7 @@ impl GetContext for Node<Expr> {
         };
     }
 
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context2) -> (Context2, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
@@ -609,7 +609,7 @@ impl GetContext for Node<Expr> {
         return (final_c, final_t);
     }
 
-    fn get_true_declarations(&self, _context: &Context2) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, _context: &Context) -> BTreeSet<Identifier> {
         panic!()
     }
 }

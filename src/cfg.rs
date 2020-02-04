@@ -67,22 +67,6 @@ impl Cfg {
         return new_index;
     }
 
-    /// Add a node containing a single branch statement.
-    // pub fn add_branch(&mut self, scope: usize, condition: &Node<Expr>) -> NodeIndex {
-    //     // let condition_stmt = Node {
-    //     //     id: get_next_id(),
-    //     //     scope: scope,
-    //     //     data: CfgStmt::Branch(condition.clone())
-    //     // };
-
-    //     // let condition_node = CfgVertex {
-    //     //     node_id: condition_stmt.id,
-    //     //     statements: vec!(condition_stmt)
-    //     // };
-
-    //     let condition_index = self.add_node(AltVertex::Branch(condition.clone()));
-    //     return condition_index;
-    // }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -194,8 +178,12 @@ impl Node<Block> {
                 },
                 Stmt::BreakStmt => {
                     let new_node = CfgVertex::Break(statements);
-
                     let new_index = new_cfg.add_node(new_node);
+                    match previous_index {
+                        Some(i) => {new_cfg.add_edge(i, new_index, false);},
+                        None => {}
+                    };
+                    
                     need_edge_to_next_block.push(new_index.clone());
                     previous_index = Some(new_index);
 
@@ -203,7 +191,12 @@ impl Node<Block> {
                     break;
                 },
                 Stmt::ContinueStmt => {
-                    let new_index = new_cfg.add_block(stmt.id, statements, previous_index);
+                    let new_index = new_cfg.add_node(CfgVertex::Continue(statements));
+
+                    match previous_index {
+                        Some(i) => {new_cfg.add_edge(i, new_index, false);},
+                        None => {}
+                    };
 
                     // Add an edge from the new block back to the loop start.
                     match loop_start {
@@ -215,7 +208,7 @@ impl Node<Block> {
                     statements = vec!();
                     break;
                 },
-                Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+                Stmt::IfStmt{ref condition, ref block, ref else_block} => {
                     // Collect existing statements into a block.
                     let new_index = new_cfg.add_block(self.id, statements, previous_index);
 
@@ -231,25 +224,6 @@ impl Node<Block> {
                     new_cfg.add_edge(condition_index, res.1, true);
                     // Track any breaks contained in the inner block.
                     need_edge_to_next_block.append(&mut res.2);
-
-                    for (elif_cond, elif_block) in elifs {
-                        // Create a new else block
-                        let sub_else = new_cfg.add_node(CfgVertex::Else);
-                        new_cfg.add_edge(condition_index, sub_else, false);
-                        // Add the elif condition to the CFG.
-                        let elif_cond_index = new_cfg.add_node(CfgVertex::IfStart(elif_cond.clone()));
-                        new_cfg.add_edge(sub_else, elif_cond_index, false);
-                        // Attach the elif condition to the previous branch.
-                        // new_cfg.add_edge(condition_index, elif_cond_index, false);
-                        condition_index = elif_cond_index;
-
-                        let mut res = elif_block.to_cfg(context, new_cfg, loop_start);
-                        new_cfg = res.0;
-                        // Add an edge from the elif condition to the elif block.
-                        new_cfg.add_edge(condition_index, res.1, true);
-                        // Track any breaks contained in the inner block.
-                        need_edge_to_next_block.append(&mut res.2);
-                    }
 
                     match else_block {
                         Some(b) => {

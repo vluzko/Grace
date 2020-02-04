@@ -433,13 +433,14 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 expression = expression.type_based_rewrite(context);
                 Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context)}
             },
-            Stmt::IfStmt {condition, block, elifs,  else_block} => {
-                let new_elifs =  elifs.into_iter().map(|elif| (elif.0.type_based_rewrite(context), elif.1.type_based_rewrite(context))).collect();
+            Stmt::IfStmt {condition, block, else_block} => {
                 let new_else_block = match else_block {
                     None => None,
                     Some(block) => Some(block.type_based_rewrite(context))
                 };
-                Stmt::IfStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), elifs: new_elifs, else_block: new_else_block}
+                Stmt::IfStmt {
+                    condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), else_block: new_else_block
+                }
             },
             Stmt::LetStmt {name, type_annotation, expression} => {
                 Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context)}
@@ -511,16 +512,10 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 final_map.insert(self.id, t.clone());
                 (final_map, t)
             }
-            Stmt::IfStmt{ref condition, ref block, ref elifs, ref else_block} => {
+            Stmt::IfStmt{ref condition, ref block, ref else_block} => {
                 let (new_map, _) = condition.resolve_types(context, type_map);
                 let (mut block_map, t) = block.resolve_types(context, new_map);
                 block_map.insert(self.id, t.clone());
-
-                // Elifs
-                for (expr, block) in elifs {
-                    let expr_map = expr.resolve_types(context, block_map).0;
-                    block_map = block.resolve_types(context, expr_map).0;
-                }
 
                 block_map = match else_block {
                     Some(block) => block.resolve_types(context, block_map).0,

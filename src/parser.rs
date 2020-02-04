@@ -289,15 +289,20 @@ pub mod stmt_parsers {
                 opt!(complete!(indented!(keyword_and_block2!(self, ELSE, indent), indent)))
             );
 
-            return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, else_block)| {
-                let mut just_elifs = vec!();
+            return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, mut else_block)| {
+                let mut just_elifs = Vec::with_capacity(elifs.len());
 
-                for ((c, mut c_u), b) in elifs.into_iter() {
+                for (i, ((c, mut c_u), b)) in elifs.into_iter().enumerate() {
                     cond_u.append(&mut c_u);
                     just_elifs.push((c, b));
                 }
 
-                let stmt = Stmt::IfStmt{condition: cond, block: block, elifs: just_elifs, else_block};
+                for (elif_cond, elif_block) in just_elifs.into_iter().rev() {
+                    let sub_if = wrap(Stmt::IfStmt{condition: elif_cond, block: elif_block, else_block: else_block});
+                    else_block = Some(Node::from(Block{statements: vec!(sub_if)}));
+                }
+
+                let stmt = Stmt::IfStmt{condition: cond, block: block, else_block};
                 return (stmt, cond_u);
             });
         }
@@ -584,7 +589,6 @@ pub mod stmt_parsers {
             let good_output = Stmt::IfStmt{
                 condition: output(e.expression(PosStr::from("a and b"))).0,
                 block: Node::from(Block{statements: vec!(Box::new(output(e.assignment_stmt(PosStr::from("x = true"))).0))}),
-                elifs: vec!(),
                 else_block: None
             };
 
@@ -592,12 +596,13 @@ pub mod stmt_parsers {
 
             check_failed("ifa and b:\n x = true", |x| e.statement(x, 0), ErrorKind::Alt);
 
-            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
-                condition: Node::from(true),
-                block: output(e.block(PosStr::from("x = true"), 0)),
-                elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
-                else_block: Some(output(e.block(PosStr::from("z = true"), 0)))
-            });
+            // check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
+            //     condition: Node::from(true),
+            //     block: output(e.block(PosStr::from("x = true"), 0)),
+            //     elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
+            //     else_block: Some(output(e.block(PosStr::from("z = true"), 0)))
+            // });
+            panic!()
         }
 
         #[test]

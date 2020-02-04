@@ -50,7 +50,7 @@ pub enum Stmt {
     FunctionDecStmt {name: Identifier, args: Vec<(Identifier, Type)>, kwargs: Vec<(Identifier, Type, Node<Expr>)>,
                      block: Node<Block>, return_type: Type},
     StructDec       {name: Identifier, fields: Vec<(Identifier, Type)>},
-    IfStmt          {condition: Node<Expr>, block: Node<Block>, elifs: Vec<(Node<Expr>, Node<Block>)>, else_block: Option<Node<Block>>},
+    IfStmt          {condition: Node<Expr>, block: Node<Block>, else_block: Option<Node<Block>>},
     WhileStmt       {condition: Node<Expr>, block: Node<Block>},
     ReturnStmt      (Node<Expr>),
     YieldStmt       (Node<Expr>),
@@ -194,7 +194,6 @@ pub mod constructors {
                     data: block,
                     scope: 0
                 },
-                elifs: vec!(),
                 else_block: None
             };
         }

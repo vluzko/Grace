@@ -26,7 +26,7 @@ use typing::{
     Type,
     Typed
 };
-use bytecode::ToBytecode;
+// use bytecode::ToBytecode;
 use expression::{
     Node,
     Module,
@@ -190,22 +190,23 @@ impl Compilation {
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
     pub fn generate_wast_files(&self, output_dir: &Box<Path>) -> Option<String> {
         let mut ret_str = None;
-        for (k, v) in self.modules.iter() {
-            let path_str = k.replace(".", "/");
-            let relative_path = &Path::new(&path_str);
-            let bytecode = v.ast.generate_bytecode(&v.context);
-            let mut output_path = output_dir.join(relative_path);
-            output_path.set_extension("wat");
-            match create_dir_all(output_path.parent().unwrap()) {
-                Ok(_) => {},
-                Err(x) => panic!("{:?}", x)
-            };
-            let outfile = File::create(output_path);
-            outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
-            if Some(k) == self.root_name.as_ref() {
-                ret_str = Some(bytecode);
-            }
-        }
+        // for (k, v) in self.modules.iter() {
+        //     let path_str = k.replace(".", "/");
+        //     let relative_path = &Path::new(&path_str);
+        //     let bytecode = v.ast.generate_bytecode(&v.context);
+        //     let mut output_path = output_dir.join(relative_path);
+        //     output_path.set_extension("wat");
+        //     match create_dir_all(output_path.parent().unwrap()) {
+        //         Ok(_) => {},
+        //         Err(x) => panic!("{:?}", x)
+        //     };
+        //     let outfile = File::create(output_path);
+        //     outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
+        //     if Some(k) == self.root_name.as_ref() {
+        //         ret_str = Some(bytecode);
+        //     }
+        // }
+        panic!()
         return ret_str;
     }
 
@@ -250,7 +251,8 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context2, String){
     let mut f = File::open(file_name).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
-    return to_bytecode::<Node<Module>>(file_contents.as_bytes());
+    panic!()
+    // return to_bytecode::<Node<Module>>(file_contents.as_bytes());
 }
 
 pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context2)
@@ -269,12 +271,14 @@ where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
     return (rewritten, context);
 }
 
-pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context2, String) 
-where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
-    let (result, context): (T, Context2) = to_type_rewrites(input);
-    let bytecode = result.generate_bytecode(&context);
-    return (result, context, bytecode);
-}
+
+
+// pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context2, String) 
+// where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
+//     let (result, context): (T, Context2) = to_type_rewrites(input);
+//     let bytecode = result.generate_bytecode(&context);
+//     return (result, context, bytecode);
+// }
 
 #[cfg(test)]
 mod tests {

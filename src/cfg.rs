@@ -225,9 +225,11 @@ impl Node<Block> {
                     // Track any breaks contained in the inner block.
                     need_edge_to_next_block.append(&mut res.2);
 
+                    let end_index = new_cfg.add_node(CfgVertex::End);
+
                     match else_block {
                         Some(b) => {
-                            let final_else = 
+                            
                             // Add the else block to the CFG.
                             let mut res = b.to_cfg(context, new_cfg, loop_start);
                             new_cfg = res.0;
@@ -236,12 +238,16 @@ impl Node<Block> {
 
                             // Add an edge from the last condition to the else block.
                             new_cfg.add_edge(condition_index, res.1, false);
-                            previous_index = Some(res.1);
+                            // Add an edge from the else block to the end.
+                            new_cfg.add_edge(res.1, end_index, false);
                         },
                         None => {
-                            previous_index = Some(condition_index);
+                            new_cfg.add_edge(condition_index, end_index, false);
+                            new_cfg.add_edge(res.1, end_index, false);
                         }
-                    }
+                    };
+
+                    previous_index = Some(end_index);
 
                     statements = vec!()
 

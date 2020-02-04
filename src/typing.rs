@@ -308,50 +308,11 @@ impl From<Identifier> for Type {
 
 pub trait Typed<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context2) -> T;
-
-    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type);
 }
 
 impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
     fn type_based_rewrite(self, _context: &mut scoping::Context2) -> scoping::CanModifyScope {
         panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
-    }
-
-    fn resolve_types(&self, context: &scoping::Context, type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        return match self {
-            scoping::CanModifyScope::Statement(ref ptr, ref id) => {
-                let stmt = unsafe {
-                    &**ptr
-                };
-                // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(id) {
-                    let t = type_map.get(id).unwrap().clone();
-                    (type_map, t)
-                } else {
-                    stmt.resolve_types(context, type_map)
-                }
-            },
-            scoping::CanModifyScope::Expression(ref ptr, ref id) => {
-                let expr = unsafe {
-                    &**ptr
-                };
-                // This can't be done in a match statement because Rust's borrow checker is wrong.
-                if type_map.contains_key(id) {
-                    let t = type_map.get(id).unwrap().clone();
-                    (type_map, t)
-                } else {
-                    expr.resolve_types(context, type_map)
-                }
-            },
-            scoping::CanModifyScope::Argument(..) => {
-                // Hack: assume all arguments are i32s for now
-                (type_map, Type::i32)
-            },
-            scoping::CanModifyScope::ImportedModule(id) => {
-                let func_type = type_map.get(id).unwrap().clone();
-                (type_map, func_type)
-            }
-        };
     }
 }
 
@@ -363,14 +324,6 @@ impl Typed<Node<Module>> for Node<Module> {
             data: Module{declarations: new_decs, imports: self.data.imports},
             scope: self.scope
         };
-    }
-
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        for stmt in self.data.declarations.iter() {
-            type_map = stmt.resolve_types(context, type_map).0;
-        }
-        type_map.insert(self.id, Type::empty);
-        return (type_map, Type::empty);
     }
 }
 
@@ -395,31 +348,6 @@ impl Typed<Node<Block>> for Node<Block> {
         }
         // new_block.update_scope(context);
         return new_block;
-    }
-
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        let mut block_type = Type::Undetermined;
-        for stmt in &self.data.statements {
-            let res = stmt.resolve_types(context, type_map);
-            type_map = res.0;
-            let stmt_type = res.1;
-
-            match stmt.data {
-                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => {
-                    block_type = block_type.merge(&stmt_type);
-                },
-                _ => {}
-            };
-        }
-
-        // Blocks with no return statement have the empty type.
-        if block_type == Type::Undetermined {
-            block_type = Type::empty;
-        }
-
-        type_map.insert(self.id, block_type.clone());
-
-        return (type_map, block_type);
     }
 }
 
@@ -457,85 +385,6 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
             id: self.id, 
             data: new_stmt,
             scope: self.scope 
-        };
-    }
-
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        return match self.data {
-            Stmt::LetStmt{ref type_annotation, ref expression, ..} => {
-                let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
-
-                // Type check
-                match type_annotation {
-                    Some(ta) => assert_eq!(ta, &expr_type),
-                    None => {}
-                };
-
-                type_map.insert(self.id, expr_type.clone());
-                (type_map, expr_type)
-            },
-            Stmt::AssignmentStmt{ref name, ref expression, ..} => {
-                let (mut type_map, expr_type) = expression.resolve_types(context, type_map);
-
-                // Type check
-                let expected_type = type_map.get(&context.get_declaration(self.scope, name).unwrap().get_id()).unwrap();
-                assert_eq!(expected_type, &expr_type);
-
-                type_map.insert(self.id, expr_type.clone());
-                (type_map, expr_type)                
-            },
-            Stmt::ReturnStmt(ref value) => {
-                let (mut new_map, t) = value.resolve_types(context, type_map);
-                new_map.insert(self.id, t.clone());
-                (new_map, t)
-            },
-            Stmt::FunctionDecStmt{ref args, ref kwargs, ref block, ref return_type, ..} => {
-                let (mut new_map, _) = block.resolve_types(context, type_map);
-
-                // let total_args = args.len() + kwargs.len();
-                // let argument_type = vec![Type::Undetermined; total_args];
-                let mut arg_types = args.clone();
-                for x in kwargs {
-                    arg_types.push((x.0.clone(), x.1.clone()));
-                }
-
-                // TODO: Type check
-                // assert_eq!(return_type.clone().unwrap(), t);
-                let function_type = Type::Function(arg_types, Box::new(return_type.clone()));
-
-                new_map.insert(self.id, function_type.clone());
-                (new_map, function_type)
-            },
-            Stmt::WhileStmt{ref condition, ref block} => {
-                let (new_map, _) = condition.resolve_types(context, type_map);
-                let (mut final_map, t) = block.resolve_types(context, new_map);
-                final_map.insert(self.id, t.clone());
-                (final_map, t)
-            }
-            Stmt::IfStmt{ref condition, ref block, ref else_block} => {
-                let (new_map, _) = condition.resolve_types(context, type_map);
-                let (mut block_map, t) = block.resolve_types(context, new_map);
-                block_map.insert(self.id, t.clone());
-
-                block_map = match else_block {
-                    Some(block) => block.resolve_types(context, block_map).0,
-                    None => block_map
-                };
-
-                (block_map, t)
-            }
-            Stmt::StructDec{ref fields, ..} => {
-                let mut order = vec!();
-                let mut records = BTreeMap::new();
-                for (n, t) in fields {
-                    order.push(n.clone());
-                    records.insert(n.clone(), t.clone());
-                }
-                let record = Type::Record(order, records);
-                type_map.insert(self.id, record.clone());
-                (type_map, record)
-            },
-            _ => panic!()
         };
     }
 }
@@ -586,124 +435,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
             id: self.id,
             data: new_expr,
             scope: self.scope
-        };
-    }
-
-    fn resolve_types(&self, context: &scoping::Context, mut type_map: HashMap<usize, Type>) -> (HashMap<usize, Type>, Type) {
-        return match &self.data {
-            Expr::BinaryExpr{ref operator, ref left, ref right} => {
-                let (left_map, left_type) = left.resolve_types(context, type_map);
-                let (mut right_map, right_type) = right.resolve_types(context, left_map.clone());
-                let return_type = operator.get_return_types(&left_type, &right_type);
-                right_map.insert(self.id, return_type.clone());
-                (right_map, return_type)
-            },
-            Expr::ComparisonExpr{ref left, ref right, ..} => {
-                let (left_map, _) = left.resolve_types(context, type_map);
-                let (mut right_map, _) = right.resolve_types(context, left_map);
-                right_map.insert(self.id, Type::boolean);
-                (right_map, Type::boolean)
-            },
-            Expr::UnaryExpr{ref operand, ..} => {
-                let (mut new_map, new_type) = operand.resolve_types(context, type_map);
-                new_map.insert(self.id, new_type.clone());
-                (new_map, new_type)
-            },
-            Expr::FunctionCall{ref function, ref args, ref kwargs} => {
-                let (mut new_map, t) = function.resolve_types(context, type_map);
-                for arg in args {
-                    new_map = arg.resolve_types(context, new_map).0;
-                }
-
-                for (_, value) in kwargs {
-                    new_map = value.resolve_types(context, new_map).0;
-                }
-                new_map.insert(self.id, t.clone());
-                (new_map, t)
-            },
-            Expr::AttributeAccess{ref base, ref attribute} => {
-                let (mut new_map, base_type) = base.resolve_types(context, type_map);
-                let attribute_type = base_type.resolve_attribute(attribute);
-                new_map.insert(self.id, attribute_type.clone());
-                (new_map, attribute_type)
-            },
-            Expr::Index{ref base, ref slices} => {
-                let (mut new_map, base_type) = base.resolve_types(context, type_map);
-                let mut slice_types = vec!();
-                for (start, stop, step) in slices {
-                    let a = match start {
-                        Some(x) => {
-                            let res = x.resolve_types(context, new_map);
-                            new_map = res.0;
-                            Some(res.1) 
-                        },
-                        None => None
-                    };
-                    let b = match stop {
-                        Some(x) => {
-                            let res = x.resolve_types(context, new_map);
-                            new_map = res.0;
-                            Some(res.1) 
-                        },
-                        None => None
-                    };
-                    let c = match step {
-                        Some(x) => {
-                            let res = x.resolve_types(context, new_map);
-                            new_map = res.0;
-                            Some(res.1) 
-                        },
-                        None => None
-                    };
-                    slice_types.push((a, b, c));
-                }
-                let result_type = base_type.resolve_slice(&slice_types);
-                new_map.insert(self.id, result_type.clone());
-                (new_map, result_type)
-            },
-            Expr::IdentifierExpr(ref name) => {
-                let creation = context.get_declaration(self.scope, name).unwrap();
-                let (mut new_map, t) = creation.resolve_types(context, type_map);
-                new_map.insert(self.id, t.clone());
-                (new_map, t)
-            },
-            Expr::String(_) => {
-                type_map.insert(self.id, Type::string);
-                (type_map, Type::string)
-            },
-            Expr::Float(_) => {
-                type_map.insert(self.id, Type::f32);
-                (type_map, Type::f32)
-            },
-            Expr::Bool(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
-            },
-            Expr::Int(_) => {
-                type_map.insert(self.id, Type::i32);
-                (type_map, Type::i32)
-            },
-            Expr::VecLiteral(exprs) => {
-                let mut vec_t = Type::Undetermined;
-                for expr in exprs {
-                    let res = expr.resolve_types(context, type_map);
-                    type_map = res.0;
-                    vec_t = vec_t.merge(&res.1);
-                }
-                type_map.insert(self.id, vec_t.clone());
-
-                (type_map, Type::Vector(Box::new(vec_t)))
-            },
-            Expr::StructLiteral{ref base, ref fields} => {
-                let (mut new_type_map, base_t) = base.resolve_types(context, type_map);
-                for field in fields {
-                    let res = field.resolve_types(context, new_type_map);
-                    new_type_map = res.0;
-                }
-                new_type_map.insert(self.id, base_t.clone());
-                (new_type_map, base_t.clone())
-            },
-            _ => panic!()
         };
     }
 }

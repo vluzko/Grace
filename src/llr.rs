@@ -8,6 +8,9 @@ use typing::Type;
 pub enum WASM {
     Block,
     Loop,
+    End,
+    If,
+    Else,
     Operation(WASMOperator),
     Const(WASMType, String),
     Call(String),
@@ -48,12 +51,7 @@ pub struct WASMFunc {
 
 pub struct WASMModule {
     imports: Vec<String>,
-    functions: Vec<WASM>
-}
-
-#[cfg(test)]
-mod tests {
-
+    functions: Vec<WASMFunc>
 }
 
 pub trait ToLLR {
@@ -62,18 +60,25 @@ pub trait ToLLR {
 
 impl ToLLR for CfgVertex {
     fn to_llr(&self, context: &Context2) -> Vec<WASM> {
-        let mut wasm = vec!();
-        for stmt in self.statements {
-            wasm.append(&mut stmt.data.to_llr(context));
-        }
-
-        panic!()
+        return match &self {
+            CfgVertex::Block(statements) => {
+                let mut wasm = vec!();
+                for stmt in statements {
+                    wasm.append(&mut stmt.to_llr(context));
+                }
+                wasm
+            },
+            CfgVertex::End => {
+                vec!(WASM::End)
+            },
+            _ => panic!()
+        } ;
     }
 }
 
-impl ToLLR for CfgStmt {
+impl ToLLR for Node<CfgStmt> {
     fn to_llr(&self, context: &Context2) -> Vec<WASM> {
-        return match self {
+        return match self.data {
             CfgStmt::Assignment {ref name, ref expression} | CfgStmt::Let {ref name, ref expression} => {
                 let mut expr_wasm = expression.to_llr(context);
                 expr_wasm.push(WASM::Set(name.name.clone()));
@@ -90,15 +95,15 @@ impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context2) -> Vec<WASM> {
         return match self.data {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
-                let mut llr = expr_to_llr(left);
-                llr.append(&mut expr_to_llr(right));
+                let mut llr = left.to_llr(context);
+                llr.append(&mut right.to_llr(context));
                 llr.append(&mut operator_to_llr(operator));
                 llr
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
                 let mut wasm = vec!();
                 for arg in args {
-                    wasm.append(&mut expr_to_llr(arg));
+                    wasm.append(&mut arg.to_llr(context));
                 }
                 match function.data {
                     Expr::IdentifierExpr(ref name) => {
@@ -121,45 +126,11 @@ pub fn vertex_to_llr(vertex: &CfgVertex) -> Vec<WASM> {
     panic!()
 }
 
-
-pub fn stmt_to_llr(stmt: &CfgStmt) -> Vec<WASM> {
-    return match stmt {
-        CfgStmt::Assignment {ref name, ref expression} | CfgStmt::Let {ref name, ref expression} => {
-            let mut expr_wasm = expr_to_llr(expression);
-            expr_wasm.push(WASM::Set(name.name.clone()));
-            expr_wasm
-        },
-        CfgStmt::Return (ref val) | CfgStmt::Yield (ref val) | CfgStmt::Branch (ref val) => {
-            expr_to_llr(val)
-        }
-    }
-}
-
-pub fn expr_to_llr(expr: &Node<Expr>) -> Vec<WASM> {
-    return match expr.data {
-        Expr::BinaryExpr{ref left, ref right, ref operator} => {
-            let mut llr = expr_to_llr(left);
-            llr.append(&mut expr_to_llr(right));
-            llr.append(&mut operator_to_llr(operator));
-            llr
-        },
-        Expr::FunctionCall{ref function, ref args, ref kwargs} => {
-            let mut wasm = vec!();
-            for arg in args {
-                wasm.append(&mut expr_to_llr(arg));
-            }
-            match function.data {
-                Expr::IdentifierExpr(ref name) => {
-                    wasm.push(WASM::Call(name.name.clone()));
-                },
-                _ => panic!()
-            }
-            wasm
-        },
-        _ => panic!()
-    }
-}
-
 pub fn operator_to_llr(operator: &BinaryOperator) -> Vec<WASM> {
     panic!()
+}
+
+#[cfg(test)]
+mod tests {
+
 }

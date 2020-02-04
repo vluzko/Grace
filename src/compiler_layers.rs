@@ -189,7 +189,7 @@ impl Compilation {
     
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
     pub fn generate_wast_files(&self, output_dir: &Box<Path>) -> Option<String> {
-        let mut ret_str = None;
+        // let mut ret_str = None;
         // for (k, v) in self.modules.iter() {
         //     let path_str = k.replace(".", "/");
         //     let relative_path = &Path::new(&path_str);
@@ -207,7 +207,7 @@ impl Compilation {
         //     }
         // }
         panic!()
-        return ret_str;
+        // return ret_str;
     }
 
     /// Merge two Compilations together.

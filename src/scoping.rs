@@ -10,17 +10,6 @@ use typing::{
     FloatingPoint,
 };
 
-
-/// The full scoping context for a compilation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context {
-    // A map from Scope ids to Scopes.
-    pub scopes: HashMap<usize, Scope>,
-    // A map from Node ids to Scope ids. Each node that modifies scope
-    // maps to the scope it's contained in.
-    pub containing_scopes: HashMap<usize, usize>
-}
-
 /// The full scoping and typing context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context2 {
@@ -63,19 +52,6 @@ pub struct Scope {
     pub declaration_order: BTreeMap<Identifier, usize>
 }
 
-/// Any object that has a scope.
-pub trait Scoped {
-    /// Get the scope of the object.
-
-    fn get_usages(&self) -> HashSet<Identifier>;
-
-    /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier>;
-
-    /// Generate scopes recursively. Returns all scopes.
-    fn gen_scopes(&mut self, parent_id: usize, context: &Context) -> Context;
-}
-
 pub trait GetContext {
     fn get_usages(&self) -> HashSet<Identifier>;
 
@@ -92,16 +68,6 @@ pub fn base_scope() -> Scope {
         declarations: BTreeMap::new(),
         declaration_order: BTreeMap::new()
     };
-}
-
-/// Create a context containing only the empty scope.
-pub fn initial_context() -> (usize, Context) {
-    let empty = base_scope();
-    let mut init_scopes = HashMap::new();
-    let id = general_utils::get_next_scope_id();
-    init_scopes.insert(id, empty);
-    let context = Context{scopes: init_scopes, containing_scopes: HashMap::new()};
-    return (id, context);
 }
 
 pub fn builtin_context() -> (usize, Context2) {

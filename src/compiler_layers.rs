@@ -13,11 +13,9 @@ use position_tracker::PosStr;
 // use scoping;
 use scoping::{
     Scope,
-    Context,
     Context2,
     CanModifyScope,
     GetContext,
-    initial_context,
     builtin_context,
     base_scope
 };

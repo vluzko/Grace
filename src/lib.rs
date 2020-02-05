@@ -18,7 +18,7 @@ pub mod parser;
 pub mod general_utils;
 pub mod grace_error;
 pub mod expression;
-// pub mod bytecode;
+pub mod bytecode;
 pub mod scoping;
 pub mod typing;
 pub mod compiler_layers;

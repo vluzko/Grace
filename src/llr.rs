@@ -1,8 +1,8 @@
 /// Low-level representation of WebAssembly.
-
+use std::collections::HashMap;
 use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Expr, BinaryOperator};
+use expression::{Node, Module, Expr, BinaryOperator, Identifier};
 use scoping::Context;
 use typing::Type;
 
@@ -54,6 +54,10 @@ pub struct WASMFunc {
 pub struct WASMModule {
     imports: Vec<String>,
     functions: Vec<WASMFunc>
+}
+
+pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
+    panic!()
 }
 
 pub trait ToLLR {

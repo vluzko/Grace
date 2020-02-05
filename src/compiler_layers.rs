@@ -10,7 +10,12 @@ extern crate itertools;
 
 use parser::Parseable;
 use position_tracker::PosStr;
-// use scoping;
+use expression::{
+    Node,
+    Module,
+    Identifier,
+    Import
+};
 use scoping::{
     Scope,
     Context,
@@ -24,13 +29,11 @@ use typing::{
     Type,
     Typed
 };
+use cfg::module_to_cfg;
+use llr::module_to_llr;
+
 // use bytecode::ToBytecode;
-use expression::{
-    Node,
-    Module,
-    Identifier,
-    Import
-};
+
 use general_utils::extend_map;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,6 +176,8 @@ impl Compilation {
 
         // 
         let context = parsed_module.scopes_and_types(scope_id, init_context).0;
+        let cfg_map = module_to_cfg(&parsed_module, &context);
+        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
 
         // Put the results in the tree.
         let compiled = CompiledModule {

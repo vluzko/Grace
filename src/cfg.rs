@@ -9,6 +9,12 @@ use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use general_utils::get_next_id;
 use scoping::Context;
 
+#[derive(Debug, Clone)]
+pub struct Cfg {
+    pub entry_index: Option<NodeIndex>,
+    pub graph: Graph::<CfgVertex, bool>
+}
+
 /// A vertex of the Cfg. Represents some kind of block or control flow structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgVertex {
@@ -23,9 +29,13 @@ pub enum CfgVertex {
     Exit
 }
 
-pub struct Cfg {
-    pub entry_index: Option<NodeIndex>,
-    pub graph: Graph::<CfgVertex, bool>
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CfgStmt {
+    Assignment  {name: Identifier, expression: Node<Expr>},
+    Let         {name: Identifier, expression: Node<Expr>},
+    Return      (Node<Expr>),
+    Yield       (Node<Expr>),
+    Branch      (Node<Expr>),
 }
 
 impl Cfg {
@@ -63,32 +73,22 @@ impl Cfg {
 
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CfgStmt {
-    Assignment  {name: Identifier, expression: Node<Expr>},
-    Let         {name: Identifier, expression: Node<Expr>},
-    Return      (Node<Expr>),
-    Yield       (Node<Expr>),
-    Branch      (Node<Expr>),
+/// Add the contents of a module to a CFG
+pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> HashMap<Identifier, Cfg> {
+    let mut cfg_map = HashMap::new();
+    for decl in &module.data.declarations {
+        match decl.data {
+            Stmt::FunctionDecStmt{ref name, ref block, ..} => {
+                let cfg = block.to_cfg(context, Cfg::empty(), None).0;
+                cfg_map.insert(name.clone(), cfg);
+            },
+            Stmt::StructDec{..} => {},
+            _ => panic!()
+        }
+    }
+    return cfg_map;
 }
 
-impl Node<Module> {
-    /// Add the contents of a module to a CFG
-    fn to_cfg(&self, context: &Context) -> HashMap<Identifier, Cfg> {
-        let mut cfg_map = HashMap::new();
-        for decl in &self.data.declarations {
-            match decl.data {
-                Stmt::FunctionDecStmt{ref name, ref block, ..} => {
-                    let cfg = block.to_cfg(context, Cfg::empty(), None).0;
-                    cfg_map.insert(name.clone(), cfg);
-                },
-                Stmt::StructDec{..} => {},
-                _ => panic!()
-            }
-        }
-        return cfg_map;
-    }
-}
 
 impl Node<Block> {
     /// Add the contents of a block to a CFG.
@@ -271,4 +271,9 @@ fn add_edges_to_next(mut current: Cfg, sources: Vec<NodeIndex>, target: NodeInde
         current.add_edge(source, target, false);
     }
     return current;
+}
+
+#[cfg(test)]
+mod tests {
+
 }

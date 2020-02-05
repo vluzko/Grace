@@ -1,4 +1,6 @@
 /// Low-level representation of WebAssembly.
+
+use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Expr, BinaryOperator};
 use scoping::Context;
@@ -58,6 +60,58 @@ pub trait ToLLR {
     fn to_llr(&self, context: &Context) -> Vec<WASM>;
 }
 
+impl ToLLR for Cfg {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
+        let mut count = 0;
+        let mut wasm = vec!();
+
+        let mut unvisited = vec!(self.entry_index.unwrap());
+
+        while let Some(current_index) = unvisited.pop() {
+            let node = self.graph.node_weight(current_index).unwrap();
+            wasm.append(&mut node.to_llr(context));
+            match node {
+                CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End | CfgVertex::Entry => {
+                    let mut n_count = 0;
+                    let edges = self.graph.edges_directed(current_index, Outgoing);
+                    for edge in edges {
+                        unvisited.push(edge.target());
+                        n_count += 1;
+                        assert_eq!(n_count, 1);
+                    }
+                },
+                CfgVertex::IfStart(_) | CfgVertex::LoopStart(_) => {
+                    let mut n_count = 0;
+                    let edges = self.graph.edges_directed(current_index, Outgoing);
+                    let mut false_block = None;
+                    let mut true_block = None;
+                    for edge in edges {
+                        if edge.weight() == &true {
+                            true_block = Some(edge.target());
+                        } else {
+                            false_block = Some(edge.target());
+                        }
+                        n_count += 1;
+                    }
+                    assert_eq!(n_count, 2);
+
+                    match false_block {
+                        Some(x) => unvisited.push(x),
+                        None => panic!()
+                    };
+
+                    match true_block {
+                        Some(x) => unvisited.push(x),
+                        None => panic!()
+                    }
+                },
+                CfgVertex::Break(_) | CfgVertex::Continue(_) | CfgVertex::Exit => {}
+            };
+        }
+        return wasm;
+    }
+}
+
 impl ToLLR for CfgVertex {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match &self {
@@ -97,7 +151,7 @@ impl ToLLR for Node<Expr> {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
-                llr.append(&mut operator_to_llr(operator));
+                llr.append(&mut operator.to_llr(context));
                 llr
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
@@ -118,16 +172,12 @@ impl ToLLR for Node<Expr> {
     }
 }
 
-pub fn cfg_to_llr(cfg: &Cfg) -> Vec<WASM> {
-    panic!()
-}
-
-pub fn vertex_to_llr(vertex: &CfgVertex) -> Vec<WASM> {
-    panic!()
-}
-
-pub fn operator_to_llr(operator: &BinaryOperator) -> Vec<WASM> {
-    panic!()
+impl ToLLR for BinaryOperator {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
+        return match self {
+            _ => panic!()
+        };
+    }
 }
 
 #[cfg(test)]

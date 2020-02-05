@@ -9,13 +9,7 @@ use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use general_utils::get_next_id;
 use scoping::Context;
 
-
-// #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-// pub struct CfgVertex {
-//     pub node_id: usize,
-//     pub statements: Vec<Node<CfgStmt>>
-// }
-
+/// A vertex of the Cfg. Represents some kind of block or control flow structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgVertex {
     Entry,

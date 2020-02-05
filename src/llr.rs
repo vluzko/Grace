@@ -43,6 +43,7 @@ pub enum WASMType {
     f32
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMFunc {
     name: String, 
     args: Vec<(String, WASMType)>, 
@@ -51,6 +52,7 @@ pub struct WASMFunc {
     code: Vec<WASM>
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMModule {
     imports: Vec<String>,
     functions: Vec<WASMFunc>

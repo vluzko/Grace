@@ -24,22 +24,22 @@ use scoping::{
     builtin_context,
     base_scope
 };
-// use typing;
 use typing::{
     Type,
     Typed
 };
-use cfg::module_to_cfg;
-use llr::module_to_llr;
-
-// use bytecode::ToBytecode;
+use cfg::{Cfg, module_to_cfg};
+use llr::{module_to_llr, WASMModule};
+use bytecode::ToBytecode;
 
 use general_utils::extend_map;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
     pub context: Context,
+    pub cfg_map: HashMap<Identifier, Cfg>,
+    pub llr: WASMModule,
     // The path to the module file.
     pub path: Box<Path>,
     // The dependencies of this module.
@@ -47,6 +47,14 @@ pub struct CompiledModule {
     // The MD5 hash of the *file* describing the module.
     pub hash: u64
 }
+
+impl PartialEq for CompiledModule {
+    fn eq(&self, other: &Self) -> bool {
+        return self.hash == other.hash;
+    }
+}
+
+impl Eq for CompiledModule {}
 
 impl CompiledModule {
     pub fn get_type(&self) -> Type {
@@ -66,7 +74,7 @@ impl CompiledModule {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Compilation {
     /// The path to the main file or folder.
     pub main_path: Option<Box<Path>>,
@@ -183,6 +191,8 @@ impl Compilation {
         let compiled = CompiledModule {
             ast: parsed_module,
             context: context,
+            cfg_map: cfg_map,
+            llr: wasm,
             path: file_name.clone(),
             dependencies: dependencies,
             hash: 0
@@ -274,14 +284,12 @@ where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
     return (rewritten, context);
 }
 
-
-
-// pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, String) 
-// where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
-//     let (result, context): (T, Context) = to_type_rewrites(input);
-//     let bytecode = result.generate_bytecode(&context);
-//     return (result, context, bytecode);
-// }
+pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, String) 
+where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
+    let (result, context): (T, Context) = to_type_rewrites(input);
+    let bytecode = result.generate_bytecode(&context);
+    return (result, context, bytecode);
+}
 
 #[cfg(test)]
 mod tests {

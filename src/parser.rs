@@ -692,9 +692,10 @@ pub mod expr_parsers {
         /// Match any unary expression.
         /// Implemented as a single parser because all unary expressions have the same precedence.
         fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
+
             let parse_result = alt!(input,
                 tuple!(
-                    map!(alt!(PLUS | NEG | TILDE | NOT), Some),
+                    map!(alt_complete!(PLUS | NEG | TILDE | NOT), Some),
                     m!(self.unary_expr)
                 ) |
                 tuple!(
@@ -1406,6 +1407,109 @@ pub mod expr_parsers {
         use std::fs::File;
         use std::io::Read;
 
+        #[cfg(test)]
+        mod subparsers {
+            use super::*;
+
+            #[test]
+            fn parse_post_index() {
+                let e = ParserContext::empty();
+                
+                check_match_no_update("[a:b:c, :, d]", |x| e.post_index(x), PostIdent::Index{slices: vec!(
+                    (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
+                    (None, None, None),
+                    (Some(Node::from("d")), None, None)
+                )});
+                simple_check_failed("[a", |x| e.post_index(x));
+                simple_check_failed("[a:", |x| e.post_index(x));
+            }
+
+            #[test]
+            fn parse_atomic() {
+                let e = ParserContext::empty();
+                check_data_and_leftover("1 ** 2", |x| e.atomic_expr(x), Expr::from(1), "** 2");
+                check_data("false", bool_expr, Expr::from(false));
+                check_data("false", |x| e.atomic_expr(x), Expr::from(false));
+            }
+
+            #[test]
+            fn parse_spec_literals() {
+                check_match_no_update("123", int_expr, Node::from(123));
+                check_failed("e10", float_expr, ErrorKind::Digit);
+                check_failed(".e10", float_expr, ErrorKind::Digit);
+                check_failed(".0", float_expr, ErrorKind::Digit);
+            }
+
+        }
+
+        #[cfg(test)]
+        mod failures {
+            use super::*;
+
+            /// Failed because NOT wasn't was returning a partial match again "n"
+            #[test]
+            #[ignore]
+            fn failure_2020_02_07() {
+                let e = ParserContext::empty();
+                check_data("n", |x| e.expression(x), Expr::from("n"))
+            }
+
+            /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_1() {
+                let input = "0+true    ";
+                let e = ParserContext::empty();
+                let result = e.additive_expr(PosStr::from(input));
+                result.unwrap();
+            }
+
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_2() {
+                let input = "\"\\\"\\\"\"+-10446305       ";
+                let e = ParserContext::empty();
+                let result = e.expression(PosStr::from(input));
+                result.unwrap();
+            }
+
+            /// Resolved by preventing -{NUM_START} from being interpreted as a unary operator.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_3() {
+                let input = "-3       ";
+                let e = ParserContext::empty();
+                check_data(input, |x| e.expression(x), Expr::Int("-3".to_string()));
+            }
+
+            /// Resolved by allowing DIGIT0 to recognize the empty string.
+            /// Before "9." would break when checking if a digit sequence occured after the decimal.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_4() {
+                let input = "0<9.";
+                let e = ParserContext::empty();
+                check_data(input, |x| e.expression(x), Expr::ComparisonExpr{
+                    operator: ComparisonOperator::Less,
+                    left: wrap(Expr::from(0)),
+                    right: wrap(Expr::Float("9.".to_string()))
+                });
+            }
+
+            /// Resolved by making a new token to recognize the negative unary operator specifically.
+            /// It checks that it's not followed by a digit.
+            #[test]
+            #[ignore]
+            fn failure_2019_12_14_5() {
+                let input = "- 0   ";
+                let e = ParserContext::empty();
+                check_data(input, |x| e.expression(x), Expr::UnaryExpr{
+                    operator: UnaryOperator::Negative,
+                    operand: wrap(Expr::from(0))
+                });
+            }
+        }
+
         #[test]
         fn parse_post_ident() {
             let e = ParserContext::empty();
@@ -1759,101 +1863,6 @@ pub mod expr_parsers {
             let mut file_contents = String::new();
             f.read_to_string(&mut file_contents).unwrap();
             check_data(file_contents.as_str(), string_expr, Expr::String("\\\"\\n\'\\\\\\\'".to_string()));
-        }
-
-        #[cfg(test)]
-        mod subparsers {
-            use super::*;
-
-            #[test]
-            fn parse_post_index() {
-                let e = ParserContext::empty();
-                
-                check_match_no_update("[a:b:c, :, d]", |x| e.post_index(x), PostIdent::Index{slices: vec!(
-                    (Some(Node::from("a")), Some(Node::from("b")), Some(Node::from("c"))),
-                    (None, None, None),
-                    (Some(Node::from("d")), None, None)
-                )});
-                simple_check_failed("[a", |x| e.post_index(x));
-                simple_check_failed("[a:", |x| e.post_index(x));
-            }
-
-            #[test]
-            fn parse_atomic() {
-                let e = ParserContext::empty();
-                check_data_and_leftover("1 ** 2", |x| e.atomic_expr(x), Expr::from(1), "** 2");
-                check_data("false", bool_expr, Expr::from(false));
-                check_data("false", |x| e.atomic_expr(x), Expr::from(false));
-            }
-
-            #[test]
-            fn parse_spec_literals() {
-                check_match_no_update("123", int_expr, Node::from(123));
-                check_failed("e10", float_expr, ErrorKind::Digit);
-                check_failed(".e10", float_expr, ErrorKind::Digit);
-                check_failed(".0", float_expr, ErrorKind::Digit);
-            }
-
-        }
-
-        #[cfg(test)]
-        mod failures {
-            use super::*;
-
-            /// Failed because + wasn't in VALID_NUM_FOLLOW. Added all binary operations to VALID_NUM_FOLLOW.
-            #[test]
-            #[ignore]
-            fn failure_2019_12_14_1() {
-                let input = "0+true    ";
-                let e = ParserContext::empty();
-                let result = e.additive_expr(PosStr::from(input));
-                result.unwrap();
-            }
-
-            #[test]
-            #[ignore]
-            fn failure_2019_12_14_2() {
-                let input = "\"\\\"\\\"\"+-10446305       ";
-                let e = ParserContext::empty();
-                let result = e.expression(PosStr::from(input));
-                result.unwrap();
-            }
-
-            /// Resolved by preventing -{NUM_START} from being interpreted as a unary operator.
-            #[test]
-            #[ignore]
-            fn failure_2019_12_14_3() {
-                let input = "-3       ";
-                let e = ParserContext::empty();
-                check_data(input, |x| e.expression(x), Expr::Int("-3".to_string()));
-            }
-
-            /// Resolved by allowing DIGIT0 to recognize the empty string.
-            /// Before "9." would break when checking if a digit sequence occured after the decimal.
-            #[test]
-            #[ignore]
-            fn failure_2019_12_14_4() {
-                let input = "0<9.";
-                let e = ParserContext::empty();
-                check_data(input, |x| e.expression(x), Expr::ComparisonExpr{
-                    operator: ComparisonOperator::Less,
-                    left: wrap(Expr::from(0)),
-                    right: wrap(Expr::Float("9.".to_string()))
-                });
-            }
-
-            /// Resolved by making a new token to recognize the negative unary operator specifically.
-            /// It checks that it's not followed by a digit.
-            #[test]
-            #[ignore]
-            fn failure_2019_12_14_5() {
-                let input = "- 0   ";
-                let e = ParserContext::empty();
-                check_data(input, |x| e.expression(x), Expr::UnaryExpr{
-                    operator: UnaryOperator::Negative,
-                    operand: wrap(Expr::from(0))
-                });
-            }
         }
     }
 }

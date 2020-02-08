@@ -126,7 +126,7 @@ impl Type {
                                 panic!()
                             }
                         }, 
-                        _ => panic!()
+                        y => panic!("Type error. Tried to merge {:?} and {:?}", x, y)
                     }
                 }
             }

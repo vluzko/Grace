@@ -28,7 +28,7 @@ use typing::{
     Type,
     Typed
 };
-use cfg::{Cfg, module_to_cfg};
+use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;
 
@@ -283,6 +283,13 @@ where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
     let rewritten = result.type_based_rewrite(&mut context);
     return (rewritten, context);
 }
+
+pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
+    let (module, context) = to_type_rewrites::<Node<Module>>(input);
+    let cfg_map = module_to_cfg(&module, &context);
+    return (module, context, cfg_map);
+}
+
 
 pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, String) 
 where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {

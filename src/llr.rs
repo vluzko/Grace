@@ -188,5 +188,16 @@ impl ToLLR for BinaryOperator {
 
 #[cfg(test)]
 mod tests {
+use super::*;
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        #[test]
+        fn test_constants() {
+            
+        }
+    }
 
 }

@@ -596,13 +596,18 @@ pub mod stmt_parsers {
 
             check_failed("ifa and b:\n x = true", |x| e.statement(x, 0), ErrorKind::Alt);
 
-            // check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
-            //     condition: Node::from(true),
-            //     block: output(e.block(PosStr::from("x = true"), 0)),
-            //     elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
-            //     else_block: Some(output(e.block(PosStr::from("z = true"), 0)))
-            // });
-            panic!()
+            check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
+                condition: Node::from(true),
+                block: output(e.block(PosStr::from("x = true"), 0)),
+                // elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
+                else_block: Some(Node::from(Block{
+                    statements: vec!(wrap(Stmt::IfStmt{
+                        condition: Node::from(false),
+                        block: output(e.block(PosStr::from("y = true"), 0)),
+                        else_block:Some(output(e.block(PosStr::from("z = true"), 0)))
+                    }))
+                }))
+            });
         }
 
         #[test]

@@ -9,6 +9,8 @@ use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use general_utils::get_next_id;
 use scoping::Context;
 
+pub type CfgMap = HashMap<Identifier, Cfg>;
+
 #[derive(Debug, Clone)]
 pub struct Cfg {
     pub entry_index: Option<NodeIndex>,
@@ -74,12 +76,12 @@ impl Cfg {
 }
 
 /// Add the contents of a module to a CFG
-pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> HashMap<Identifier, Cfg> {
+pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
     let mut cfg_map = HashMap::new();
     for decl in &module.data.declarations {
         match decl.data {
             Stmt::FunctionDecStmt{ref name, ref block, ..} => {
-                let cfg = block.to_cfg(context, Cfg::empty(), None).0;
+                let cfg = block_to_cfg(block, context, Cfg::empty(), None).0;
                 cfg_map.insert(name.clone(), cfg);
             },
             Stmt::StructDec{..} => {},
@@ -90,173 +92,171 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> HashMap<Identi
 }
 
 
-impl Node<Block> {
-    /// Add the contents of a block to a CFG.
-    /// 
-    /// # Arguments
-    /// 
-    /// * `context` - 
-    /// * `current` - 
-    /// * `loop_start` - 
-    fn to_cfg(&self, context: &Context, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
-        let mut new_cfg = current;
-        // The set of statements in the current CFG block.
-        let mut statements = vec!();
-        let mut need_edge_to_next_block = vec!();
-        let mut entry_index = None;
-        let mut previous_index = None;
+/// Add the contents of a block to a CFG.
+/// 
+/// # Arguments
+/// 
+/// * `context` - 
+/// * `current` - 
+/// * `loop_start` - 
+fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
+    let mut new_cfg = current;
+    // The set of statements in the current CFG block.
+    let mut statements = vec!();
+    let mut need_edge_to_next_block = vec!();
+    let mut entry_index = None;
+    let mut previous_index = None;
 
-        for stmt in &self.data.statements {
-            match stmt.data {
-                Stmt::LetStmt{ref name, ref expression, ..} => {
-                    statements.push(Node {
-                        id: stmt.id,
-                        scope: stmt.scope,
-                        data: CfgStmt::Let{name: name.clone(), expression: expression.clone()}
-                    });
-                },
-                Stmt::AssignmentStmt{ref name, ref expression} => {
-                    statements.push(Node {
-                        id: stmt.id,
-                        scope: stmt.scope,
-                        data: CfgStmt::Assignment{name: name.clone(), expression: expression.clone()}
-                    });
-                },
-                Stmt::ReturnStmt(ref val) => {
-                    statements.push(Node {
-                        id: stmt.id,
-                        scope: stmt.scope, 
-                        data: CfgStmt::Return(val.clone())
-                    });
-                },
-                Stmt::YieldStmt(ref val) => {
-                    statements.push(Node {
-                        id: stmt.id,
-                        scope: stmt.scope, 
-                        data: CfgStmt::Yield(val.clone())
-                    });
-                },
-                Stmt::WhileStmt{ref condition, ref block} => {
-                    // Collect the current batch of statements into a block and add it to the CFG.
-                    let new_index = new_cfg.add_block(self.id, statements, previous_index);
+    for stmt in &block.data.statements {
+        match stmt.data {
+            Stmt::LetStmt{ref name, ref expression, ..} => {
+                statements.push(Node {
+                    id: stmt.id,
+                    scope: stmt.scope,
+                    data: CfgStmt::Let{name: name.clone(), expression: expression.clone()}
+                });
+            },
+            Stmt::AssignmentStmt{ref name, ref expression} => {
+                statements.push(Node {
+                    id: stmt.id,
+                    scope: stmt.scope,
+                    data: CfgStmt::Assignment{name: name.clone(), expression: expression.clone()}
+                });
+            },
+            Stmt::ReturnStmt(ref val) => {
+                statements.push(Node {
+                    id: stmt.id,
+                    scope: stmt.scope, 
+                    data: CfgStmt::Return(val.clone())
+                });
+            },
+            Stmt::YieldStmt(ref val) => {
+                statements.push(Node {
+                    id: stmt.id,
+                    scope: stmt.scope, 
+                    data: CfgStmt::Yield(val.clone())
+                });
+            },
+            Stmt::WhileStmt{ref condition, ref block} => {
+                // Collect the current batch of statements into a block and add it to the CFG.
+                let new_index = new_cfg.add_block(block.id, statements, previous_index);
 
-                    // Create a vertex containing just the while loop condition.
-                    // The loop body passes back to here, as do all continue statements.
-                    let condition_index = new_cfg.add_node(CfgVertex::LoopStart(condition.clone()));
-                    new_cfg.add_edge(new_index, condition_index, true);
-                    
-                    // Add the while loop block to the CFG.
-                    let res = block.to_cfg(context, new_cfg, Some(condition_index));
-                    new_cfg = res.0;
+                // Create a vertex containing just the while loop condition.
+                // The loop body passes back to here, as do all continue statements.
+                let condition_index = new_cfg.add_node(CfgVertex::LoopStart(condition.clone()));
+                new_cfg.add_edge(new_index, condition_index, true);
+                
+                // Add the while loop block to the CFG.
+                let res = block_to_cfg(block, context, new_cfg, Some(condition_index));
+                new_cfg = res.0;
 
-                    // The condition block passes inside the loop when it evaluates to true.
-                    new_cfg.add_edge(condition_index, res.1, true);
+                // The condition block passes inside the loop when it evaluates to true.
+                new_cfg.add_edge(condition_index, res.1, true);
 
-                    // Breaks *within* the while loop go immediately after the while loop.
-                    // Note that this structure is *not* the same as `need_edge_to_next_block`, which need an edge
-                    // to the loop *containing* the current statement.
-                    // e.g. if we're looking at while loop A inside while loop B, the former breaks out of A and
-                    // the latter breaks out of B.
-                    let mut need_edge_to_loop_end = res.2;
-                    need_edge_to_loop_end.push(condition_index);
+                // Breaks *within* the while loop go immediately after the while loop.
+                // Note that this structure is *not* the same as `need_edge_to_next_block`, which need an edge
+                // to the loop *containing* the current statement.
+                // e.g. if we're looking at while loop A inside while loop B, the former breaks out of A and
+                // the latter breaks out of B.
+                let mut need_edge_to_loop_end = res.2;
+                need_edge_to_loop_end.push(condition_index);
 
-                    // We create an empty vertex to serve as a placeholder for the next vertex.
-                    // All break statements in the while loop and the while loop exit have an edge to it.
-                    let empty_index = new_cfg.add_node(CfgVertex::End);
-                    new_cfg = add_edges_to_next(new_cfg, need_edge_to_next_block, empty_index);
+                // We create an empty vertex to serve as a placeholder for the next vertex.
+                // All break statements in the while loop and the while loop exit have an edge to it.
+                let empty_index = new_cfg.add_node(CfgVertex::End);
+                new_cfg = add_edges_to_next(new_cfg, need_edge_to_next_block, empty_index);
 
-                    // Reset for the next iteration.
-                    need_edge_to_next_block = vec!();
-                    previous_index = Some(empty_index);
-                    statements = vec!();
-                },
-                Stmt::BreakStmt => {
-                    let new_node = CfgVertex::Break(statements);
-                    let new_index = new_cfg.add_node(new_node);
-                    match previous_index {
-                        Some(i) => {new_cfg.add_edge(i, new_index, false);},
-                        None => {}
-                    };
-                    
-                    need_edge_to_next_block.push(new_index.clone());
-                    previous_index = Some(new_index);
+                // Reset for the next iteration.
+                need_edge_to_next_block = vec!();
+                previous_index = Some(empty_index);
+                statements = vec!();
+            },
+            Stmt::BreakStmt => {
+                let new_node = CfgVertex::Break(statements);
+                let new_index = new_cfg.add_node(new_node);
+                match previous_index {
+                    Some(i) => {new_cfg.add_edge(i, new_index, false);},
+                    None => {}
+                };
+                
+                need_edge_to_next_block.push(new_index.clone());
+                previous_index = Some(new_index);
 
-                    statements = vec!();
-                    break;
-                },
-                Stmt::ContinueStmt => {
-                    let new_index = new_cfg.add_node(CfgVertex::Continue(statements));
+                statements = vec!();
+                break;
+            },
+            Stmt::ContinueStmt => {
+                let new_index = new_cfg.add_node(CfgVertex::Continue(statements));
 
-                    match previous_index {
-                        Some(i) => {new_cfg.add_edge(i, new_index, false);},
-                        None => {}
-                    };
+                match previous_index {
+                    Some(i) => {new_cfg.add_edge(i, new_index, false);},
+                    None => {}
+                };
 
-                    // Add an edge from the new block back to the loop start.
-                    match loop_start {
-                        Some(i) => new_cfg.add_edge(new_index, i, false),
-                        None => panic!()
-                    };
+                // Add an edge from the new block back to the loop start.
+                match loop_start {
+                    Some(i) => new_cfg.add_edge(new_index, i, false),
+                    None => panic!()
+                };
 
-                    previous_index = Some(new_index);
-                    statements = vec!();
-                    break;
-                },
-                Stmt::IfStmt{ref condition, ref block, ref else_block} => {
-                    // Collect existing statements into a block.
-                    let new_index = new_cfg.add_block(self.id, statements, previous_index);
+                previous_index = Some(new_index);
+                statements = vec!();
+                break;
+            },
+            Stmt::IfStmt{ref condition, ref block, ref else_block} => {
+                // Collect existing statements into a block.
+                let new_index = new_cfg.add_block(block.id, statements, previous_index);
 
-                    // A block for the initial if condition.
-                    let mut condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
-                    // Attach the condition to the previous block.
-                    new_cfg.add_edge(new_index, condition_index, false);
+                // A block for the initial if condition.
+                let mut condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
+                // Attach the condition to the previous block.
+                new_cfg.add_edge(new_index, condition_index, false);
 
-                    // Add the initial if block to the CFG.
-                    let mut res = block.to_cfg(context, new_cfg, loop_start);
-                    new_cfg = res.0;
-                    // Add an edge from the if condition to the inner block.
-                    new_cfg.add_edge(condition_index, res.1, true);
-                    // Track any breaks contained in the inner block.
-                    need_edge_to_next_block.append(&mut res.2);
+                // Add the initial if block to the CFG.
+                let mut res = block_to_cfg(block, context, new_cfg, loop_start);
+                new_cfg = res.0;
+                // Add an edge from the if condition to the inner block.
+                new_cfg.add_edge(condition_index, res.1, true);
+                // Track any breaks contained in the inner block.
+                need_edge_to_next_block.append(&mut res.2);
 
-                    let end_index = new_cfg.add_node(CfgVertex::End);
+                let end_index = new_cfg.add_node(CfgVertex::End);
 
-                    match else_block {
-                        Some(b) => {
-                            
-                            // Add the else block to the CFG.
-                            let mut res = b.to_cfg(context, new_cfg, loop_start);
-                            new_cfg = res.0;
-                            
-                            need_edge_to_next_block.append(&mut res.2);
+                match else_block {
+                    Some(b) => {
+                        
+                        // Add the else block to the CFG.
+                        let mut res = block_to_cfg(b, context, new_cfg, loop_start);
+                        new_cfg = res.0;
+                        
+                        need_edge_to_next_block.append(&mut res.2);
 
-                            // Add an edge from the last condition to the else block.
-                            new_cfg.add_edge(condition_index, res.1, false);
-                            // Add an edge from the else block to the end.
-                            new_cfg.add_edge(res.1, end_index, false);
-                        },
-                        None => {
-                            new_cfg.add_edge(condition_index, end_index, false);
-                            new_cfg.add_edge(res.1, end_index, false);
-                        }
-                    };
+                        // Add an edge from the last condition to the else block.
+                        new_cfg.add_edge(condition_index, res.1, false);
+                        // Add an edge from the else block to the end.
+                        new_cfg.add_edge(res.1, end_index, false);
+                    },
+                    None => {
+                        new_cfg.add_edge(condition_index, end_index, false);
+                        new_cfg.add_edge(res.1, end_index, false);
+                    }
+                };
 
-                    previous_index = Some(end_index);
+                previous_index = Some(end_index);
 
-                    statements = vec!()
+                statements = vec!()
 
-                },
-                Stmt::PassStmt => {},
-                _ => panic!()
-            };
-        }
-
-        // Collect any leftover statements into a block.
-        let final_index = new_cfg.add_block(get_next_id(), statements, previous_index);
-        entry_index = update_entry(entry_index, &final_index);
-
-        return (new_cfg, entry_index.unwrap(), need_edge_to_next_block);
+            },
+            Stmt::PassStmt => {},
+            _ => panic!()
+        };
     }
+
+    // Collect any leftover statements into a block.
+    let final_index = new_cfg.add_block(get_next_id(), statements, previous_index);
+    entry_index = update_entry(entry_index, &final_index);
+
+    return (new_cfg, entry_index.unwrap(), need_edge_to_next_block);
 }
 
 fn update_entry(current: Option<NodeIndex>, new: &NodeIndex) -> Option<NodeIndex> {

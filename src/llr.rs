@@ -4,7 +4,9 @@ use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Module, Expr, BinaryOperator, Identifier};
 use scoping::Context;
+use std::convert::From;
 use typing::Type;
+
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASM {
@@ -128,10 +130,35 @@ impl ToLLR for CfgVertex {
                 }
                 wasm
             },
-            CfgVertex::End => {
-                vec!(WASM::End)
+            CfgVertex::IfStart(expression) => {
+                let mut wasm = expression.to_llr(context);
+                wasm.push(WASM::If);
+                wasm
             },
-            _ => panic!()
+            CfgVertex::LoopStart(expression) => {
+                let mut wasm = expression.to_llr(context);
+                wasm.push(WASM::Loop);
+                wasm
+            },
+            CfgVertex::Break(block) => {
+                let mut wasm = vec!();
+                for stmt in block {
+                    wasm.append(&mut stmt.to_llr(context));
+                }
+                wasm.push(WASM::Branch(0));
+                wasm
+            },
+            CfgVertex::Continue(block) => {
+                let mut wasm = vec!();
+                for stmt in block {
+                    wasm.append(&mut stmt.to_llr(context));
+                }
+                wasm.push(WASM::Branch(1));
+                wasm
+            },
+            CfgVertex::Else => vec!(WASM::Else),
+            CfgVertex::End => vec!(WASM::End),
+            CfgVertex::Entry | CfgVertex::Exit => vec!(),
         } ;
     }
 }
@@ -147,6 +174,19 @@ impl ToLLR for Node<CfgStmt> {
             CfgStmt::Return (ref val) | CfgStmt::Yield (ref val) | CfgStmt::Branch (ref val) => {
                 val.to_llr(context)
             }
+        }
+    }
+}
+
+impl From<&Type> for WASMType {
+    fn from(input: &Type) -> Self {
+        match input {
+            &Type::i32 => WASMType::i32,
+            &Type::i64 => WASMType::i64,
+            &Type::f32 => WASMType::f32,
+            &Type::f64 => WASMType::f64,
+            &Type::boolean => WASMType::i32,
+            _ => panic!()
         }
     }
 }
@@ -173,12 +213,46 @@ impl ToLLR for Node<Expr> {
                 }
                 wasm
             },
+            Expr::Int(ref value) | Expr::Float(ref value) => {
+                let id_type = context.g_type(self.id);
+                let wasm_type = WASMType::from(&id_type);
+                vec!(WASM::Const(wasm_type, value.clone()))
+            },
+            Expr::Bool(ref value) => {
+                return match value {
+                    true => vec!(WASM::Const(WASMType::i32, "true".to_string())),
+                    false => vec!(WASM::Const(WASMType::i32, "false".to_string()))
+                }
+            },
+            Expr::ComparisonExpr{ref left, ref right, ref operator} => {
+                let mut llr = left.to_llr(context);
+                llr.append(&mut right.to_llr(context));
+                let left_id_type = context.g_type(left.id);
+                let left_wasm_type = WASMType::from(&left_id_type);
+                let right_id_type = context.g_type(right.id);
+                let right_wasm_type = WASMType::from(&right_id_type);
+                assert_eq!(left_wasm_type, right_wasm_type);
+                // Convert operator to a wasm operator
+                llr.append(to_wasm_comparison(operator));
+                llr
+            },
+            Expr::IdentifierExpr(ref identifier) => {
+                panic!()
+            },
             _ => panic!()
         }
     }
 }
 
 impl ToLLR for BinaryOperator {
+    fn to_llr(&self, context: &Context) -> Vec<WASM> {
+        return match self {
+            _ => panic!()
+        };
+    }
+}
+
+impl ToLLR for ComparisonOperator {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match self {
             _ => panic!()

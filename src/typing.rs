@@ -440,8 +440,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
 }
 
 pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
-    println!("Left: {:?}", left_type);
-    println!("Right: {:?}", right_type);
     // Topological ordering of numeric types.
     // i32, f32, i64, f64
     let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];

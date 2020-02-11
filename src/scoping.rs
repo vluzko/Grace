@@ -268,8 +268,6 @@ impl GetContext for Node<Block> {
             // Update the block type if it's a return statement.
             block_type = match stmt.data {
                 Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => {
-
-                    println!("Right, left: {:?}, {:?}", block_type, res.1);
                     block_type.merge(&res.1)
                 },
                 Stmt::BreakStmt | Stmt::ContinueStmt => {
@@ -384,7 +382,6 @@ impl GetContext for Node<Stmt> {
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
                 // TODO: Type checking
 
-                println!("Right, left: {:?}, {:?}", return_type, block_type);
                 return_type.merge(&block_type);
 
                 (block_context, function_type)
@@ -507,7 +504,6 @@ impl GetContext for Node<Expr> {
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
-                println!("Right, left: {:?}, {:?}", right_t, left_t);
                 let return_type = operator.get_return_types(&left_t, &right_t);
                 (right_c, return_type)
             },

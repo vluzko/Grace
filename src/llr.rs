@@ -2,7 +2,7 @@
 use std::collections::HashMap;
 use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, BinaryOperator, Identifier};
+use expression::{Node, Module, Expr, BinaryOperator, ComparisonOperator, Identifier};
 use scoping::Context;
 use std::convert::From;
 use typing::Type;
@@ -197,7 +197,12 @@ impl ToLLR for Node<Expr> {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
-                llr.append(&mut operator.to_llr(context));
+                let left_id_type = context.g_type(left.id);
+                let left_wasm_type = WASMType::from(&left_id_type);
+                let right_id_type = context.g_type(right.id);
+                let right_wasm_type = WASMType::from(&right_id_type);
+                assert_eq!(left_wasm_type, right_wasm_type);
+                llr.push(WASM::from((operator, left_wasm_type)));
                 llr
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
@@ -233,7 +238,7 @@ impl ToLLR for Node<Expr> {
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
                 // Convert operator to a wasm operator
-                llr.append(to_wasm_comparison(operator));
+                llr.push(WASM::from((operator, left_wasm_type)));
                 llr
             },
             Expr::IdentifierExpr(ref identifier) => {
@@ -244,17 +249,21 @@ impl ToLLR for Node<Expr> {
     }
 }
 
-impl ToLLR for BinaryOperator {
-    fn to_llr(&self, context: &Context) -> Vec<WASM> {
-        return match self {
+impl From<(&BinaryOperator, WASMType)> for WASM {
+    fn from(input: (&BinaryOperator, WASMType)) -> Self {
+        let t = input.1;
+        return match input.0 {
+            BinaryOperator::Add => WASM::Operation(WASMOperator::Add(t)),
             _ => panic!()
         };
     }
 }
 
-impl ToLLR for ComparisonOperator {
-    fn to_llr(&self, context: &Context) -> Vec<WASM> {
-        return match self {
+impl From<(&ComparisonOperator, WASMType)> for WASM {
+    fn from(input: (&ComparisonOperator, WASMType)) -> Self {
+        let t = input.1;
+        return match input.0 {
+            ComparisonOperator::Equal => WASM::Operation(WASMOperator::Eq(t)),
             _ => panic!()
         };
     }

@@ -15,7 +15,7 @@ pub enum WASM {
     End,
     If,
     Else,
-    Operation(WASMOperator),
+    Operation(WASMOperator, WASMType),
     Const(WASMType, String),
     Call(String),
     Branch(usize),
@@ -29,12 +29,16 @@ pub enum WASM {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASMOperator {
-    Add(WASMType),
-    Sub(WASMType),
-    Mult(WASMType),
-    Div(WASMType),
-    Eq(WASMType),
-    Ne(WASMType),
+    Add,
+    Sub,
+    Mult,
+    Div,
+    Eq,
+    Ne,
+    Lt,
+    Gt,
+    Le,
+    Ge,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -70,7 +74,6 @@ pub trait ToLLR {
 
 impl ToLLR for Cfg {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
-        let mut count = 0;
         let mut wasm = vec!();
 
         let mut unvisited = vec!(self.entry_index.unwrap());
@@ -202,21 +205,33 @@ impl ToLLR for Node<Expr> {
                 let right_id_type = context.g_type(right.id);
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
-                llr.push(WASM::from((operator, left_wasm_type)));
+                llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
+                llr
+            },
+            Expr::ComparisonExpr{ref left, ref right, ref operator} => {
+                let mut llr = left.to_llr(context);
+                llr.append(&mut right.to_llr(context));
+                let left_id_type = context.g_type(left.id);
+                let left_wasm_type = WASMType::from(&left_id_type);
+                let right_id_type = context.g_type(right.id);
+                let right_wasm_type = WASMType::from(&right_id_type);
+                assert_eq!(left_wasm_type, right_wasm_type);
+                // Convert operator to a wasm operator
+                llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
                 llr
             },
             Expr::FunctionCall{ref function, ref args, ref kwargs} => {
-                let mut wasm = vec!();
+                let mut llr = vec!();
                 for arg in args {
-                    wasm.append(&mut arg.to_llr(context));
+                    llr.append(&mut arg.to_llr(context));
                 }
                 match function.data {
                     Expr::IdentifierExpr(ref name) => {
-                        wasm.push(WASM::Call(name.name.clone()));
+                        llr.push(WASM::Call(name.name.clone()));
                     },
                     _ => panic!()
                 }
-                wasm
+                llr
             },
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.g_type(self.id);
@@ -229,41 +244,28 @@ impl ToLLR for Node<Expr> {
                     false => vec!(WASM::Const(WASMType::i32, "false".to_string()))
                 }
             },
-            Expr::ComparisonExpr{ref left, ref right, ref operator} => {
-                let mut llr = left.to_llr(context);
-                llr.append(&mut right.to_llr(context));
-                let left_id_type = context.g_type(left.id);
-                let left_wasm_type = WASMType::from(&left_id_type);
-                let right_id_type = context.g_type(right.id);
-                let right_wasm_type = WASMType::from(&right_id_type);
-                assert_eq!(left_wasm_type, right_wasm_type);
-                // Convert operator to a wasm operator
-                llr.push(WASM::from((operator, left_wasm_type)));
-                llr
-            },
-            Expr::IdentifierExpr(ref identifier) => {
-                panic!()
-            },
+            Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
             _ => panic!()
         }
     }
 }
 
-impl From<(&BinaryOperator, WASMType)> for WASM {
-    fn from(input: (&BinaryOperator, WASMType)) -> Self {
-        let t = input.1;
-        return match input.0 {
-            BinaryOperator::Add => WASM::Operation(WASMOperator::Add(t)),
+impl From<&BinaryOperator> for WASMOperator {
+    fn from(input: &BinaryOperator) -> Self {
+        return match input {
+            BinaryOperator::Add => WASMOperator::Add,
+            BinaryOperator::Sub => WASMOperator::Sub,
+            BinaryOperator::Mult => WASMOperator::Mult,
+            BinaryOperator::Div => WASMOperator::Div,
             _ => panic!()
         };
     }
 }
 
-impl From<(&ComparisonOperator, WASMType)> for WASM {
-    fn from(input: (&ComparisonOperator, WASMType)) -> Self {
-        let t = input.1;
-        return match input.0 {
-            ComparisonOperator::Equal => WASM::Operation(WASMOperator::Eq(t)),
+impl From<&ComparisonOperator> for WASMOperator {
+    fn from(input: &ComparisonOperator) -> Self {
+        return match input {
+            ComparisonOperator::Equal => WASMOperator::Eq,
             _ => panic!()
         };
     }

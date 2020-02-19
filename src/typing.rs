@@ -398,8 +398,8 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 Expr::ComparisonExpr {left, right, operator}
             },
             Expr::BinaryExpr {operator, left, right} => {
-                let left_type = context.g_type(left.id);
-                let right_type = context.g_type(right.id);
+                let left_type = context.get_node_type(left.id);
+                let right_type = context.get_node_type(right.id);
                 let new_left = left.type_based_rewrite(context);
                 let new_right = right.type_based_rewrite(context);
 
@@ -424,7 +424,7 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
             Expr::Int(_) | Expr::Float(_) => {
-                let current_type = context.g_type(self.id);
+                let current_type = context.get_node_type(self.id);
                 context.add_type(self.id, choose_return_type(&current_type));
                 self.data
             },
@@ -560,9 +560,9 @@ mod test {
         // let context = parsed.gen_scopes(id, &init);
         // let (types, _) = parsed.resolve_types(&context, HashMap::new());
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
-        assert_eq!(context.g_type(parsed.id), Type::empty);
+        assert_eq!(context.get_node_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(context.g_type(id2), Numeric());
+        assert_eq!(context.get_node_type(id2), Numeric());
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {

@@ -2,11 +2,28 @@
 use std::collections::HashMap;
 use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, BinaryOperator, ComparisonOperator, Identifier};
-use scoping::Context;
+use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, Identifier};
+use scoping::{Context, GetContext};
 use std::convert::From;
 use typing::Type;
 
+/// A representation of a WASM module.
+/// Includes function declarations, imports, and memory declarations.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WASMModule {
+    imports: Vec<String>,
+    functions: Vec<WASMFunc>
+}
+
+/// A WASM function declaration
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct WASMFunc {
+    name: String, 
+    args: Vec<(String, WASMType)>, 
+    locals: Vec<(String, WASMType)>, 
+    result: WASMType, 
+    code: Vec<WASM>
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASM {
@@ -49,22 +66,28 @@ pub enum WASMType {
     f32
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct WASMFunc {
-    name: String, 
-    args: Vec<(String, WASMType)>, 
-    locals: Vec<(String, WASMType)>, 
-    result: WASMType, 
-    code: Vec<WASM>
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct WASMModule {
-    imports: Vec<String>,
-    functions: Vec<WASMFunc>
-}
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
+    for declaration in &module.data.declarations {
+        match declaration.data {
+            Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref block, ref return_type} => {
+                let local_variables = declaration.get_true_declarations(context);
+                let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables.iter().map(
+                    |(n, t)| (n.name.clone(), WASMType::from(t))).collect();
+                let cfg = cfg_map.get(name).unwrap();
+                let block_llr = cfg.to_llr(context);
+                let wasm_args: Vec<(String, WASMType)>  = args.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+                let wasm_func = WASMFunc {
+                    name: name.name.clone(),
+                    args: wasm_args,
+                    locals: locals_with_wasm_types,
+                    result: WASMType::from(return_type),
+                    code: block_llr
+                };
+            },
+            _ => {}
+        }
+    }
     panic!()
 }
 
@@ -181,28 +204,15 @@ impl ToLLR for Node<CfgStmt> {
     }
 }
 
-impl From<&Type> for WASMType {
-    fn from(input: &Type) -> Self {
-        match input {
-            &Type::i32 => WASMType::i32,
-            &Type::i64 => WASMType::i64,
-            &Type::f32 => WASMType::f32,
-            &Type::f64 => WASMType::f64,
-            &Type::boolean => WASMType::i32,
-            _ => panic!()
-        }
-    }
-}
-
 impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match self.data {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
-                let left_id_type = context.g_type(left.id);
+                let left_id_type = context.get_node_type(left.id);
                 let left_wasm_type = WASMType::from(&left_id_type);
-                let right_id_type = context.g_type(right.id);
+                let right_id_type = context.get_node_type(right.id);
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
                 llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
@@ -211,9 +221,9 @@ impl ToLLR for Node<Expr> {
             Expr::ComparisonExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
-                let left_id_type = context.g_type(left.id);
+                let left_id_type = context.get_node_type(left.id);
                 let left_wasm_type = WASMType::from(&left_id_type);
-                let right_id_type = context.g_type(right.id);
+                let right_id_type = context.get_node_type(right.id);
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
                 // Convert operator to a wasm operator
@@ -234,7 +244,7 @@ impl ToLLR for Node<Expr> {
                 llr
             },
             Expr::Int(ref value) | Expr::Float(ref value) => {
-                let id_type = context.g_type(self.id);
+                let id_type = context.get_node_type(self.id);
                 let wasm_type = WASMType::from(&id_type);
                 vec!(WASM::Const(wasm_type, value.clone()))
             },
@@ -245,6 +255,19 @@ impl ToLLR for Node<Expr> {
                 }
             },
             Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
+            _ => panic!()
+        }
+    }
+}
+
+impl From<&Type> for WASMType {
+    fn from(input: &Type) -> Self {
+        match input {
+            &Type::i32 => WASMType::i32,
+            &Type::i64 => WASMType::i64,
+            &Type::f32 => WASMType::f32,
+            &Type::f64 => WASMType::f64,
+            &Type::boolean => WASMType::i32,
             _ => panic!()
         }
     }

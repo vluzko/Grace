@@ -58,7 +58,7 @@ pub trait GetContext {
     fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
 
     /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier>;
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
 /// Create an empty scope.
@@ -144,7 +144,7 @@ impl Context {
         return t;
     }
 
-    pub fn g_type(&self, node_id: usize) -> Type {
+    pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
     }
 
@@ -233,12 +233,16 @@ impl GetContext for Node<Module> {
         return (new_context, Type::empty);
     }
 
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
-        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        let top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        let mut with_types = top_level.into_iter().map(|x| {
+            let t = context.get_type(self.scope, &x);
+            (x, t)
+        }).collect();
         for stmt in &self.data.declarations {
-            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
+            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
         }
-        return top_level;
+        return with_types;
     }
 }
 
@@ -296,12 +300,16 @@ impl GetContext for Node<Block> {
         return (new_context, block_type);
     }
 
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
-        let mut top_level: BTreeSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        let top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        let mut with_types = top_level.into_iter().map(|x| {
+            let t = context.get_type(self.scope, &x);
+            (x, t)
+        }).collect();
         for stmt in &self.data.statements {
-            top_level = general_utils::mb_union(top_level, stmt.get_true_declarations(context));
+            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
         }
-        return top_level;
+        return with_types;
     }
 }
 
@@ -441,12 +449,12 @@ impl GetContext for Node<Stmt> {
         return (final_c, final_t);
     }
 
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
         return match self.data {
             Stmt::FunctionDecStmt{ref block, ..} => {
                 block.get_true_declarations(context)
             },
-            _ => BTreeSet::new()
+            _ => HashSet::new()
         };
     }
 }
@@ -609,7 +617,7 @@ impl GetContext for Node<Expr> {
         return (final_c, final_t);
     }
 
-    fn get_true_declarations(&self, _context: &Context) -> BTreeSet<Identifier> {
+    fn get_true_declarations(&self, _context: &Context) -> HashSet<(Identifier, Type)> {
         panic!()
     }
 }
@@ -636,7 +644,7 @@ mod test {
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         for ptr in actual {
-            assert_eq!(ptr, new_ident);
+            assert_eq!(ptr.0, new_ident);
         }
     }
 

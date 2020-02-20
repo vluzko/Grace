@@ -1,17 +1,20 @@
 # Rewrites
 A rewrite is *type-invariant* if the return value of the rewrite has the same type as the rewritten node.
+By 'same type' I mean that the output *representation* has the same type as the input representation.
 
 Other wise it is type variant.
 
 ## Type invariant, in parser
-* Complex assignments (Implemented)
+* Complex assignments -> assignment with a modified rhs
+* 
 
-## Type variant, post parser
-* For loops
+## Type variant, in parser
+* For loops -> while loops
     * Stmt -> (Stmt, Stmt)
-* Comprehensions -> loops
-    * Expr -> (Vec<Stmt>, Identifier)
-    * Each rewritten loop must appear *after* its descendants.
+* Comprehensions -> while loops
+    * Expr -> (Vec<Stmt>, IdentifierExpr)
+* Match expressions -> nested if/else
+    * Expr -> (Vec<Stmt>, IdentifierExpr)
 
 ## Type invariant, post context
 * Attribute access -> module access

@@ -68,6 +68,7 @@ pub enum WASMType {
 
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
+    let mut functions = vec!()
     for declaration in &module.data.declarations {
         match declaration.data {
             Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref block, ref return_type} => {
@@ -84,6 +85,7 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     result: WASMType::from(return_type),
                     code: block_llr
                 };
+                functions.push(wasm_func)
             },
             _ => {}
         }

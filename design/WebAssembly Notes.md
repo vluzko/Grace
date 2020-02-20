@@ -13,7 +13,7 @@ Example. In the spec we have:
 
 to convert an `i32` to an `f64`. But the actual wabt implementation has:
 
-    f64.conver_s/i32
+    f64.convert_s/i32
 
 ## Loading WebAssembly
 There are two steps to instantiating a WebAssembly module: compilation and instantiation. In order to actually use it you need to compile and then instantiate.

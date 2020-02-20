@@ -16,9 +16,6 @@
 * DOM interaction?
 * Javascript calling
 
-### *Control Flow Graph*
-* What are the kinds of node in a control-flow graph?
-
 ### Low Level Representation
 
 ## Type System Extensions
@@ -27,7 +24,7 @@
 
 ### Typeclasses
 
-### *Dynamic Types*
+### Dynamic Types
 
 ## Quality of Life
 

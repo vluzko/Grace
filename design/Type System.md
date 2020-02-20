@@ -32,7 +32,7 @@ Provide syntactic sugar for "inheritance", but without establishing any subtype 
 * Might be confusing to OOP coders, since we meet one of their expectations but violate another
 
 ### No Subtypes
-Just copy Haskell/Coq/Idris
+Just copy Hindley-Milner
 
 #### Pros
 * Global type inference
@@ -41,12 +41,6 @@ Just copy Haskell/Coq/Idris
 #### Cons
 * No subtypes.
 
-## Type conversions
-* Float +-*% Int -> Float +-*% Float
-* Int / Int -> Float / Float
-
-5.0 / (5 + 3)
-FloatingPoint() / (Numeric() + Numeric())
 
 ## Problems
 * We're pretty sure we can handle gradual dependent typing by inserting run time checks. Can this be done without an enormous performance hit?

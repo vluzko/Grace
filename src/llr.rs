@@ -1,28 +1,36 @@
 /// Low-level representation of WebAssembly.
 use std::collections::HashMap;
+use std::convert::From;
+use std::fmt;
+
 use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
+
+
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, Identifier};
 use scoping::{Context, GetContext};
-use std::convert::From;
 use typing::Type;
 
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMModule {
-    imports: Vec<String>,
-    functions: Vec<WASMFunc>
+    pub imports: Vec<String>,
+    pub functions: Vec<WASMFunc>
+}
+
+pub struct WASMImport {
+
 }
 
 /// A WASM function declaration
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMFunc {
-    name: String, 
-    args: Vec<(String, WASMType)>, 
-    locals: Vec<(String, WASMType)>, 
-    result: WASMType, 
-    code: Vec<WASM>
+    pub name: String, 
+    pub args: Vec<(String, WASMType)>, 
+    pub locals: Vec<(String, WASMType)>, 
+    pub result: WASMType, 
+    pub code: Vec<WASM>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -32,11 +40,11 @@ pub enum WASM {
     End,
     If,
     Else,
+    Branch(usize),
+    BranchIf(usize),
     Operation(WASMOperator, WASMType),
     Const(WASMType, String),
     Call(String),
-    Branch(usize),
-    BranchIf(usize),
     Get(String),
     Set(String),
     Tee(String),
@@ -68,10 +76,16 @@ pub enum WASMType {
 
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
-    let mut functions = vec!()
+    let mut functions = vec!();
+    // let mut imports = vec!();
+
+    for import in &module.data.imports {
+
+    }
+
     for declaration in &module.data.declarations {
         match declaration.data {
-            Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref block, ref return_type} => {
+            Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref return_type, ..} => {
                 let local_variables = declaration.get_true_declarations(context);
                 let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables.iter().map(
                     |(n, t)| (n.name.clone(), WASMType::from(t))).collect();
@@ -90,7 +104,10 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
             _ => {}
         }
     }
-    panic!()
+    return WASMModule {
+        imports: vec!(),
+        functions: functions
+    };
 }
 
 pub trait ToLLR {
@@ -270,7 +287,8 @@ impl From<&Type> for WASMType {
             &Type::f32 => WASMType::f32,
             &Type::f64 => WASMType::f64,
             &Type::boolean => WASMType::i32,
-            _ => panic!()
+            &Type::Sum(..) => WASMType::i32,
+            x => panic!("Tried to convert {:?} to WASM", x)
         }
     }
 }
@@ -293,6 +311,31 @@ impl From<&ComparisonOperator> for WASMOperator {
             ComparisonOperator::Equal => WASMOperator::Eq,
             _ => panic!()
         };
+    }
+}
+
+impl fmt::Display for WASMType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            WASMType::i32 => "i32",
+            WASMType::i64 => "i64",
+            WASMType::f32 => "f32",
+            WASMType::f64 => "f64"
+        })
+    }
+}
+
+impl fmt::Display for WASMOperator {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", match self {
+            WASMOperator::Add => "add",
+            WASMOperator::Sub => "sub",
+            WASMOperator::Mult => "mul",
+            WASMOperator::Div => "div",
+            WASMOperator::Eq => "eq",
+            WASMOperator::Ne => "ne",
+            x => panic!("Display not implemented for WASMOperator: {:?}", self)
+        })
     }
 }
 

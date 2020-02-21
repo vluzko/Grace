@@ -10,6 +10,7 @@ extern crate petgraph;
 #[macro_use]
 extern crate proptest;
 extern crate indexmap;
+extern crate itertools;
 
 pub mod position_tracker;
 #[macro_use]

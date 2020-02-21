@@ -1,17 +1,11 @@
-// DEPRECATED //
-
-use std::collections::HashMap;
-// extern crate itertools;
 use itertools::join;
 
 use scoping::Context;
-use typing::Type;
 use llr::{
     WASMModule,
     WASMFunc,
     WASM
 };
-use compiler_layers::CompiledModule;
 
 pub trait ToBytecode {
     /// Generate WAST bytecode from an AST

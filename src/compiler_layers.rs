@@ -1,12 +1,10 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::path::PathBuf;
+use std::collections::{HashMap, BTreeMap};
+use std::path::{Path, PathBuf};
 use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::{File, canonicalize, create_dir_all};
 
-extern crate itertools;
+use itertools::join;
 
 use parser::Parseable;
 use position_tracker::PosStr;
@@ -31,8 +29,8 @@ use typing::{
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;
-
 use general_utils::extend_map;
+
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
@@ -70,7 +68,7 @@ impl CompiledModule {
     }
 
     pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {
-        return itertools::join(idents.iter().map(|x| x.name.clone()), ".");
+        return join(idents.iter().map(|x| x.name.clone()), ".");
     }
 }
 
@@ -147,7 +145,7 @@ impl Compilation {
         // Compile dependencies
         for import in &parsed_module.data.imports {
             let path = module_path_to_path(&import.path);
-            let submodule_name = itertools::join(import.path.iter().map(|x| x.name.clone()), ".");
+            let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
 
             let submodule = match self.modules.get(&submodule_name) {
                 Some(x) => x,
@@ -179,7 +177,7 @@ impl Compilation {
         parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
-        let mut init_context = Context::new_context(init_scope, init_type_map);
+        let init_context = Context::new_context(init_scope, init_type_map);
 
         // 
         let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
@@ -255,7 +253,7 @@ fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
 fn path_to_module_reference(path: &Box<Path>) -> String {
     // WOW it's hard to convert Paths to Strings.
     let without_extension = path.parent().unwrap().join(path.file_stem().unwrap());
-    return itertools::join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
+    return join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
 }
 
 pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String){

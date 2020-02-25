@@ -164,12 +164,17 @@ impl Type {
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
+                let mut t = None;
+                
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
-                        return attr_type.clone();
+                        t = Some(attr_type.clone());
                     }
                 }
-                panic!()
+                match t {
+                    Some(attr_type) => attr_type,
+                    None => panic!()
+                }
             },
             _ => panic!("The provided type doesn't have attributes.")
         };

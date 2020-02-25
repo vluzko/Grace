@@ -179,11 +179,10 @@ impl Compilation {
         parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
-        let mut init_context = Context::empty();
-        let scope_id = init_context.new_scope(init_scope);
+        let mut init_context = Context::new_context(init_scope, init_type_map);
 
         // 
-        let context = parsed_module.scopes_and_types(scope_id, init_context).0;
+        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
         let cfg_map = module_to_cfg(&parsed_module, &context);
         let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
 

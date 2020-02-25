@@ -126,6 +126,18 @@ impl Context {
             defined_types: HashMap::new()
         };
     }
+    pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
+        let root_id = general_utils::get_next_scope_id();
+        let mut scope_map = HashMap::new();
+        scope_map.insert(root_id, scope);
+        return Context{
+            root_id: root_id,
+            scopes: scope_map,
+            containing_scopes: HashMap::new(),
+            type_map: type_map,
+            defined_types: HashMap::new()
+        };
+    }
 
     /// Record the type of a node.
     pub fn add_type(&mut self, id: usize, t: Type) {
@@ -145,6 +157,7 @@ impl Context {
     }
 
     pub fn get_node_type(&self, node_id: usize) -> Type {
+        println!("{:?}", self);
         return self.type_map.get(&node_id).unwrap().clone();
     }
 

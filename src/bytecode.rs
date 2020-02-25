@@ -19,12 +19,22 @@ pub trait ToBytecode {
 
 impl ToBytecode for WASMModule {
     fn to_bytecode(&self, context: &Context) -> String {
+        let mut import_strings = vec!();
         let mut function_declarations = vec!();
+        println!("{:?}", self.imports);
+        for import in &self.imports {
+            //(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
+            let params = join(import.params.iter().map(|(n,t)| format!("(param ${} {})", n, t)), " ");
+            let res = format!("(result {})", import.return_type);
+            let import_string = format!("(import \"{}\" \"{}\" (func ${} {} {}))", 
+            import.path, import.value, import.internal_name, params, res);
+            import_strings.push(import_string);
+        }
         for function in &self.functions {
             let declaration_string = function.to_bytecode(context);
             function_declarations.push(declaration_string)
         }
-        return join(function_declarations, "\n\n");
+        return format!("{}\n\n{}", join(import_strings, "\n"), join(function_declarations, "\n\n"));
     }
 }
 

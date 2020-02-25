@@ -1,4 +1,5 @@
 /// Low-level representation of WebAssembly.
+use itertools::join;
 use std::collections::HashMap;
 use std::convert::From;
 use std::fmt;
@@ -15,11 +16,17 @@ use typing::Type;
 /// Includes function declarations, imports, and memory declarations.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMModule {
-    pub imports: Vec<String>,
+    pub imports: Vec<WASMImport>,
     pub functions: Vec<WASMFunc>
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMImport {
+    pub path: String,
+    pub value: String,
+    pub internal_name: String,
+    pub params: Vec<(String, WASMType)>,
+    pub return_type: WASMType,
 
 }
 
@@ -77,10 +84,35 @@ pub enum WASMType {
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
     let mut functions = vec!();
-    // let mut imports = vec!();
+    let mut imports = vec!();
 
     for import in &module.data.imports {
-
+        println!("import is: {:?}", import);
+        //ID, path, alias, values
+        let typing_info = context.get_node_type(import.id);
+        for value in &import.values {
+            println!("value is: {:?}", value);
+            //get params and return type
+            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value) {
+                // convert everything to WASMTypes
+                Type::Function(ref args, ref return_type) => {
+                    let wasm_args = args.iter().map( |(n, t) | (n.name.clone(), WASMType::from(t))).collect();
+                    let wasm_return = WASMType::from(&**return_type); 
+                    (wasm_args, wasm_return)
+                },
+                _ => panic!()
+            };
+            let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
+            let internal_name = format!(".{}.{}", joined_path, value);
+            let wasm_import = WASMImport {
+                path: joined_path,
+                value: value.name.clone(),
+                internal_name: internal_name,
+                params: wasm_args,
+                return_type: wasm_return
+            };
+            imports.push(wasm_import);
+        }
     }
 
     for declaration in &module.data.declarations {
@@ -105,7 +137,7 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
         }
     }
     return WASMModule {
-        imports: vec!(),
+        imports: imports,
         functions: functions
     };
 }

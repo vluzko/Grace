@@ -71,7 +71,7 @@ pub fn base_scope() -> Scope {
 }
 
 pub fn builtin_context() -> (usize, Context) {
-    let empty = base_scope();
+    let mut empty = Scope::empty();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
@@ -118,9 +118,12 @@ impl Scope {
 
 impl Context {
     pub fn empty() -> Context {
+        let root_id = general_utils::get_next_scope_id();
+        let mut scopes = HashMap::new();
+        scopes.insert(root_id, Scope::empty());
         return Context{
-            root_id: general_utils::get_next_scope_id(),
-            scopes: HashMap::new(),
+            root_id: root_id,
+            scopes: scopes,
             containing_scopes: HashMap::new(),
             type_map: HashMap::new(),
             defined_types: HashMap::new()
@@ -157,7 +160,6 @@ impl Context {
     }
 
     pub fn get_node_type(&self, node_id: usize) -> Type {
-        println!("{:?}", self);
         return self.type_map.get(&node_id).unwrap().clone();
     }
 
@@ -179,11 +181,22 @@ impl Context {
         return scope_id;
     }
 
-    /// Add the
+    /// Add a statement to a scope.
     pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Box<Node<Stmt>>) {
         let mut scope = self.scopes.get_mut(&scope_id).unwrap();
         scope.append_declaration(name, stmt);
     }
+
+    /// Add an import to a scope.
+    pub fn append_import(&mut self, import: &Import) {
+        let import_name =  import.path.get(0).unwrap().clone();
+        let scope_mod = CanModifyScope::ImportedModule(import.id);
+
+        let mut scope = self.scopes.get_mut(&self.root_id).unwrap();
+        scope.declaration_order.insert(import_name.clone(), scope.declaration_order.len() + 1);
+        scope.declarations.insert(import_name.clone(), scope_mod);
+    }
+
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
@@ -200,6 +213,8 @@ impl Context {
             };
         }
     }
+
+    
 }
 
 impl CanModifyScope {

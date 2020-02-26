@@ -315,12 +315,6 @@ pub trait Typed<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> T;
 }
 
-impl Typed<scoping::CanModifyScope> for scoping::CanModifyScope {
-    fn type_based_rewrite(self, _context: &mut scoping::Context) -> scoping::CanModifyScope {
-        panic!("Don't call type_based_rewrite on a CanModifyScope. Go through the AST.");
-    }
-}
-
 impl Typed<Node<Module>> for Node<Module> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Module> {
         let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();

@@ -87,11 +87,8 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
     let mut imports = vec!();
 
     for import in &module.data.imports {
-        println!("import is: {:?}", import);
-        //ID, path, alias, values
         let typing_info = context.get_node_type(import.id);
         for value in &import.values {
-            println!("value is: {:?}", value);
             //get params and return type
             let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value) {
                 // convert everything to WASMTypes

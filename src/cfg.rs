@@ -208,7 +208,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 let new_index = new_cfg.add_block(block.id, statements, previous_index);
 
                 // A block for the initial if condition.
-                let mut condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
+                let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
                 // Attach the condition to the previous block.
                 new_cfg.add_edge(new_index, condition_index, false);
 

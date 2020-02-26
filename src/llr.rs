@@ -278,7 +278,7 @@ impl ToLLR for Node<Expr> {
                 llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
                 llr
             },
-            Expr::FunctionCall{ref function, ref args, ref kwargs} => {
+            Expr::FunctionCall{ref function, ref args, ..} => {
                 let mut llr = vec!();
                 for arg in args {
                     llr.append(&mut arg.to_llr(context));
@@ -363,7 +363,7 @@ impl fmt::Display for WASMOperator {
             WASMOperator::Div => "div",
             WASMOperator::Eq => "eq",
             WASMOperator::Ne => "ne",
-            x => panic!("Display not implemented for WASMOperator: {:?}", self)
+            x => panic!("Display not implemented for WASMOperator: {:?}", x)
         })
     }
 }

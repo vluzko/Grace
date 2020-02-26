@@ -62,7 +62,7 @@ impl Cfg {
     }
 
     /// Add a node containing the given statements.
-    pub fn add_block(&mut self, node_id: usize, statements: Vec<Node<CfgStmt>>, previous: Option<NodeIndex>) -> NodeIndex {
+    pub fn add_block(&mut self, statements: Vec<Node<CfgStmt>>, previous: Option<NodeIndex>) -> NodeIndex {
         let new_node = CfgVertex::Block(statements);
         let new_index = self.add_node(new_node);
         match previous {
@@ -139,7 +139,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
             },
             Stmt::WhileStmt{ref condition, ref block} => {
                 // Collect the current batch of statements into a block and add it to the CFG.
-                let new_index = new_cfg.add_block(block.id, statements, previous_index);
+                let new_index = new_cfg.add_block(statements, previous_index);
 
                 // Create a vertex containing just the while loop condition.
                 // The loop body passes back to here, as do all continue statements.
@@ -205,7 +205,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
             },
             Stmt::IfStmt{ref condition, ref block, ref else_block} => {
                 // Collect existing statements into a block.
-                let new_index = new_cfg.add_block(block.id, statements, previous_index);
+                let new_index = new_cfg.add_block(statements, previous_index);
 
                 // A block for the initial if condition.
                 let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
@@ -253,7 +253,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
     }
 
     // Collect any leftover statements into a block.
-    let final_index = new_cfg.add_block(get_next_id(), statements, previous_index);
+    let final_index = new_cfg.add_block(statements, previous_index);
     entry_index = update_entry(entry_index, &final_index);
 
     return (new_cfg, entry_index.unwrap(), need_edge_to_next_block);

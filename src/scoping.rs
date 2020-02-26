@@ -71,7 +71,7 @@ pub fn base_scope() -> Scope {
 }
 
 pub fn builtin_context() -> (usize, Context) {
-    let mut empty = Scope::empty();
+    let empty = Scope::empty();
     let mut init_scopes = HashMap::new();
     let id = general_utils::get_next_scope_id();
     init_scopes.insert(id, empty);
@@ -183,7 +183,7 @@ impl Context {
 
     /// Add a statement to a scope.
     pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Box<Node<Stmt>>) {
-        let mut scope = self.scopes.get_mut(&scope_id).unwrap();
+        let scope = self.scopes.get_mut(&scope_id).unwrap();
         scope.append_declaration(name, stmt);
     }
 
@@ -192,7 +192,7 @@ impl Context {
         let import_name =  import.path.get(0).unwrap().clone();
         let scope_mod = CanModifyScope::ImportedModule(import.id);
 
-        let mut scope = self.scopes.get_mut(&self.root_id).unwrap();
+        let scope = self.scopes.get_mut(&self.root_id).unwrap();
         scope.declaration_order.insert(import_name.clone(), scope.declaration_order.len() + 1);
         scope.declarations.insert(import_name.clone(), scope_mod);
     }
@@ -346,7 +346,7 @@ impl GetContext for Node<Stmt> {
     fn get_usages(&self) -> HashSet<Identifier> {
         return match self.data {
             Stmt::IfStmt{ref condition, ref block, ref else_block} => {
-                let mut usages = general_utils::m_union(condition.get_usages(), block.get_usages());
+                let usages = general_utils::m_union(condition.get_usages(), block.get_usages());
                 match else_block {
                     Some(y) => general_utils::m_union(usages, y.get_usages()),
                     None => usages
@@ -532,7 +532,7 @@ impl GetContext for Node<Expr> {
         let (mut final_c, final_t) = match self.data {
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
-                let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c);
+                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
                 assert_eq!(left_t, right_t);
                 (right_c, Type::boolean)
             },
@@ -660,7 +660,7 @@ mod test {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c
         "#;
-        let (func_stmt, context) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
+        let (func_stmt, _) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
         let usages = func_stmt.get_usages();
         assert!(usages.contains(&Identifier::from("b")));
         assert!(usages.contains(&Identifier::from("c")));

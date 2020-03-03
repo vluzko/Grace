@@ -1,6 +1,5 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
-use std::collections::BTreeSet;
 use std::collections::HashMap;
 use expression::*;
 use general_utils;
@@ -9,22 +8,6 @@ use typing::{
     Numeric,
     FloatingPoint,
 };
-
-/// The full scoping and typing context for a compilation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context {
-    // The ID of the root scope of the context.
-    pub root_id: usize,
-    // A map from Scope IDs to Scopes.
-    pub scopes: HashMap<usize, Scope>,
-    // A map from Node IDs to Scope IDs. Each node that modifies scope
-    // maps to the scope it's contained in.
-    pub containing_scopes: HashMap<usize, usize>,
-    // A map from Node IDs to types.
-    pub type_map: HashMap<usize, Type>, 
-    // The user-defined types
-    pub defined_types: HashMap<String, Type>
-}
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -51,6 +34,24 @@ pub struct Scope {
     /// The order in which each identifier was declared. (Important for blocks.)
     pub declaration_order: BTreeMap<Identifier, usize>
 }
+
+/// The full scoping and typing context for a compilation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Context {
+    // The ID of the root scope of the context.
+    pub root_id: usize,
+    // A map from Scope IDs to Scopes.
+    pub scopes: HashMap<usize, Scope>,
+    // A map from Node IDs to Scope IDs. Each node that modifies scope
+    // maps to the scope it's contained in.
+    pub containing_scopes: HashMap<usize, usize>,
+    // A map from Node IDs to types.
+    pub type_map: HashMap<usize, Type>, 
+    // The user-defined types
+    pub defined_types: HashMap<Identifier, Type>
+}
+
+
 
 pub trait GetContext {
     fn get_usages(&self) -> HashSet<Identifier>;
@@ -145,6 +146,11 @@ impl Context {
     /// Record the type of a node.
     pub fn add_type(&mut self, id: usize, t: Type) {
         self.type_map.insert(id, t);
+    }
+
+    /// Define a named type.
+    pub fn define_type(&mut self, name: Identifier, t: Type) {
+        self.defined_types.insert(name.clone(), t);
     }
 
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
@@ -457,7 +463,7 @@ impl GetContext for Node<Stmt> {
                     None => (new_context, if_type)
                 }
             },
-            Stmt::StructDec{ref fields, ..} => {
+            Stmt::StructDec{ref name, ref fields} => {
                 let mut order = vec!();
                 let mut records = BTreeMap::new();
                 for (n, t) in fields {
@@ -465,8 +471,8 @@ impl GetContext for Node<Stmt> {
                     records.insert(n.clone(), t.clone());
                 }
                 let record = Type::Record(order, records);
-                (context, record)
-
+                context.define_type(name.clone(), record);
+                (context, Type::Named(name.clone()))
             },
             Stmt::ReturnStmt(ref mut expression) => {
                 expression.scopes_and_types(parent_id, context)
@@ -528,6 +534,7 @@ impl GetContext for Node<Expr> {
     }
 
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
+        println!("Scoping for expr: {:?}", self);
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
@@ -584,6 +591,7 @@ impl GetContext for Node<Expr> {
                 panic!()
             },
             Expr::IdentifierExpr(ref name) => {
+                println!("ident: {:?}", name);
                 let t = context.get_type(self.scope, name);
                 context.add_type(self.id, t.clone());
                 (context, t)

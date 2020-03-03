@@ -872,10 +872,12 @@ pub mod expr_parsers {
             );
             let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
                 let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
-                for attribute in idents[1..].iter() {
+                for attribute in idents[1..idents.len()-1].iter() {
                     tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
                     attribute: attribute.clone()};
                 };
+
+                let rewritten = self.rewrite_access(tree_base, idents.get(idents.len()-1).unwrap().clone());
 
                 let mut args = vec!();
                 let mut update = vec!();
@@ -883,7 +885,7 @@ pub mod expr_parsers {
                     args.push(val);
                     update.append(&mut u);
                 }
-                return (Expr::StructLiteral{base: Box::new(Node::from(tree_base)), fields: args}, update);
+                return (Expr::StructLiteral{base: Box::new(Node::from(rewritten)), fields: args}, update);
             };
             return fmap_nodeu(result, map);
         }
@@ -1041,15 +1043,17 @@ pub mod expr_parsers {
         /// Rewrite an AttributeAccess as a ModuleAccess if necessary
         /// Will rewrite if the base expression is an identifier in the imports set, or if it's a ModuleExpression.
         fn rewrite_access(&self, base: Expr, attribute: Identifier) -> Expr {
+            
             return match base {
                 Expr::ModuleAccess(mut v) => {
                     v.push(attribute);
                     Expr::ModuleAccess(v)
                 },
-                Expr::IdentifierExpr(name) => match self.imported.contains(&name) {
+                Expr::IdentifierExpr(name) => {
+                    match self.imported.contains(&name) {
                     true => Expr::ModuleAccess(vec!(name, attribute)),
                     false => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
-                },
+                }},
                 x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
             };
         }

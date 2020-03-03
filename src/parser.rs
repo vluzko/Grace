@@ -119,27 +119,42 @@ impl ParserContext {
 
 /// Match a module.
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
-    let context = ParserContext::empty();
-    let parse_result = preceded!(input,
+    let mut context = ParserContext::empty();
+
+    let just_imports = preceded!(input,
         opt!(between_statement),
-        tuple!(
-            many0c!(
-                terminated!(import, between_statement)
-            ),
-            many1c!(
-                terminated!(
-                    alt_complete!(m!(context.function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
-                    
-                    between_statement
-                )
-            ),
-            alt_complete!(eof!() | EMPTY)
+        many0c!(
+            terminated!(import, between_statement)
         )
     );
 
-    return fmap_node(parse_result, |x| Module{
-        imports: x.0.into_iter().map(Box::new).collect(), 
-        declarations: x.1.into_iter().map(|y| Box::new(y)).collect()
+    let (remaining, imports) = match &just_imports {
+        Ok((i, parsed_imports)) => {
+            for import in parsed_imports {
+                match &import.alias {
+                    Some(ref alias) => context.imported.insert(alias.clone()),
+                    None => context.imported.insert(import.path.get(0).unwrap().clone())
+                };
+            }
+            (i, parsed_imports)
+        }, 
+        _ => panic!()
+    };
+
+    let statements = terminated!(remaining,
+        many1c!(
+            terminated!(
+                alt_complete!(m!(context.function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
+                
+                between_statement
+            )
+        ),
+        alt_complete!(eof!() | EMPTY)
+    );
+
+    return fmap_node(statements, |x| Module{
+        imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(), 
+        declarations: x.into_iter().map(|y| Box::new(y)).collect()
     });
 }
 
@@ -1032,7 +1047,7 @@ pub mod expr_parsers {
                     Expr::ModuleAccess(v)
                 },
                 Expr::IdentifierExpr(name) => match self.imported.contains(&name) {
-                    true => Expr::ModuleAccess(vec!(name)),
+                    true => Expr::ModuleAccess(vec!(name, attribute)),
                     false => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
                 },
                 x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
@@ -1864,6 +1879,13 @@ pub mod expr_parsers {
             f.read_to_string(&mut file_contents).unwrap();
             check_data(file_contents.as_str(), string_expr, Expr::String("\\\"\\n\'\\\\\\\'".to_string()));
         }
+
+        #[test]
+        fn parse_module_access() {
+            let mut e = ParserContext::empty();
+            e.imported.insert(Identifier::from("file_2"));
+            check_data("file_2.foo", |x| e.expression(x), Expr::ModuleAccess(vec!(Identifier::from("file_2"), Identifier::from("foo"))));
+        }
     }
 }
 
@@ -2052,8 +2074,6 @@ fn for_to_while(loop_var: Identifier, iterator: &Node<Expr>, mut inner_loop: Stm
 
     return (while_loop, outer_stmts);
 }
-
-
 
 #[cfg(test)]
 mod property_based_tests {
@@ -2271,7 +2291,30 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
-        }))
+        }));
+        
+        let e = ParserContext::empty();
+        let module_str = "import file_2\nfn a() -> i64:\n return file_2.foo()\n";
+        check_match(module_str, module, Node::from(Module{
+            declarations: vec!(
+                wrap(Stmt::FunctionDecStmt{
+                    name: Identifier::from("a"), 
+                    args: vec!(),
+                    kwargs: vec!(),
+                    block: Node::from(Block{
+                        statements: vec!(wrap(Stmt::ReturnStmt(
+                            Node::from(Expr::FunctionCall{
+                                function: wrap(Expr::ModuleAccess(vec!(Identifier::from("file_2"), Identifier::from("foo")))),
+                                args: vec!(),
+                                kwargs: vec!(),
+                            })
+                        )))
+                    }), 
+                    return_type: Type::i64
+                })
+            ),
+            imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
+        }));
     }        
 
     #[test]
@@ -2285,6 +2328,8 @@ mod tests {
             alias: None,
             values: vec!()
         });
+
+
     }
 
     #[test]

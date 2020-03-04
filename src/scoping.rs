@@ -584,7 +584,8 @@ impl GetContext for Node<Expr> {
                 let attr_t = base_t.resolve_attribute(attribute);
                 (new_c, attr_t)
             },
-            Expr::ModuleAccess(ref mut names) => {
+            Expr::ModuleAccess(ref id, ref mut names) => {
+                // let module_type = context.get_type
                 panic!()
             },
             Expr::Index{ref mut base, ref mut slices} => {

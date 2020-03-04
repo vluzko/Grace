@@ -1,5 +1,5 @@
 use std::str::from_utf8;
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 extern crate nom;
 use self::nom::*;
@@ -65,7 +65,7 @@ impl Parseable for Node<Expr> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserContext {
-    imported: HashSet<Identifier>
+    imported: HashMap<Identifier, Import>
 }
 
 impl ParserContext {
@@ -112,7 +112,7 @@ impl ParserContext {
 
     pub fn empty() -> ParserContext {
         return ParserContext{
-            imported: HashSet::new()
+            imported: HashMap::new()
         };
     }
 }
@@ -132,8 +132,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         Ok((i, parsed_imports)) => {
             for import in parsed_imports {
                 match &import.alias {
-                    Some(ref alias) => context.imported.insert(alias.clone()),
-                    None => context.imported.insert(import.path.get(0).unwrap().clone())
+                    Some(ref alias) => context.imported.insert(alias.clone(), import.clone()),
+                    None => context.imported.insert(import.path.get(0).unwrap().clone(), import.clone())
                 };
             }
             (i, parsed_imports)
@@ -1045,14 +1045,14 @@ pub mod expr_parsers {
         fn rewrite_access(&self, base: Expr, attribute: Identifier) -> Expr {
             
             return match base {
-                Expr::ModuleAccess(mut v) => {
+                Expr::ModuleAccess(id, mut v) => {
                     v.push(attribute);
-                    Expr::ModuleAccess(v)
+                    Expr::ModuleAccess(id, v)
                 },
                 Expr::IdentifierExpr(name) => {
-                    match self.imported.contains(&name) {
-                    true => Expr::ModuleAccess(vec!(name, attribute)),
-                    false => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
+                    match self.imported.get(&name) {
+                    Some(import) => Expr::ModuleAccess(import.id, vec!(name, attribute)),
+                    None => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
                 }},
                 x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
             };
@@ -1887,8 +1887,14 @@ pub mod expr_parsers {
         #[test]
         fn parse_module_access() {
             let mut e = ParserContext::empty();
-            e.imported.insert(Identifier::from("file_2"));
-            check_data("file_2.foo", |x| e.expression(x), Expr::ModuleAccess(vec!(Identifier::from("file_2"), Identifier::from("foo"))));
+            let import = Import {
+                id: 0,
+                path: vec!(Identifier::from("file_2")),
+                alias: None,
+                values: vec!()
+            };
+            e.imported.insert(Identifier::from("file_2"), import);
+            check_data("file_2.foo", |x| e.expression(x), Expr::ModuleAccess(0, vec!(Identifier::from("file_2"), Identifier::from("foo"))));
         }
     }
 }
@@ -2308,7 +2314,7 @@ mod tests {
                     block: Node::from(Block{
                         statements: vec!(wrap(Stmt::ReturnStmt(
                             Node::from(Expr::FunctionCall{
-                                function: wrap(Expr::ModuleAccess(vec!(Identifier::from("file_2"), Identifier::from("foo")))),
+                                function: wrap(Expr::ModuleAccess(0, vec!(Identifier::from("file_2"), Identifier::from("foo")))),
                                 args: vec!(),
                                 kwargs: vec!(),
                             })

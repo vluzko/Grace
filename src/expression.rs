@@ -81,7 +81,7 @@ pub enum Expr {
     StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
-    ModuleAccess    (Vec<Identifier>),
+    ModuleAccess    (usize, Vec<Identifier>),
     IdentifierExpr  (Identifier),
     Bool            (bool),
     Int             (String),

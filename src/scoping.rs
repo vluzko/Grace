@@ -534,7 +534,6 @@ impl GetContext for Node<Expr> {
     }
 
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
-        println!("Scoping for expr: {:?}", self);
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
@@ -555,11 +554,16 @@ impl GetContext for Node<Expr> {
             }
             // TODO: Type checking
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
-                let (mut new_c, t) = function.scopes_and_types(parent_id, context);
-                for arg in args {
+                let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context);
+                let (arg_types, ret) = match wrapped_func {
+                    Type::Function(a, b) => (a, *b.clone()),
+                    x => panic!("Expected function type. Got: {:?}", x)
+                };
+                for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
                     let _arg_t = res.1;
+                    assert_eq!(arg_types.get(i).unwrap().1, _arg_t);
                 }
 
                 for (_, value) in kwargs {
@@ -567,7 +571,7 @@ impl GetContext for Node<Expr> {
                     new_c = res.0;
                     let _kwarg_t = res.1;
                 }
-                (new_c, t)
+                (new_c, ret)
             },
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
@@ -585,8 +589,10 @@ impl GetContext for Node<Expr> {
                 (new_c, attr_t)
             },
             Expr::ModuleAccess(ref id, ref mut names) => {
-                // let module_type = context.get_type
-                panic!()
+                let module_type = context.get_node_type(*id);
+                let t = module_type.resolve_nested_record(&names[1..].to_vec());
+                context.add_type(self.id, t.clone());
+                (context, t)
             },
             Expr::Index{ref mut base, ref mut slices} => {
                 panic!()

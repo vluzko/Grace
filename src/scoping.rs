@@ -168,7 +168,6 @@ impl Context {
     }
 
     pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        println!("\ndefined types: {:?}", self.defined_types);
         return self.defined_types.get(name).unwrap().clone();
     }
 

@@ -98,11 +98,12 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     (wasm_args, wasm_return)
                 },
                 Type::Named(name) => {
-                    println!("import: {:?}", import);
-                    println!("Context: {:?}\nname: {:?}", context, name);
                     let full_name = format!("{}.{}", import.string_ref(), name);
                     let actual_type = context.get_defined_type(&Identifier::from(full_name));
-                    panic!()
+                    let (args, return_type) = actual_type.get_constructor_type();
+                    let wasm_args = args.iter().map( |(n, t) | (n.name.clone(), WASMType::from(t))).collect();
+                    let wasm_return = WASMType::from(&return_type); 
+                    (wasm_args, wasm_return)
                 },
                 x => panic!("Wrong import type: {:?}", x)
             };
@@ -324,6 +325,7 @@ impl From<&Type> for WASMType {
             &Type::f64 => WASMType::f64,
             &Type::boolean => WASMType::i32,
             &Type::Sum(..) => WASMType::i32,
+            &Type::Named(..) => WASMType::i32,
             x => panic!("Tried to convert {:?} to WASM", x)
         }
     }

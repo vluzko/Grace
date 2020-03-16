@@ -3,6 +3,8 @@ use std::fmt::Display;
 use std::str::from_utf8;
 use std::convert::From;
 
+use itertools::join;
+
 use typing::*;
 use position_tracker::PosStr;
 use general_utils;
@@ -36,6 +38,15 @@ pub struct Import {
     pub path: Vec<Identifier>,
     pub alias: Option<Identifier>,
     pub values: Vec<Identifier>
+}
+
+impl Import {
+    pub fn string_ref(&self) -> String {
+        return match &self.alias {
+            Some(x) => x.name.clone(), 
+            None => join(self.path.iter().map(|x| x.name.clone()), ".")
+        };
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

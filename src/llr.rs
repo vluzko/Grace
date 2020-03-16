@@ -97,7 +97,14 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     let wasm_return = WASMType::from(&**return_type); 
                     (wasm_args, wasm_return)
                 },
-                _ => panic!()
+                Type::Named(name) => {
+                    println!("import: {:?}", import);
+                    println!("Context: {:?}\nname: {:?}", context, name);
+                    let full_name = format!("{}.{}", import.string_ref(), name);
+                    let actual_type = context.get_defined_type(&Identifier::from(full_name));
+                    panic!()
+                },
+                x => panic!("Wrong import type: {:?}", x)
             };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
             let internal_name = format!(".{}.{}", joined_path, value);

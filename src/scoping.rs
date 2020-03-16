@@ -51,8 +51,6 @@ pub struct Context {
     pub defined_types: HashMap<Identifier, Type>
 }
 
-
-
 pub trait GetContext {
     fn get_usages(&self) -> HashSet<Identifier>;
 
@@ -167,6 +165,11 @@ impl Context {
 
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
+    }
+
+    pub fn get_defined_type(&self, name: &Identifier) -> Type {
+        println!("\ndefined types: {:?}", self.defined_types);
+        return self.defined_types.get(name).unwrap().clone();
     }
 
     pub fn get_scope(&self, scope_id: usize) -> &Scope {

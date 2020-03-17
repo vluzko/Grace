@@ -48,7 +48,7 @@ impl ToBytecode for WASMFunc {
 
         let footer = format!("(export \"{}\" (func ${}))", self.name, self.name);
         
-        let code_string = join(self.code.iter().map(|x| x.to_bytecode(context)), "\n    ");
+        let code_string = join(self.code.iter().map(|x| x.to_bytecode(context)), "\n");
         return format!("({}\n{}\n)\n{}", header, code_string, footer);
     }
 }

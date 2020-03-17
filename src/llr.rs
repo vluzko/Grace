@@ -262,7 +262,7 @@ impl ToLLR for Node<CfgStmt> {
 
 impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
-        return match self.data {
+        return match &self.data {
             Expr::BinaryExpr{ref left, ref right, ref operator} => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
@@ -291,13 +291,28 @@ impl ToLLR for Node<Expr> {
                 for arg in args {
                     llr.append(&mut arg.to_llr(context));
                 }
-                match function.data {
+                match &function.data {
                     Expr::IdentifierExpr(ref name) => {
                         llr.push(WASM::Call(name.name.clone()));
                     },
-                    _ => panic!()
+                    Expr::ModuleAccess(ref id, ref path) => {
+                        let func_name = join(path.iter().map(|x| x.name.clone()), ".");
+                        llr.push(WASM::Call(format!(".{}", func_name.clone())));
+                    },
+                    x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
                 }
                 llr
+            },
+            Expr::StructLiteral{ref base, ref fields} => {
+                let mut llr = vec!();
+                for field in fields {
+                    llr.append(&mut field.to_llr(context));
+                }
+                llr.append(&mut base.to_llr(context));
+                llr
+            },
+            Expr::ModuleAccess(ref id, ref fields) => {
+                panic!()
             },
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.get_node_type(self.id);
@@ -311,7 +326,7 @@ impl ToLLR for Node<Expr> {
                 }
             },
             Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
-            _ => panic!()
+            x => panic!("to_llr not implemented for: {:?}", x)
         }
     }
 }

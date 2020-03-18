@@ -81,6 +81,15 @@ pub enum WASMType {
     f32
 }
 
+impl WASMType {
+    pub fn size(&self) -> usize {
+        return match self {
+            WASMType::i32 | WASMType::f32 => 1,
+            WASMType::i64 | WASMType::f64 => 2
+        };
+    }
+}
+
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
     let mut functions = vec!();
@@ -138,7 +147,33 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                 };
                 functions.push(wasm_func)
             },
-            _ => {}
+            Stmt::StructDec{ref name, ref fields} => {
+                let wasm_args: Vec<(String, WASMType)>  = fields.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+                let mut block_llr = vec!();
+                let num_words: usize = wasm_args.iter().map(|(name, t)| t.size()).sum();
+                block_llr.push(WASM::Const(WASMType::i32, format!("{}", num_words)));
+                block_llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+                block_llr.push(WASM::Set(".x".to_string()));
+                for (index, (field_name, field_type)) in fields.iter().enumerate() {
+                    block_llr.push(WASM::Get(".x".to_string()));
+                    block_llr.push(WASM::Const(WASMType::i32, format!("{}", 8+index*4)));
+                    block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+                    block_llr.push(WASM::Get(field_name.name.clone()));
+                    block_llr.push(WASM::Call(".memory_management.set".to_string()));
+                }
+                block_llr.push(WASM::Get(".x".to_string()));
+                block_llr.push(WASM::Const(WASMType::i32, "8".to_string()));
+                block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+                let wasm_func = WASMFunc {
+                    name: name.name.clone(),
+                    args: wasm_args,
+                    locals: vec!((".x".to_string(), WASMType::i32)),
+                    result: WASMType::i32,
+                    code: block_llr
+                };
+                functions.push(wasm_func)                
+            }
+            _ => panic!()
         }
     }
     return WASMModule {
@@ -308,11 +343,17 @@ impl ToLLR for Node<Expr> {
                 for field in fields {
                     llr.append(&mut field.to_llr(context));
                 }
-                llr.append(&mut base.to_llr(context));
+                match &base.data {
+                    Expr::IdentifierExpr(ref name) => {
+                        llr.push(WASM::Call(name.name.clone()));
+                    },
+                    Expr::ModuleAccess(ref id, ref path) => {
+                        let func_name = join(path.iter().map(|x| x.name.clone()), ".");
+                        llr.push(WASM::Call(format!(".{}", func_name.clone())));
+                    },
+                    x => panic!("StructLiteral to_llr not implemented for :{:?}", x)
+                }
                 llr
-            },
-            Expr::ModuleAccess(ref id, ref fields) => {
-                panic!()
             },
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.get_node_type(self.id);

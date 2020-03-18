@@ -54,7 +54,7 @@ impl ToBytecode for WASMFunc {
 }
 
 impl ToBytecode for WASM {
-    fn to_bytecode(&self, context: &Context) -> String {
+    fn to_bytecode(&self, _context: &Context) -> String {
         return match self {
             // Control-flow
             WASM::Block => "block $void".to_string(),
@@ -65,7 +65,7 @@ impl ToBytecode for WASM {
             WASM::Branch(level) => format!("br {}", level),
             WASM::BranchIf(level) => format!("br_if {}", level),
             // Expressions
-            WASM::Const(t, val) => format!("{}.const {}", t, val),
+            WASM::Const(val, t) => format!("{}.const {}", t, val),
             WASM::Call(name) => format!("call ${}", name),
             WASM::Operation(operator, t) => format!("{}.{}", t, operator),
             WASM::Get(name) => format!("get_local ${}", name),

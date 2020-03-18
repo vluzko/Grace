@@ -1,6 +1,7 @@
 /// Low-level representation of WebAssembly.
 use itertools::join;
 use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::convert::From;
 use std::fmt;
 
@@ -50,7 +51,7 @@ pub enum WASM {
     Branch(usize),
     BranchIf(usize),
     Operation(WASMOperator, WASMType),
-    Const(WASMType, String),
+    Const(String, WASMType),
     Call(String),
     Get(String),
     Set(String),
@@ -150,19 +151,19 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
             Stmt::StructDec{ref name, ref fields} => {
                 let wasm_args: Vec<(String, WASMType)>  = fields.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
                 let mut block_llr = vec!();
-                let num_words: usize = wasm_args.iter().map(|(name, t)| t.size()).sum();
-                block_llr.push(WASM::Const(WASMType::i32, format!("{}", num_words)));
+                let num_words: usize = wasm_args.iter().map(|(_, t)| t.size()).sum();
+                block_llr.push(WASM::Const(format!("{}", num_words), WASMType::i32));
                 block_llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
                 block_llr.push(WASM::Set(".x".to_string()));
-                for (index, (field_name, field_type)) in fields.iter().enumerate() {
+                for (index, (field_name, _)) in fields.iter().enumerate() {
                     block_llr.push(WASM::Get(".x".to_string()));
-                    block_llr.push(WASM::Const(WASMType::i32, format!("{}", 8+index*4)));
+                    block_llr.push(WASM::Const(format!("{}", 8+index*4), WASMType::i32));
                     block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                     block_llr.push(WASM::Get(field_name.name.clone()));
                     block_llr.push(WASM::Call(".memory_management.set".to_string()));
                 }
                 block_llr.push(WASM::Get(".x".to_string()));
-                block_llr.push(WASM::Const(WASMType::i32, "8".to_string()));
+                block_llr.push(WASM::Const("8".to_string(), WASMType::i32));
                 block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                 let wasm_func = WASMFunc {
                     name: name.name.clone(),
@@ -355,15 +356,31 @@ impl ToLLR for Node<Expr> {
                 }
                 llr
             },
+            Expr::AttributeAccess{ref base, ref attribute} => {
+                let mut llr = vec!();
+
+                llr.append(&mut base.to_llr(context));
+                let base_type = context.get_node_type(base.id);
+                match base_type {
+                    Type::Record(ref names, ref fields) => {
+                        let offset = calculate_offset(attribute, names, fields);
+                        llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
+                        panic!()
+                    },
+                    x => panic!("Cannot access attribute of: {:?}", x)
+                }
+
+                llr
+            },
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.get_node_type(self.id);
                 let wasm_type = WASMType::from(&id_type);
-                vec!(WASM::Const(wasm_type, value.clone()))
+                vec!(WASM::Const(value.clone(), wasm_type))
             },
             Expr::Bool(ref value) => {
                 return match value {
-                    true => vec!(WASM::Const(WASMType::i32, "true".to_string())),
-                    false => vec!(WASM::Const(WASMType::i32, "false".to_string()))
+                    true => vec!(WASM::Const("1".to_string(), WASMType::i32)),
+                    false => vec!(WASM::Const("0".to_string(), WASMType::i32))
                 }
             },
             Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
@@ -372,64 +389,83 @@ impl ToLLR for Node<Expr> {
     }
 }
 
-impl From<&Type> for WASMType {
-    fn from(input: &Type) -> Self {
-        match input {
-            &Type::i32 => WASMType::i32,
-            &Type::i64 => WASMType::i64,
-            &Type::f32 => WASMType::f32,
-            &Type::f64 => WASMType::f64,
-            &Type::boolean => WASMType::i32,
-            &Type::Sum(..) => WASMType::i32,
-            &Type::Named(..) => WASMType::i32,
-            x => panic!("Tried to convert {:?} to WASM", x)
+/// Calculate the offset of a field in a tuple.
+fn calculate_offset(name: &Identifier, order: &Vec<Identifier>, type_map: &BTreeMap<Identifier, Type>) -> usize {
+    let mut offset = 8;
+    for val in order {
+        if val == name {
+            break
+        } else {
+            offset += type_map.get(&val).unwrap().size();
         }
     }
+    return offset;
 }
 
-impl From<&BinaryOperator> for WASMOperator {
-    fn from(input: &BinaryOperator) -> Self {
-        return match input {
-            BinaryOperator::Add => WASMOperator::Add,
-            BinaryOperator::Sub => WASMOperator::Sub,
-            BinaryOperator::Mult => WASMOperator::Mult,
-            BinaryOperator::Div => WASMOperator::Div,
-            _ => panic!()
-        };
+
+/// Implementations of Rust builtin traits.
+pub mod rust_trait_impls {
+    use super::*;
+
+    impl From<&Type> for WASMType {
+        fn from(input: &Type) -> Self {
+            match input {
+                &Type::i32 => WASMType::i32,
+                &Type::i64 => WASMType::i64,
+                &Type::f32 => WASMType::f32,
+                &Type::f64 => WASMType::f64,
+                &Type::boolean => WASMType::i32,
+                &Type::Sum(..) => WASMType::i32,
+                &Type::Named(..) => WASMType::i32,
+                x => panic!("Tried to convert {:?} to WASM", x)
+            }
+        }
     }
-}
 
-impl From<&ComparisonOperator> for WASMOperator {
-    fn from(input: &ComparisonOperator) -> Self {
-        return match input {
-            ComparisonOperator::Equal => WASMOperator::Eq,
-            _ => panic!()
-        };
+    impl From<&BinaryOperator> for WASMOperator {
+        fn from(input: &BinaryOperator) -> Self {
+            return match input {
+                BinaryOperator::Add => WASMOperator::Add,
+                BinaryOperator::Sub => WASMOperator::Sub,
+                BinaryOperator::Mult => WASMOperator::Mult,
+                BinaryOperator::Div => WASMOperator::Div,
+                _ => panic!()
+            };
+        }
     }
-}
 
-impl fmt::Display for WASMType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            WASMType::i32 => "i32",
-            WASMType::i64 => "i64",
-            WASMType::f32 => "f32",
-            WASMType::f64 => "f64"
-        })
+    impl From<&ComparisonOperator> for WASMOperator {
+        fn from(input: &ComparisonOperator) -> Self {
+            return match input {
+                ComparisonOperator::Equal => WASMOperator::Eq,
+                _ => panic!()
+            };
+        }
     }
-}
 
-impl fmt::Display for WASMOperator {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", match self {
-            WASMOperator::Add => "add",
-            WASMOperator::Sub => "sub",
-            WASMOperator::Mult => "mul",
-            WASMOperator::Div => "div",
-            WASMOperator::Eq => "eq",
-            WASMOperator::Ne => "ne",
-            x => panic!("Display not implemented for WASMOperator: {:?}", x)
-        })
+    impl fmt::Display for WASMType {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", match self {
+                WASMType::i32 => "i32",
+                WASMType::i64 => "i64",
+                WASMType::f32 => "f32",
+                WASMType::f64 => "f64"
+            })
+        }
+    }
+
+    impl fmt::Display for WASMOperator {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "{}", match self {
+                WASMOperator::Add => "add",
+                WASMOperator::Sub => "sub",
+                WASMOperator::Mult => "mul",
+                WASMOperator::Div => "div",
+                WASMOperator::Eq => "eq",
+                WASMOperator::Ne => "ne",
+                x => panic!("Display not implemented for WASMOperator: {:?}", x)
+            })
+        }
     }
 }
 

@@ -162,8 +162,6 @@ impl Type {
     }
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
-        // println!("self: {:?}", self);
-        // println!("attribute: {:?}", attribute);
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
                 let mut t = None;

@@ -82,8 +82,8 @@ pub struct Compilation {
 }
 
 impl Compilation {
-    pub fn compile(file_name: String) -> Compilation {
-        let path = Path::new(&file_name);
+    pub fn compile(file_name: &String) -> Compilation {
+        let path = Path::new(file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
 
         // Panics if the file_name ends in ".."
@@ -208,7 +208,7 @@ impl Compilation {
         };
         return new_import;
     }
-    
+
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
     pub fn generate_wast_files(&self, output_dir: &Box<Path>) -> Option<String> {
         let mut ret_str = None;
@@ -325,12 +325,8 @@ pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
     return (module, context, cfg_map);
 }
 
-
-pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, String) 
-where T: Parseable, T: GetContext, T: Typed<T>, T: ToBytecode, T: Debug {
-    let (result, context): (T, Context) = to_type_rewrites(input);
-    let bytecode = result.to_bytecode(&context);
-    return (result, context, bytecode);
+pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
+    panic!()
 }
 
 #[cfg(test)]
@@ -344,7 +340,7 @@ mod tests {
         let folder_path = format!("./test_data/{}", subfolder);
         let output_path = format!("./test_data/{}/outputs", subfolder);
         let file_path = format!("{}/file_1.gr", folder_path);
-        let compiled = Compilation::compile(file_path);
+        let compiled = Compilation::compile(&file_path);
         let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
         let paths = read_dir(folder_path).unwrap();
         for path in paths {

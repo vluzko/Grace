@@ -28,7 +28,6 @@ impl ToBytecode for WASMModule {
             let import_string = format!("(import \"{}\" \"{}\" (func ${} {} {}))", 
                 import.path, import.value, import.internal_name, params, res
             );
-            println!("{}$", import_string);
             import_strings.push(import_string);
         }
         for function in &self.functions {

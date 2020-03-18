@@ -307,7 +307,7 @@ pub mod stmt_parsers {
             return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, mut else_block)| {
                 let mut just_elifs = Vec::with_capacity(elifs.len());
 
-                for (i, ((c, mut c_u), b)) in elifs.into_iter().enumerate() {
+                for ((c, mut c_u), b) in elifs.into_iter() {
                     cond_u.append(&mut c_u);
                     just_elifs.push((c, b));
                 }

@@ -72,7 +72,6 @@ impl ToBytecode for WASM {
             WASM::Tee(name) => format!("tee_local ${}", name),
             WASM::Load(t) => format!("{}.load", t),
             WASM::Store(t) => format!("{}.store", t),
-            x => panic!("WASM to_bytecode not implemented for: {:?}", x)
         };
 
     }

@@ -6,7 +6,6 @@ extern crate petgraph;
 use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
-use general_utils::get_next_id;
 use scoping::Context;
 
 pub type CfgMap = HashMap<Identifier, Cfg>;

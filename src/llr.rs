@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::convert::From;
 use std::fmt;
 
-use petgraph::{graph::Neighbors, Outgoing, visit::EdgeRef};
+use petgraph::{Outgoing, visit::EdgeRef};
 
 
 use cfg::{Cfg, CfgVertex, CfgStmt};
@@ -478,7 +478,7 @@ pub mod rust_trait_impls {
 
 #[cfg(test)]
 mod tests {
-use super::*;
+    use super::*;
 
     #[cfg(test)]
     mod exprs {

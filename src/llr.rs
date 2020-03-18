@@ -358,14 +358,19 @@ impl ToLLR for Node<Expr> {
             },
             Expr::AttributeAccess{ref base, ref attribute} => {
                 let mut llr = vec!();
-
+                // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context));
                 let base_type = context.get_node_type(base.id);
                 match base_type {
                     Type::Record(ref names, ref fields) => {
+                        let attr_type = fields.get(attribute).unwrap();
+                        // Calculate the offset of `attribute` from the start of the expression result.
                         let offset = calculate_offset(attribute, names, fields);
                         llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
-                        panic!()
+                        // Add the offset and the address
+                        llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+                        // Get the value at that address.
+                        llr.push(WASM::Load(WASMType::from(attr_type)));
                     },
                     x => panic!("Cannot access attribute of: {:?}", x)
                 }

@@ -596,7 +596,8 @@ impl GetContext for Node<Expr> {
                 context.add_type(self.id, t.clone());
                 (context, t)
             },
-            Expr::Index{ref mut base, ref mut slices} => {
+            Expr::Index{ref mut base, ..} => {
+                let (_new_c, _base_t) = base.scopes_and_types(parent_id, context);
                 panic!()
             },
             Expr::IdentifierExpr(ref name) => {

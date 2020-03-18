@@ -242,7 +242,7 @@ impl Type {
 
     pub fn get_constructor_type(&self) -> (Vec<(Identifier, Type)>, Type) {
         return match &self {
-            Type::Record(ref order, ref fields) => {
+            Type::Record(_, ref fields) => {
                 let args: Vec<(Identifier, Type)> = fields.clone().into_iter().collect();
                 (args, Type::i32)
             },

@@ -2303,7 +2303,7 @@ mod tests {
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
         }));
         
-        let e = ParserContext::empty();
+        // let e = ParserContext::empty();
         let module_str = "import file_2\nfn a() -> i64:\n return file_2.foo()\n";
         check_match(module_str, module, Node::from(Module{
             declarations: vec!(

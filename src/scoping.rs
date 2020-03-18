@@ -96,7 +96,7 @@ impl Scope {
 
     /// Create a child of the given parent
     pub fn child(parent_id: usize) -> Scope {
-        return return Scope{
+        return Scope{
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new()

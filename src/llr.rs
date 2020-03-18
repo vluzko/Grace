@@ -138,7 +138,9 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     |(n, t)| (n.name.clone(), WASMType::from(t))).collect();
                 let cfg = cfg_map.get(name).unwrap();
                 let block_llr = cfg.to_llr(context);
-                let wasm_args: Vec<(String, WASMType)>  = args.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+                let mut wasm_args: Vec<(String, WASMType)>  = args.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+                // Add kwargs
+                wasm_args.append(&mut kwargs.iter().map(|(name, t, _)| (name.name.clone(), WASMType::from(t))).collect());
                 let wasm_func = WASMFunc {
                     name: name.name.clone(),
                     args: wasm_args,
@@ -331,7 +333,7 @@ impl ToLLR for Node<Expr> {
                     Expr::IdentifierExpr(ref name) => {
                         llr.push(WASM::Call(name.name.clone()));
                     },
-                    Expr::ModuleAccess(ref id, ref path) => {
+                    Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     },
@@ -348,7 +350,7 @@ impl ToLLR for Node<Expr> {
                     Expr::IdentifierExpr(ref name) => {
                         llr.push(WASM::Call(name.name.clone()));
                     },
-                    Expr::ModuleAccess(ref id, ref path) => {
+                    Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     },

@@ -16,6 +16,21 @@ use self::iresult_helpers::*;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
 
+/// A macro for calling methods.
+macro_rules! m (
+  ($i:expr, $self_:ident.$method:ident) => (
+    {
+      let res = $self_.$method($i);
+      res
+    }
+  );
+  ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
+    {
+      let res = $self_.$method($i, $($args),*);
+      res
+    }
+  );
+);
 
 /// Alias for opt!(complete!())
 macro_rules! optc (
@@ -114,6 +129,43 @@ macro_rules! line_and_block (
     );
 );
 
+macro_rules! line_and_block2 (
+    ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                $submac!($($args)*),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            m!($self_.block, $indent + 1)
+        )
+    );
+
+    ($i:expr, $self_:ident, $f: expr, $indent: expr) => (
+        tuple!($i,
+            terminated!(
+                call!($f),
+                tuple!(
+                    COLON,
+                    NEWLINE
+                )
+            ),
+            m!($self_.block, $indent + 1)
+        )
+    );
+);
+
+macro_rules! keyword_and_block2 (
+    ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
+        match line_and_block2!($i, $self_, $keyword, $indent) {
+            Ok((remaining, (_,o))) => Ok((remaining, o)),
+            Err(e) => Err(e)
+        }
+    );
+);
+
 macro_rules! keyword_and_block (
     ($i:expr, $keyword: expr, $indent: expr) => (
         match line_and_block!($i, $keyword, $indent) {
@@ -141,6 +193,8 @@ macro_rules! w_followed (
         w_followed!($i, call!($f));
     );
 );
+
+
 
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
@@ -190,6 +244,19 @@ pub mod tokens {
         }
     }
 
+    pub fn NUM_START<'a>(input: PosStr<'a>) -> IO<'a> {
+        return match input.slice.len() {
+            0 => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            _ => {
+                let x = input.slice[0];
+                match (x >= 0x30 && x <= 0x39) || x == 0x2e {
+                    true => Ok(input.take_split(1)),
+                    false => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit)))
+                }
+            }
+        };
+    }
+
     /// Recognize a non-empty sequence of decimal digits.
     pub fn DIGIT<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
@@ -206,10 +273,7 @@ pub mod tokens {
     pub fn DIGIT0<'a>(input: PosStr<'a>) -> IO<'a> {
         return match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(n) => Ok(input.take_split(n)),
-            None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
-                n => Ok(input.take_split(n))
-            }
+            None => Ok(input.take_split(input.input_len()))
         };
     }
 
@@ -237,6 +301,7 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a sequence of valid internal identifier characters.
     pub fn IDENT_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
         let identifier_segment = input.position(|x| {
             let y = x.as_char();
@@ -252,13 +317,15 @@ pub mod tokens {
         };
     }
 
+    /// Recognize a character in a string, or an escape sequence.
     pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a>{
         return alt!(input,
             tag!("\\\"") |
+            tag!("\\\'") |
             tag!("\\\\") |
-            tag!("\\\n") |
+            tag!("\\n") |
             tag!("\\\r") |
-            recognize!(none_of!("\n\""))
+            recognize!(none_of!("\r\n\"\\"))
         );
     }
 
@@ -313,7 +380,19 @@ pub mod tokens {
                 tag!(",") | 
                 tag!("]") | 
                 tag!("}") |
-                tag!("=>")
+                tag!("=>") |
+                tag!("+") |
+                tag!("-") |
+                tag!("*") |
+                tag!("/") |
+                tag!("%") |
+                tag!("&") |
+                tag!("|") |
+                tag!("^") |
+                tag!("!") |
+                tag!("=") |
+                tag!("<") |
+                tag!(">")
             ));
         }
     }
@@ -324,6 +403,11 @@ pub mod tokens {
 
     pub fn SIGN <'a> (input: PosStr<'a>) -> IO<'a> {
         return recognize!(input, alt!(tag!("+") | tag!("-")));
+    }
+
+    /// Parser for the negative unary operator. Checks that it's not immediately followed by a digit.
+    pub fn NEG<'a>(input: PosStr<'a>) -> IO<'a> {
+        return w_followed!(input, terminated!(tag!("-"), peek!(not!(NUM_START))));
     }
 
     // Keywords
@@ -457,11 +541,38 @@ pub mod iresult_helpers {
         };
     }
 
+    pub fn fmap_update<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (T, U)>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, (o, u))) => Ok((i, (func(o), u))),
+            Err(e) => Err(e)
+        };
+    }
+
     /// Map the contents and wrap a Node around it.
     pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
         where F: Fn(X) -> T {
         return match res {
             Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
+        where F: Fn(X) -> T {
+        return match res {
+            Ok((i, o)) => Ok((i, (Node::from(func(o.0)), o.1))),
+            Err(e) => Err(e)
+        };
+    }
+
+    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F) -> Res<'a, (Node<T>, U)>
+        where F: Fn(X) -> (T, U) {
+        return match res {
+            Ok((i, o)) => {
+                let (v, u) = func(o);
+                Ok((i, (Node::from(v), u)))
+            },
             Err(e) => Err(e)
         };
     }
@@ -519,7 +630,7 @@ pub mod iresult_helpers {
         };
     }
 
-    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
+    pub fn check_match_and_leftover<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T, expected_leftover: &'a str)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
@@ -533,13 +644,13 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data_and_leftover<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T, expected_leftover: &str)
+    pub fn check_data_and_leftover<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T, expected_leftover: &str)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
             Ok((i, o)) => {
                 assert_eq!(i.slice, expected_leftover.as_bytes());
-                assert_eq!(o.data, expected);
+                assert_eq!(o.0.data, expected);
             },
             Result::Err(e) => {
                 panic!("Error: {:?}. Input was: {:?}", e, input)
@@ -547,7 +658,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_match<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: T)
+    pub fn check_match<'a, T>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         match res {
@@ -562,22 +673,38 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_data<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    pub fn check_match_no_update<'a, T, U>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, (T, U)>, expected: T)
+        where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
+                assert_eq!(o.0, expected);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}. Input was: {:?}", e, input)
+            }
+        }
+    }
+
+    /// Check just the data of the result of a parser. Skips the containing node and the update.
+    pub fn check_data<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
         return match res {
             Ok((i, o)) => {
-                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o);
-                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}", i, l_r);
-                assert_eq!(o.data, expected);
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0.data);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
+                assert_eq!(o.0.data, expected, "Results were: {}\nInput was: {}", l_r, input);
             },
             Result::Err(e) => {
-                panic!("Error: {:?}.", e)
+                panic!("Error: {:?}.\nInput was: {}", e, input)
             }
         };
     }
 
-    pub fn simple_check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>) {
+    pub fn simple_check_failed<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>) {
         let res = parser(PosStr::from(input));
         match res {
             Result::Err(_) => {},
@@ -603,7 +730,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn check_failed<'a, T>(input: &'a str, parser: fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
+    pub fn check_failed<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, T>, expected: ErrorKind)
     where T: Debug {
         let res = parser(PosStr::from(input));
         unwrap_and_check_error(res, expected);

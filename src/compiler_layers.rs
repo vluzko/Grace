@@ -1,44 +1,43 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
-use std::path::Path;
-use std::path::PathBuf;
+use std::collections::{HashMap, BTreeMap};
+use std::path::{Path, PathBuf};
 use std::fmt::Debug;
 use std::io::prelude::*;
 use std::fs::{File, canonicalize, create_dir_all};
-use std::env;
 
-extern crate itertools;
+use itertools::join;
 
 use parser::Parseable;
 use position_tracker::PosStr;
-// use scoping;
-use scoping::{
-    Scoped,
-    Scope,
-    Context,
-    CanModifyScope,
-    initial_context,
-    base_scope
-};
-// use typing;
-use typing::{
-    Type,
-    Typed
-};
-use bytecode::ToBytecode;
 use expression::{
     Node,
     Module,
     Identifier,
     Import
 };
-use general_utils::extend_map;
+use scoping::{
+    Scope,
+    Context,
+    CanModifyScope,
+    GetContext,
+    builtin_context,
+    base_scope
+};
+use typing::{
+    Type,
+    Typed
+};
+use cfg::{CfgMap, Cfg, module_to_cfg};
+use llr::{module_to_llr, WASMModule};
+use bytecode::ToBytecode;
+use general_utils::{extend_map, get_next_id};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+
+#[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
     pub context: Context,
-    pub type_map: HashMap<usize, Type>,
+    pub cfg_map: HashMap<Identifier, Cfg>,
+    pub llr: WASMModule,
     // The path to the module file.
     pub path: Box<Path>,
     // The dependencies of this module.
@@ -47,12 +46,20 @@ pub struct CompiledModule {
     pub hash: u64
 }
 
+impl PartialEq for CompiledModule {
+    fn eq(&self, other: &Self) -> bool {
+        return self.hash == other.hash;
+    }
+}
+
+impl Eq for CompiledModule {}
+
 impl CompiledModule {
     pub fn get_type(&self) -> Type {
         let mut attribute_map = BTreeMap::new();
         let mut attribute_order = vec!();
         for func_dec in &self.ast.data.declarations {
-            let func_type = self.type_map.get(&func_dec.id).unwrap().clone();
+            let func_type = self.context.type_map.get(&func_dec.id).unwrap().clone();
             attribute_order.push(func_dec.data.get_name());
             attribute_map.insert(func_dec.data.get_name(), func_type);
         }
@@ -61,11 +68,11 @@ impl CompiledModule {
     }
 
     pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {
-        return itertools::join(idents.iter().map(|x| x.name.clone()), ".");
+        return join(idents.iter().map(|x| x.name.clone()), ".");
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct Compilation {
     /// The path to the main file or folder.
     pub main_path: Option<Box<Path>>,
@@ -75,8 +82,8 @@ pub struct Compilation {
 }
 
 impl Compilation {
-    pub fn compile(file_name: String) -> Compilation {
-        let path = Path::new(&file_name);
+    pub fn compile(file_name: &String) -> Compilation {
+        let path = Path::new(file_name);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
 
         // Panics if the file_name ends in ".."
@@ -94,12 +101,12 @@ impl Compilation {
 
     /// Get the full record type of a submodule.
     /// a.b.c turns into Record(a => Record(b => Record(c => functions_in_c)))
-    fn get_submodule_type(sub_module: &CompiledModule, import: &Import) -> Type {
+    fn get_submodule_type(submodule: &CompiledModule, import: &Import) -> Type {
 
         // Add the types of all the imported functions to the record type.
         let mut record_type = BTreeMap::new();
-        for func_dec in &sub_module.ast.data.declarations {
-            let func_type = sub_module.type_map.get(&func_dec.id).unwrap().clone();
+        for func_dec in &submodule.ast.data.declarations {
+            let func_type = submodule.context.type_map.get(&func_dec.id).unwrap().clone();
             record_type.insert(func_dec.data.get_name(), func_type);
         }
 
@@ -107,16 +114,6 @@ impl Compilation {
         let module_type = Type::flatten_to_module(&import.path, record_type);
 
         return module_type;
-    }
-
-    fn add_submodule_to_scope(import: &Import, mut init_scope: Scope) -> Scope {
-        // Add the imported module to scope.
-        // TODO: I think this can just be in scoping.
-        let module_root = import.path.get(0).unwrap().clone();
-        init_scope.declarations.insert(module_root.clone(), CanModifyScope::ImportedModule(import.id));
-        init_scope.declaration_order.insert(module_root, init_scope.declaration_order.len());
-
-        return init_scope;
     }
 
     /// Compile the module tree rooted at the given file name.
@@ -132,74 +129,93 @@ impl Compilation {
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec!();
         let mut dependencies = vec!();
-        let mut init_scope = base_scope();
-        let mut init_type_map = HashMap::new();
+        // let mut init_scope = base_scope();
+        // let mut init_type_map = HashMap::new();
+
+        let mut init_context = Context::empty();
+
+        // Add builtin imports
+        for (import, t) in default_imports().into_iter() {
+            init_context.append_import(&import);
+            init_context.add_type(import.id, t);
+            new_imports.push(Box::new(import));
+        }
 
         // Compile dependencies
         for import in &parsed_module.data.imports {
-            let path = module_path_to_path(&import.path);
-            let submodule_name = itertools::join(import.path.iter().map(|x| x.name.clone()), ".");
+            let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
+            let new_import = self.add_import(base_dir, import, &mut init_context);
 
-            let submodule = match self.modules.get(&submodule_name) {
-                Some(x) => x,
-                None => {
-                    self.compile_tree(base_dir, &path);
-                    self.modules.get(&submodule_name).unwrap()
-                }
-            };
-
-            // A vector containing all the names of the imported functions.
-            let exports = submodule.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
-
-            // Add the imported functions to scope.
-            init_scope = Compilation::add_submodule_to_scope(import, init_scope);
-
-            // The type of the full module (including all the parent modules).
-            let module_type = Compilation::get_submodule_type(submodule, import);
-            init_type_map.insert(import.id, module_type);
-
-            new_imports.push(Box::new(Import {
-                id: import.id,
-                path: import.path.clone(),
-                alias: import.alias.clone(),
-                values: exports
-            }));
+            new_imports.push(Box::new(new_import));
             dependencies.push(submodule_name);
         }
 
         parsed_module.data.imports = new_imports;
 
         // Create the initial context for the current module.
-        let mut init_context = Context::empty();
-        let scope_id = init_context.new_scope(init_scope);
+        // let init_context = Context::new_context(init_scope, init_type_map);
 
-        // Calculate all scopes for the current module.
-        let context = parsed_module.gen_scopes(scope_id, &init_context);
-        init_context.extend(context);
-
-        // Get the types for the module and do type_rewrites.
-        let (mut type_map, _) = parsed_module.resolve_types(&init_context, init_type_map);
-        let rewritten = parsed_module.type_based_rewrite(&mut init_context, &mut type_map);
+        // 
+        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
+        let cfg_map = module_to_cfg(&parsed_module, &context);
+        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
 
         // Put the results in the tree.
         let compiled = CompiledModule {
-            ast: rewritten,
-            context: init_context,
-            type_map: type_map,
+            ast: parsed_module,
+            context: context,
+            cfg_map: cfg_map,
+            llr: wasm,
             path: file_name.clone(),
             dependencies: dependencies,
             hash: 0
         };
         self.modules.insert(module_name, compiled);
     }
-    
+
+    fn add_import(&mut self, base_dir: &Box<Path>, import: &Import, context: &mut Context) -> Import {
+        let path = module_path_to_path(&import.path);
+        let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
+
+        let submodule = match self.modules.get(&submodule_name) {
+            Some(x) => x,
+            None => {
+                self.compile_tree(base_dir, &path);
+                self.modules.get(&submodule_name).unwrap()
+            }
+        };
+
+        // A vector containing all the names of the imported functions.
+        let exports = submodule.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
+
+        // Add the imported functions to scope.
+        context.append_import(&import);
+
+        // The type of the full module (including all the parent modules).
+        let module_type = Compilation::get_submodule_type(submodule, &import);
+        context.add_type(import.id, module_type);
+
+        for (def_name, def_type) in &submodule.context.defined_types {
+            let new_type_name = Identifier::from(format!("{}.{}", import.string_ref(), def_name));
+            context.define_type(new_type_name, def_type.clone());
+        }
+
+        let new_import = Import {
+            id: import.id,
+            path: import.path.clone(),
+            alias: import.alias.clone(),
+            values: exports
+        };
+        return new_import;
+    }
+
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
     pub fn generate_wast_files(&self, output_dir: &Box<Path>) -> Option<String> {
         let mut ret_str = None;
         for (k, v) in self.modules.iter() {
             let path_str = k.replace(".", "/");
             let relative_path = &Path::new(&path_str);
-            let bytecode = v.ast.generate_bytecode(&v.context, &mut v.type_map.clone());
+            let bytecode = v.llr.to_bytecode(&v.context);
             let mut output_path = output_dir.join(relative_path);
             output_path.set_extension("wat");
             match create_dir_all(output_path.parent().unwrap()) {
@@ -231,6 +247,33 @@ impl Compilation {
     }
 }
 
+/// Return the default imports that all files need.
+fn default_imports() -> Vec<(Import, Type)> {
+    let mm_id = get_next_id();
+
+    let mem_management = Import{
+        id: mm_id,
+        path: vec!(Identifier::from("memory_management")),
+        alias: None,
+        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many")),
+    };
+    let alloc_and_free_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
+    let copy_type = Type::Function(vec!(
+        (Identifier::from("a"), Type::i32), 
+        (Identifier::from("b"), Type::i32),
+        (Identifier::from("size"), Type::i32)), 
+        Box::new(Type::i32)
+    );
+    let mut func_map = BTreeMap::new();
+    func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
+    func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
+    func_map.insert(Identifier::from("copy_many"), copy_type);
+
+    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), func_map);
+
+    return vec!((mem_management, mem_type));
+}
+
 fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
     let mut path = PathBuf::new();
     for component in module_path {
@@ -249,45 +292,41 @@ fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
 fn path_to_module_reference(path: &Box<Path>) -> String {
     // WOW it's hard to convert Paths to Strings.
     let without_extension = path.parent().unwrap().join(path.file_stem().unwrap());
-    return itertools::join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
+    return join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
 }
 
-pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, HashMap<usize, Type>, String){
+pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String){
     let mut f = File::open(file_name).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
-    return to_bytecode::<Node<Module>>(file_contents.as_bytes());
+    panic!()
+    // return to_bytecode::<Node<Module>>(file_contents.as_bytes());
 }
 
-pub fn to_scopes<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: Scoped {
+pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context)
+where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
-    let (id, mut init) = initial_context();
-    let context = result.gen_scopes(id, &init);
-    init.extend(context);
-    return (result, init);
+    let (id, init) = builtin_context();
+    let context = result.scopes_and_types(id, init).0;
+    return (result, context);
 }
 
-pub fn to_types<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped, T: Typed<T> {
-    let (result, context): (T, Context) = to_scopes(input);
-    let (type_map, _) = result.resolve_types(&context, HashMap::new());
-    return (result, context, type_map);
+pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context) 
+where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
+    let (result, mut context): (T, Context) = to_context(input);
+    let rewritten = result.type_based_rewrite(&mut context);
+    return (rewritten, context);
 }
 
-pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>) 
-where T: Parseable, T: Scoped, T: Typed<T>, T: Debug {
-    let (result, mut context, mut type_map): (T, Context, HashMap<usize, Type>) = to_types(input);
-    let rewritten = result.type_based_rewrite(&mut context, &mut type_map);
-    return (rewritten, context, type_map);
+pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
+    let (module, context) = to_type_rewrites::<Node<Module>>(input);
+    let cfg_map = module_to_cfg(&module, &context);
+    return (module, context, cfg_map);
 }
 
-pub fn to_bytecode<'a, T>(input: &'a [u8]) -> (T, Context, HashMap<usize, Type>, String) 
-where T: Parseable, T: Scoped, T: Typed<T>, T: ToBytecode, T: Debug {
-    let (result, context, mut type_map): (T, Context, HashMap<usize, Type>) = to_type_rewrites(input);
-    let bytecode = result.generate_bytecode(&context, &mut type_map);
-    return (result, context, type_map, bytecode);
+pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
+    panic!()
 }
 
 #[cfg(test)]
@@ -301,7 +340,7 @@ mod tests {
         let folder_path = format!("./test_data/{}", subfolder);
         let output_path = format!("./test_data/{}/outputs", subfolder);
         let file_path = format!("{}/file_1.gr", folder_path);
-        let compiled = Compilation::compile(file_path);
+        let compiled = Compilation::compile(&file_path);
         let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
         let paths = read_dir(folder_path).unwrap();
         for path in paths {

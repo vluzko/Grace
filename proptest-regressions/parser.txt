@@ -1,0 +1,17 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc e53531d9d01d2aacd438f2cc57e5675d0f4bb1381f66b89906ca7af7aa23785e # shrinks to v = IdentifierExpr(Identifier { name: "a" })
+cc dcbe696b0b40579449e2034804bd1b500f1004246122890a492edeeb1a817c63 # shrinks to v = ComparisonExpr { operator: Greater, left: Node { id: 496, data: Int("0"), scope: 0 }, right: Node { id: 497, data: UnaryExpr { operator: Positive, operand: Node { id: 495, data: Int("0"), scope: 0 } }, scope: 0 } }
+cc 8531f09b69cdd15777a1e9a24e2c6ada46eb067bf63f72d56397b134eb73fd76 # shrinks to v = String("\n")
+cc 72e649ac5c2acc9f8817e5287fa53745b605d78429d1bb55c37a0070c22355de # shrinks to v = String("\n")
+cc eca9b901337ba820323760f5ce3380b6dc0466f900b2a45805d230cdf8bc0735 # shrinks to v = ComparisonExpr { operator: Greater, left: Node { id: 53, data: Float("0.00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001232735624942596"), scope: 0 }, right: Node { id: 54, data: Bool(false), scope: 0 } }
+cc b1c5cf96c0b0d7f843eb2c33f5d1604b48bf04e699f066ba238ff363db814941 # shrinks to v = ComparisonExpr { operator: Equal, left: Node { id: 664, data: Int("3108722448437055713"), scope: 0 }, right: Node { id: 665, data: ComparisonExpr { operator: Unequal, left: Node { id: 662, data: String("w{c?+|2 HT/F==&h$!v%we##"), scope: 0 }, right: Node { id: 663, data: Float("0.000000000000000000000000000000000009596617953176391"), scope: 0 } }, scope: 0 } }
+cc 3071b1dca625eb2777164ced418ea167bced34e84e51c34dc697e127204a9697 # shrinks to v = BinaryExpr { operator: Or, left: Node { id: 47, data: BinaryExpr { operator: Add, left: Node { id: 45, data: Float("-0.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000006019227446386837"), scope: 0 }, right: Node { id: 46, data: Bool(true), scope: 0 } }, scope: 0 }, right: Node { id: 48, data: Float("-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000019158241602355104"), scope: 0 } }
+cc 2a27f98b1b0ba5f13c75989200cb17992e6ffe2b3edf847447d928d698d6841b # shrinks to v = String("\\")
+cc b2be3949f7ee568932dc98052b9a6c5890f09ac0eaacc5c9aaa41d9e6118c854 # shrinks to v = BinaryExpr { operator: And, left: Node { id: 1869, data: Int("0"), scope: 0 }, right: Node { id: 1870, data: Float("0."), scope: 0 } }
+cc 36f83632c5ebadc78f3e168360ad4486e007c942a0689b88c02d0810b62ff3db # shrinks to v = UnaryExpr { operator: Negative, operand: Node { id: 231, data: Int("0"), scope: 0 } }
+cc 53f750adda264c2de0dce5385f713c35bc0f5dd877615580eafa439cc7eb02ba # shrinks to v = IdentifierExpr(Identifier { name: "n" })

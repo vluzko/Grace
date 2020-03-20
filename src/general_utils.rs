@@ -29,6 +29,7 @@ where T: Eq, T: Hash {
     return a;
 }
 
+/// Take the union of two BTreeSets, consuming both.
 pub fn mb_union<T>(mut a: BTreeSet<T>,  b: BTreeSet<T>) -> BTreeSet<T>
 where T: Eq, T: Ord {
     for element in b.into_iter() {
@@ -37,6 +38,7 @@ where T: Eq, T: Ord {
     return a;
 }
 
+/// Take the union of two vectors, without consuming either.
 pub fn vec_c_union<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T> 
 where T: Eq, T: Clone {
     let mut new_vec: Vec<T> = a.clone();
@@ -48,6 +50,7 @@ where T: Eq, T: Clone {
     return new_vec;
 }
 
+/// Take the intersection of two vectors, without consuming either.
 pub fn vec_c_int<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T> 
 where T: Eq, T: Clone {
     let mut new_vec: Vec<T> = vec!();
@@ -57,6 +60,23 @@ where T: Eq, T: Clone {
         }
     }
     return new_vec;
+}
+
+/// Append vec `b` to vec `a` and return the result, consuming both.
+pub fn join<T>(mut a: Vec<T>, mut b: Vec<T>) -> Vec<T> {
+    a.append(&mut b);
+    return a;
+}
+
+/// Unzip a vector of two tuples into a tuple of vectors.
+pub fn unzip_vec<S, T>(a: Vec<(S, T)>) -> (Vec<S>, Vec<T>) {
+    let mut ss = Vec::with_capacity(a.len());
+    let mut ts = Vec::with_capacity(a.len());
+    for (s, t) in a.into_iter() {
+        ss.push(s);
+        ts.push(t);
+    }
+    return (ss, ts);
 }
 
 pub fn vec_subset<T>(a: &Vec<T>, b: &Vec<T>) -> bool 
@@ -86,6 +106,7 @@ where V: Eq, K: Hash, K: Eq, K: Debug, V: Debug {
 static NODE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static SCOPE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static MODULE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
+static LOCAL_VAR_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 // Return a unique node ID.
 pub fn get_next_id() -> usize {
@@ -102,6 +123,11 @@ pub fn get_next_scope_id() -> usize {
 /// Return a unique module ID.
 pub fn get_next_module_id() -> usize {
     let next_id = MODULE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
+    return next_id as usize;
+}
+
+pub fn get_next_var() -> usize {
+    let next_id = LOCAL_VAR_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
     return next_id as usize;
 }
 

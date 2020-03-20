@@ -1,13 +1,16 @@
 extern crate rand;
 extern crate log;
-#[macro_use(c)]
-extern crate cute;
 #[macro_use]
 extern crate maplit;
 extern crate bytecount;
 extern crate memchr;
 #[macro_use]
 extern crate pretty_assertions;
+extern crate petgraph;
+#[macro_use]
+extern crate proptest;
+extern crate indexmap;
+extern crate itertools;
 
 pub mod position_tracker;
 #[macro_use]
@@ -20,3 +23,5 @@ pub mod bytecode;
 pub mod scoping;
 pub mod typing;
 pub mod compiler_layers;
+pub mod cfg;
+pub mod llr;

@@ -674,6 +674,18 @@ mod test {
     use compiler_layers;
 
     #[test]
+    fn test_basic_grace_function_dec() {
+        let file_name = "test_data/basic_grace.gr".to_string();
+        let compilation = compiler_layers::Compilation::compile(
+            &file_name);
+        let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
+        let first_func_id = compiled_module.ast.data.declarations.get(0).unwrap().id;
+        let actual_type = compiled_module.context.type_map.get(&first_func_id).unwrap();
+        let expected_type = Type::Function(vec!((Identifier::from("arg"), Type::i32)), Box::new(Type::i32));
+        assert_eq!(&expected_type, actual_type);
+    }
+
+    #[test]
     fn test_function_locals() {
         let func_str = r#"fn a(b: i32, c: i32) -> i32:
         return b + c

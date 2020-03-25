@@ -1051,9 +1051,10 @@ pub mod expr_parsers {
                 },
                 Expr::IdentifierExpr(name) => {
                     match self.imported.get(&name) {
-                    Some(import) => Expr::ModuleAccess(import.id, vec!(name, attribute)),
-                    None => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
-                }},
+                        Some(import) => Expr::ModuleAccess(import.id, vec!(name, attribute)),
+                        None => Expr::AttributeAccess{base: wrap(Expr::IdentifierExpr(name)), attribute: attribute}
+                    }
+                },
                 x => Expr::AttributeAccess {base: wrap(x), attribute: attribute}
             };
         }
@@ -2305,7 +2306,9 @@ mod tests {
         
         // let e = ParserContext::empty();
         let module_str = "import file_2\nfn a() -> i64:\n return file_2.foo()\n";
-        check_match(module_str, module, Node::from(Module{
+        let parsed = module(PosStr::from(module_str)).unwrap();
+        let import_id = parsed.1.data.imports[0].id;
+        assert_eq!(parsed.1, Node::from(Module{
             declarations: vec!(
                 wrap(Stmt::FunctionDecStmt{
                     name: Identifier::from("a"), 
@@ -2314,7 +2317,7 @@ mod tests {
                     block: Node::from(Block{
                         statements: vec!(wrap(Stmt::ReturnStmt(
                             Node::from(Expr::FunctionCall{
-                                function: wrap(Expr::ModuleAccess(0, vec!(Identifier::from("file_2"), Identifier::from("foo")))),
+                                function: wrap(Expr::ModuleAccess(import_id, vec!(Identifier::from("file_2"), Identifier::from("foo")))),
                                 args: vec!(),
                                 kwargs: vec!(),
                             })

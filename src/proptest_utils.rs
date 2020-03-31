@@ -63,6 +63,12 @@ pub(crate) mod strategies {
         ]
     }
 
+    fn ident_expr_strat(in_scope: &'static Vec<String>) -> impl Strategy<Value = Expr> {
+        return (0..in_scope.len(), Just(in_scope)).prop_map(|(x, y)| {
+            Expr::IdentifierExpr(Identifier::from(y[x].clone()))
+        });
+    }
+
     /// Generate a recursive expression.
     fn complex_expression_strat() -> impl Strategy<Value = Expr> {
         let leaf = literal_strategy();

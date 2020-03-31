@@ -63,7 +63,7 @@ pub(crate) mod strategies {
         ]
     }
 
-    fn ident_expr_strat(in_scope: &'static Vec<String>) -> impl Strategy<Value = Expr> {
+    fn valid_ident_expr_strat(in_scope: &'static Vec<String>) -> impl Strategy<Value = Expr> {
         return (0..in_scope.len(), Just(in_scope)).prop_map(|(x, y)| {
             Expr::IdentifierExpr(Identifier::from(y[x].clone()))
         });
@@ -138,6 +138,16 @@ pub(crate) mod strategies {
             let_strategy(),
             assignment_strategy()
         ];
+    }
+
+    pub fn scoped_stmt_strategy(used_names: Vec<String>) -> impl Strategy<Value = (Stmt, Option<String>)> {
+        return stmt_strategy().prop_map(|stmt| {
+            let s = match &stmt {
+                Stmt::LetStmt{ref name, ..} => Some(name.name.clone()),
+                _ => None
+            };
+            (stmt, s)
+        });
     }
 
     pub fn block_strategy() -> impl Strategy<Value = Block> {

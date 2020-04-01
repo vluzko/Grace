@@ -1,4 +1,5 @@
 /// Helpers for writing property based tests.
+use rand::Rng;
 use expression::*;
 
 /// Strategies for use in property-based testing.

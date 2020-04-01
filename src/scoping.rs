@@ -675,7 +675,16 @@ mod test {
     use super::*;
     use compiler_layers;
 
-    
+    #[cfg(test)]
+    mod expected_failures {
+        use super::*;
+        #[test]
+        #[should_panic]
+        fn add_incompatible() {
+            let input = "fn a():\n   let x = \"a\" + 0";
+            compiler_layers::Compilation::compile_from_string(&input.to_string());
+        }
+    }
 
     #[test]
     fn test_basic_grace_function_dec() {

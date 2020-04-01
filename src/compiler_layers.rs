@@ -231,6 +231,47 @@ impl Compilation {
         return ret_str;
     }
 
+    pub fn compile_from_string(input: &String) -> Compilation{
+        let mut compilation = Compilation::empty();
+        // Parse the module
+        let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(input));
+
+        // Set everything up for compiling the dependencies.
+        let mut new_imports = vec!();
+        let mut dependencies = vec!();
+
+        let mut init_context = Context::empty();
+
+        // Add builtin imports
+        for (import, t) in default_imports().into_iter() {
+            init_context.append_import(&import);
+            init_context.add_type(import.id, t);
+            new_imports.push(Box::new(import));
+        }
+
+        // No imports if you're compiling from a string.
+        if (parsed_module.data.imports.len() > 0) {
+            panic!()
+        }
+
+        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
+        let cfg_map = module_to_cfg(&parsed_module, &context);
+        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
+
+        // Put the results in the tree.
+        let compiled = CompiledModule {
+            ast: parsed_module,
+            context: context,
+            cfg_map: cfg_map,
+            llr: wasm,
+            path: Box::from(Path::new(".")),
+            dependencies: dependencies,
+            hash: 0
+        };
+        compilation.modules.insert("$cli".to_string(), compiled);
+        return compilation;
+    }
+
     /// Merge two Compilations together.
     pub fn merge(mut self, other: Compilation) -> Compilation {
         self.modules = extend_map(self.modules, other.modules);

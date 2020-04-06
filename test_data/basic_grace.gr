@@ -1,0 +1,36 @@
+fn return_example(arg: i32) -> i32:
+    return 1
+
+fn func_call():
+    let one = return_example(4)
+
+fn if_example():
+    let val = true
+    let second_val = true
+    if val:
+        let checked = true
+    elif second_val:
+        let checked = true
+    else:
+        let checked = false
+
+fn while_loop():
+    let counter = 1
+    while counter < 10:
+        counter += 1
+
+fn while_loop_continue():
+    let counter = 1
+    while counter < 10:
+        counter += 1
+        if counter == 7:
+            continue
+        let not_seven = true
+
+fn while_loop_break():
+    let counter = 1
+    while counter < 10:
+        counter += 1
+        if counter == 7:
+            break
+

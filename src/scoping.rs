@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::HashMap;
+use std::cell::{RefCell, RefMut};
+use std::rc::Rc;
+
 use expression::*;
 use general_utils;
 use typing::{
@@ -601,7 +604,6 @@ impl GetContext for Node<Expr> {
                 panic!()
             },
             Expr::IdentifierExpr(ref name) => {
-                println!("ident: {:?}", name);
                 let t = context.get_type(self.scope, name);
                 context.add_type(self.id, t.clone());
                 (context, t)
@@ -672,6 +674,17 @@ impl GetContext for Node<Expr> {
 mod test {
     use super::*;
     use compiler_layers;
+
+    #[cfg(test)]
+    mod expected_failures {
+        use super::*;
+        #[test]
+        #[should_panic]
+        fn add_incompatible() {
+            let input = "fn a():\n   let x = \"a\" + 0";
+            compiler_layers::Compilation::compile_from_string(&input.to_string());
+        }
+    }
 
     #[test]
     fn test_basic_grace_function_dec() {

@@ -391,6 +391,38 @@ impl ToLLR for Node<Expr> {
                 }
             },
             Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
+            Expr::VecLiteral(ref exprs) => {
+                let mut llr = vec!();
+                let t = context.get_node_type(self.id);
+                let vector_size = exprs.len() * t.size() + 3;
+                llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
+                llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+
+                for expr in exprs {
+                    llr.append(&mut expr.to_llr(context))
+                }
+                panic!();
+                // let wasm_args: Vec<(String, WASMType)>  = fields.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+                // let mut block_llr = vec!();
+                // let num_words: usize = wasm_args.iter().map(|(_, t)| t.size()).sum();
+                // block_llr.push(WASM::Const(format!("{}", num_words), WASMType::i32));
+                // block_llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+                // block_llr.push(WASM::Set(".x".to_string()));
+                // for (index, (field_name, _)) in fields.iter().enumerate() {
+                //     block_llr.push(WASM::Get(".x".to_string()));
+                //     block_llr.push(WASM::Const(format!("{}", 8+index*4), WASMType::i32));
+                //     block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+                //     block_llr.push(WASM::Get(field_name.name.clone()));
+                //     block_llr.push(WASM::Call(".memory_management.set".to_string()));
+                // }
+                // block_llr.push(WASM::Get(".x".to_string()));
+                // block_llr.push(WASM::Const("8".to_string(), WASMType::i32));
+                // block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+                llr
+            },
+            Expr::TupleLiteral(ref exprs) => {
+                panic!()
+            },
             x => panic!("to_llr not implemented for: {:?}", x)
         }
     }

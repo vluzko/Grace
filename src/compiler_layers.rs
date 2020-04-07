@@ -295,8 +295,8 @@ fn default_imports() -> Vec<(Import, Type)> {
     let mem_management = Import{
         id: mm_id,
         path: vec!(Identifier::from("memory_management")),
-        alias: None,
-        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many")),
+        alias: Some(Identifier::from(".memory_management")),
+        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many"), Identifier::from("tee_memory")),
     };
     let alloc_and_free_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
     let copy_type = Type::Function(vec!(
@@ -305,10 +305,16 @@ fn default_imports() -> Vec<(Import, Type)> {
         (Identifier::from("size"), Type::i32)), 
         Box::new(Type::i32)
     );
+    let tee_type = Type::Function(vec!(
+        (Identifier::from("loc"), Type::i32),
+        (Identifier::from("value"), Type::i32)), 
+        Box::new(Type::i32)
+    );
     let mut func_map = BTreeMap::new();
     func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
     func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
     func_map.insert(Identifier::from("copy_many"), copy_type);
+    func_map.insert(Identifier::from("tee_memory"), tee_type);
 
     let mem_type = Type::Module(vec!(Identifier::from("memory_management")), func_map);
 

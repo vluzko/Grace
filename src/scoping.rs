@@ -377,13 +377,23 @@ impl GetContext for Node<Stmt> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
-            Stmt::LetStmt{ref mut expression, ..} => {
+            Stmt::LetStmt{ref mut expression, ref type_annotation, ..} => {
                 // TODO: Type checking
-                expression.scopes_and_types(parent_id, context)
+                let (c, t) = expression.scopes_and_types(parent_id, context);
+                match &type_annotation {
+                    Some(x) => assert!(t.is_compatible(x)),
+                    None => {}
+                };
+
+                (c, t)
             },
-            Stmt::AssignmentStmt{ref mut expression, ..} => {
+            Stmt::AssignmentStmt{ref mut expression, ref name} => {
                 // TODO: Type checking
-                expression.scopes_and_types(parent_id, context)
+
+                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let expected_type = c.get_type(self.scope, name);
+                assert!(t.is_compatible(&expected_type));
+                (c, t)
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
                 // TODO: Type checking
@@ -609,14 +619,14 @@ impl GetContext for Node<Expr> {
                 (context, t)
             },
             Expr::Int(_) => {
-                let t = Numeric();
-                context.add_type(self.id, t.clone());
-                (context, t)
+                // let t = Numeric();
+                context.add_type(self.id, Type::i32);
+                (context, Type::i32)
             },
             Expr::Float(_) => {
-                let t = FloatingPoint();
-                context.add_type(self.id, t.clone());
-                (context, t)
+                // let t = FloatingPoint();
+                context.add_type(self.id, Type::f32);
+                (context, Type::f32)
             },
             Expr::String(_) => {
                 let t = Type::string;

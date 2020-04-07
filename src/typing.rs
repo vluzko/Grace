@@ -133,6 +133,41 @@ impl Type {
         }
     }
 
+    /// Check if it is possible to convert from one type to the other
+    pub fn is_compatible(&self, other: &Type) -> bool {
+        if self == other {
+            return true
+        } else {
+            return match self {
+                Type::i32 => {
+                    match other {
+                        Type::i64 | Type::f64 => true,
+                        _ => false
+                    }
+                },
+                Type::f32 => {
+                    match other {
+                        Type::f64 => true,
+                        _ => false
+                    }
+                },
+                Type::Sum(ref types) => {
+                    match other {
+                        Type::Sum(_) => true, 
+                        x => types.contains(&x)
+                    }
+                }, 
+                Type::Undetermined => true,
+                x => {
+                    match other {
+                        Type::Sum(ref other_types) => other_types.contains(&x),
+                        _ => false
+                    }
+                }
+            }
+        }
+    }
+
     pub fn size(&self) -> usize {
         return match self {
             Type::i32 => 1,
@@ -142,6 +177,7 @@ impl Type {
             Type::ui32 => 2,
             Type::boolean => 1,
             Type::string => 1,
+            Type::Vector(ref t) => t.size(),
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
             Type::Record(_, ref fields)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
@@ -363,12 +399,24 @@ impl Typed<Node<Block>> for Node<Block> {
 impl Typed<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Stmt> {
         let new_stmt = match self.data {
-            Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
-                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, kwargs, return_type}
+            Stmt::LetStmt {name, type_annotation, expression} => {
+                let returned_type = context.get_node_type(expression.id);
+                let base = expression.type_based_rewrite(context);
+                let expr = match &type_annotation {
+                    Some(x) => get_convert_expr(&returned_type, &x, base, context),
+                    None => base
+                };
+                Stmt::LetStmt {name, type_annotation, expression: expr}
             },
             Stmt::AssignmentStmt {mut expression, name} => {
-                expression = expression.type_based_rewrite(context);
-                Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context)}
+                let expected_type = context.get_node_type(self.id);
+                let actual_type = context.get_node_type(expression.id);
+                let base = expression.type_based_rewrite(context);
+                let expr = get_convert_expr(&actual_type, &expected_type, base, context);
+                Stmt::AssignmentStmt {name, expression: expr}
+            },
+            Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
+                Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, kwargs, return_type}
             },
             Stmt::IfStmt {condition, block, else_block} => {
                 let new_else_block = match else_block {
@@ -378,9 +426,6 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 Stmt::IfStmt {
                     condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), else_block: new_else_block
                 }
-            },
-            Stmt::LetStmt {name, type_annotation, expression} => {
-                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context)}
             },
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
@@ -417,8 +462,8 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 // the other types need to be.
                 if Numeric().super_type(&left_type) && Numeric().super_type(&right_type) {
                     let merged_type = operator.get_return_types(&left_type, &right_type);
-                    let converted_left = convert_expr(&new_left, &merged_type, &mut context.type_map);
-                    let converted_right = convert_expr(&new_right, &merged_type, &mut context.type_map);
+                    let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
+                    let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
                     Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
                 } else {
                     // TODO: Update this once typeclasses are implemented
@@ -472,6 +517,19 @@ pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<u
     }
 }
 
+fn get_convert_expr(from: &Type, to: &Type, base: Node<Expr>, context: &mut scoping::Context) -> Node<Expr> {
+    return match from == to {
+        false => {
+            let operator = UnaryOperator::cast(&from, &to);
+            let raw_expr = Expr::UnaryExpr{operator: operator, operand: Box::new(base)};
+            let new_node = Node::from(raw_expr);
+            context.add_type(new_node.id, to.clone());
+            new_node
+        },
+        true => base
+    };
+}
+
 pub fn choose_return_type(possible: &Type) -> Type {
     return match possible {
         Type::Sum(ref types) => {
@@ -518,6 +576,20 @@ impl BinaryOperator {
         }
     }
 }
+
+
+impl UnaryOperator {
+    fn cast(from: &Type, to: &Type) -> UnaryOperator {
+        let possible = from.is_compatible(to);
+
+        if possible {
+            return UnaryOperator::Convert(from.clone(), to.clone());
+        } else {
+            panic!("Cannot cast from {:?} to {:?}", from, to);
+        }
+    }
+}
+
 
 #[cfg(test)]
 mod test {

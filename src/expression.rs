@@ -165,7 +165,7 @@ pub enum BinaryOperator {
 }
 
 /// Any unary operator.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum UnaryOperator {
     Not,
     Positive,
@@ -177,7 +177,8 @@ pub enum UnaryOperator {
     ToUi64,
     ToF32,
     ToF64,
-    ToBool
+    ToBool,
+    Convert(Type, Type)
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.

@@ -629,7 +629,7 @@ mod test {
         fn if_stmt_typing() {
             let (block, context) = compiler_layers::to_context::<Node<Block>>(if_stmt_fixture());
             let if_stmt = block.data.statements.get(2).unwrap();
-            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Numeric());
+            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
         }
     }
 
@@ -643,7 +643,7 @@ mod test {
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
         assert_eq!(context.get_node_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(context.get_node_type(id2), Numeric());
+        assert_eq!(context.get_node_type(id2), Type::i32);
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {

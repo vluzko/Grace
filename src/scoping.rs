@@ -492,7 +492,8 @@ impl GetContext for Node<Stmt> {
             Stmt::ReturnStmt(ref mut expression) => {
                 expression.scopes_and_types(parent_id, context)
             },
-            _ => panic!()
+            Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => (context, Type::empty),
+            _ => panic!("scopes_and_types not implemented for {:?}", self.data)
         };
         final_c.add_type(self.id, final_t.clone());
         return (final_c, final_t);

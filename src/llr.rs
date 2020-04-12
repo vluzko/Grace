@@ -477,6 +477,10 @@ pub mod rust_trait_impls {
         fn from(input: &ComparisonOperator) -> Self {
             return match input {
                 ComparisonOperator::Equal => WASMOperator::Eq,
+                ComparisonOperator::Less => WASMOperator::Lt,
+                ComparisonOperator::Greater => WASMOperator::Gt,
+                ComparisonOperator::LessEqual => WASMOperator::Le,
+                ComparisonOperator::GreaterEqual => WASMOperator::Ge,
                 _ => panic!()
             };
         }

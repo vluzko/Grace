@@ -4,7 +4,7 @@
   "description": "Javascript tests for Grace",
   "license": "MIT",
   "devDependencies": {
-    "jasmine": "^3.1.0",
+    "jasmine": "^3.5.0",
     "jest": "^23.6.0"
   },
   "scripts": {

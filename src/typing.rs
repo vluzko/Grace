@@ -431,7 +431,16 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
             },
             Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite(context))
+                let exp_type = context.get_type(self.scope, &Identifier::from("$ret"));
+                let ret_type = context.get_node_type(value.id);
+                let base = value.type_based_rewrite(context);
+                assert!(ret_type.is_compatible(&exp_type));
+
+                let expr = match ret_type == exp_type {
+                    true => base,
+                    false => get_convert_expr(&ret_type, &exp_type, base, context)
+                };
+                Stmt::ReturnStmt(expr)
             },
             _ => self.data
         };
@@ -627,9 +636,15 @@ mod test {
         use compiler_layers;
         #[test]
         fn if_stmt_typing() {
-            let (block, context) = compiler_layers::to_context::<Node<Block>>(if_stmt_fixture());
-            let if_stmt = block.data.statements.get(2).unwrap();
-            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+            let (fun, context) = compiler_layers::to_context::<Node<Stmt>>(if_stmt_fixture());
+            match fun.data {
+                Stmt::FunctionDecStmt{ref block, ..} => {
+                    let if_stmt = block.data.statements.get(2).unwrap();
+                    assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+                },
+                _ => panic!()
+            };
+            
         }
     }
 
@@ -647,13 +662,13 @@ mod test {
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {
-        let if_stmt = r#"
-        let a = 1
-        let b = 1
-        if false:
-            return a
-        else:
-            return b"#;
+        let if_stmt = r#"fn a() -> i32:
+            let a = 1
+            let b = 1
+            if false:
+                return a
+            else::
+                return b"#;
         return if_stmt.as_bytes(); 
     }
 }

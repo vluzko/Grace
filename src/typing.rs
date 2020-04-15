@@ -32,36 +32,6 @@ pub enum Type {
     Undetermined
 }
 
-#[allow(non_snake_case)]
-/// The signed integral types.
-pub fn Signed<'a>() -> Type {
-    Type::Sum(vec!(Type::i32, Type::i64))
-}
-
-#[allow(non_snake_case)]
-/// The unsigned integral types.
-pub fn Unsigned<'a>() -> Type {
-    Type::Sum(vec!(Type::ui32))
-}
-
-#[allow(non_snake_case)]
-/// The floating point types.
-pub fn Integral<'a>() -> Type {
-    return Signed() + Unsigned();
-}
-
-#[allow(non_snake_case)]
-/// The floating point types.
-pub fn FloatingPoint<'a>() -> Type {
-    Type::Sum(vec!(Type::f32, Type::f64))
-}
-
-#[allow(non_snake_case)]
-/// All numeric types.
-pub fn Numeric<'a>() -> Type {
-    return Integral() + FloatingPoint();
-}
-
 impl Type {
 
     /// Get the name of this type in WAST.
@@ -408,7 +378,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                 };
                 Stmt::LetStmt {name, type_annotation, expression: expr}
             },
-            Stmt::AssignmentStmt {mut expression, name} => {
+            Stmt::AssignmentStmt {expression, name} => {
                 let expected_type = context.get_node_type(self.id);
                 let actual_type = context.get_node_type(expression.id);
                 let base = expression.type_based_rewrite(context);
@@ -469,16 +439,10 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 // TODO: Once typeclasses are implemented, call the typeclass method with
                 // the operator, the left type, and the right type to figure out what all
                 // the other types need to be.
-                if Numeric().super_type(&left_type) && Numeric().super_type(&right_type) {
-                    let merged_type = operator.get_return_types(&left_type, &right_type);
-                    let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
-                    let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
-                    Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
-                } else {
-                    // TODO: Update this once typeclasses are implemented
-                    assert_eq!(left_type, right_type);
-                    Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
-                }
+                let merged_type = operator.get_return_types(&left_type, &right_type);
+                let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
+                let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
+                Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
             },
             Expr::FunctionCall {function, args, kwargs} => {
                 let new_func_expr = Box::new(function.type_based_rewrite(context));
@@ -623,11 +587,6 @@ mod test {
             };
             assert_eq!(record_type, Type::Record(vec!(Identifier::from("b")), second_map));
         }
-    }
-
-    #[cfg(test)]
-    mod expressions {
-        use super::*;
     }
 
     #[cfg(test)]

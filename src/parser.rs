@@ -271,7 +271,7 @@ pub mod stmt_parsers {
                 ))
             );
 
-            let parse_result = line_and_block2!(input, self, preceded!(FN, arg_parser), indent);
+            let parse_result = line_and_block!(input, self, preceded!(FN, arg_parser), indent);
 
             return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| {
                 let mut res_kwargs = vec!();
@@ -299,9 +299,9 @@ pub mod stmt_parsers {
         /// Match an if statement.
         fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
             let parse_result = tuple!(input,
-                line_and_block2!(self, preceded!(IF, m!(self.expression)), indent),
-                many0c!(indented!(line_and_block2!(self, preceded!(ELIF, m!(self.expression)), indent), indent)),
-                opt!(complete!(indented!(keyword_and_block2!(self, ELSE, indent), indent)))
+                line_and_block!(self, preceded!(IF, m!(self.expression)), indent),
+                many0c!(indented!(line_and_block!(self, preceded!(ELIF, m!(self.expression)), indent), indent)),
+                opt!(complete!(indented!(keyword_and_block!(self, ELSE, indent), indent)))
             );
 
             return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, mut else_block)| {
@@ -324,13 +324,13 @@ pub mod stmt_parsers {
 
         /// Parse a while loop.
         fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
-            let parse_result = line_and_block2!(input, self, preceded!(WHILE, m!(self.expression)), indent);
+            let parse_result = line_and_block!(input, self, preceded!(WHILE, m!(self.expression)), indent);
             return fmap_nodeu(parse_result, |((cond, cu), block)| (Stmt::WhileStmt {condition: cond, block: block}, cu));
         }
 
         /// Parse a for in loop.
         fn for_in<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
-            let parse_result = line_and_block2!(input, self, tuple!(
+            let parse_result = line_and_block!(input, self, tuple!(
                 preceded!(
                     FOR,
                     IDENTIFIER
@@ -701,7 +701,7 @@ pub mod expr_parsers {
             );
 
             // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-            panic!()
+            panic!("{:?}", parse_result)
         }
 
         /// Match any unary expression.
@@ -2094,7 +2094,7 @@ mod property_based_tests {
     use proptest::prelude::*;
     use proptest_utils::strategies;
 
-    /// Check that literal expressions can parse at all.
+    // Check that literal expressions can parse at all.
     proptest! {
         #[test]
         fn lit_props(v in strategies::literal_strategy()) {
@@ -2105,7 +2105,7 @@ mod property_based_tests {
         }
     }
 
-    /// Check that exprs can parse at all.
+    // Check that exprs can parse at all.
     proptest! {
         #![proptest_config(ProptestConfig {
             cases: 50, .. ProptestConfig::default()
@@ -2119,7 +2119,7 @@ mod property_based_tests {
         }
     }
 
-    /// Check that turning an expression into a string and back again is the identity.
+    // Check that turning an expression into a string and back again is the identity.
     proptest! {
         #![proptest_config(ProptestConfig {
             cases: 10, .. ProptestConfig::default()

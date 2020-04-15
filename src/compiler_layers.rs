@@ -15,13 +15,11 @@ use expression::{
     Import
 };
 use scoping::{
-    Scope,
     Context,
-    CanModifyScope,
     GetContext,
     builtin_context,
-    base_scope
 };
+
 use typing::{
     Type,
     Typed
@@ -238,7 +236,6 @@ impl Compilation {
 
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec!();
-        let mut dependencies = vec!();
 
         let mut init_context = Context::empty();
 
@@ -250,7 +247,7 @@ impl Compilation {
         }
 
         // No imports if you're compiling from a string.
-        if (parsed_module.data.imports.len() > 0) {
+        if parsed_module.data.imports.len() > 0 {
             panic!()
         }
 
@@ -265,7 +262,7 @@ impl Compilation {
             cfg_map: cfg_map,
             llr: wasm,
             path: Box::from(Path::new(".")),
-            dependencies: dependencies,
+            dependencies: vec!(),
             hash: 0
         };
         compilation.modules.insert("$cli".to_string(), compiled);
@@ -373,7 +370,9 @@ pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
 }
 
 pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
-    panic!()
+    let (module, context, cfg_map) = to_cfg_map(input);
+    let llr = module_to_llr(&module, &context, &cfg_map);
+    return (module, context, cfg_map, llr);
 }
 
 #[cfg(test)]

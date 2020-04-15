@@ -7,7 +7,6 @@ extern crate memchr;
 #[macro_use]
 extern crate pretty_assertions;
 extern crate petgraph;
-#[macro_use]
 extern crate proptest;
 extern crate indexmap;
 extern crate itertools;

@@ -1,16 +1,10 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::HashMap;
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
 
 use expression::*;
 use general_utils;
-use typing::{
-    Type,
-    Numeric,
-    FloatingPoint,
-};
+use typing::Type;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:

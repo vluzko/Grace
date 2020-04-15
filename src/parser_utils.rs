@@ -102,34 +102,6 @@ macro_rules! separated_at_least_m {
 }
 
 macro_rules! line_and_block (
-    ($i:expr, $submac: ident!($($args:tt)* ), $indent: expr) => (
-        tuple!($i,
-            terminated!(
-                $submac!($($args)*),
-                tuple!(
-                    COLON,
-                    NEWLINE
-                )
-            ),
-            call!(block, $indent + 1)
-        )
-    );
-
-    ($i:expr, $f: expr, $indent: expr) => (
-        tuple!($i,
-            terminated!(
-                call!($f),
-                tuple!(
-                    COLON,
-                    NEWLINE
-                )
-            ),
-            call!(block, $indent + 1)
-        )
-    );
-);
-
-macro_rules! line_and_block2 (
     ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
         tuple!($i,
             terminated!(
@@ -157,18 +129,9 @@ macro_rules! line_and_block2 (
     );
 );
 
-macro_rules! keyword_and_block2 (
-    ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
-        match line_and_block2!($i, $self_, $keyword, $indent) {
-            Ok((remaining, (_,o))) => Ok((remaining, o)),
-            Err(e) => Err(e)
-        }
-    );
-);
-
 macro_rules! keyword_and_block (
-    ($i:expr, $keyword: expr, $indent: expr) => (
-        match line_and_block!($i, $keyword, $indent) {
+    ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
+        match line_and_block!($i, $self_, $keyword, $indent) {
             Ok((remaining, (_,o))) => Ok((remaining, o)),
             Err(e) => Err(e)
         }

@@ -1,5 +1,4 @@
 use std::env;
-use std::fs::File;
 use std::path::Path;
 extern crate grace_lib;
 use grace_lib::compiler_layers;

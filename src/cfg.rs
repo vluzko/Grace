@@ -3,7 +3,7 @@ use std::collections::HashMap;
 
 extern crate petgraph;
 
-use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex, Outgoing};
+use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use scoping::Context;

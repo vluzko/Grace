@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -29,7 +28,19 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    Gradual(BTreeSet<Type>),
+    Refinement(Box<Type>, Refinement),
     Undetermined
+}
+
+pub enum Refinement {
+    Atom(String),
+    Not(Box<Refinement>),
+    Equal(Box<Refinement>, Box<Refinement>),
+    Lt(Box<Refinement>, Box<Refinement>),
+    Gt(Box<Refinement>, Box<Refinement>),
+    And(Box<Refinement>, Box<Refinement>),
+    Or(Box<Refinement>, Box<Refinement>),
 }
 
 impl Type {

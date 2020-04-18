@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::Type;
+use typing::{Type, Refinement};
 use general_utils::{
     get_next_id,
     get_next_var,
@@ -271,7 +271,7 @@ pub mod stmt_parsers {
                 ))
             );
 
-            let parse_result = line_and_block2!(input, self, preceded!(FN, arg_parser), indent);
+            let parse_result = line_and_block!(input, self, preceded!(FN, arg_parser), indent);
 
             return fmap_node(parse_result, |((name, args, keyword_args, return_type), body)| {
                 let mut res_kwargs = vec!();
@@ -299,9 +299,9 @@ pub mod stmt_parsers {
         /// Match an if statement.
         fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
             let parse_result = tuple!(input,
-                line_and_block2!(self, preceded!(IF, m!(self.expression)), indent),
-                many0c!(indented!(line_and_block2!(self, preceded!(ELIF, m!(self.expression)), indent), indent)),
-                opt!(complete!(indented!(keyword_and_block2!(self, ELSE, indent), indent)))
+                line_and_block!(self, preceded!(IF, m!(self.expression)), indent),
+                many0c!(indented!(line_and_block!(self, preceded!(ELIF, m!(self.expression)), indent), indent)),
+                opt!(complete!(indented!(keyword_and_block!(self, ELSE, indent), indent)))
             );
 
             return fmap_nodeu(parse_result, |(((cond, mut cond_u), block), elifs, mut else_block)| {
@@ -324,13 +324,13 @@ pub mod stmt_parsers {
 
         /// Parse a while loop.
         fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
-            let parse_result = line_and_block2!(input, self, preceded!(WHILE, m!(self.expression)), indent);
+            let parse_result = line_and_block!(input, self, preceded!(WHILE, m!(self.expression)), indent);
             return fmap_nodeu(parse_result, |((cond, cu), block)| (Stmt::WhileStmt {condition: cond, block: block}, cu));
         }
 
         /// Parse a for in loop.
         fn for_in<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
-            let parse_result = line_and_block2!(input, self, tuple!(
+            let parse_result = line_and_block!(input, self, tuple!(
                 preceded!(
                     FOR,
                     IDENTIFIER
@@ -701,7 +701,7 @@ pub mod expr_parsers {
             );
 
             // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-            panic!()
+            panic!("{:?}", parse_result)
         }
 
         /// Match any unary expression.
@@ -1341,15 +1341,7 @@ pub mod expr_parsers {
 
     /// Match an integer literal expression.
     fn int_expr<'a>(input: PosStr<'a>) -> ExprRes {
-        let parse_result = w_followed!(input, 
-            recognize!(tuple!(
-                optc!(SIGN),
-                terminated!(
-                    DIGIT,
-                    VALID_NUM_FOLLOW
-                )
-            )
-        ));
+        let parse_result = just_int(input);
         return fmap_nodeu(parse_result, |x| (Expr::Int(from_utf8(x.slice).unwrap().to_string()), vec!()));
     }
 
@@ -1900,6 +1892,19 @@ pub mod expr_parsers {
     }
 }
 
+/// Recognize an integer. No post-processing.
+fn just_int<'a>(input: PosStr<'a>) -> IO<'a> {
+    return w_followed!(input, 
+        recognize!(tuple!(
+            optc!(SIGN),
+            terminated!(
+                DIGIT,
+                VALID_NUM_FOLLOW
+            )
+        )
+    ));
+}
+
 /// Type parsers
 pub mod type_parser {
     use super::*;
@@ -1958,6 +1963,57 @@ pub mod type_parser {
             None => Type::from(x.0)
         });
     }
+
+    fn refinement<'a>(input: PosStr<'a>) {
+
+        panic!()
+    }
+
+    fn comparison_refinement<'a>(input: PosStr<'a>) {
+        let parse_result = tuple!(input,
+            operator_refinement,
+            optc!(tuple!(
+                alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
+                operator_refinement
+            ))
+        );
+
+        let map = |x: (ExprU, Option<(PosStr<'a>, ExprU)>)| match x.1 {
+            None => x.0,
+            Some((o, (right, mut u))) => {
+                let operator = ComparisonOperator::from(o.slice);
+                (Node::from(Expr::ComparisonExpr{operator, left: Box::new(left), right: Box::new(right)}), update)
+            }
+        };
+
+        // let node = fmap_iresult(parse_result, map);
+        panic!()
+        // return node;
+    }
+
+    fn operator_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+        let parse_result = tuple!(input,
+            refinement_atom,
+            optc!(tuple!(
+                alt_complete!(PLUS | MINUS | STAR),
+                operator_refinement
+            ))
+        );
+        return fmap_iresult(parse_result, |(x, y)| => match y {
+            Some((op, t)) => {
+                match op {
+                    "+" => Refinement::Plus(x, t),
+                    _ => panic!()
+                }
+            },
+        });
+    }
+
+    fn refinement_atom<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+        return just_int(input);
+    }
+
+    
 
     #[cfg(test)]
     mod test {
@@ -2092,7 +2148,7 @@ mod property_based_tests {
     use proptest::prelude::*;
     use proptest_utils::strategies;
 
-    /// Check that literal expressions can parse at all.
+    // Check that literal expressions can parse at all.
     proptest! {
         #[test]
         fn lit_props(v in strategies::literal_strategy()) {
@@ -2103,7 +2159,7 @@ mod property_based_tests {
         }
     }
 
-    /// Check that exprs can parse at all.
+    // Check that exprs can parse at all.
     proptest! {
         #![proptest_config(ProptestConfig {
             cases: 50, .. ProptestConfig::default()
@@ -2117,7 +2173,7 @@ mod property_based_tests {
         }
     }
 
-    /// Check that turning an expression into a string and back again is the identity.
+    // Check that turning an expression into a string and back again is the identity.
     proptest! {
         #![proptest_config(ProptestConfig {
             cases: 10, .. ProptestConfig::default()
@@ -2130,150 +2186,6 @@ mod property_based_tests {
         }
     }
 
-    // /// Strategies for use in property-based testing.
-    // pub(super) mod strategies {
-    //     use super::*;
-
-    //     extern crate rand;
-    //     use rand::Rng;
-
-    //     use proptest::string::{
-    //         string_regex,
-    //         RegexGeneratorStrategy
-    //     };
-    //     use proptest::strategy::{
-    //         Map
-    //     };
-    //     use proptest::arbitrary::{
-    //         StrategyFor
-    //     };
-
-    //     /// Generate a random binary operator.
-    //     fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
-    //         prop_oneof![
-    //             Just(BinaryOperator::Add),
-    //             Just(BinaryOperator::Sub),
-    //             Just(BinaryOperator::Div),
-    //             Just(BinaryOperator::Mult),
-    //             Just(BinaryOperator::Mod),
-    //             Just(BinaryOperator::And),
-    //             Just(BinaryOperator::Or),
-    //             Just(BinaryOperator::Xor),
-    //             Just(BinaryOperator::BitAnd),
-    //             Just(BinaryOperator::BitOr),
-    //             Just(BinaryOperator::BitXor),
-    //             Just(BinaryOperator::BitShiftL),
-    //             Just(BinaryOperator::BitShiftR),
-    //             Just(BinaryOperator::Exponent)
-    //         ]
-    //     }
-
-    //     /// Generate a random comparison operator.
-    //     fn comparison_operator_strat() -> impl Strategy<Value = ComparisonOperator> {
-    //         prop_oneof![
-    //             Just(ComparisonOperator::Greater),
-    //             Just(ComparisonOperator::Less),
-    //             Just(ComparisonOperator::Equal),
-    //             Just(ComparisonOperator::Unequal),
-    //             Just(ComparisonOperator::GreaterEqual),
-    //             Just(ComparisonOperator::LessEqual)
-    //         ]
-    //     }
-
-    //     /// Generate a random unary operator.
-    //     fn unary_operator_strat() -> impl Strategy<Value = UnaryOperator> {
-    //         prop_oneof![
-    //             Just(UnaryOperator::Positive),
-    //             Just(UnaryOperator::Negative),
-    //             Just(UnaryOperator::Not),
-    //             Just(UnaryOperator::BitNot),
-    //         ]
-    //     }
-
-    //     /// Generate a recursive expression.
-    //     fn complex_expression_strat() -> impl Strategy<Value = Expr> {
-    //         let leaf = literal_strategy();
-    //         // Minimum 1 level deep, aim for 6 levels deep, usually each level contains 2 branches.
-    //         leaf.prop_recursive(1, 3, 2, |inner| prop_oneof![
-    //             (inner.clone(), inner.clone(), binary_operator_strat()).prop_map(
-    //                 |(left, right, operator)| Expr::BinaryExpr{operator, left: wrap(left), right: wrap(right)}
-    //             ),
-    //             (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
-    //                 |(left, right, operator)| Expr::ComparisonExpr{operator, left: wrap(left), right: wrap(right)}
-    //             ),
-    //             (inner.clone(), unary_operator_strat()).prop_map(
-    //                 |(operand, operator)| Expr::UnaryExpr{operator, operand: wrap(operand)}
-    //             )
-    //         ])
-    //     }
-
-    //     /// Generate a random literal expression.
-    //     pub fn literal_strategy() -> impl Strategy<Value = Expr> {
-    //         prop_oneof![
-    //             // i64 Strategy
-    //             any::<i64>().prop_map(Expr::from),
-    //             // f64 Strategy
-    //             any::<f64>().prop_map(|x| {
-    //                 if x.fract() == 0.0 {
-    //                     Expr::Float(format!("{}.", x))
-    //                 } else {
-    //                     Expr::Float(format!("{}", x))
-    //                 }
-    //             }),
-    //             // Boolean strategy
-    //             any::<bool>().prop_map(Expr::from),
-    //             // ASCII string strategy
-    //             string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)),
-    //         ]
-    //     }
-
-    //     /// Generate a random expression.
-    //     pub fn expr_strategy() -> impl Strategy<Value = Expr> {
-    //         prop_oneof![
-    //             // Any literal
-    //             literal_strategy(),
-    //             // Identifier expression
-    //             string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Expr::IdentifierExpr(Identifier::from(x))),
-    //             // Binary expression
-    //             complex_expression_strat()
-    //         ]
-    //     }
-
-    //     impl Expr {
-    //         /// Turn an expression into a PosStr that should parse to that expression.
-    //         /// Whitespace is inserted randomly. Technically this breaks one of the assumptions of proptest,
-    //         /// so if there are issues with parsing whitespace proptest will not be able to replicate failing tests,
-    //         /// or at least won't be able to shrink test cases properly.
-    //         pub fn inverse_parse(&self) -> String {
-    //             let mut rng = rand::thread_rng();
-    //             let post_space: usize = rng.gen_range(0, 10);
-    //             return match self {
-    //                 Expr::BinaryExpr{ref operator, ref left, ref right} => format!(
-    //                     "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
-    //                 ),
-    //                 Expr::ComparisonExpr{ref operator, ref left, ref right} => format!(
-    //                     "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
-    //                 ),
-    //                 Expr::UnaryExpr{ref operator, ref operand} => {
-    //                     match (operator, &operand.data) {
-    //                         (UnaryOperator::Negative, &Expr::Float(_)) | (UnaryOperator::Negative, &Expr::Int(_))=> format!("{} {}", 
-    //                             operator.to_string(), operand.data.inverse_parse()
-    //                         ),
-    //                         _ => format!("{}{}", operator.to_string(), operand.data.inverse_parse())
-    //                     }
-                        
-    //                 }
-    //                 Expr::String(v) => format!("\"{}\"{}", v, " ".repeat(post_space)),
-    //                 Expr::Int(v) | Expr::Float(v) => format!("{}{}", v, " ".repeat(post_space)),
-    //                 // Yes the code is exactly the same, but the type of `v` is different.
-    //                 Expr::Bool(v) => format!("{}{}", v, " ".repeat(post_space)),
-    //                 Expr::IdentifierExpr(v) => v.name.clone(),
-    //                 x => panic!("{:?}", x)
-    //             };
-    //         }
-    //     }
-
-    // }
 }
 
 

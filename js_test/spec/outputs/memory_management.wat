@@ -264,4 +264,14 @@
 )
 (export "free_chunk" (func $free_chunk))
 
+;; Allocate a chunk of memory whose size is given in words
+;; Args:
+;;      number_of_words (i32):
+;; Returns:
+;;      A pointer to the data segment of the new chunk.
+(func $tee_memory (param $loc i32) (param $val i32) (result i32)
+    
+)(export "tee_memory" (func $tee_memory))
+
+
 )

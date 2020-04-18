@@ -1,16 +1,10 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::HashMap;
-use std::cell::{RefCell, RefMut};
-use std::rc::Rc;
 
 use expression::*;
 use general_utils;
-use typing::{
-    Type,
-    Numeric,
-    FloatingPoint,
-};
+use typing::Type;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -23,6 +17,7 @@ pub enum CanModifyScope {
     Statement(*const Node<Stmt>, usize),
     Expression(*const Node<Expr>, usize),
     Argument(Type),
+    Return(Type),
     ImportedModule(usize)
 }
 
@@ -160,7 +155,7 @@ impl Context {
             CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) => {
                 self.type_map.get(id).unwrap().clone()
             },
-            CanModifyScope::Argument(ref t) => t.clone(),
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
             CanModifyScope::ImportedModule(ref _id) => panic!()
         };
         return t;
@@ -224,8 +219,6 @@ impl Context {
             };
         }
     }
-
-    
 }
 
 impl CanModifyScope {
@@ -243,7 +236,7 @@ impl CanModifyScope {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
             CanModifyScope::Expression(ref _ptr, ref id) => *id,
             CanModifyScope::ImportedModule(ref id) => *id,
-            CanModifyScope::Argument(..) => panic!()
+            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
         };
     }
 }
@@ -317,6 +310,13 @@ impl GetContext for Node<Block> {
                     block_type.merge(&Type::empty);
                     break;
                 },
+                Stmt::IfStmt{..} | Stmt::WhileStmt{..} => {
+                    if res.1 != Type::empty {
+                        block_type.merge(&res.1)
+                    } else {
+                        block_type
+                    }
+                },
                 _ => block_type
             };
 
@@ -377,13 +377,23 @@ impl GetContext for Node<Stmt> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
-            Stmt::LetStmt{ref mut expression, ..} => {
+            Stmt::LetStmt{ref mut expression, ref type_annotation, ..} => {
                 // TODO: Type checking
-                expression.scopes_and_types(parent_id, context)
+                let (c, t) = expression.scopes_and_types(parent_id, context);
+                match &type_annotation {
+                    Some(x) => assert!(t.is_compatible(x)),
+                    None => {}
+                };
+
+                (c, t)
             },
-            Stmt::AssignmentStmt{ref mut expression, ..} => {
+            Stmt::AssignmentStmt{ref mut expression, ref name} => {
                 // TODO: Type checking
-                expression.scopes_and_types(parent_id, context)
+
+                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let expected_type = c.get_type(self.scope, name);
+                assert!(t.is_compatible(&expected_type));
+                (c, t)
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
                 // TODO: Type checking
@@ -422,14 +432,16 @@ impl GetContext for Node<Stmt> {
                     let modification = CanModifyScope::Argument(t.clone());
                     new_scope.append_modification(key, modification);
                 }
+
+                let ret_modification = CanModifyScope::Return(return_type.clone());
+                new_scope.append_modification(&Identifier::from("$ret"), ret_modification);
                 
                 let scope_id = context.new_scope(new_scope);
                 self.scope = scope_id;
 
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
-                // TODO: Type checking
 
-                return_type.merge(&block_type);
+                assert!(return_type.is_compatible(&block_type), "{:?} not compatible with {:?}", return_type, block_type);
 
                 (block_context, function_type)
             },
@@ -480,9 +492,14 @@ impl GetContext for Node<Stmt> {
                 (context, Type::Named(name.clone()))
             },
             Stmt::ReturnStmt(ref mut expression) => {
-                expression.scopes_and_types(parent_id, context)
+                let exp_type = context.get_type(self.scope, &Identifier::from("$ret"));
+                let (new_c, new_t) = expression.scopes_and_types(parent_id, context);
+                assert!(exp_type.is_compatible(&new_t));
+                
+                (new_c, new_t)
             },
-            _ => panic!()
+            Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => (context, Type::empty),
+            _ => panic!("scopes_and_types not implemented for {:?}", self.data)
         };
         final_c.add_type(self.id, final_t.clone());
         return (final_c, final_t);
@@ -609,14 +626,14 @@ impl GetContext for Node<Expr> {
                 (context, t)
             },
             Expr::Int(_) => {
-                let t = Numeric();
-                context.add_type(self.id, t.clone());
-                (context, t)
+                // let t = Numeric();
+                context.add_type(self.id, Type::i32);
+                (context, Type::i32)
             },
             Expr::Float(_) => {
-                let t = FloatingPoint();
-                context.add_type(self.id, t.clone());
-                (context, t)
+                // let t = FloatingPoint();
+                context.add_type(self.id, Type::f32);
+                (context, Type::f32)
             },
             Expr::String(_) => {
                 let t = Type::string;

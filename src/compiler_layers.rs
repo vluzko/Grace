@@ -15,13 +15,11 @@ use expression::{
     Import
 };
 use scoping::{
-    Scope,
     Context,
-    CanModifyScope,
     GetContext,
     builtin_context,
-    base_scope
 };
+
 use typing::{
     Type,
     Typed
@@ -238,7 +236,6 @@ impl Compilation {
 
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec!();
-        let mut dependencies = vec!();
 
         let mut init_context = Context::empty();
 
@@ -250,7 +247,7 @@ impl Compilation {
         }
 
         // No imports if you're compiling from a string.
-        if (parsed_module.data.imports.len() > 0) {
+        if parsed_module.data.imports.len() > 0 {
             panic!()
         }
 
@@ -265,7 +262,7 @@ impl Compilation {
             cfg_map: cfg_map,
             llr: wasm,
             path: Box::from(Path::new(".")),
-            dependencies: dependencies,
+            dependencies: vec!(),
             hash: 0
         };
         compilation.modules.insert("$cli".to_string(), compiled);
@@ -295,8 +292,8 @@ fn default_imports() -> Vec<(Import, Type)> {
     let mem_management = Import{
         id: mm_id,
         path: vec!(Identifier::from("memory_management")),
-        alias: None,
-        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many")),
+        alias: Some(Identifier::from(".memory_management")),
+        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many"), Identifier::from("tee_memory")),
     };
     let alloc_and_free_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
     let copy_type = Type::Function(vec!(
@@ -305,10 +302,16 @@ fn default_imports() -> Vec<(Import, Type)> {
         (Identifier::from("size"), Type::i32)), 
         Box::new(Type::i32)
     );
+    let tee_type = Type::Function(vec!(
+        (Identifier::from("loc"), Type::i32),
+        (Identifier::from("value"), Type::i32)), 
+        Box::new(Type::i32)
+    );
     let mut func_map = BTreeMap::new();
     func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
     func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
     func_map.insert(Identifier::from("copy_many"), copy_type);
+    func_map.insert(Identifier::from("tee_memory"), tee_type);
 
     let mem_type = Type::Module(vec!(Identifier::from("memory_management")), func_map);
 
@@ -367,7 +370,9 @@ pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
 }
 
 pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
-    panic!()
+    let (module, context, cfg_map) = to_cfg_map(input);
+    let llr = module_to_llr(&module, &context, &cfg_map);
+    return (module, context, cfg_map, llr);
 }
 
 #[cfg(test)]

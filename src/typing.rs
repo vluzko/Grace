@@ -1,5 +1,4 @@
-use std::collections::HashMap;
-use std::collections::BTreeMap;
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -29,37 +28,21 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    Gradual(Vec<Type>),
+    Refinement(Box<Type>, Refinement),
     Undetermined
 }
 
-#[allow(non_snake_case)]
-/// The signed integral types.
-pub fn Signed<'a>() -> Type {
-    Type::Sum(vec!(Type::i32, Type::i64))
-}
-
-#[allow(non_snake_case)]
-/// The unsigned integral types.
-pub fn Unsigned<'a>() -> Type {
-    Type::Sum(vec!(Type::ui32))
-}
-
-#[allow(non_snake_case)]
-/// The floating point types.
-pub fn Integral<'a>() -> Type {
-    return Signed() + Unsigned();
-}
-
-#[allow(non_snake_case)]
-/// The floating point types.
-pub fn FloatingPoint<'a>() -> Type {
-    Type::Sum(vec!(Type::f32, Type::f64))
-}
-
-#[allow(non_snake_case)]
-/// All numeric types.
-pub fn Numeric<'a>() -> Type {
-    return Integral() + FloatingPoint();
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Refinement {
+    Atom(String),
+    Not(Box<Refinement>),
+    Equal(Box<Refinement>, Box<Refinement>),
+    Lt(Box<Refinement>, Box<Refinement>),
+    Gt(Box<Refinement>, Box<Refinement>),
+    And(Box<Refinement>, Box<Refinement>),
+    Or(Box<Refinement>, Box<Refinement>),
+    Add(Box<Refinement>, Box<Refinement>),
 }
 
 impl Type {
@@ -133,6 +116,41 @@ impl Type {
         }
     }
 
+    /// Check if it is possible to convert from one type to the other
+    pub fn is_compatible(&self, other: &Type) -> bool {
+        if self == other {
+            return true
+        } else {
+            return match self {
+                Type::i32 => {
+                    match other {
+                        Type::i64 | Type::f64 => true,
+                        _ => false
+                    }
+                },
+                Type::f32 => {
+                    match other {
+                        Type::f64 => true,
+                        _ => false
+                    }
+                },
+                Type::Sum(ref types) => {
+                    match other {
+                        Type::Sum(_) => true, 
+                        x => types.contains(&x)
+                    }
+                }, 
+                Type::Undetermined => true,
+                x => {
+                    match other {
+                        Type::Sum(ref other_types) => other_types.contains(&x),
+                        _ => false
+                    }
+                }
+            }
+        }
+    }
+
     pub fn size(&self) -> usize {
         return match self {
             Type::i32 => 1,
@@ -142,6 +160,7 @@ impl Type {
             Type::ui32 => 2,
             Type::boolean => 1,
             Type::string => 1,
+            Type::Vector(ref t) => t.size(),
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
             Type::Record(_, ref fields)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
@@ -316,6 +335,7 @@ impl From<Identifier> for Type {
             "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
+            "any" => Type::Gradual(vec!()),
             _ => Type::Named(input)
         };
     }
@@ -363,12 +383,24 @@ impl Typed<Node<Block>> for Node<Block> {
 impl Typed<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Stmt> {
         let new_stmt = match self.data {
+            Stmt::LetStmt {name, type_annotation, expression} => {
+                let returned_type = context.get_node_type(expression.id);
+                let base = expression.type_based_rewrite(context);
+                let expr = match &type_annotation {
+                    Some(x) => get_convert_expr(&returned_type, &x, base, context),
+                    None => base
+                };
+                Stmt::LetStmt {name, type_annotation, expression: expr}
+            },
+            Stmt::AssignmentStmt {expression, name} => {
+                let expected_type = context.get_node_type(self.id);
+                let actual_type = context.get_node_type(expression.id);
+                let base = expression.type_based_rewrite(context);
+                let expr = get_convert_expr(&actual_type, &expected_type, base, context);
+                Stmt::AssignmentStmt {name, expression: expr}
+            },
             Stmt::FunctionDecStmt {name, block, args, kwargs, return_type} => {
                 Stmt::FunctionDecStmt {block: block.type_based_rewrite(context), name, args, kwargs, return_type}
-            },
-            Stmt::AssignmentStmt {mut expression, name} => {
-                expression = expression.type_based_rewrite(context);
-                Stmt::AssignmentStmt {name, expression: expression.type_based_rewrite(context)}
             },
             Stmt::IfStmt {condition, block, else_block} => {
                 let new_else_block = match else_block {
@@ -379,14 +411,20 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
                     condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context), else_block: new_else_block
                 }
             },
-            Stmt::LetStmt {name, type_annotation, expression} => {
-                Stmt::LetStmt {name, type_annotation, expression: expression.type_based_rewrite(context)}
-            },
             Stmt::WhileStmt {condition, block} => {
                 Stmt::WhileStmt {condition: condition.type_based_rewrite(context), block: block.type_based_rewrite(context)}
             },
             Stmt::ReturnStmt (value) => {
-                Stmt::ReturnStmt (value.type_based_rewrite(context))
+                let exp_type = context.get_type(self.scope, &Identifier::from("$ret"));
+                let ret_type = context.get_node_type(value.id);
+                let base = value.type_based_rewrite(context);
+                assert!(ret_type.is_compatible(&exp_type));
+
+                let expr = match ret_type == exp_type {
+                    true => base,
+                    false => get_convert_expr(&ret_type, &exp_type, base, context)
+                };
+                Stmt::ReturnStmt(expr)
             },
             _ => self.data
         };
@@ -415,16 +453,10 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 // TODO: Once typeclasses are implemented, call the typeclass method with
                 // the operator, the left type, and the right type to figure out what all
                 // the other types need to be.
-                if Numeric().super_type(&left_type) && Numeric().super_type(&right_type) {
-                    let merged_type = operator.get_return_types(&left_type, &right_type);
-                    let converted_left = convert_expr(&new_left, &merged_type, &mut context.type_map);
-                    let converted_right = convert_expr(&new_right, &merged_type, &mut context.type_map);
-                    Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
-                } else {
-                    // TODO: Update this once typeclasses are implemented
-                    assert_eq!(left_type, right_type);
-                    Expr::BinaryExpr{operator, left: Box::new(new_left), right: Box::new(new_right)}
-                }
+                let merged_type = operator.get_return_types(&left_type, &right_type);
+                let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
+                let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
+                Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
             },
             Expr::FunctionCall {function, args, kwargs} => {
                 let new_func_expr = Box::new(function.type_based_rewrite(context));
@@ -470,6 +502,19 @@ pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<u
             operator, operand: Box::new(expr.clone())
         });
     }
+}
+
+fn get_convert_expr(from: &Type, to: &Type, base: Node<Expr>, context: &mut scoping::Context) -> Node<Expr> {
+    return match from == to {
+        false => {
+            let operator = UnaryOperator::cast(&from, &to);
+            let raw_expr = Expr::UnaryExpr{operator: operator, operand: Box::new(base)};
+            let new_node = Node::from(raw_expr);
+            context.add_type(new_node.id, to.clone());
+            new_node
+        },
+        true => base
+    };
 }
 
 pub fn choose_return_type(possible: &Type) -> Type {
@@ -519,6 +564,20 @@ impl BinaryOperator {
     }
 }
 
+
+impl UnaryOperator {
+    fn cast(from: &Type, to: &Type) -> UnaryOperator {
+        let possible = from.is_compatible(to);
+
+        if possible {
+            return UnaryOperator::Convert(from.clone(), to.clone());
+        } else {
+            panic!("Cannot cast from {:?} to {:?}", from, to);
+        }
+    }
+}
+
+
 #[cfg(test)]
 mod test {
 
@@ -545,19 +604,20 @@ mod test {
     }
 
     #[cfg(test)]
-    mod expressions {
-        use super::*;
-    }
-
-    #[cfg(test)]
     mod statements {
         use super::*;
         use compiler_layers;
         #[test]
         fn if_stmt_typing() {
-            let (block, context) = compiler_layers::to_context::<Node<Block>>(if_stmt_fixture());
-            let if_stmt = block.data.statements.get(2).unwrap();
-            assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Numeric());
+            let (fun, context) = compiler_layers::to_context::<Node<Stmt>>(if_stmt_fixture());
+            match fun.data {
+                Stmt::FunctionDecStmt{ref block, ..} => {
+                    let if_stmt = block.data.statements.get(2).unwrap();
+                    assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
+                },
+                _ => panic!()
+            };
+            
         }
     }
 
@@ -571,17 +631,17 @@ mod test {
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
         assert_eq!(context.get_node_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(context.get_node_type(id2), Numeric());
+        assert_eq!(context.get_node_type(id2), Type::i32);
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {
-        let if_stmt = r#"
-        let a = 1
-        let b = 1
-        if false:
-            return a
-        else:
-            return b"#;
+        let if_stmt = r#"fn a() -> i32:
+            let a = 1
+            let b = 1
+            if false:
+                return a
+            else::
+                return b"#;
         return if_stmt.as_bytes(); 
     }
 }

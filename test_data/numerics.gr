@@ -1,0 +1,21 @@
+
+
+fn i32_inference() -> i32:
+    return 0
+
+
+fn f32_inference() -> f32:
+    return 0.0
+
+
+fn float_cast() -> f32:
+    let x = 2
+    return 5 / x
+
+
+fn bad_for_sum_types() -> f32:
+    let x = 0 
+    let y = 1 
+    let z = x + y 
+    let w = 0.5 + y 
+    return w

@@ -157,8 +157,8 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 // to the loop *containing* the current statement.
                 // e.g. if we're looking at while loop A inside while loop B, the former breaks out of A and
                 // the latter breaks out of B.
-                let mut need_edge_to_loop_end = res.2;
-                need_edge_to_loop_end.push(condition_index);
+                let mut need_edge_to_next_block = res.2;
+                need_edge_to_next_block.push(condition_index);
 
                 // We create an empty vertex to serve as a placeholder for the next vertex.
                 // All break statements in the while loop and the while loop exit have an edge to it.

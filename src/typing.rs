@@ -28,11 +28,12 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
-    Gradual(BTreeSet<Type>),
+    Gradual(Vec<Type>),
     Refinement(Box<Type>, Refinement),
     Undetermined
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Refinement {
     Atom(String),
     Not(Box<Refinement>),
@@ -41,6 +42,7 @@ pub enum Refinement {
     Gt(Box<Refinement>, Box<Refinement>),
     And(Box<Refinement>, Box<Refinement>),
     Or(Box<Refinement>, Box<Refinement>),
+    Add(Box<Refinement>, Box<Refinement>),
 }
 
 impl Type {
@@ -333,6 +335,7 @@ impl From<Identifier> for Type {
             "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
+            "any" => Type::Gradual(vec!()),
             _ => Type::Named(input)
         };
     }

@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::Type;
+use typing::{Type, Refinement};
 use general_utils::{
     get_next_id,
     get_next_var,
@@ -1341,15 +1341,7 @@ pub mod expr_parsers {
 
     /// Match an integer literal expression.
     fn int_expr<'a>(input: PosStr<'a>) -> ExprRes {
-        let parse_result = w_followed!(input, 
-            recognize!(tuple!(
-                optc!(SIGN),
-                terminated!(
-                    DIGIT,
-                    VALID_NUM_FOLLOW
-                )
-            )
-        ));
+        let parse_result = just_int(input);
         return fmap_nodeu(parse_result, |x| (Expr::Int(from_utf8(x.slice).unwrap().to_string()), vec!()));
     }
 
@@ -1900,6 +1892,19 @@ pub mod expr_parsers {
     }
 }
 
+/// Recognize an integer. No post-processing.
+fn just_int<'a>(input: PosStr<'a>) -> IO<'a> {
+    return w_followed!(input, 
+        recognize!(tuple!(
+            optc!(SIGN),
+            terminated!(
+                DIGIT,
+                VALID_NUM_FOLLOW
+            )
+        )
+    ));
+}
+
 /// Type parsers
 pub mod type_parser {
     use super::*;
@@ -1957,6 +1962,55 @@ pub mod type_parser {
             Some(y) => Type::Parameterized(x.0, y),
             None => Type::from(x.0)
         });
+    }
+
+    fn refinement<'a>(input: PosStr<'a>) {
+
+        panic!()
+    }
+
+    fn comparison_refinement<'a>(input: PosStr<'a>) {
+        let parse_result = tuple!(input,
+            operator_refinement,
+            optc!(tuple!(
+                alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
+                operator_refinement
+            ))
+        );
+
+        let map = |x: (ExprU, Option<(PosStr<'a>, ExprU)>)| match x.1 {
+            None => x.0,
+            Some((o, (right, mut u))) => {
+                let operator = ComparisonOperator::from(o.slice);
+                (Node::from(Expr::ComparisonExpr{operator, left: Box::new(left), right: Box::new(right)}), update)
+            }
+        };
+
+        // let node = fmap_iresult(parse_result, map);
+        panic!()
+        // return node;
+    }
+
+    fn operator_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+        let parse_result = tuple!(input,
+            refinement_atom,
+            optc!(tuple!(
+                alt_complete!(PLUS | MINUS | STAR),
+                operator_refinement
+            ))
+        );
+        return fmap_iresult(parse_result, |(x, y)| => match y {
+            Some((op, t)) => {
+                match op {
+                    "+" => Refinement::Plus(x, t),
+                    _ => panic!()
+                }
+            },
+        });
+    }
+
+    fn refinement_atom<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+        return just_int(input);
     }
 
     

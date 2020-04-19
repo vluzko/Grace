@@ -29,7 +29,7 @@ pub enum Type {
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Gradual(Vec<Type>),
-    Refinement(Box<Type>, Refinement),
+    Refinement(Box<Type>, Box<Node<Expr>>),
     Undetermined
 }
 

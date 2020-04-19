@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::{Type, Refinement};
+use typing::Type;
 use general_utils::{
     get_next_id,
     get_next_var,
@@ -681,27 +681,28 @@ pub mod expr_parsers {
         /// Match a match expression.
         fn match_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
-            let parse_result = tuple!(input,
-                delimited!(
-                    MATCH,
-                    m!(self.expression),
-                    tuple!(
-                        COLON,
-                        between_statement
-                    )
-                ),
-                separated_nonempty_list_complete!(
-                    between_statement,
-                    separated_pair!(
-                        alt!(float_expr | int_expr | string_expr),
-                        ARROW,
-                        m!(self.expression)
-                    )
-                )
-            );
+            // let parse_result = tuple!(input,
+            //     delimited!(
+            //         MATCH,
+            //         m!(self.expression),
+            //         tuple!(
+            //             COLON,
+            //             between_statement
+            //         )
+            //     ),
+            //     separated_nonempty_list_complete!(
+            //         between_statement,
+            //         separated_pair!(
+            //             alt!(float_expr | int_expr | string_expr),
+            //             ARROW,
+            //             m!(self.expression)
+            //         )
+            //     )
+            // );
 
             // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-            panic!("{:?}", parse_result)
+            // panic!("{:?}", parse_result)
+            panic!()
         }
 
         /// Match any unary expression.
@@ -808,9 +809,9 @@ pub mod expr_parsers {
 
         fn atomic_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
             let node = w_followed!(input, alt_complete!(
-                bool_expr |
-                float_expr |
-                int_expr |
+                tuple!(bool_expr, value!(vec!())) |
+                tuple!(float_expr, value!(vec!())) |
+                tuple!(int_expr, value!(vec!())) |
                 string_expr |
                 delimited!(
                     OPEN_BRACE,
@@ -1325,28 +1326,27 @@ pub mod expr_parsers {
 
     // BEGIN SIMPLE LITERALS
 
-    /// Match a boolean literal expression.
-    fn bool_expr<'a>(input: PosStr<'a>) -> ExprRes {
+    pub (super) fn bool_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         let parse_result = w_followed!(input, 
             alt!(
             terminated!(tag!("true"), peek!(not!(IDENT_CHAR))) |
             terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
         ));
-        return fmap_nodeu(parse_result, |x| (Expr::Bool(match from_utf8(x.slice).unwrap() {
+        return fmap_node(parse_result, |x| Expr::Bool(match from_utf8(x.slice).unwrap() {
             "true" => true,
             "false" => false,
             _ => panic!()
-        }), vec!()));
+        }));
     }
 
     /// Match an integer literal expression.
-    fn int_expr<'a>(input: PosStr<'a>) -> ExprRes {
+    pub (super) fn int_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         let parse_result = just_int(input);
-        return fmap_nodeu(parse_result, |x| (Expr::Int(from_utf8(x.slice).unwrap().to_string()), vec!()));
+        return fmap_node(parse_result, |x| Expr::Int(from_utf8(x.slice).unwrap().to_string()));
     }
 
     /// Match a floating point literal expression.
-    fn float_expr<'a>(input: PosStr<'a>) -> ExprRes {
+    pub (super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         
         let exponent = |x: PosStr<'a>| preceded!(x, 
             alt!(tag!("e") | tag!("E")),
@@ -1374,7 +1374,7 @@ pub mod expr_parsers {
             )
         ));
 
-        return fmap_nodeu(parse_result, |x| (Expr::Float(from_utf8(x.slice).unwrap().to_string()), vec!()));
+        return fmap_node(parse_result, |x| Expr::Float(from_utf8(x.slice).unwrap().to_string()));
     }
 
     /// Match a string literal expression.
@@ -1440,13 +1440,11 @@ pub mod expr_parsers {
             fn parse_atomic() {
                 let e = ParserContext::empty();
                 check_data_and_leftover("1 ** 2", |x| e.atomic_expr(x), Expr::from(1), "** 2");
-                check_data("false", bool_expr, Expr::from(false));
                 check_data("false", |x| e.atomic_expr(x), Expr::from(false));
             }
 
             #[test]
             fn parse_spec_literals() {
-                check_match_no_update("123", int_expr, Node::from(123));
                 check_failed("e10", float_expr, ErrorKind::Digit);
                 check_failed(".e10", float_expr, ErrorKind::Digit);
                 check_failed(".0", float_expr, ErrorKind::Digit);
@@ -1782,9 +1780,9 @@ pub mod expr_parsers {
             check_data_and_leftover("2]", |x| e.expression(x), Expr::from(2), "]");
 
             let int = rand::random::<i64>().abs();
-            check_match_no_update(&int.to_string(), int_expr, Node::from(int));
+            check_match_no_update(&int.to_string(), |x| e.expression(x), Node::from(int));
             let rand_float = rand::random::<f64>().abs();
-            check_match_no_update(&rand_float.to_string(), float_expr, Node::from(rand_float));
+            check_match_no_update(&rand_float.to_string(), |x| e.expression(x), Node::from(rand_float));
             let expr = Expr::String("asdf\\\"\\\ra\'sdf".to_string());
             check_match_no_update("\"asdf\\\"\\\ra\'sdf\"", |x| e.expression(x), Node::from(expr));
 
@@ -1908,6 +1906,9 @@ fn just_int<'a>(input: PosStr<'a>) -> IO<'a> {
 /// Type parsers
 pub mod type_parser {
     use super::*;
+    use self::expr_parsers::{bool_expr, int_expr, float_expr};
+
+    type JustExpr<'a> = IResult<PosStr<'a>, ExprNode>;
     /// Parse a type.
     pub fn any_type<'a>(input: PosStr<'a>) -> TypeRes {
         return alt_complete!(input, product_type | sum_type);
@@ -1956,63 +1957,135 @@ pub mod type_parser {
                     any_type
                 ),
                 RANGLE
-            ))
+            )),
+            optc!(refinement)
         );
-        return fmap_iresult(result, |x| match x.1 {
-            Some(y) => Type::Parameterized(x.0, y),
-            None => Type::from(x.0)
+        return fmap_iresult(result, |(base, param, refine)| {
+            let b = match param {
+                Some(y) => Type::Parameterized(base, y),
+                None => Type::from(base)
+            };
+            match refine {
+                Some(r) => Type::Refinement(Box::new(b), Box::new(r)),
+                None => b
+            }
         });
     }
 
-    fn refinement<'a>(input: PosStr<'a>) {
-
-        panic!()
+    fn refinement<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return preceded!(input,
+            TILDE,
+            comparison_expr
+        );
     }
 
-    fn comparison_refinement<'a>(input: PosStr<'a>) {
+    fn flatten_binary<'a>(result: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)) -> Node<Expr> {
+        return match result.1 {
+            Some((o, right)) => {
+                let op = BinaryOperator::from(o.slice);
+                Node::from(Expr::BinaryExpr {operator: op, left: Box::new(result.0), right: Box::new(right)})
+            },
+            None => result.0
+        };
+    }
+
+    /// Match a comparison expression.
+    fn comparison_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
         let parse_result = tuple!(input,
-            operator_refinement,
+            logical_binary_expr,
             optc!(tuple!(
                 alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
-                operator_refinement
+                comparison_expr
             ))
         );
 
-        let map = |x: (ExprU, Option<(PosStr<'a>, ExprU)>)| match x.1 {
+        let map = |x: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)| match x.1 {
             None => x.0,
-            Some((o, (right, mut u))) => {
+            Some((o, right)) => {
                 let operator = ComparisonOperator::from(o.slice);
-                (Node::from(Expr::ComparisonExpr{operator, left: Box::new(left), right: Box::new(right)}), update)
+                Node::from(Expr::ComparisonExpr{operator, left: Box::new(x.0), right: Box::new(right)})
             }
         };
 
-        // let node = fmap_iresult(parse_result, map);
-        panic!()
-        // return node;
+        let node = fmap_iresult(parse_result, map);
+        return node;
     }
 
-    fn operator_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+    /// Match a list of binary operations
+    fn binary_expr<'a>(input: PosStr<'a>, operator_parser: impl Fn(PosStr) -> IResult<PosStr, PosStr>, next_expr: impl Fn(PosStr) -> JustExpr) -> JustExpr<'a> {
         let parse_result = tuple!(input,
-            refinement_atom,
+            next_expr,
             optc!(tuple!(
-                alt_complete!(PLUS | MINUS | STAR),
-                operator_refinement
+                operator_parser,
+                call!(binary_expr, operator_parser, next_expr)
             ))
         );
-        return fmap_iresult(parse_result, |(x, y)| => match y {
-            Some((op, t)) => {
-                match op {
-                    "+" => Refinement::Plus(x, t),
-                    _ => panic!()
-                }
-            },
-        });
+
+        return fmap_iresult(parse_result, flatten_binary);
     }
 
-    fn refinement_atom<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
-        return just_int(input);
+    /// Match logical expressions.
+    /// Must be public because it's used by several statements
+    pub fn logical_binary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), |x| bitwise_binary_expr(x));
     }
 
+    /// Match bitwise boolean expressions.
+    fn bitwise_binary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), |x| shift_expr(x));
+    }
+
+    /// Match bit shift expressions.
+    fn shift_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), |x| additive_expr(x));
+    }
+
+    /// Match addition and subtraction expressions.
+    fn additive_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), |x| mult_expr(x));
+    }
+
+    /// Match multiplication, division, and modulo expressions.
+    fn mult_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), |x| unary_expr(x));
+    }
+
+    /// Match an exponentiation expression.
+    fn power_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        return binary_expr(input, |x| call!(x, EXP), |x| atomic_expr(x));
+    }
+
+    fn unary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+
+        let parse_result = alt!(input,
+            tuple!(
+                map!(alt_complete!(PLUS | NEG | TILDE | NOT), Some),
+                unary_expr
+            ) |
+            tuple!(
+                value!(None, tag!("")),
+                power_expr
+            )
+        );
+
+        let node = fmap_iresult(parse_result, |(maybe_op, expr)|
+            match maybe_op {
+                Some(op_str) => Node::from(Expr::UnaryExpr {operator: UnaryOperator::from(op_str), operand: Box::new(expr)}),
+                None => expr
+
+            });
+        return node;
+    }
+
+    fn atomic_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+        let node = w_followed!(input, alt_complete!(
+            bool_expr |
+            float_expr |
+            int_expr |
+            map!(IDENTIFIER, |x| Node::from(Expr::IdentifierExpr(x)))
+        ));
+        return node;
+    }
     
 
     #[cfg(test)]
@@ -2053,6 +2126,18 @@ pub mod type_parser {
             check_match("(i32, i64)", any_type, Type::Product(vec!(
                 Type::i32, Type::i64
             )));
+        }
+
+        #[test]
+        fn test_refinements() {
+            check_match("i32 ~ x > 0", any_type, Type::Refinement(
+                Box::from(Type::i32), 
+                wrap(Expr::ComparisonExpr{
+                    operator: ComparisonOperator::Greater,
+                    left: wrap(Expr::from("x")),
+                    right: wrap(Expr::from(0))
+                })
+            ));
         }
     }
 

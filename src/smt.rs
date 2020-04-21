@@ -2,22 +2,21 @@ use std::collections::HashSet;
 
 use expression::*;
 use typing::{Type, Refinement};
-use scoping::Context;
+use scoping::{Context, CanModifyScope};
 use general_utils::{m_union, get_next_id};
 
 pub fn check_constraints(name: &Identifier, expr: &Node<Expr>, context: &Context, mut constraints: Vec<Refinement>) -> bool {
     constraints.push(Refinement{
         operator: ComparisonOperator::Equal,
         left: Box::new(Node{
-            id: 
+            id: get_next_id(),
             scope: expr.scope,
             data: Expr::from(name.clone())
         }),
         right: Box::new(expr.clone())
     });
-    let (idents, mut constraint_strings) = call_from_refinement_type(name, expr.scope, constraints, context);
+    let (idents, mut constraint_strings) = call_from_refinement_type(name, expr.scope, &constraints, context);
     let (_, python_encoded) = expr.construct_condition(context);
-    constraint_strings.push(format!("{} = {}", name.name.clone(), python_encoded));
     println!("{:?}", idents);
     println!("{:?}", constraint_strings);
     panic!()
@@ -38,6 +37,15 @@ fn call_from_refinement_type(name: &Identifier, scope_id: usize, constraints: &V
         for variable in set.iter() {
             println!("variable: {:?}", variable);
             if !checked.contains(variable) && variable != name {
+
+                // Add the declaration to the constraints.
+                let var_dec = context.get_declaration(scope_id, &variable).unwrap();
+                let (dec_set, dec_str) = var_dec.construct_condition(context);
+                checked = m_union(checked, dec_set.clone());
+                variables = m_union(variables, dec_set);
+                constraint_strings.push(format!("{} == {}", variable, dec_str));
+
+                // Add the type to the constraints.
                 let var_scope = context.get_declaring_scope(scope_id, &variable);
                 let var_type = context.get_type(scope_id, &variable);
                 match var_type {
@@ -65,6 +73,18 @@ trait ToPython {
     fn construct_condition(&self, &Context) -> (HashSet<Identifier>, String);
 }
 
+impl ToPython for CanModifyScope {
+    fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
+        return match self {
+            CanModifyScope::Statement(ref raw_stmt, stmt_id) => {
+                unsafe {
+                    (**raw_stmt).construct_condition(context)
+                }
+            },
+            _ => panic!()
+        }
+    }
+}
 
 impl ToPython for Refinement {
     fn construct_condition(&self,context: &Context) -> (HashSet<Identifier>, String) {
@@ -72,6 +92,15 @@ impl ToPython for Refinement {
         let (r_set, r_str) = self.right.construct_condition(context);
         let f_set = m_union(l_set, r_set);
         return (f_set, format!("({}) {} ({})", l_str, self.operator.to_string(), r_str));
+    }
+}
+
+impl ToPython for Node<Stmt> {
+    fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
+        return match &self.data {
+            Stmt::LetStmt{ref name, ref expression, ref type_annotation} => expression.construct_condition(context),
+            x => panic!("ToPython not implemented for {:?}", x)
+        }
     }
 }
 

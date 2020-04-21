@@ -242,17 +242,13 @@ impl Context {
             return true;
         } else {
             return match desired_type {
-                Type::Refinement(_, ref d_conds) => check_constraints(ref_name, expr, self, d_conds),
+                Type::Refinement(_, ref d_conds) => check_constraints(ref_name, expr, self, d_conds.clone()),
                 x => match expr_t {
                     Type::Refinement(ref base, ..) => x == &**base,
                     y => x == y
                 }
             };
         }
-    }
-
-    pub fn check_constraints(&self, ref_name: &Identifier, expr: &Node<Expr>, expr_t: &Type, conditions: &Vec<Refinement>) -> bool {
-        panic!()
     }
 }
 

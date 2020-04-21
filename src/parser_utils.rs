@@ -410,6 +410,7 @@ pub mod tokens {
     token!(RANGLE, ">");
     token!(ARROW, "=>");
     token!(TARROW, "->");
+    token!(UNDERSCORE, "_");
 
     // Assignments
     token!(ADDASN, "+=");

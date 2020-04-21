@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::Type;
+use typing::{Type, Refinement};
 use general_utils::{
     get_next_id,
     get_next_var,
@@ -738,7 +738,7 @@ pub mod expr_parsers {
                 m!(self.logical_binary_expr),
                 optc!(tuple!(
                     alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
-                    m!(self.comparison_expr)
+                    m!(self.logical_binary_expr)
                 ))
             );
 
@@ -1966,17 +1966,36 @@ pub mod type_parser {
                 None => Type::from(base)
             };
             match refine {
-                Some(r) => Type::Refinement(Box::new(b), Box::new(r)),
+                Some(r) => Type::Refinement(Box::new(b), r),
                 None => b
             }
         });
     }
 
-    fn refinement<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-        return preceded!(input,
-            TILDE,
-            comparison_expr
+    fn refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Refinement>> {
+        return delimited!(input,
+            OPEN_BRACKET,
+            separated_nonempty_list_complete!(
+                COMMA,
+                single_refinement
+                
+            ),
+            CLOSE_BRACKET
         );
+    }
+
+    fn single_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+        let parse_result = tuple!(input,
+            logical_binary_expr,
+            alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
+            logical_binary_expr
+        );
+
+        return fmap_iresult(parse_result, |(l, o, r)| Refinement {
+            operator: ComparisonOperator::from(o),
+            left: Box::new(l),
+            right: Box::new(r),
+        });
     }
 
     fn flatten_binary<'a>(result: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)) -> Node<Expr> {
@@ -1987,28 +2006,6 @@ pub mod type_parser {
             },
             None => result.0
         };
-    }
-
-    /// Match a comparison expression.
-    fn comparison_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-        let parse_result = tuple!(input,
-            logical_binary_expr,
-            optc!(tuple!(
-                alt_complete!( DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE  | RANGLE),
-                comparison_expr
-            ))
-        );
-
-        let map = |x: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)| match x.1 {
-            None => x.0,
-            Some((o, right)) => {
-                let operator = ComparisonOperator::from(o.slice);
-                Node::from(Expr::ComparisonExpr{operator, left: Box::new(x.0), right: Box::new(right)})
-            }
-        };
-
-        let node = fmap_iresult(parse_result, map);
-        return node;
     }
 
     /// Match a list of binary operations
@@ -2027,17 +2024,7 @@ pub mod type_parser {
     /// Match logical expressions.
     /// Must be public because it's used by several statements
     pub fn logical_binary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-        return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), |x| bitwise_binary_expr(x));
-    }
-
-    /// Match bitwise boolean expressions.
-    fn bitwise_binary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-        return binary_expr(input, |x| alt_complete!(x, BAND | VBAR | BXOR), |x| shift_expr(x));
-    }
-
-    /// Match bit shift expressions.
-    fn shift_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-        return binary_expr(input, |x| alt_complete!(x, LSHIFT | RSHIFT), |x| additive_expr(x));
+        return binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), |x| additive_expr(x));
     }
 
     /// Match addition and subtraction expressions.
@@ -2130,9 +2117,9 @@ pub mod type_parser {
 
         #[test]
         fn test_refinements() {
-            check_match("i32 ~ x > 0", any_type, Type::Refinement(
+            check_match("i32 [x > 0]", any_type, Type::Refinement(
                 Box::from(Type::i32), 
-                wrap(Expr::ComparisonExpr{
+                vec!(Refinement{
                     operator: ComparisonOperator::Greater,
                     left: wrap(Expr::from("x")),
                     right: wrap(Expr::from(0))

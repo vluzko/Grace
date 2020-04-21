@@ -415,4 +415,9 @@ mod tests {
     fn import_calls_test() {
         compile_folder("import_calls_test");
     }
+
+    #[test]
+    fn simple_ref_types_test() {
+        compile_folder("refinement_types_test");
+    }
 }

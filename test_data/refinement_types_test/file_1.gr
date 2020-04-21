@@ -1,0 +1,10 @@
+
+
+fn require_ref(x: i32 [x > 0], y: i32) -> i32:
+    return x + y
+
+
+fn call_require() -> i32:
+    let a = 1
+    let b = 2
+    return require_ref(a, b)

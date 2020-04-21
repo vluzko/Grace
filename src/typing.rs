@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap};
 use std::usize;
 use std::ops::Add;
 use std::convert::From;
@@ -29,20 +29,15 @@ pub enum Type {
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Gradual(Vec<Type>),
-    Refinement(Box<Type>, Box<Node<Expr>>),
+    Refinement(Box<Type>, Vec<Refinement>),
     Undetermined
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Refinement {
-    Atom(String),
-    Not(Box<Refinement>),
-    Equal(Box<Refinement>, Box<Refinement>),
-    Lt(Box<Refinement>, Box<Refinement>),
-    Gt(Box<Refinement>, Box<Refinement>),
-    And(Box<Refinement>, Box<Refinement>),
-    Or(Box<Refinement>, Box<Refinement>),
-    Add(Box<Refinement>, Box<Refinement>),
+pub struct Refinement {
+    pub operator: ComparisonOperator,
+    pub left: Box<Node<Expr>>,
+    pub right: Box<Node<Expr>>
 }
 
 impl Type {
@@ -68,6 +63,10 @@ impl Type {
         }
     }
 
+    pub fn is_local(&self, allowed_ident: &Identifier) -> bool {
+        panic!()
+    }
+
     /// Get _s or _u for signed values, otherwise an empty string.
     pub fn sign(&self) -> String {
         match &self {
@@ -75,6 +74,13 @@ impl Type {
             &Type::ui32 | &Type::ui64 => "_u".to_string(),
             _ => "".to_string()
         }
+    }
+
+    pub fn is_simple(&self) -> bool {
+        return match self {
+            Type::Refinement(..) => false,
+            _ => true
+        };
     }
 
     /// Merge two types if they're compatible.
@@ -96,7 +102,10 @@ impl Type {
                             }
                         }
                     }
-                }, 
+                },
+                Type::Refinement(ref base, ..) => {
+                    other.merge(&base)
+                },
                 Type::Undetermined => {
                     other.clone()
                 },
@@ -269,6 +278,7 @@ impl Type {
         }
     }
 }
+
 
 impl Add for Type {
     type Output = Self;

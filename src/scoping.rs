@@ -4,7 +4,8 @@ use std::collections::HashMap;
 
 use expression::*;
 use general_utils;
-use typing::Type;
+use typing::{Type, Refinement};
+use smt::check_constraints;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -58,15 +59,8 @@ pub trait GetContext {
     fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
-/// Create an empty scope.
-pub fn base_scope() -> Scope {
-    return Scope{
-        parent_id: None,
-        declarations: BTreeMap::new(),
-        declaration_order: BTreeMap::new()
-    };
-}
 
+/// Create a Context containing all Grace builtins.
 pub fn builtin_context() -> (usize, Context) {
     let empty = Scope::empty();
     let mut init_scopes = HashMap::new();
@@ -149,6 +143,7 @@ impl Context {
         self.defined_types.insert(name.clone(), t);
     }
 
+    /// Get the type of the identifier in the given scope.
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
@@ -161,6 +156,7 @@ impl Context {
         return t;
     }
 
+    /// Get the type of the given node.
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
     }
@@ -219,9 +215,49 @@ impl Context {
             };
         }
     }
+
+    pub fn get_declaring_scope(&self, scope_id: usize, name: &Identifier) -> usize {
+        let initial_scope = self.scopes.get(&scope_id).unwrap();
+        if scope_id == 0 {
+            panic!("Reached scope id 0 searching for {}", name);
+        } else if initial_scope.declarations.contains_key(name) {
+            return scope_id;
+        } else {
+            return match initial_scope.parent_id {
+                Some(id) => {
+                    self.get_declaring_scope(id, name)
+                },
+                None => panic!()
+            };
+        }
+    }
+}
+
+/// Typechecking
+impl Context {
+
+    /// Check if the type of expr is a subtype of desired_type.
+    pub fn check_subtype(&self, ref_name: &Identifier, expr: &Node<Expr>, expr_t: &Type, desired_type: &Type) -> bool {
+        if expr_t == desired_type {
+            return true;
+        } else {
+            return match desired_type {
+                Type::Refinement(_, ref d_conds) => check_constraints(ref_name, expr, self, d_conds),
+                x => match expr_t {
+                    Type::Refinement(ref base, ..) => x == &**base,
+                    y => x == y
+                }
+            };
+        }
+    }
+
+    pub fn check_constraints(&self, ref_name: &Identifier, expr: &Node<Expr>, expr_t: &Type, conditions: &Vec<Refinement>) -> bool {
+        panic!()
+    }
 }
 
 impl CanModifyScope {
+
     pub fn extract_stmt(&self) -> Stmt {
         return unsafe {
             match self {
@@ -584,8 +620,9 @@ impl GetContext for Node<Expr> {
                 for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
-                    let _arg_t = res.1;
-                    assert_eq!(arg_types.get(i).unwrap().1, _arg_t);
+                    let arg_t = res.1;
+                    assert!(new_c.check_subtype(&arg_types[i].0, &arg, &arg_t, &arg_types[i].1));
+                    // assert_eq!(arg_types.get(i).unwrap().1, arg_t);
                 }
 
                 for (_, value) in kwargs {

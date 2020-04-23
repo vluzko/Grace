@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use expression::*;
 use general_utils;
 use typing::{Type, Refinement};
-use smt::check_constraints;
+use refinements::check_constraints;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -47,7 +47,9 @@ pub struct Context {
     // A map from Node IDs to types.
     pub type_map: HashMap<usize, Type>, 
     // The user-defined types
-    pub defined_types: HashMap<Identifier, Type>
+    pub defined_types: HashMap<Identifier, Type>,
+    /// A vector containing all the gradual types in context.
+    pub gradual_constraints: Vec<Type>
 }
 
 pub trait GetContext {
@@ -71,7 +73,8 @@ pub fn builtin_context() -> (usize, Context) {
         scopes: init_scopes, 
         containing_scopes: HashMap::new(),
         type_map: HashMap::new(), 
-        defined_types: HashMap::new()
+        defined_types: HashMap::new(),
+        gradual_constraints: vec!()
     };
     return (id, context);
 }
@@ -117,7 +120,8 @@ impl Context {
             scopes: scopes,
             containing_scopes: HashMap::new(),
             type_map: HashMap::new(),
-            defined_types: HashMap::new()
+            defined_types: HashMap::new(),
+            gradual_constraints: vec!()
         };
     }
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
@@ -129,7 +133,8 @@ impl Context {
             scopes: scope_map,
             containing_scopes: HashMap::new(),
             type_map: type_map,
-            defined_types: HashMap::new()
+            defined_types: HashMap::new(),
+            gradual_constraints: vec!()
         };
     }
 

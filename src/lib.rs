@@ -24,5 +24,5 @@ pub mod typing;
 pub mod compiler_layers;
 pub mod cfg;
 pub mod llr;
-pub mod smt;
+pub mod refinements;
 pub(crate) mod proptest_utils;

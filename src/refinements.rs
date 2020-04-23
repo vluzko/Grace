@@ -1,9 +1,14 @@
 use std::collections::HashSet;
+use std::process::Command;
+
+use itertools::join;
 
 use expression::*;
 use typing::{Type, Refinement};
 use scoping::{Context, CanModifyScope};
 use general_utils::{m_union, get_next_id};
+
+
 
 pub fn check_constraints(name: &Identifier, expr: &Node<Expr>, context: &Context, mut constraints: Vec<Refinement>) -> bool {
     constraints.push(Refinement{
@@ -15,11 +20,22 @@ pub fn check_constraints(name: &Identifier, expr: &Node<Expr>, context: &Context
         }),
         right: Box::new(expr.clone())
     });
-    let (idents, mut constraint_strings) = call_from_refinement_type(name, expr.scope, &constraints, context);
-    let (_, python_encoded) = expr.construct_condition(context);
-    println!("{:?}", idents);
-    println!("{:?}", constraint_strings);
-    panic!()
+    let (idents, constraint_strings) = call_from_refinement_type(name, expr.scope, &constraints, context);
+
+    let var_name_string = join(idents.iter().map(|x| x.name.clone()), ",");
+    let constraints_str = join(constraint_strings, ",");
+    let args = &["src/smt.py", var_name_string.as_str(), constraints_str.as_str()];
+    let res = Command::new("python").args(args).output();
+    return match res {
+        Ok(output) => output.stdout != "no solution".as_bytes(),
+        Err(e) => false
+    };
+    // let res = cmd.output();
+    // println!("{:?}", res);
+
+    // println!("{:?}", var_name_string);
+    // println!("{:?}", constraints_str);
+    // panic!()
 }
 
 
@@ -31,11 +47,9 @@ fn call_from_refinement_type(name: &Identifier, scope_id: usize, constraints: &V
     let mut constraint_strings = vec!();
     while full_constraints.len() > 0 {
         let constraint = full_constraints.pop().unwrap();
-        println!("constraint: {:?}", constraint);
         let (set, constraint_str) = constraint.construct_condition(context);
 
         for variable in set.iter() {
-            println!("variable: {:?}", variable);
             if !checked.contains(variable) && variable != name {
 
                 // Add the declaration to the constraints.
@@ -76,7 +90,7 @@ trait ToPython {
 impl ToPython for CanModifyScope {
     fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
         return match self {
-            CanModifyScope::Statement(ref raw_stmt, stmt_id) => {
+            CanModifyScope::Statement(ref raw_stmt, _) => {
                 unsafe {
                     (**raw_stmt).construct_condition(context)
                 }
@@ -98,7 +112,7 @@ impl ToPython for Refinement {
 impl ToPython for Node<Stmt> {
     fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
         return match &self.data {
-            Stmt::LetStmt{ref name, ref expression, ref type_annotation} => expression.construct_condition(context),
+            Stmt::LetStmt{ref expression, ..} => expression.construct_condition(context),
             x => panic!("ToPython not implemented for {:?}", x)
         }
     }

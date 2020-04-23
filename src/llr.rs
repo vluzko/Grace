@@ -457,14 +457,15 @@ pub mod rust_trait_impls {
 
     impl From<&Type> for WASMType {
         fn from(input: &Type) -> Self {
-            match input {
-                &Type::i32 => WASMType::i32,
-                &Type::i64 => WASMType::i64,
-                &Type::f32 => WASMType::f32,
-                &Type::f64 => WASMType::f64,
-                &Type::boolean => WASMType::i32,
-                &Type::Sum(..) => WASMType::i32,
-                &Type::Named(..) => WASMType::i32,
+            match &input {
+                Type::i32 => WASMType::i32,
+                Type::i64 => WASMType::i64,
+                Type::f32 => WASMType::f32,
+                Type::f64 => WASMType::f64,
+                Type::boolean => WASMType::i32,
+                Type::Sum(..) => WASMType::i32,
+                Type::Named(..) => WASMType::i32,
+                Type::Refinement(ref base, ..) => WASMType::from(&**base),
                 x => panic!("Tried to convert {:?} to WASM", x)
             }
         }

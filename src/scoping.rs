@@ -49,7 +49,7 @@ pub struct Context {
     // The user-defined types
     pub defined_types: HashMap<Identifier, Type>,
     /// A vector containing all the gradual types in context.
-    pub gradual_constraints: Vec<Type>
+    pub gradual_constraints: HashMap<usize, Vec<Type>>
 }
 
 pub trait GetContext {
@@ -74,7 +74,7 @@ pub fn builtin_context() -> (usize, Context) {
         containing_scopes: HashMap::new(),
         type_map: HashMap::new(), 
         defined_types: HashMap::new(),
-        gradual_constraints: vec!()
+        gradual_constraints: HashMap::new()
     };
     return (id, context);
 }
@@ -121,7 +121,7 @@ impl Context {
             containing_scopes: HashMap::new(),
             type_map: HashMap::new(),
             defined_types: HashMap::new(),
-            gradual_constraints: vec!()
+            gradual_constraints: HashMap::new()
         };
     }
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
@@ -134,7 +134,7 @@ impl Context {
             containing_scopes: HashMap::new(),
             type_map: type_map,
             defined_types: HashMap::new(),
-            gradual_constraints: vec!()
+            gradual_constraints: HashMap::new()
         };
     }
 
@@ -241,11 +241,17 @@ impl Context {
 /// Typechecking
 impl Context {
 
+    pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
+        panic!();
+
+        return true;
+    }
+
     /// Check if the type of expr is a subtype of desired_type.
     /// For types that do *not* include any gradual or refinement types this is equivalent to equality.
     /// For refinement types we have the additional requirement that the refinement constraints be satisfied.
     /// For gradual types *at least one* of the possible gradual types must be a subtype of the desired type.
-    pub fn check_subtype(&self, expr: &Node<Expr>, expr_t: &Type, desired_type: &Type) -> bool {
+    pub fn check_subtype(&mut self, expr: &Node<Expr>, expr_t: &Type, desired_type: &Type) -> bool {
         if expr_t == desired_type {
             return true;
         } else {
@@ -254,7 +260,7 @@ impl Context {
                 Type::empty => false,
                 Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match expr_t {
                     Type::Refinement(ref base, ..) => self.check_subtype(expr, base, desired_type),
-                    Type::Gradual(ref possible) => possible.iter().any(|x| self.check_subtype(expr, x, desired_type)),
+                    Type::Gradual(id) => self.update_gradual(*id, desired_type),
                     x => x.has_simple_conversion(desired_type)
                 },
                 Type::Product(ref types) => match expr_t {
@@ -273,7 +279,7 @@ impl Context {
                     x => panic!("Can't get {:?} from {:?}", expr_t, x)
                 },
                 Type::Refinement(_, ref d_conds) => check_constraints(expr.scope, self, d_conds.clone()),
-                Type::Gradual(ref possible) => possible.iter().any(|x| self.check_subtype(expr, expr_t, x)),
+                Type::Gradual(id) => self.update_gradual(*id, expr_t),
                 Type::Named(..) => desired_type == expr_t,
                 _ => panic!()
             };
@@ -557,7 +563,7 @@ impl GetContext for Node<Stmt> {
             Stmt::ReturnStmt(ref mut expression) => {
                 let ret_name = Identifier::from("$ret");
                 let exp_type = context.get_type(self.scope, &ret_name);
-                let (new_c, new_t) = expression.scopes_and_types(parent_id, context);
+                let (mut new_c, new_t) = expression.scopes_and_types(parent_id, context);
                 assert!(new_c.check_subtype(expression, &new_t, &exp_type));
                 
                 (new_c, new_t)

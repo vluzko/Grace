@@ -28,7 +28,7 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
-    Gradual(Vec<Type>),
+    Gradual(usize),
     Refinement(Box<Type>, Vec<Refinement>),
     Undetermined
 }
@@ -383,7 +383,7 @@ impl From<Identifier> for Type {
             "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
-            "any" => Type::Gradual(vec!()),
+            "any" => Type::Gradual(general_utils::get_next_grad()),
             _ => Type::Named(input)
         };
     }

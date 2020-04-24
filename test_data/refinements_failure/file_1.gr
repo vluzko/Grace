@@ -1,0 +1,9 @@
+
+
+fn greater_than_zero(x: i32 [x > 0]) -> i32:
+    return x
+
+
+fn call_require() -> i32:
+    let a = -1
+    return greater_than_zero(a)

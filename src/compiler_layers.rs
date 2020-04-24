@@ -420,4 +420,10 @@ mod tests {
     fn simple_ref_types_test() {
         compile_folder("refinement_types_test");
     }
+
+    #[test]
+    #[should_panic]
+    fn refinement_failures_test() {
+        compile_folder("refinements_failure");
+    }
 }

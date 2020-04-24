@@ -5,21 +5,16 @@
 (import "memory_management" "tee_memory" (func $.memory_management.tee_memory (param $loc i32) (param $value i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $require_ref (param $x i32) (param $y i32) (result i32) 
+(func $greater_than_zero (param $x i32) (result i32) 
 get_local $x
-get_local $y
-i32.add
 )
-(export "require_ref" (func $require_ref))
+(export "greater_than_zero" (func $greater_than_zero))
 
-(func $call_require  (result i32) (local $b i32) (local $a i32)
-i32.const 1
+(func $call_require  (result i32) (local $a i32)
+i32.const -1
 set_local $a
-i32.const 2
-set_local $b
 get_local $a
-get_local $b
-call $require_ref
+call $greater_than_zero
 )
 (export "call_require" (func $call_require))
 )

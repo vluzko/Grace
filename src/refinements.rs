@@ -6,40 +6,24 @@ use itertools::join;
 use expression::*;
 use typing::{Type, Refinement};
 use scoping::{Context, CanModifyScope};
-use general_utils::{m_union, get_next_id};
+use general_utils::{m_union};
 
 
 
-pub fn check_constraints(name: &Identifier, expr: &Node<Expr>, context: &Context, mut constraints: Vec<Refinement>) -> bool {
-    constraints.push(Refinement{
-        operator: ComparisonOperator::Equal,
-        left: Box::new(Node{
-            id: get_next_id(),
-            scope: expr.scope,
-            data: Expr::from(name.clone())
-        }),
-        right: Box::new(expr.clone())
-    });
-    let (idents, constraint_strings) = call_from_refinement_type(name, expr.scope, &constraints, context);
-
+pub fn check_constraints(scope_id: usize, context: &Context, constraints: Vec<Refinement>) -> bool {
+    let (idents, constraint_strings) = call_from_refinement_type(scope_id, &constraints, context);
     let var_name_string = join(idents.iter().map(|x| x.name.clone()), ",");
     let constraints_str = join(constraint_strings, ",");
     let args = &["src/smt.py", var_name_string.as_str(), constraints_str.as_str()];
     let res = Command::new("python").args(args).output();
     return match res {
-        Ok(output) => output.stdout != "no solution".as_bytes(),
-        Err(e) => false
+        Ok(output) => output.stdout != "no solution\n".as_bytes(),
+        Err(_) => false
     };
-    // let res = cmd.output();
-    // println!("{:?}", res);
-
-    // println!("{:?}", var_name_string);
-    // println!("{:?}", constraints_str);
-    // panic!()
 }
 
 
-fn call_from_refinement_type(name: &Identifier, scope_id: usize, constraints: &Vec<Refinement>, context: &Context) -> (HashSet<Identifier>, Vec<String>) {
+fn call_from_refinement_type(scope_id: usize, constraints: &Vec<Refinement>, context: &Context) -> (HashSet<Identifier>, Vec<String>) {
     let mut full_constraints = constraints.clone();
     let mut variables = HashSet::new();
     let mut checked = HashSet::new();
@@ -50,29 +34,33 @@ fn call_from_refinement_type(name: &Identifier, scope_id: usize, constraints: &V
         let (set, constraint_str) = constraint.construct_condition(context);
 
         for variable in set.iter() {
-            if !checked.contains(variable) && variable != name {
-
+            if !checked.contains(variable) {
                 // Add the declaration to the constraints.
-                let var_dec = context.get_declaration(scope_id, &variable).unwrap();
-                let (dec_set, dec_str) = var_dec.construct_condition(context);
-                checked = m_union(checked, dec_set.clone());
-                variables = m_union(variables, dec_set);
-                constraint_strings.push(format!("{} == {}", variable, dec_str));
+                let var_dec_opt = context.get_declaration(scope_id, &variable);
+                match var_dec_opt {
+                    Some(var_dec) => {
+                        let (dec_set, dec_str) = var_dec.construct_condition(context);
+                        checked = m_union(checked, dec_set.clone());
+                        variables = m_union(variables, dec_set);
+                        constraint_strings.push(format!("{} == {}", variable, dec_str));
 
-                // Add the type to the constraints.
-                let var_scope = context.get_declaring_scope(scope_id, &variable);
-                let var_type = context.get_type(scope_id, &variable);
-                match var_type {
-                    Type::Refinement(_, ref new_conds) => {
-                        let (new_idents, mut new_constraints) = call_from_refinement_type(variable, var_scope, new_conds, context);
-                        checked = m_union(checked, new_idents.clone());
-                        variables = m_union(variables, new_idents);
-                        constraint_strings.append(&mut new_constraints);
+                        // Add the type to the constraints.
+                        let var_scope = context.get_declaring_scope(scope_id, &variable);
+                        let var_type = context.get_type(scope_id, &variable);
+                        match var_type {
+                            Type::Refinement(_, ref new_conds) => {
+                                let (new_idents, mut new_constraints) = call_from_refinement_type(var_scope, new_conds, context);
+                                checked = m_union(checked, new_idents.clone());
+                                variables = m_union(variables, new_idents);
+                                constraint_strings.append(&mut new_constraints);
+                            },
+                            Type::i32 => {},
+                            x => panic!("Can't have a variable of type {:?} in a constraint", x)
+                        }
+                        checked.insert(variable.clone());
                     },
-                    Type::i32 => {},
-                    x => panic!("Can't have a variable of type {:?} in a constraint", x)
+                    None => {}
                 }
-                checked.insert(variable.clone());
             }
         }
 

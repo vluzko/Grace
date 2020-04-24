@@ -208,7 +208,7 @@ impl Context {
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
-            panic!("Reached scope id 0 searching for {}", name);
+            return None;
         } else if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
@@ -242,16 +242,40 @@ impl Context {
 impl Context {
 
     /// Check if the type of expr is a subtype of desired_type.
-    pub fn check_subtype(&self, ref_name: &Identifier, expr: &Node<Expr>, expr_t: &Type, desired_type: &Type) -> bool {
+    /// For types that do *not* include any gradual or refinement types this is equivalent to equality.
+    /// For refinement types we have the additional requirement that the refinement constraints be satisfied.
+    /// For gradual types *at least one* of the possible gradual types must be a subtype of the desired type.
+    pub fn check_subtype(&self, expr: &Node<Expr>, expr_t: &Type, desired_type: &Type) -> bool {
         if expr_t == desired_type {
             return true;
         } else {
             return match desired_type {
-                Type::Refinement(_, ref d_conds) => check_constraints(ref_name, expr, self, d_conds.clone()),
-                x => match expr_t {
-                    Type::Refinement(ref base, ..) => x == &**base,
-                    y => x == y
-                }
+                Type::Undetermined => true,
+                Type::empty => false,
+                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match expr_t {
+                    Type::Refinement(ref base, ..) => self.check_subtype(expr, base, desired_type),
+                    Type::Gradual(ref possible) => possible.iter().any(|x| self.check_subtype(expr, x, desired_type)),
+                    x => x.has_simple_conversion(desired_type)
+                },
+                Type::Product(ref types) => match expr_t {
+                    Type::Product(ref expr_types) => expr_types.iter().enumerate().all(|(i, x)| self.check_subtype(expr, x, &types[i])),
+                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                },
+                Type::Function(ref args, ref ret) => match expr_t {
+                    Type::Function(ref e_args, ref e_ret) => {
+                        let args_match = args.iter().enumerate().all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
+                        args_match && self.check_subtype(expr, ret, e_ret)
+                    },
+                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                },
+                Type::Vector(ref t) => match expr_t {
+                    Type::Vector(ref e_t) => self.check_subtype(expr, e_t, t),
+                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                },
+                Type::Refinement(_, ref d_conds) => check_constraints(expr.scope, self, d_conds.clone()),
+                Type::Gradual(ref possible) => possible.iter().any(|x| self.check_subtype(expr, expr_t, x)),
+                Type::Named(..) => desired_type == expr_t,
+                _ => panic!()
             };
         }
     }
@@ -478,6 +502,8 @@ impl GetContext for Node<Stmt> {
 
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
 
+                // assert!(block_context.check_subtype(Identifier::from("$ret"), ))
+
                 assert!(return_type.is_compatible(&block_type), "{:?} not compatible with {:?}", return_type, block_type);
 
                 (block_context, function_type)
@@ -529,9 +555,10 @@ impl GetContext for Node<Stmt> {
                 (context, Type::Named(name.clone()))
             },
             Stmt::ReturnStmt(ref mut expression) => {
-                let exp_type = context.get_type(self.scope, &Identifier::from("$ret"));
+                let ret_name = Identifier::from("$ret");
+                let exp_type = context.get_type(self.scope, &ret_name);
                 let (new_c, new_t) = expression.scopes_and_types(parent_id, context);
-                assert!(exp_type.is_compatible(&new_t));
+                assert!(new_c.check_subtype(expression, &new_t, &exp_type));
                 
                 (new_c, new_t)
             },
@@ -622,7 +649,10 @@ impl GetContext for Node<Expr> {
                     let res = arg.scopes_and_types(parent_id, new_c);
                     new_c = res.0;
                     let arg_t = res.1;
-                    assert!(new_c.check_subtype(&arg_types[i].0, &arg, &arg_t, &arg_types[i].1));
+
+                    let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
+                    
+                    assert!(new_c.check_subtype(&arg, &arg_t, &expected_type));
                     // assert_eq!(arg_types.get(i).unwrap().1, arg_t);
                 }
 

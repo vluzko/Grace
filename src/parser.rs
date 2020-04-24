@@ -2069,7 +2069,8 @@ pub mod type_parser {
             bool_expr |
             float_expr |
             int_expr |
-            map!(IDENTIFIER, |x| Node::from(Expr::IdentifierExpr(x)))
+            map!(IDENTIFIER, |x| Node::from(Expr::IdentifierExpr(x))) |
+            map!(w_followed!(tag!("$ret")), |x| Node::from(Expr::from(x)))
         ));
         return node;
     }

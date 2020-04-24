@@ -63,10 +63,6 @@ impl Type {
         }
     }
 
-    pub fn is_local(&self, allowed_ident: &Identifier) -> bool {
-        panic!()
-    }
-
     /// Get _s or _u for signed values, otherwise an empty string.
     pub fn sign(&self) -> String {
         match &self {
@@ -130,34 +126,55 @@ impl Type {
         if self == other {
             return true
         } else {
-            return match self {
-                Type::i32 => {
-                    match other {
-                        Type::i64 | Type::f64 => true,
-                        _ => false
-                    }
-                },
-                Type::f32 => {
-                    match other {
-                        Type::f64 => true,
-                        _ => false
-                    }
-                },
-                Type::Sum(ref types) => {
-                    match other {
-                        Type::Sum(_) => true, 
-                        x => types.contains(&x)
-                    }
-                }, 
-                Type::Undetermined => true,
-                x => {
-                    match other {
-                        Type::Sum(ref other_types) => other_types.contains(&x),
-                        _ => false
+            return match &other {
+                Type::Refinement(ref base, ..) => self.is_compatible(base),
+                x => match self {
+                    Type::i32 => {
+                        match other {
+                            Type::i64 | Type::f64 => true,
+                            _ => false
+                        }
+                    },
+                    Type::f32 => {
+                        match other {
+                            Type::f64 => true,
+                            _ => false
+                        }
+                    },
+                    Type::Sum(ref types) => {
+                        match other {
+                            Type::Sum(_) => true, 
+                            x => types.contains(&x)
+                        }
+                    }, 
+                    Type::Undetermined => true,
+                    x => {
+                        match other {
+                            Type::Sum(ref other_types) => other_types.contains(&x),
+                            _ => false
+                        }
                     }
                 }
             }
         }
+    }
+
+    pub fn has_simple_conversion(&self, other: &Type) -> bool {
+        return match self {
+            Type::i32 => {
+                match other {
+                    Type::i64 | Type::f64 => true,
+                    _ => false
+                }
+            },
+            Type::f32 => {
+                match other {
+                    Type::f64 => true,
+                    _ => false
+                }
+            },
+            _ => false
+        };
     }
 
     pub fn size(&self) -> usize {
@@ -275,6 +292,27 @@ impl Type {
                 (args, Type::i32)
             },
             _ => panic!()
+        }
+    }
+
+    /// Add a constraint if the type is a refinement. Do nothing otherwise.
+    pub fn add_constraint(&self, name: &Identifier, expr: &Node<Expr>) -> Type {
+        return match self {
+            Type::Refinement(ref base, ref constraints) => {
+                let mut new_constraints = constraints.clone();
+                new_constraints.push(Refinement{
+                    operator: ComparisonOperator::Equal,
+                    left: Box::new(Node{
+                        id: general_utils::get_next_id(),
+                        scope: expr.scope,
+                        data: Expr::from(name.clone())
+                    }),
+                    right: Box::new(expr.clone())
+                });
+
+                Type::Refinement(base.clone(), new_constraints)
+            },
+            x => x.clone()
         }
     }
 }

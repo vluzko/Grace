@@ -242,8 +242,8 @@ impl Context {
 impl Context {
 
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
-        panic!();
-
+        let constraints = self.gradual_constraints.get_mut(&gradual_id).unwrap();
+        constraints.push(constraint.clone());
         return true;
     }
 
@@ -285,6 +285,7 @@ impl Context {
             };
         }
     }
+
 }
 
 impl CanModifyScope {

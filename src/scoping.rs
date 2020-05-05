@@ -161,6 +161,19 @@ impl Context {
         return t;
     }
 
+    /// Get the type of the identifier in the given scope, except it never panics.
+    /// Use this one when checking whether to give an identifier a globally unique name.
+    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
+        let maybe_scope_mod = self.get_declaration(scope_id, name);
+        return match maybe_scope_mod ? {
+            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) => {
+                Some(self.type_map.get(id).unwrap().clone())
+            },
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
+        };
+    }
+
     /// Get the type of the given node.
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
@@ -445,8 +458,8 @@ impl GetContext for Node<Stmt> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
-            Stmt::LetStmt{ref mut expression, ref type_annotation, ..} => {
-                // TODO: Type checking
+            Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
+                name.name = format!("{}.{}", name.name, self.scope);
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 match &type_annotation {
                     Some(x) => assert!(t.is_compatible(x)),
@@ -455,9 +468,8 @@ impl GetContext for Node<Stmt> {
 
                 (c, t)
             },
-            Stmt::AssignmentStmt{ref mut expression, ref name} => {
-                // TODO: Type checking
-
+            Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
+                name.name = format!("{}.{}", name.name, self.scope);
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 let expected_type = c.get_type(self.scope, name);
                 assert!(t.is_compatible(&expected_type));
@@ -695,8 +707,14 @@ impl GetContext for Node<Expr> {
                 let (_new_c, _base_t) = base.scopes_and_types(parent_id, context);
                 panic!()
             },
-            Expr::IdentifierExpr(ref name) => {
-                let t = context.get_type(self.scope, name);
+            Expr::IdentifierExpr(ref mut name) => {
+                let t = match context.safe_get_type(self.scope, name) {
+                    Some(t2) => t2,
+                    None => {
+                        name.name = format!("{}.{}", name, self.scope);
+                        context.get_type(self.scope, name)
+                    }
+                };
                 context.add_type(self.id, t.clone());
                 (context, t)
             },
@@ -766,6 +784,8 @@ impl GetContext for Node<Expr> {
 mod test {
     use super::*;
     use compiler_layers;
+    use difference::{Difference, Changeset};
+    use regex::Regex;
 
     #[cfg(test)]
     mod expected_failures {
@@ -806,8 +826,20 @@ mod test {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
         let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
+        let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
         for ptr in actual {
-            assert_eq!(ptr.0, new_ident);
+            let changeset = Changeset::new("x", ptr.0.name.as_str(), "");
+            for diff in changeset.diffs {
+                match diff {
+                    Difference::Same(_) => {},
+                    Difference::Rem(_) => panic!(),
+                    Difference::Add(added_string) => {
+                        // Check if the thing being added is a scope ID on the end
+                        // of a variable
+                        assert!(scope_suffix_regex.is_match(added_string.as_str()));
+                    }
+                }
+            }
         }
     }
 

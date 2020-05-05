@@ -381,6 +381,8 @@ mod tests {
     use std::fs::{
         read_to_string, read_dir
     };
+    use difference::{Difference, Changeset};
+    use regex::Regex;
 
     fn compile_folder(subfolder: &str) {
         let folder_path = format!("./test_data/{}", subfolder);
@@ -401,7 +403,19 @@ mod tests {
                 let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
                 let actual = read_to_string(output_file).unwrap();
                 let expected = read_to_string(expected_file).unwrap();
-                assert_eq!(actual, expected);
+                let changeset = Changeset::new(expected.as_str(), actual.as_str(), "");
+                let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
+                for diff in changeset.diffs {
+                    match diff {
+                        Difference::Same(_) => {},
+                        Difference::Rem(x) => panic!("Removed {:?}", x),
+                        Difference::Add(added_string) => {
+                            // Check if the thing being added is a scope ID on the end
+                            // of a variable
+                            assert!(scope_suffix_regex.is_match(added_string.as_str()));
+                        }
+                    }
+                }
             }
         }
     }

@@ -40,6 +40,12 @@ pub struct Refinement {
     pub right: Box<Node<Expr>>
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Trait {
+    pub name: Identifier,
+    pub functions: Vec<(Identifier, Type)>
+}
+
 impl Type {
 
     /// Get the name of this type in WAST.

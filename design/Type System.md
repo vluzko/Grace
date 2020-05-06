@@ -47,3 +47,41 @@ Just copy Hindley-Milner
 * How do we handle
 
 
+## Run-Time Type System
+
+We need a "type-wrapper" of some sort.
+
+This tells us how to map a piece of data to it's type. In particular how to call functions with it.
+
+
+### Example
+We have the type `Gradual(f32 | i32)`. How do we resolve this at run-time?
+
+We store a "type-wrapper" object containing a pointer to a "type-descriptor" object and the actual data.
+
+How do we do function calls?
+
+fn foo(x, y):
+    let x: Gradual(f32 | i32) = 1
+    let y: Gradual(f32 | i32) = 2
+    let z = x + y
+
+
+First: how do we turn the let statements into WASM?
+
+We have a `make_gradual` call which takes the underlying data (an i32, in each case), and wraps it in a gradual type.
+
+The `+` operator gets converted to a *function call* (something like `add_gradual`).
+
+`add_gradual` needs to map types of inputs to an actual function.
+
+So for instance if both are `i32`, it should map to the function i32.add, which we can then call with the underlying data.
+
+If both are `f32`, we do essentially the same thing.
+
+If the types are mismatched, we throw an error.
+
+Finally we call `make_gradual` on the result of that function call. That gets stored as `z`.
+
+
+

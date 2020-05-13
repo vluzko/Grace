@@ -53,6 +53,33 @@ We need a "type-wrapper" of some sort.
 
 This tells us how to map a piece of data to it's type. In particular how to call functions with it.
 
+## Dynamic Attribute Access
+We have the code `foo.bar`. `foo` can either be an `A` or a `B`.
+
+* Case: `type(A.bar) == type(B.bar)`
+    * Perfect. Accessing `foo.bar` gives us a statically known type.
+* Case: both are gradual types
+    * This is fine. At runtime a gradual type is an object. This is essentially the same as them having the same type.
+* Case: `type(A.bar) != type(B.bar)`
+    * Now `foo.bar` has a gradual type.
+
+## Dynamic Function Calls
+We have the code `foo(a, b)`. How do we call this?
+
+* Case: All the types are known statically
+    * Just do it normally
+* Case: 
+
+## Dynamically Finding The Right Function
+
+### One function per gradual operator
+
+1. Take the function ID and use it as an index to an array. The value we get is a pointer to the function chooser for that function ID
+2. Call the function chooser, passing the type IDs of all the gradual types. This gives us a pointer to the real function to call.
+3. Call that function with the *gradual* arguments
+4. The function unwraps the gradual arguments
+5. It runs with the actual data
+6. It wraps the result and returns
 
 ### Example
 We have the type `Gradual(f32 | i32)`. How do we resolve this at run-time?

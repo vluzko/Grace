@@ -53,6 +53,12 @@ We need a "type-wrapper" of some sort.
 
 This tells us how to map a piece of data to it's type. In particular how to call functions with it.
 
+### Data Layout
+Gradual types are stored as:
+
+    type_id: i32
+    data: ?
+
 ## Dynamic Attribute Access
 We have the code `foo.bar`. `foo` can either be an `A` or a `B`.
 

@@ -1,7 +1,8 @@
 from itertools import product
 
 types = ("i32", "i64", "f32", "f64")
-operators = ("add", "sub", "mul", "div", "eq", "ne", "lt_s", "le_s", "gt_s", "ge_s")
+operators = ("add", "sub", "mul", "eq", "ne")
+# Div, lt, le, gt, and ge have been removed due to issues distinguishing signed and unsigned versions
 
 binary_template = """
     (func ${op}_{t} (param $a i32) (param $b i32) (result i32)
@@ -57,7 +58,6 @@ choose_template = """
                 end
             end
         end
-        )
     )
 """
 
@@ -76,6 +76,7 @@ gradual_op_template = """   (func ${op}_gradual (param $a i32) (param $b i32) (r
         call_indirect (type $generic_binary)
     )"""
 
+table_functions = []
 
 for i, op in enumerate(operators):
     for t in types:
@@ -87,3 +88,8 @@ for i, op in enumerate(operators):
 
     gradual_val = gradual_op_template.format(op=op)
     print(gradual_val)
+    table_functions.append("${}_gradual".format(op))
+
+all_funcs = " ".join(table_functions)
+table_output = "(elem (i32.const 0) {})".format(all_funcs)
+print(table_output)

@@ -13,7 +13,18 @@ describe("Simple WASM test.", function () {
     expect(module.instance.exports.add(2,3)).toBe(5);
   });
 
-  test.only('table_test.', async (done) => {
+  test('table_test.', async (done) => {
+    let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/table_test.wasm"));
+    let module = await WebAssembly.instantiate(module_as_bytes);
+    let first_call = module.instance.exports.callByIndex(0);
+    let second_call = module.instance.exports.callByIndex(1);
+    expect(first_call).toBe(42);
+    expect(second_call).toBe(13);
+    done();
+  })
+
+  // This is just a clone of table_test; it needs changing
+  test('gradual_binary_test.', async (done) => {
     let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/table_test.wasm"));
     let module = await WebAssembly.instantiate(module_as_bytes);
     let first_call = module.instance.exports.callByIndex(0);

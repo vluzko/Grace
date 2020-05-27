@@ -4,6 +4,9 @@
     (import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
     (import "memory_management" "mem" (memory (;0;) 1))
 
+    (table $tb 2 anyfunc)
+    (type $generic_binary (func (param $a i32) (param $b i32) (result i32)))
+
     (func $unwrap_i32 (param $ptr i32) (result i32)
         ;; Shift the pointer to point to the data.
         get_local $ptr
@@ -123,17 +126,6 @@
         ;; Return the pointer.
         get_local $ptr
     )
-
-
-    (table $tb 2 anyfunc)
-    (func $f1 (result i32)
-        i32.const 42)
-    (func $f2 (result i32)
-        i32.const 13)
-    ;; (elem (i32.const 0) $f1 $f2)
-    (type $return_i32 (func (result i32)))
-    (type $generic_binary (func (param $a i32) (param $b i32) (result i32)))
-
         
     (func $add_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -740,5 +732,6 @@
         get_local $i
         get_local $a
         get_local $b
-        call_indirect (type $generic_binary))
+        call_indirect (type $generic_binary)
+    )
 )

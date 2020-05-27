@@ -23,14 +23,21 @@ describe("Simple WASM test.", function () {
     done();
   })
 
-  // This is just a clone of table_test; it needs changing
-  test('gradual_binary_test.', async (done) => {
-    let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/table_test.wasm"));
-    let module = await WebAssembly.instantiate(module_as_bytes);
-    let first_call = module.instance.exports.callByIndex(0);
-    let second_call = module.instance.exports.callByIndex(1);
+  test.only('gradual_binary_test.', async (done) => {
+    let mem_module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/memory_management.wasm"));
+    let mem_module = await WebAssembly.instantiate(mem_module_as_bytes);
+    let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
+    let module = await WebAssembly.instantiate(module_as_bytes, {
+      'memory_management': mem_module.instance.exports
+    });
+    const a_ptr = mem_module.alloc(2);
+    const b_ptr = mem_module.alloc(2);
+    mem_module.set(a_ptr, 0);
+    mem_module.set(b_ptr, 0);
+    mem_module.set(a_ptr+4, 1);
+    mem_module.set(b_ptr+4, 7);
+    let first_call = module.instance.exports.callByIndex(0, a_ptr, b_ptr);
     expect(first_call).toBe(42);
-    expect(second_call).toBe(13);
     done();
   })
 
@@ -78,7 +85,7 @@ describe("Small grace tests.", function () {
   }]]);
 });
 
-describe("Wat tests.", function() {
+describe("Memory management tests.", function() {
   let mem_manage;
   afterEach(function () {
     mem_manage.obliviate();

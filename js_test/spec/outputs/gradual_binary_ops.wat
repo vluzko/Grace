@@ -4,9 +4,9 @@
     ;; (import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
     (import "memory_management" "mem" (memory (;0;) 1))
 
-    (table $tb 5 anyfunc)
+    (table $tb 25 anyfunc)
     (type $generic_binary (func (param $a i32) (param $b i32) (result i32)))
-
+(type $return_i32 (func (result i32)))
     (func $unwrap_i32 (param $ptr i32) (result i32)
         ;; Shift the pointer to point to the data.
         get_local $ptr
@@ -62,7 +62,7 @@
  
         ;; Return the pointer.
         get_local $ptr
-    )
+    ) (export "wrap_i32" (func $wrap_i32))
  
     (func $wrap_i64 (param $val i64) (result i32) (local $ptr i32)
         ;; Allocate data for the gradual object
@@ -141,7 +141,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "add_i32" (func $add_i32))
 
     (func $add_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -227,20 +227,28 @@
             end
         end
     )
-
-    (func $add_gradual (param $a i32) (param $b i32) (result i32)
+    (func $add_gradual (result i32)
+    ;; (func $add_gradual (param $a i32) (param $b i32) (result i32)
             ;; Get the type ID of a
-            get_local $a
+            ;; get_local $a
+            i32.const 12
             i32.load
 
             ;; Get a pointer to the correct operator function.
             call $choose_add
+            drop
 
             ;; Call the returned function pointer.
-            get_local $a
-            get_local $b
+            ;; get_local $a
+            ;; get_local $b
+            i32.const 12
+            i32.const 28
 
-            call_indirect (type $generic_binary)
+            call $add_i32
+            ;; call_indirect (type $generic_binary)
+            ;; i32.add
+            ;; i32.add
+            ;; i32.const 48
         )
 
     (func $sub_i32 (param $a i32) (param $b i32) (result i32)
@@ -708,12 +716,14 @@
         )
 
     ;; (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
-    (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
+    (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual $add_i32 $add_i64 $add_f32 $add_f64 $sub_i32 $sub_i64 $sub_f32 $sub_f64 $mul_i32 $mul_i64 $mul_f32 $mul_f64 $eq_i32 $eq_i64 $eq_f32 $eq_f64 $ne_i32 $ne_i64 $ne_f32 $ne_f64)
     (func (export "callByIndex") (param $i i32) (param $a i32) (param $b i32) (result i32)
-        
-        get_local $a
-        get_local $b
+        ;; i32.const 12
+        ;; i32.const 28
         get_local $i
-        call_indirect (type $generic_binary)
+        ;; get_local $a
+        ;; get_local $b
+        
+        call_indirect (type $return_i32)
     )
 )

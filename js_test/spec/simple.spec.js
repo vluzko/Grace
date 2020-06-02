@@ -23,20 +23,60 @@ describe("Simple WASM test.", function () {
     done();
   })
 
-  test.only('gradual_binary_test.', async (done) => {
+  test('wrap_i32.', async (done) => {
     const mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
     let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
     let module = await WebAssembly.instantiate(module_as_bytes, {
       'memory_management': mem_module
     });
-    const a_ptr = mem_module.alloc(2);
-    const b_ptr = mem_module.alloc(2);
+    const wrapped = module.instance.exports.wrap_i32(5);
+    const type_val = mem_module.inspect(wrapped);
+    const data_val = mem_module.inspect(wrapped + 4);
+    expect(type_val).toBe(0);
+    expect(data_val).toBe(5);
+    done();
+  })
+
+  test('add_i32.', async (done) => {
+    const mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
+    let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
+    let module = await WebAssembly.instantiate(module_as_bytes, {
+      'memory_management': mem_module
+    });
+    const a_ptr = mem_module.alloc_words(2);
+    const b_ptr = mem_module.alloc_words(2);
     mem_module.set(a_ptr, 0);
     mem_module.set(b_ptr, 0);
-    mem_module.set(a_ptr+4, 1);
+    mem_module.set(a_ptr+4, 2);
     mem_module.set(b_ptr+4, 7);
+    let first_call = module.instance.exports.add_i32(a_ptr, b_ptr);
+    let type_res = mem_module.inspect(first_call);
+    let data_res = mem_module.inspect(first_call + 4);
+    expect(type_res).toBe(0);
+    expect(data_res).toBe(9);
+    done();
+  })
+
+  test('gradual_binary_test.', async (done) => {
+    const mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
+    let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
+    let module = await WebAssembly.instantiate(module_as_bytes, {
+      'memory_management': mem_module
+    });
+    const a_ptr = mem_module.alloc_words(2);
+    const b_ptr = mem_module.alloc_words(2);
+    console.log(a_ptr);
+    console.log(b_ptr);
+    mem_module.set(a_ptr, 2);
+    mem_module.set(b_ptr, 2);
+    mem_module.set(a_ptr+4, 2.0);
+    mem_module.set(b_ptr+4, 7.0);
     let first_call = module.instance.exports.callByIndex(0, a_ptr, b_ptr);
-    expect(first_call).toBe(42);
+    let type_res = mem_module.inspect(first_call);
+    let data_res = mem_module.inspect(first_call + 4);
+    expect(type_res).toBe(1);
+    expect(data_res).toBe(9);
+    // expect(first_call).toBe(7);
     done();
   })
 

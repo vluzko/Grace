@@ -76,20 +76,24 @@ gradual_op_template = """   (func ${op}_gradual (param $a i32) (param $b i32) (r
         call_indirect (type $generic_binary)
     )"""
 
-table_functions = []
-
+table_functions = ['${}_gradual'.format(op) for op in operators]
+ops_start = len(table_functions)
 for i, op in enumerate(operators):
     for t in types:
         binary_val = binary_template.format(op=op, t=t)
         print(binary_val)
-    start = i * 4
+
+        table_functions.append('${}_{}'.format(op, t))
+
+    start = ops_start + i * 4
     choose_val = choose_template.format(op=op, i32_ptr=start, i64_ptr=start+1, f32_ptr=start+2, f64_ptr=start+3)
     print(choose_val)
 
     gradual_val = gradual_op_template.format(op=op)
     print(gradual_val)
-    table_functions.append("${}_gradual".format(op))
 
 all_funcs = " ".join(table_functions)
 table_output = "(elem (i32.const 0) {})".format(all_funcs)
 print(table_output)
+
+print("Size of table: {}".format(len(table_functions)))

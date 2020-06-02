@@ -72,27 +72,27 @@
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 0
+            i32.const 5
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 1
+                i32.const 6
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 2
+                    i32.const 7
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 3
+                        i32.const 8
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -192,27 +192,27 @@
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 4
+            i32.const 9
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 5
+                i32.const 10
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 6
+                    i32.const 11
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 7
+                        i32.const 12
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -312,27 +312,27 @@
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 8
+            i32.const 13
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 9
+                i32.const 14
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 10
+                    i32.const 15
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 11
+                        i32.const 16
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -432,27 +432,27 @@
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 12
+            i32.const 17
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 13
+                i32.const 18
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 14
+                    i32.const 19
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 15
+                        i32.const 20
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -552,27 +552,27 @@
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 16
+            i32.const 21
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 17
+                i32.const 22
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 18
+                    i32.const 23
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 19
+                        i32.const 24
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -598,4 +598,5 @@
 
         call_indirect (type $generic_binary)
     )
-(elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
+(elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual $add_i32 $add_i64 $add_f32 $add_f64 $sub_i32 $sub_i64 $sub_f32 $sub_f64 $mul_i32 $mul_i64 $mul_f32 $mul_f64 $eq_i32 $eq_i64 $eq_f32 $eq_f64 $ne_i32 $ne_i64 $ne_f32 $ne_f64)
+Size of table: 25

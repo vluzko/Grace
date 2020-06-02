@@ -19,7 +19,7 @@ binary_template = """
 
         ;; Rewrap and return.
         call $wrap_{t}
-    )
+    ) (export "{op}_{t}" (func ${op}_{t}))
 """
 
 choose_template = """
@@ -58,7 +58,7 @@ choose_template = """
                 end
             end
         end
-    )
+    ) (export "choose_{op}" (func $choose_{op}))
 """
 
 gradual_op_template = """   (func ${op}_gradual (param $a i32) (param $b i32) (result i32)
@@ -74,7 +74,7 @@ gradual_op_template = """   (func ${op}_gradual (param $a i32) (param $b i32) (r
         get_local $b
 
         call_indirect (type $generic_binary)
-    )"""
+    ) (export "{op}_gradual" (func ${op}_gradual))"""
 
 table_functions = ['${}_gradual'.format(op) for op in operators]
 ops_start = len(table_functions)

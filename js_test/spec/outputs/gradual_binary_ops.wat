@@ -127,7 +127,7 @@
         get_local $ptr
     )
         
-    (func $add_i32 (param $a i32) (param $b i32) (result i32)
+     (func $add_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
         call $unwrap_i32
@@ -143,6 +143,7 @@
         call $wrap_i32
     ) (export "add_i32" (func $add_i32))
 
+
     (func $add_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -157,7 +158,8 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "add_i64" (func $add_i64))
+
 
     (func $add_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -173,7 +175,8 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "add_f32" (func $add_f32))
+
 
     (func $add_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -189,34 +192,35 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "add_f64" (func $add_f64))
+
 
     (func $choose_add (param $type_id i32) (result i32)
         ;; Check if it's an i32
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 0
+            i32.const 5
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 1
+                i32.const 6
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 2
+                    i32.const 7
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 3
+                        i32.const 8
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -226,30 +230,22 @@
                 end
             end
         end
-    )
-    (func $add_gradual (result i32)
-    ;; (func $add_gradual (param $a i32) (param $b i32) (result i32)
-            ;; Get the type ID of a
-            ;; get_local $a
-            i32.const 12
-            i32.load
+    ) (export "choose_add" (func $choose_add))
 
-            ;; Get a pointer to the correct operator function.
-            call $choose_add
-            drop
+   (func $add_gradual (param $a i32) (param $b i32) (result i32)
+        ;; Get the type ID of a
+        get_local $a
+        i32.load
 
-            ;; Call the returned function pointer.
-            ;; get_local $a
-            ;; get_local $b
-            i32.const 12
-            i32.const 28
+        ;; Get a pointer to the correct operator function.
+        call $choose_add
 
-            call $add_i32
-            ;; call_indirect (type $generic_binary)
-            ;; i32.add
-            ;; i32.add
-            ;; i32.const 48
-        )
+        ;; Call the returned function pointer.
+        get_local $a
+        get_local $b
+
+        call_indirect (type $generic_binary)
+    ) (export "add_gradual" (func $add_gradual))
 
     (func $sub_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -265,7 +261,8 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "sub_i32" (func $sub_i32))
+
 
     (func $sub_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -281,7 +278,8 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "sub_i64" (func $sub_i64))
+
 
     (func $sub_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -297,7 +295,8 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "sub_f32" (func $sub_f32))
+
 
     (func $sub_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -313,34 +312,35 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "sub_f64" (func $sub_f64))
+
 
     (func $choose_sub (param $type_id i32) (result i32)
         ;; Check if it's an i32
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 4
+            i32.const 9
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 5
+                i32.const 10
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 6
+                    i32.const 11
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 7
+                        i32.const 12
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -350,22 +350,22 @@
                 end
             end
         end
-    )
+    ) (export "choose_sub" (func $choose_sub))
 
-    (func $sub_gradual (param $a i32) (param $b i32) (result i32)
-            ;; Get the type ID of a
-            get_local $a
-            i32.load
+   (func $sub_gradual (param $a i32) (param $b i32) (result i32)
+        ;; Get the type ID of a
+        get_local $a
+        i32.load
 
-            ;; Get a pointer to the correct operator function.
-            call $choose_sub
+        ;; Get a pointer to the correct operator function.
+        call $choose_sub
 
-            ;; Call the returned function pointer.
-            get_local $a
-            get_local $b
+        ;; Call the returned function pointer.
+        get_local $a
+        get_local $b
 
-            call_indirect (type $generic_binary)
-        )
+        call_indirect (type $generic_binary)
+    ) (export "sub_gradual" (func $sub_gradual))
 
     (func $mul_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -381,7 +381,8 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "mul_i32" (func $mul_i32))
+
 
     (func $mul_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -397,7 +398,8 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "mul_i64" (func $mul_i64))
+
 
     (func $mul_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -413,7 +415,8 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "mul_f32" (func $mul_f32))
+
 
     (func $mul_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -429,34 +432,35 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "mul_f64" (func $mul_f64))
+
 
     (func $choose_mul (param $type_id i32) (result i32)
         ;; Check if it's an i32
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 8
+            i32.const 13
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 9
+                i32.const 14
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 10
+                    i32.const 15
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 11
+                        i32.const 16
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -466,9 +470,9 @@
                 end
             end
         end
-    )
+    ) (export "choose_mul" (func $choose_mul))
 
-    (func $mul_gradual (param $a i32) (param $b i32) (result i32)
+   (func $mul_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -481,7 +485,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "mul_gradual" (func $mul_gradual))
 
     (func $eq_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -497,7 +501,8 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "eq_i32" (func $eq_i32))
+
 
     (func $eq_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -512,8 +517,9 @@
         i64.eq
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_i64
+    ) (export "eq_i64" (func $eq_i64))
+
 
     (func $eq_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -528,8 +534,9 @@
         f32.eq
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_f32
+    ) (export "eq_f32" (func $eq_f32))
+
 
     (func $eq_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -544,35 +551,36 @@
         f64.eq
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_f64
+    ) (export "eq_f64" (func $eq_f64))
+
 
     (func $choose_eq (param $type_id i32) (result i32)
         ;; Check if it's an i32
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 12
+            i32.const 17
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 13
+                i32.const 18
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 14
+                    i32.const 19
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 15
+                        i32.const 20
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -582,9 +590,9 @@
                 end
             end
         end
-    )
+    ) (export "choose_eq" (func $choose_eq))
 
-    (func $eq_gradual (param $a i32) (param $b i32) (result i32)
+   (func $eq_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -597,7 +605,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "eq_gradual" (func $eq_gradual))
 
     (func $ne_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -613,7 +621,8 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "ne_i32" (func $ne_i32))
+
 
     (func $ne_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -628,8 +637,9 @@
         i64.ne
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_i64
+    ) (export "ne_i64" (func $ne_i64))
+
 
     (func $ne_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -644,8 +654,9 @@
         f32.ne
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_f32
+    ) (export "ne_f32" (func $ne_f32))
+
 
     (func $ne_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -660,35 +671,36 @@
         f64.ne
 
         ;; Rewrap and return.
-        call $wrap_i32
-    )
+        call $wrap_f64
+    ) (export "ne_f64" (func $ne_f64))
+
 
     (func $choose_ne (param $type_id i32) (result i32)
         ;; Check if it's an i32
         get_local $type_id
         i32.eqz
         if (result i32)
-            i32.const 16
+            i32.const 21
         else
             ;;  Check if it's an i64
             get_local $type_id
             i32.const 1
             i32.eq
             if (result i32)
-                i32.const 17
+                i32.const 22
             else
                 ;; Check if it's an f32
                 get_local $type_id
                 i32.const 2
                 i32.eq
                 if (result i32)
-                    i32.const 18
+                    i32.const 23
                 else
                     get_local $type_id
                     i32.const 3
                     i32.eq
                     if (result i32)
-                        i32.const 19
+                        i32.const 24
                     else
                         ;; TODO: Handle non-primitive values.
                         ;; This is essentially a method call.
@@ -698,22 +710,22 @@
                 end
             end
         end
-    )
+    ) (export "choose_ne" (func $choose_ne))
 
-    (func $ne_gradual (param $a i32) (param $b i32) (result i32)
-            ;; Get the type ID of a
-            get_local $a
-            i32.load
+   (func $ne_gradual (param $a i32) (param $b i32) (result i32)
+        ;; Get the type ID of a
+        get_local $a
+        i32.load
 
-            ;; Get a pointer to the correct operator function.
-            call $choose_ne
+        ;; Get a pointer to the correct operator function.
+        call $choose_ne
 
-            ;; Call the returned function pointer.
-            get_local $a
-            get_local $b
+        ;; Call the returned function pointer.
+        get_local $a
+        get_local $b
 
-            call_indirect (type $generic_binary)
-        )
+        call_indirect (type $generic_binary)
+    ) (export "ne_gradual" (func $ne_gradual))
 
     ;; (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
     (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual $add_i32 $add_i64 $add_f32 $add_f64 $sub_i32 $sub_i64 $sub_f32 $sub_f64 $mul_i32 $mul_i64 $mul_f32 $mul_f64 $eq_i32 $eq_i64 $eq_f32 $eq_f64 $ne_i32 $ne_i64 $ne_f32 $ne_f64)

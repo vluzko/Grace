@@ -13,7 +13,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "add_i32" (func $add_i32))
 
 
     (func $add_i64 (param $a i32) (param $b i32) (result i32)
@@ -30,7 +30,7 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "add_i64" (func $add_i64))
 
 
     (func $add_f32 (param $a i32) (param $b i32) (result i32)
@@ -47,7 +47,7 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "add_f32" (func $add_f32))
 
 
     (func $add_f64 (param $a i32) (param $b i32) (result i32)
@@ -64,7 +64,7 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "add_f64" (func $add_f64))
 
 
     (func $choose_add (param $type_id i32) (result i32)
@@ -102,7 +102,7 @@
                 end
             end
         end
-    )
+    ) (export "choose_add" (func $choose_add))
 
    (func $add_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
@@ -117,7 +117,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "add_gradual" (func $add_gradual))
 
     (func $sub_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -133,7 +133,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "sub_i32" (func $sub_i32))
 
 
     (func $sub_i64 (param $a i32) (param $b i32) (result i32)
@@ -150,7 +150,7 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "sub_i64" (func $sub_i64))
 
 
     (func $sub_f32 (param $a i32) (param $b i32) (result i32)
@@ -167,7 +167,7 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "sub_f32" (func $sub_f32))
 
 
     (func $sub_f64 (param $a i32) (param $b i32) (result i32)
@@ -184,7 +184,7 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "sub_f64" (func $sub_f64))
 
 
     (func $choose_sub (param $type_id i32) (result i32)
@@ -222,7 +222,7 @@
                 end
             end
         end
-    )
+    ) (export "choose_sub" (func $choose_sub))
 
    (func $sub_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
@@ -237,7 +237,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "sub_gradual" (func $sub_gradual))
 
     (func $mul_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -253,7 +253,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "mul_i32" (func $mul_i32))
 
 
     (func $mul_i64 (param $a i32) (param $b i32) (result i32)
@@ -270,7 +270,7 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "mul_i64" (func $mul_i64))
 
 
     (func $mul_f32 (param $a i32) (param $b i32) (result i32)
@@ -287,7 +287,7 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "mul_f32" (func $mul_f32))
 
 
     (func $mul_f64 (param $a i32) (param $b i32) (result i32)
@@ -304,7 +304,7 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "mul_f64" (func $mul_f64))
 
 
     (func $choose_mul (param $type_id i32) (result i32)
@@ -342,7 +342,7 @@
                 end
             end
         end
-    )
+    ) (export "choose_mul" (func $choose_mul))
 
    (func $mul_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
@@ -357,7 +357,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "mul_gradual" (func $mul_gradual))
 
     (func $eq_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -373,7 +373,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "eq_i32" (func $eq_i32))
 
 
     (func $eq_i64 (param $a i32) (param $b i32) (result i32)
@@ -390,7 +390,7 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "eq_i64" (func $eq_i64))
 
 
     (func $eq_f32 (param $a i32) (param $b i32) (result i32)
@@ -407,7 +407,7 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "eq_f32" (func $eq_f32))
 
 
     (func $eq_f64 (param $a i32) (param $b i32) (result i32)
@@ -424,7 +424,7 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "eq_f64" (func $eq_f64))
 
 
     (func $choose_eq (param $type_id i32) (result i32)
@@ -462,7 +462,7 @@
                 end
             end
         end
-    )
+    ) (export "choose_eq" (func $choose_eq))
 
    (func $eq_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
@@ -477,7 +477,7 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "eq_gradual" (func $eq_gradual))
 
     (func $ne_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -493,7 +493,7 @@
 
         ;; Rewrap and return.
         call $wrap_i32
-    )
+    ) (export "ne_i32" (func $ne_i32))
 
 
     (func $ne_i64 (param $a i32) (param $b i32) (result i32)
@@ -510,7 +510,7 @@
 
         ;; Rewrap and return.
         call $wrap_i64
-    )
+    ) (export "ne_i64" (func $ne_i64))
 
 
     (func $ne_f32 (param $a i32) (param $b i32) (result i32)
@@ -527,7 +527,7 @@
 
         ;; Rewrap and return.
         call $wrap_f32
-    )
+    ) (export "ne_f32" (func $ne_f32))
 
 
     (func $ne_f64 (param $a i32) (param $b i32) (result i32)
@@ -544,7 +544,7 @@
 
         ;; Rewrap and return.
         call $wrap_f64
-    )
+    ) (export "ne_f64" (func $ne_f64))
 
 
     (func $choose_ne (param $type_id i32) (result i32)
@@ -582,7 +582,7 @@
                 end
             end
         end
-    )
+    ) (export "choose_ne" (func $choose_ne))
 
    (func $ne_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
@@ -597,6 +597,6 @@
         get_local $b
 
         call_indirect (type $generic_binary)
-    )
+    ) (export "ne_gradual" (func $ne_gradual))
 (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual $add_i32 $add_i64 $add_f32 $add_f64 $sub_i32 $sub_i64 $sub_f32 $sub_f64 $mul_i32 $mul_i64 $mul_f32 $mul_f64 $eq_i32 $eq_i64 $eq_f32 $eq_f64 $ne_i32 $ne_i64 $ne_f32 $ne_f64)
 Size of table: 25

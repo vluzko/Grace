@@ -24,11 +24,10 @@ describe("Simple WASM test.", function () {
   })
 
   test.only('gradual_binary_test.', async (done) => {
-    let mem_module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/memory_management.wasm"));
-    let mem_module = await WebAssembly.instantiate(mem_module_as_bytes);
+    const mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
     let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
     let module = await WebAssembly.instantiate(module_as_bytes, {
-      'memory_management': mem_module.instance.exports
+      'memory_management': mem_module
     });
     const a_ptr = mem_module.alloc(2);
     const b_ptr = mem_module.alloc(2);

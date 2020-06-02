@@ -1,10 +1,10 @@
 (module
     (import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
-    (import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
-    (import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
+    ;; (import "memory_management" "free_chunk" (func $.memory_management.free_chunk (param $a i32) (result i32)))
+    ;; (import "memory_management" "copy_many" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))
     (import "memory_management" "mem" (memory (;0;) 1))
 
-    (table $tb 2 anyfunc)
+    (table $tb 5 anyfunc)
     (type $generic_binary (func (param $a i32) (param $b i32) (result i32)))
 
     (func $unwrap_i32 (param $ptr i32) (result i32)
@@ -143,7 +143,6 @@
         call $wrap_i32
     )
 
-
     (func $add_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -159,7 +158,6 @@
         ;; Rewrap and return.
         call $wrap_i64
     )
-
 
     (func $add_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -177,7 +175,6 @@
         call $wrap_f32
     )
 
-
     (func $add_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -193,7 +190,6 @@
         ;; Rewrap and return.
         call $wrap_f64
     )
-
 
     (func $choose_add (param $type_id i32) (result i32)
         ;; Check if it's an i32
@@ -232,20 +228,20 @@
         end
     )
 
-   (func $add_gradual (param $a i32) (param $b i32) (result i32)
-        ;; Get the type ID of a
-        get_local $a
-        i32.load
+    (func $add_gradual (param $a i32) (param $b i32) (result i32)
+            ;; Get the type ID of a
+            get_local $a
+            i32.load
 
-        ;; Get a pointer to the correct operator function.
-        call $choose_add
+            ;; Get a pointer to the correct operator function.
+            call $choose_add
 
-        ;; Call the returned function pointer.
-        get_local $a
-        get_local $b
+            ;; Call the returned function pointer.
+            get_local $a
+            get_local $b
 
-        call_indirect (type $generic_binary)
-    )
+            call_indirect (type $generic_binary)
+        )
 
     (func $sub_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -263,7 +259,6 @@
         call $wrap_i32
     )
 
-
     (func $sub_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -279,7 +274,6 @@
         ;; Rewrap and return.
         call $wrap_i64
     )
-
 
     (func $sub_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -297,7 +291,6 @@
         call $wrap_f32
     )
 
-
     (func $sub_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -313,7 +306,6 @@
         ;; Rewrap and return.
         call $wrap_f64
     )
-
 
     (func $choose_sub (param $type_id i32) (result i32)
         ;; Check if it's an i32
@@ -352,20 +344,20 @@
         end
     )
 
-   (func $sub_gradual (param $a i32) (param $b i32) (result i32)
-        ;; Get the type ID of a
-        get_local $a
-        i32.load
+    (func $sub_gradual (param $a i32) (param $b i32) (result i32)
+            ;; Get the type ID of a
+            get_local $a
+            i32.load
 
-        ;; Get a pointer to the correct operator function.
-        call $choose_sub
+            ;; Get a pointer to the correct operator function.
+            call $choose_sub
 
-        ;; Call the returned function pointer.
-        get_local $a
-        get_local $b
+            ;; Call the returned function pointer.
+            get_local $a
+            get_local $b
 
-        call_indirect (type $generic_binary)
-    )
+            call_indirect (type $generic_binary)
+        )
 
     (func $mul_i32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -383,7 +375,6 @@
         call $wrap_i32
     )
 
-
     (func $mul_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -399,7 +390,6 @@
         ;; Rewrap and return.
         call $wrap_i64
     )
-
 
     (func $mul_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -417,7 +407,6 @@
         call $wrap_f32
     )
 
-
     (func $mul_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -433,7 +422,6 @@
         ;; Rewrap and return.
         call $wrap_f64
     )
-
 
     (func $choose_mul (param $type_id i32) (result i32)
         ;; Check if it's an i32
@@ -472,7 +460,7 @@
         end
     )
 
-   (func $mul_gradual (param $a i32) (param $b i32) (result i32)
+    (func $mul_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -503,7 +491,6 @@
         call $wrap_i32
     )
 
-
     (func $eq_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -519,7 +506,6 @@
         ;; Rewrap and return.
         call $wrap_i32
     )
-
 
     (func $eq_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -537,7 +523,6 @@
         call $wrap_i32
     )
 
-
     (func $eq_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -553,7 +538,6 @@
         ;; Rewrap and return.
         call $wrap_i32
     )
-
 
     (func $choose_eq (param $type_id i32) (result i32)
         ;; Check if it's an i32
@@ -592,7 +576,7 @@
         end
     )
 
-   (func $eq_gradual (param $a i32) (param $b i32) (result i32)
+    (func $eq_gradual (param $a i32) (param $b i32) (result i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -623,7 +607,6 @@
         call $wrap_i32
     )
 
-
     (func $ne_i64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -639,7 +622,6 @@
         ;; Rewrap and return.
         call $wrap_i32
     )
-
 
     (func $ne_f32 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
@@ -657,7 +639,6 @@
         call $wrap_i32
     )
 
-
     (func $ne_f64 (param $a i32) (param $b i32) (result i32)
         ;; Unwrap a
         get_local $a
@@ -673,7 +654,6 @@
         ;; Rewrap and return.
         call $wrap_i32
     )
-
 
     (func $choose_ne (param $type_id i32) (result i32)
         ;; Check if it's an i32
@@ -712,26 +692,28 @@
         end
     )
 
-   (func $ne_gradual (param $a i32) (param $b i32) (result i32)
-        ;; Get the type ID of a
-        get_local $a
-        i32.load
+    (func $ne_gradual (param $a i32) (param $b i32) (result i32)
+            ;; Get the type ID of a
+            get_local $a
+            i32.load
 
-        ;; Get a pointer to the correct operator function.
-        call $choose_ne
+            ;; Get a pointer to the correct operator function.
+            call $choose_ne
 
-        ;; Call the returned function pointer.
-        get_local $a
-        get_local $b
+            ;; Call the returned function pointer.
+            get_local $a
+            get_local $b
 
-        call_indirect (type $generic_binary)
-    )
+            call_indirect (type $generic_binary)
+        )
 
+    ;; (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
     (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
     (func (export "callByIndex") (param $i i32) (param $a i32) (param $b i32) (result i32)
-        get_local $i
+        
         get_local $a
         get_local $b
+        get_local $i
         call_indirect (type $generic_binary)
     )
 )

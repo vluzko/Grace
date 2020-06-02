@@ -31,3 +31,32 @@ As an example, suppose module `a` has been compiled and needs to import module `
     WebAssembly.instantiate(a, {
         b: b.instance.exports
     })
+
+
+## Tables
+
+Tables are declared with:
+
+    (table $table_name size_of_table anyfunc)
+
+`anyfunc` is the signature allowed in the table. `anyfunc` is currently the only one supported by WebAssembly.
+
+Example: `(table $tb 2 anyfunc)` creates a table of size 2 that can handle any function.
+
+Functions are added to a table with:
+
+    (elem (i32.const starting_index) $func_1 $func_2 ...)
+
+Example: `(elem (i32.const 0) $foo $bar)` will add `foo` and `bar` to the table, at indices 0 and 1 respectively. Note that you do *not* need to name the table when you add the functions to it. (I believe that currently it's impossible to have more than one table available anyway, so there's no point to being able to name it).
+
+Calling a function pointer:
+
+    call_indirect $function_signature ;; with the function pointer on the top of the stack.
+
+Example:
+
+    (type $generic_binary (func (param $a i32) (param $b i32) (result i32)))
+    i32.const 0
+    call_indirect (type $generic_binary)
+
+will call the function at index 0 of the table, assuming that function has the $generic_binary type signature.

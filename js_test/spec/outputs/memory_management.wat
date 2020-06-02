@@ -269,9 +269,13 @@
 ;;      number_of_words (i32):
 ;; Returns:
 ;;      A pointer to the data segment of the new chunk.
-(func $tee_memory (param $loc i32) (param $val i32) (result i32)
-    
-)(export "tee_memory" (func $tee_memory))
+(func $tee_i32 (param $loc i32) (param $val i32) (result i32)
+    get_local $loc
+    get_local $val
+    i32.store
+
+    get_local $loc
+)(export "tee_i32" (func $tee_i32))
 
 
 )

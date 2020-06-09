@@ -122,7 +122,6 @@ function compile_wat(input, imports) {
     return WebAssembly.instantiate(module_as_bytes, imports);
   });
   return loaded_module;
-
 }
 
 exports.utils = {

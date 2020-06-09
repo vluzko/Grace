@@ -78,7 +78,7 @@ choose_template = """
     ) (export "choose_{op}" (func $choose_{op}))
 """
 
-gradual_op_template = """   (func ${op}_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+gradual_op_template = """    (func ${op}_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load

@@ -78,22 +78,16 @@ describe("gradual tests.", () => {
     })
     
     test.only('gradual_binary_test.', async (done) => {
-        const mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
-        let module_as_bytes = new Uint8Array(fs.readFileSync("spec/outputs/gradual_binary_ops.wasm"));
-        let module = await WebAssembly.instantiate(module_as_bytes, {
-          'memory_management': mem_module
-        });
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
-        console.log(a_ptr);
-        console.log(b_ptr);
-        mem_module.set(a_ptr, 2);
-        mem_module.set(b_ptr, 2);
-        mem_module.set(a_ptr+4, 2.0);
-        mem_module.set(b_ptr+4, 7.0);
-        let first_call = module.instance.exports.callByIndex(0, a_ptr, b_ptr);
-        let type_res = mem_module.inspect(first_call);
-        let data_res = mem_module.inspect(first_call + 4);
+        mem_module.set(a_ptr, 1);
+        mem_module.set(b_ptr, 1);
+        mem_module.set(a_ptr+4, 2);
+        mem_module.set(b_ptr+4, 7);
+        const res = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        console.log(res)
+        const type_res = mem_module.inspect(res);
+        const data_res = mem_module.inspect(res + 4);
         expect(type_res).toBe(1);
         expect(data_res).toBe(9);
         // expect(first_call).toBe(7);

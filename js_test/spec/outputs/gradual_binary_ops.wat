@@ -195,7 +195,7 @@
         call $wrap_f64
     ) (export "add_f64" (func $add_f64))
 
-   (func $add_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+    (func $add_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -311,7 +311,7 @@
         call $wrap_f64
     ) (export "sub_f64" (func $sub_f64))
 
-   (func $sub_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+    (func $sub_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -427,7 +427,7 @@
         call $wrap_f64
     ) (export "mul_f64" (func $mul_f64))
 
-   (func $mul_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+    (func $mul_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -531,7 +531,7 @@
         f64.eq
     ) (export "eq_f64" (func $eq_f64))
 
-   (func $eq_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+    (func $eq_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -635,7 +635,7 @@
         f64.ne
     ) (export "ne_f64" (func $ne_f64))
 
-   (func $ne_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
+    (func $ne_gradual (param $a i32) (param $b i32) (result i32) (local $type_id i32)
         ;; Get the type ID of a
         get_local $a
         i32.load
@@ -687,12 +687,10 @@
 
     (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
     (func (export "callByIndex") (param $i i32) (param $a i32) (param $b i32) (result i32)
-        ;; i32.const 12
-        ;; i32.const 28
-        get_local $i
         get_local $a
         get_local $b
-        
+        get_local $i
+
         call_indirect (type $generic_binary)
     )
 )

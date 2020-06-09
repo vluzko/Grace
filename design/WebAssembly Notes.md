@@ -60,3 +60,13 @@ Example:
     call_indirect (type $generic_binary)
 
 will call the function at index 0 of the table, assuming that function has the $generic_binary type signature.
+
+
+In general, the *top* of the stack is the pointer.
+
+    arg1
+    arg2
+    pointer_to_func
+    call_indirect (type $generic_binary)
+
+Will call whatever function is at `pointer_to_func` in the module's table with (arg1, arg2) (in that order)

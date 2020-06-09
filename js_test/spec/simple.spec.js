@@ -62,7 +62,7 @@ describe("gradual tests.", () => {
         done();
     })
     
-    test.only('add_gradual.', async (done) => {
+    test('add_gradual.', async (done) => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 0);
@@ -76,8 +76,38 @@ describe("gradual tests.", () => {
         expect(data_res).toBe(9);
         done();
     })
+
+    test('gradual_binary test add f32.', async (done) => {
+        const a_ptr = mem_module.alloc_words(2);
+        const b_ptr = mem_module.alloc_words(2);
+        mem_module.set(a_ptr, 2);
+        mem_module.set(b_ptr, 2);
+        mem_module.set_f32(a_ptr+4, 2);
+        mem_module.set_f32(b_ptr+4, 7);
+        const res_ptr = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        const type_res = mem_module.inspect(res_ptr);
+        const data_res = mem_module.inspect_f32(res_ptr + 4);
+        expect(type_res).toBe(2);
+        expect(data_res).toBe(9);
+        done();
+    })
+
+    test('gradual_binary test add f64.', async (done) => {
+        const a_ptr = mem_module.alloc_words(3);
+        const b_ptr = mem_module.alloc_words(3);
+        mem_module.set(a_ptr, 3);
+        mem_module.set(b_ptr, 3);
+        mem_module.set_f64(a_ptr+4, 2);
+        mem_module.set_f64(b_ptr+4, 7);
+        const res_ptr = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        const type_res = mem_module.inspect(res_ptr);
+        const data_res = mem_module.inspect_f64(res_ptr + 4);
+        expect(type_res).toBe(3);
+        expect(data_res).toBe(9);
+        done();
+    })
     
-    test.only('gradual_binary_test.', async (done) => {
+    test('gradual_binary_test.', async (done) => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 1);

@@ -38,11 +38,44 @@
     i32.load
 )(export "inspect" (func $inspect))
 
+(func $inspect_i64 (param $loc i32) (result i64)
+    get_local $loc
+    i64.load
+)(export "inspect_i64" (func $inspect_i64))
+
+(func $inspect_f32 (param $loc i32) (result f32)
+    get_local $loc
+    f32.load
+)(export "inspect_f32" (func $inspect_f32))
+
+(func $inspect_f64 (param $loc i32) (result f64)
+    get_local $loc
+    f64.load
+)(export "inspect_f64" (func $inspect_f64))
+
 (func $set (param $loc i32) (param $val i32)
     get_local $loc
     get_local $val
     i32.store
 )(export "set" (func $set))
+
+(func $set_i64 (param $loc i32) (param $val i64)
+    get_local $loc
+    get_local $val
+    i64.store
+)(export "set_i64" (func $set_i64))
+
+(func $set_f32 (param $loc i32) (param $val f32)
+    get_local $loc
+    get_local $val
+    f32.store
+)(export "set_f32" (func $set_f32))
+
+(func $set_f64 (param $loc i32) (param $val f64)
+    get_local $loc
+    get_local $val
+    f64.store
+)(export "set_f64" (func $set_f64))
 
 ;; Copy from a to b.
 (func $copy (param $a i32) (param $b i32)

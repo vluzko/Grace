@@ -84,7 +84,7 @@ describe("gradual tests.", () => {
         mem_module.set(b_ptr, 2);
         mem_module.set_f32(a_ptr+4, 2);
         mem_module.set_f32(b_ptr+4, 7);
-        const res_ptr = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        const res_ptr = grad_funcs.call_gradual(0, a_ptr, b_ptr);
         const type_res = mem_module.inspect(res_ptr);
         const data_res = mem_module.inspect_f32(res_ptr + 4);
         expect(type_res).toBe(2);
@@ -99,7 +99,7 @@ describe("gradual tests.", () => {
         mem_module.set(b_ptr, 3);
         mem_module.set_f64(a_ptr+4, 2);
         mem_module.set_f64(b_ptr+4, 7);
-        const res_ptr = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        const res_ptr = grad_funcs.call_gradual(0, a_ptr, b_ptr);
         const type_res = mem_module.inspect(res_ptr);
         const data_res = mem_module.inspect_f64(res_ptr + 4);
         expect(type_res).toBe(3);
@@ -114,7 +114,7 @@ describe("gradual tests.", () => {
         mem_module.set(b_ptr, 1);
         mem_module.set(a_ptr+4, 2);
         mem_module.set(b_ptr+4, 7);
-        const res = grad_funcs.callByIndex(0, a_ptr, b_ptr);
+        const res = grad_funcs.call_gradual(0, a_ptr, b_ptr);
         console.log(res)
         const type_res = mem_module.inspect(res);
         const data_res = mem_module.inspect(res + 4);

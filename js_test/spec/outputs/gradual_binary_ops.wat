@@ -686,7 +686,7 @@
 
 
     (elem (i32.const 0) $add_gradual $sub_gradual $mul_gradual $eq_gradual $ne_gradual)
-    (func (export "callByIndex") (param $i i32) (param $a i32) (param $b i32) (result i32)
+    (func (export "call_gradual") (param $i i32) (param $a i32) (param $b i32) (result i32)
         get_local $a
         get_local $b
         get_local $i

@@ -78,10 +78,21 @@ impl Type {
         }
     }
 
+    /// Check if a type is a refinement type.
     pub fn is_simple(&self) -> bool {
         return match self {
             Type::Refinement(..) => false,
             _ => true
+        };
+    }
+
+    /// Check if a type is a gradual type.
+    /// Both pure gradual types and refinement types containing gradual types count.
+    pub fn is_gradual(&self) -> bool {
+        return match self {
+            Type::Gradual(..) => true,
+            Type::Refinement(ref inner_t, _) => inner_t.is_gradual(),
+            _ => false
         };
     }
 
@@ -183,6 +194,7 @@ impl Type {
         };
     }
 
+    /// The number of words required to store a type in WASM memory.
     pub fn size(&self) -> usize {
         return match self {
             Type::i32 => 1,
@@ -323,78 +335,6 @@ impl Type {
     }
 }
 
-
-impl Add for Type {
-    type Output = Self;
-
-    fn add(self, other: Self) -> Self {
-        if self == other {
-            return self.clone();
-        } else {
-            return match self {
-                Type::Sum(ref types) => {
-                    match other {
-                        Type::Sum(ref other_types) => {
-                            Type::Sum(general_utils::vec_c_union(types, other_types))
-                        },
-                        x => {
-                            let mut new_vec = types.clone();
-                            new_vec.push(x.clone());
-                            Type::Sum(new_vec)
-                        }
-                    }
-                },
-                x => {
-                    match other {
-                        Type::Sum(ref other_types) => {
-                            let mut new_vec = other_types.clone();
-                            new_vec.push(x.clone());
-                            Type::Sum(new_vec)
-                        },
-                        y => {
-                            let new_vec = vec![x.clone(), y.clone()];
-                            Type::Sum(new_vec)
-                        }
-                    }
-                }
-            };
-        }
-    }
-}
-
-impl <'a> From<&'a Identifier> for Type {
-    fn from(input: &'a Identifier) -> Self {
-        return match input.name.as_ref() {
-            "i32" => Type::i32,
-            "i64" => Type::i64,
-            "f32" => Type::f32,
-            "f64" => Type::f64,
-            "ui32" => Type::ui32,
-            "ui64" => Type::ui64,
-            "boolean" => Type::boolean,
-            "string" => Type::string,
-            _ => Type::Named(input.clone())
-        };
-    }
-}
-
-impl From<Identifier> for Type {
-    fn from(input: Identifier) -> Self {
-        return match input.name.as_ref() {
-            "i32" => Type::i32,
-            "i64" => Type::i64,
-            "f32" => Type::f32,
-            "f64" => Type::f64,
-            "ui32" => Type::ui32,
-            "ui64" => Type::ui64,
-            "boolean" => Type::boolean,
-            "string" => Type::string,
-            "any" => Type::Gradual(general_utils::get_next_grad()),
-            _ => Type::Named(input)
-        };
-    }
-}
-
 pub trait Typed<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> T;
 }
@@ -504,13 +444,32 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 let new_left = left.type_based_rewrite(context);
                 let new_right = right.type_based_rewrite(context);
 
-                // TODO: Once typeclasses are implemented, call the typeclass method with
-                // the operator, the left type, and the right type to figure out what all
-                // the other types need to be.
-                let merged_type = operator.get_return_types(&left_type, &right_type);
-                let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
-                let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
-                Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
+                // If neither type is gradual, proceed as normal
+                if !left_type.is_gradual() && !right_type.is_gradual() {
+                    // TODO: Once typeclasses are implemented, call the typeclass method with
+                    // the operator, the left type, and the right type to figure out what all
+                    // the other types need to be.
+                    let merged_type = operator.get_return_types(&left_type, &right_type);
+                    let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
+                    let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
+                    Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
+                } else {
+                    // If either is gradual, we have to call the gradual version of the operator. 
+                    let func_name_expr = wrap(Expr::from("$.gradual_binary_ops.call_gradual"));
+
+                    // Create the function table pointer.
+                    let op_ptr = operator.gradual_index();
+                    let op_ptr_expr = Node::from(Expr::from(op_ptr));
+                    context.add_type(op_ptr_expr.id, Type::i32);
+
+                    // Set up the function call
+                    let args = vec!(op_ptr_expr, new_left, new_right);
+                    let kwargs = vec!();
+                    let func_call = Expr::FunctionCall{function: func_name_expr, args, kwargs};
+                    func_call
+                }
+
+                
             },
             Expr::FunctionCall {function, args, kwargs} => {
                 let new_func_expr = Box::new(function.type_based_rewrite(context));
@@ -616,8 +575,17 @@ impl BinaryOperator {
             _ => false
         }
     }
-}
 
+    /// Return the index of the corresponding gradual function in the gradual function table.
+    pub fn gradual_index(&self) -> i32 {
+        return match self {
+            BinaryOperator::Add => 0,
+            BinaryOperator::Sub => 1,
+            BinaryOperator::Mult => 2,
+            _ => panic!()
+        };
+    }
+}
 
 impl UnaryOperator {
     fn cast(from: &Type, to: &Type) -> UnaryOperator {
@@ -628,6 +596,39 @@ impl UnaryOperator {
         } else {
             panic!("Cannot cast from {:?} to {:?}", from, to);
         }
+    }
+}
+
+impl <'a> From<&'a Identifier> for Type {
+    fn from(input: &'a Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "f32" => Type::f32,
+            "f64" => Type::f64,
+            "ui32" => Type::ui32,
+            "ui64" => Type::ui64,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            _ => Type::Named(input.clone())
+        };
+    }
+}
+
+impl From<Identifier> for Type {
+    fn from(input: Identifier) -> Self {
+        return match input.name.as_ref() {
+            "i32" => Type::i32,
+            "i64" => Type::i64,
+            "f32" => Type::f32,
+            "f64" => Type::f64,
+            "ui32" => Type::ui32,
+            "ui64" => Type::ui64,
+            "boolean" => Type::boolean,
+            "string" => Type::string,
+            "any" => Type::Gradual(general_utils::get_next_grad()),
+            _ => Type::Named(input)
+        };
     }
 }
 

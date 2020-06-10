@@ -407,6 +407,16 @@ pub mod rust_trait_impls {
             }
         }
 
+        impl From<i32> for Node<Expr> {
+            fn from(input: i32) -> Self {
+                let expr: Expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
+                }
+            }
+        }
         impl From<i64> for Node<Expr> {
             fn from(input: i64) -> Self {
                 let expr: Expr = Expr::from(input);
@@ -417,7 +427,6 @@ pub mod rust_trait_impls {
                 }
             }
         }
-
         impl From<f64> for Node<Expr> {
             fn from(input: f64) -> Self {
                 let expr: Expr = Expr::from(input);
@@ -448,6 +457,11 @@ pub mod rust_trait_impls {
         impl From<bool> for Expr {
             fn from(input: bool) -> Self {
                 return Expr::Bool(input);
+            }
+        }
+        impl From<i32> for Expr {
+            fn from(input: i32) -> Self {
+                return Expr::Int(input.to_string());
             }
         }
         impl From<i64> for Expr {

@@ -31,9 +31,9 @@ describe("gradual tests.", () => {
     let grad_funcs;
 
     beforeAll(async (done) => {
-        mem_module = (await async_utils.compile_wat("spec/outputs/memory_management.wat")).instance.exports;
+        mem_module = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
         const imports = {'memory_management': mem_module};
-        grad_module = await async_utils.compile_wat("spec/outputs/gradual_binary_ops.wat", imports);
+        grad_module = await async_utils.compile_wat("../src/builtins/gradual_binary_ops.wat", imports);
         grad_funcs = grad_module.instance.exports;
         done()
     })
@@ -173,7 +173,7 @@ describe("Memory management tests.", function() {
     mem_manage.obliviate();
   });
   async_desc("", () => {
-    return async_utils.compile_wat("spec/outputs/memory_management.wat").then(module => {
+    return async_utils.compile_wat("../src/builtins/memory_management.wat").then(module => {
       mem_manage = module.instance.exports;
       return module.instance.exports;
     });
@@ -210,12 +210,12 @@ describe("Array tests.", function () {
   });
 
   async_desc("", () => {
-    return async_utils.compile_wat("spec/outputs/memory_management.wat").then(module => {
+    return async_utils.compile_wat("../src/builtins/memory_management.wat").then(module => {
       let imports = {
         "memory_management": module.instance.exports
       };
       mem_manage = module.instance.exports;
-      return async_utils.compile_wat("spec/outputs/arrays.wat", imports).then(mod => mod.instance.exports);
+      return async_utils.compile_wat("../src/builtins/arrays.wat", imports).then(mod => mod.instance.exports);
     });
 
   }, [[

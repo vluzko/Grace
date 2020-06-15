@@ -94,7 +94,7 @@ function compile_grace(input, output) {
   // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
   let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
     const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
-    const memory_management = compile_wat("spec/outputs/memory_management.wat");
+    const memory_management = compile_wat("../src/builtins/memory_management.wat");
     return memory_management.then(mem => {
       return WebAssembly.instantiate(module_as_bytes, {
         'memory_management': mem.instance.exports

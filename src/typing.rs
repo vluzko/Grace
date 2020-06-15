@@ -28,7 +28,7 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
-    Gradual(usize),
+    Gradual(Vec<Type>),
     Refinement(Box<Type>, Vec<Refinement>),
     Undetermined
 }

@@ -436,6 +436,11 @@ mod tests {
     }
 
     #[test]
+    fn gradual_add_test() {
+        compile_folder("gradual_add_test");
+    }
+
+    #[test]
     #[should_panic]
     fn refinement_failures_test() {
         compile_folder("refinements_failure");

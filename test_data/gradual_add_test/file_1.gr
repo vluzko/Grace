@@ -1,0 +1,2 @@
+fn gradual_add(x: any, y: any) -> i32:
+    return x+y

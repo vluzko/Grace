@@ -1,6 +1,5 @@
 use std::collections::{HashMap, BTreeMap};
 use std::usize;
-use std::ops::Add;
 use std::convert::From;
 
 use expression::*;
@@ -28,7 +27,7 @@ pub enum Type {
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
-    Gradual(Vec<Type>),
+    Gradual(usize),
     Refinement(Box<Type>, Vec<Refinement>),
     Undetermined
 }
@@ -102,17 +101,15 @@ impl Type {
             return self.clone()
         } else {
             return match self {
-                Type::Sum(ref types) => {
-                    match other {
-                        Type::Sum(ref other_types) => {
-                            Type::Sum(general_utils::vec_c_int(types, other_types))
-                        }, 
-                        x => {
-                            if types.contains(&x) {
-                                x.clone()
-                            } else {
-                                panic!()
-                            }
+                Type::Sum(ref types) => match other {
+                    Type::Sum(ref other_types) => {
+                        Type::Sum(general_utils::vec_c_int(types, other_types))
+                    }, 
+                    x => {
+                        if types.contains(&x) {
+                            x.clone()
+                        } else {
+                            panic!()
                         }
                     }
                 },
@@ -145,7 +142,8 @@ impl Type {
         } else {
             return match &other {
                 Type::Refinement(ref base, ..) => self.is_compatible(base),
-                x => match self {
+                Type::Gradual(_) => true,
+                _ => match self {
                     Type::i32 => {
                         match other {
                             Type::i64 | Type::f64 => true,
@@ -352,7 +350,6 @@ impl Typed<Node<Module>> for Node<Module> {
 
 impl Typed<Node<Block>> for Node<Block> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Block> {
-        // let mut new_stmts = vec![];
         let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
 
         let new_block = Node{
@@ -369,7 +366,6 @@ impl Typed<Node<Block>> for Node<Block> {
                 _ => {}
             };
         }
-        // new_block.update_scope(context);
         return new_block;
     }
 }
@@ -468,8 +464,6 @@ impl Typed<Node<Expr>> for Node<Expr> {
                     let func_call = Expr::FunctionCall{function: func_name_expr, args, kwargs};
                     func_call
                 }
-
-                
             },
             Expr::FunctionCall {function, args, kwargs} => {
                 let new_func_expr = Box::new(function.type_based_rewrite(context));

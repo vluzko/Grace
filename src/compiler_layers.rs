@@ -150,17 +150,15 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        // Create the initial context for the current module.
-        // let init_context = Context::new_context(init_scope, init_type_map);
-
         // 
-        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
-        let cfg_map = module_to_cfg(&parsed_module, &context);
-        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
+        let mut context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
+        let rewritten = parsed_module.type_based_rewrite(&mut context);
+        let cfg_map = module_to_cfg(&rewritten, &context);
+        let wasm = module_to_llr(&rewritten, &context, &cfg_map);
 
         // Put the results in the tree.
         let compiled = CompiledModule {
-            ast: parsed_module,
+            ast: rewritten,
             context: context,
             cfg_map: cfg_map,
             llr: wasm,

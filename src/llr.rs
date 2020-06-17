@@ -9,7 +9,7 @@ use petgraph::{Outgoing, visit::EdgeRef};
 
 
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, Identifier};
+use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
 use scoping::{Context, GetContext};
 use typing::Type;
 
@@ -380,6 +380,21 @@ impl ToLLR for Node<Expr> {
 
                 llr
             },
+            Expr::UnaryExpr{ref operator, ref operand} => {
+                let mut llr = operand.to_llr(context);
+                match operator {
+                    UnaryOperator::Convert(to_type, from_type) => match to_type {
+                        Type::Gradual(_) => match from_type {
+                            Type::Gradual(_) => {},
+                            _ => panic!()
+                        },
+                        _ => panic!()
+
+                    },
+                    x => panic!()
+                };
+                llr
+            },
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.get_node_type(self.id);
                 let wasm_type = WASMType::from(&id_type);
@@ -466,6 +481,7 @@ pub mod rust_trait_impls {
                 Type::Sum(..) => WASMType::i32,
                 Type::Named(..) => WASMType::i32,
                 Type::Refinement(ref base, ..) => WASMType::from(&**base),
+                Type::Gradual(_) => WASMType::i32,
                 x => panic!("Tried to convert {:?} to WASM", x)
             }
         }

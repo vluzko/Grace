@@ -11,5 +11,6 @@ i32.const 0
 get_local $x
 get_local $y
 call $.gradual_binary_ops.call_gradual
+)
 (export "gradual_add" (func $gradual_add))
 )

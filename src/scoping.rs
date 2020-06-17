@@ -254,9 +254,33 @@ impl Context {
 /// Typechecking
 impl Context {
 
+    pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
+        return match op {
+            // TODO: 540: Update left and right with an "addable" constraint.
+            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => match left {
+                Type::Gradual(_) => match right {
+                    Type::Gradual(_) => Type::Gradual(general_utils::get_next_grad()),
+                    Type::i32 | Type::i64 | Type::f32 | Type::f64 => right.clone(),
+                    _ => panic!("Type error. Tried to add {:?} and {:?}", left, right)
+                }
+                x => match right {
+                    Type::Gradual(_) => left.clone(),
+                    y => x.merge(y)
+                }
+            },
+            BinaryOperator::Div => Type::f64,
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
+            _ => panic!()
+        };
+    }
+
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
-        let constraints = self.gradual_constraints.get_mut(&gradual_id).unwrap();
-        constraints.push(constraint.clone());
+        let maybe_constraints = self.gradual_constraints.get_mut(&gradual_id);
+        match maybe_constraints {
+            Some(constraints) => {constraints.push(constraint.clone());},
+            None => {self.gradual_constraints.insert(gradual_id, vec!(constraint.clone()));}
+        };
+        
         return true;
     }
 
@@ -521,8 +545,6 @@ impl GetContext for Node<Stmt> {
 
                 let (block_context, block_type) = block.scopes_and_types(scope_id, context);
 
-                // assert!(block_context.check_subtype(Identifier::from("$ret"), ))
-
                 assert!(return_type.is_compatible(&block_type), "{:?} not compatible with {:?}", return_type, block_type);
 
                 (block_context, function_type)
@@ -651,7 +673,7 @@ impl GetContext for Node<Expr> {
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
-                let return_type = operator.get_return_types(&left_t, &right_t);
+                let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)
             },
             Expr::UnaryExpr{ref mut operand, ..} => {

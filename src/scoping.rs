@@ -953,7 +953,8 @@ mod test {
                 assert_eq!(context.scopes.len(), 2);
                 let scope = context.get_scope(block.scope);
                 assert_eq!(scope.declarations.len(), 1);
-                assert!(scope.declarations.contains_key(&Identifier::from("a")));
+                println!("scope: {:?}", scope);
+                assert!(scope.declarations.contains_key(&Identifier::from("a.1")));
             }
 
             #[test]

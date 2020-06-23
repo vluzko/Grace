@@ -425,14 +425,13 @@ mod tests {
                 for diff in changeset.diffs {
                     match diff {
                         Difference::Same(_) => {},
-                        Difference::Rem(x) => panic!("Removed {:?}", x),
+                        Difference::Rem(x) => panic!("Removed {:?} in {:?}", x, name),
                         Difference::Add(added_string) => {
                             // Check if the thing being added is a scope ID on the end
                             // of a variable
                             // Scope IDs aren't the same every time, so instead of comparing
                             // the string, check that the diff is plausibly a scope_id
-                            println!("added_string is {:?}", added_string);
-                            assert!(scope_suffix_regex.is_match(added_string.as_str()));
+                            assert!(scope_suffix_regex.is_match(added_string.as_str()), "Added {:?} in {:?}", added_string, name);
                         }
                     }
                 }

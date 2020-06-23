@@ -137,6 +137,7 @@ impl Type {
 
     /// Check if it is possible to convert from one type to the other
     pub fn is_compatible(&self, other: &Type) -> bool {
+        println!("Self is {:?} and other is {:?} ", self, other);
         if self == other {
             return true
         } else {
@@ -144,6 +145,7 @@ impl Type {
                 Type::Refinement(ref base, ..) => self.is_compatible(base),
                 Type::Gradual(_) => true,
                 _ => match self {
+                    Type::Refinement(ref base, ..) => base.is_compatible(other),
                     Type::i32 => {
                         match other {
                             Type::i64 | Type::f64 => true,
@@ -234,7 +236,7 @@ impl Type {
                 }
                 match t {
                     Some(attr_type) => attr_type,
-                    None => panic!()
+                    None => panic!("Self: {:?}, attribute: {:?}", self, attribute)
                 }
             },
             _ => panic!("The provided type doesn't have attributes.")
@@ -451,7 +453,7 @@ impl Typed<Node<Expr>> for Node<Expr> {
                     Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
                 } else {
                     // If either is gradual, we have to call the gradual version of the operator. 
-                    let func_name_expr = wrap(Expr::from("$.gradual_binary_ops.call_gradual"));
+                    let func_name_expr = wrap(Expr::from(".gradual_binary_ops.call_gradual"));
 
                     // Create the function table pointer.
                     let op_ptr = operator.gradual_index();

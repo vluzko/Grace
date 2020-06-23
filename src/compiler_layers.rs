@@ -305,15 +305,34 @@ fn default_imports() -> Vec<(Import, Type)> {
         (Identifier::from("value"), Type::i32)), 
         Box::new(Type::i32)
     );
-    let mut func_map = BTreeMap::new();
-    func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
-    func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
-    func_map.insert(Identifier::from("copy_many"), copy_type);
-    func_map.insert(Identifier::from("tee_memory"), tee_type);
+    let mut mem_management_func_map = BTreeMap::new();
+    mem_management_func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
+    mem_management_func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
+    mem_management_func_map.insert(Identifier::from("copy_many"), copy_type);
+    mem_management_func_map.insert(Identifier::from("tee_memory"), tee_type);
 
-    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), func_map);
+    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), mem_management_func_map);
 
-    return vec!((mem_management, mem_type));
+    let bin_ops_id = get_next_id();
+
+    let binary_operations = Import{
+        id: bin_ops_id,
+        path: vec!(Identifier::from("gradual_binary_ops")),
+        alias: Some(Identifier::from(".gradual_binary_ops")),
+        values: vec!(Identifier::from("call_gradual"))
+    };
+    let call_gradual_type = Type::Function(vec!(
+        (Identifier::from("i"), Type::i32),
+        (Identifier::from("a"), Type::i32),
+        (Identifier::from("b"), Type::i32)), 
+        Box::new(Type::i32)
+    );
+    let mut bin_ops_func_map = BTreeMap::new();
+    bin_ops_func_map.insert(Identifier::from("call_gradual"), call_gradual_type.clone());
+
+    let binary_operations_type = Type::Module(vec!(Identifier::from("gradual_binary_ops")), bin_ops_func_map);
+
+    return vec!((mem_management, mem_type), (binary_operations, binary_operations_type));
 }
 
 fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
@@ -410,6 +429,9 @@ mod tests {
                         Difference::Add(added_string) => {
                             // Check if the thing being added is a scope ID on the end
                             // of a variable
+                            // Scope IDs aren't the same every time, so instead of comparing
+                            // the string, check that the diff is plausibly a scope_id
+                            println!("added_string is {:?}", added_string);
                             assert!(scope_suffix_regex.is_match(added_string.as_str()));
                         }
                     }
@@ -419,7 +441,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_imports_compile_test() {
+    fn simple_imports_test() {
         compile_folder("simple_imports_test");
     }
 
@@ -429,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn simple_ref_types_test() {
+    fn refinement_types_test() {
         compile_folder("refinement_types_test");
     }
 
@@ -441,6 +463,6 @@ mod tests {
     #[test]
     #[should_panic]
     fn refinement_failures_test() {
-        compile_folder("refinements_failure");
+        compile_folder("refinement_failures_test");
     }
 }

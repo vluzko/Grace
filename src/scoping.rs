@@ -731,6 +731,9 @@ impl GetContext for Node<Expr> {
                 let t = match context.safe_get_type(self.scope, name) {
                     Some(t2) => t2,
                     None => {
+                        println!("name: {:?}", name);
+                        println!("context: {:?}", context.get_scope(self.scope));
+                        println!("types: {:?}", context.type_map);
                         name.name = format!("{}.{}", name, self.scope);
                         context.get_type(self.scope, name)
                     }

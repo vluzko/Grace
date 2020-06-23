@@ -16,7 +16,6 @@ use refinements::check_constraints;
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CanModifyScope {
     Statement(*const Node<Stmt>, usize),
-    Expression(*const Node<Expr>, usize),
     Argument(Type),
     Return(Type),
     ImportedModule(usize)
@@ -152,7 +151,7 @@ impl Context {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) => {
+            CanModifyScope::Statement(_, ref id) => {
                 self.type_map.get(id).unwrap().clone()
             },
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
@@ -166,7 +165,7 @@ impl Context {
     pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
         let maybe_scope_mod = self.get_declaration(scope_id, name);
         return match maybe_scope_mod ? {
-            CanModifyScope::Statement(_, ref id) | CanModifyScope::Expression(_, ref id) => {
+            CanModifyScope::Statement(_, ref id) => {
                 Some(self.type_map.get(id).unwrap().clone())
             },
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
@@ -339,7 +338,6 @@ impl CanModifyScope {
     pub fn get_id(&self) -> usize {
         return match self {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
-            CanModifyScope::Expression(ref _ptr, ref id) => *id,
             CanModifyScope::ImportedModule(ref id) => *id,
             CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
         };
@@ -868,57 +866,77 @@ mod test {
     #[cfg(test)]
     mod scope_generation {
         use super::*;
-        
-        #[test]
-        fn test_block_scope() {
-            // Block is:
-            // let a = 5 + -1
-            // let b = true and false
-            let l1 = Node::from(Expr::Int("5".to_string()));
-            let r1 = Node::from(Expr::Int("-1".to_string()));
-            let l2 = Node::from(true);
-            let r2 = Node::from(false);
+        use parser::Parseable;
+        use position_tracker::PosStr;
 
-            let e1 = Expr::BinaryExpr{operator: BinaryOperator::Add, left: Box::new(l1), right: Box::new(r1)};
-            let e2 = Expr::BinaryExpr{operator: BinaryOperator::And, left: Box::new(l2), right: Box::new(r2)};
+        fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
+            return match ptr {
+                CanModifyScope::Statement(x, _) => {
+                    unsafe {
+                        let actual_stmt = &(**x).data;
+                        assert_eq!(actual_stmt, expected);
+                        true
+                    }
+                },
+                x => panic!("Expected a statement modification, found: {:?}", x)
+            }
+        }
 
-            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
-            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
-
-            let mut block = Node::from(Block{
-                statements: vec!(Box::new(Node::from(s1.clone())), Box::new(Node::from(s2.clone())))
-            });
-            let (id, init) = builtin_context();
-            let context = block.scopes_and_types(id, init).0;
-            let scope = context.get_scope(block.scope);
-            assert_eq!(scope.declarations.len(), 2);
-            unsafe {
-                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
-                match stmt1_pointer {
-                    CanModifyScope::Statement(x, _) => {
-                        match (**x).data {
-                            Stmt::LetStmt{ref name, ..} => {
-                                assert_eq!(name, &Identifier::from("a"))
-                            },
-                            _ => panic!()
-                        };
-                    },
-                    _ => panic!()
-                }
-
-                let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
-                match stmt1_pointer {
-                    CanModifyScope::Statement(x, _) => {
-                        match (**x).data {
-                            Stmt::LetStmt{ref name, ..} => {
-                                assert_eq!(name, &Identifier::from("b"))
-                            },
-                            _ => panic!()
-                        };
-                    },
-                    _ => panic!()
+        impl Node<Stmt> {
+            fn mod_scope(&mut self, new_scope: usize) {
+                self.scope = new_scope;
+                match self.data {
+                    Stmt::LetStmt{ref mut expression, ..} => {
+                        expression.mod_scope(new_scope);
+                    }
+                    _ => {}
                 }
             }
+        }
+
+        /// Utility function to recursively modify the scope of an Expr AST.
+        impl Node<Expr> {
+            fn mod_scope(&mut self, new_scope: usize) {
+                self.scope = new_scope;
+                match self.data {
+                    Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
+                        left.mod_scope(new_scope);
+                        right.mod_scope(new_scope);
+                    },
+                    Expr::FunctionCall{ref mut function, ref mut args, ..} => {
+                        function.mod_scope(new_scope);
+                        for arg in args {
+                            arg.mod_scope(new_scope);
+                        }
+                    },
+                    _ => {}
+                }
+            }
+        }
+
+        #[test]
+        fn test_block_scope() {
+            let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
+            e1.mod_scope(1);
+            let s1 = Stmt::LetStmt{name: Identifier::from("a.1"), type_annotation: None, expression: Node::from(e1)};
+
+            let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
+            e2.mod_scope(1);
+            let s2 = Stmt::LetStmt{name: Identifier::from("b.1"), type_annotation: None, expression: Node::from(e2)};
+
+            let input = r#"
+            let a = 5 + -1
+            let b = true and false"#;
+
+            let (block, context) = compiler_layers::to_context::<Node<Block>>(input.as_bytes());
+            let scope = context.get_scope(block.scope);
+            assert_eq!(scope.declarations.len(), 2);
+
+            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a.1")).unwrap();
+            check_ptr_stmt(stmt1_pointer, &s1);
+
+            let stmt2_pointer = context.get_declaration(block.scope, &Identifier::from("b.1")).unwrap();
+            check_ptr_stmt(stmt2_pointer, &s2);
         }
         
         #[cfg(test)]

@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use expression::*;
 use general_utils;
-use typing::{Type, Refinement};
+use typing::{Type, Refinement, Trait};
 use refinements::check_constraints;
 
 /// A sum type for things that can modify scope.
@@ -47,8 +47,12 @@ pub struct Context {
     pub type_map: HashMap<usize, Type>, 
     // The user-defined types
     pub defined_types: HashMap<Identifier, Type>,
-    /// A vector containing all the gradual types in context.
-    pub gradual_constraints: HashMap<usize, Vec<Type>>
+    // A vector containing all the gradual types in context.
+    pub gradual_constraints: HashMap<usize, Vec<Type>>,
+    // A vectgor of all the traits in context.
+    pub traits: Vec<Trait>,
+    // A map from tuples (struct_name, trait_name) to [maps from method name to method definition]
+    pub trait_implementations: HashMap<(Identifier, Identifier), HashMap<Identifier, Node<Stmt>>>
 }
 
 pub trait GetContext {

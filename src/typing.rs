@@ -39,10 +39,10 @@ pub struct Refinement {
     pub right: Box<Node<Expr>>
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trait {
     pub name: Identifier,
-    pub functions: Vec<(Identifier, Type)>
+    pub functions: HashMap<Identifier, Type>
 }
 
 impl Type {

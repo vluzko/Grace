@@ -248,6 +248,16 @@ impl Context {
             };
         }
     }
+
+    pub fn print_all_variables(&self) -> Vec<Identifier> {
+        let mut all_variables = vec!();
+        for scope in self.scopes.values() {
+            for key in scope.declaration_order.keys() {
+                all_variables.push(key.clone());
+            }
+        }
+        return all_variables;
+    }
 }
 
 /// Typechecking
@@ -481,7 +491,6 @@ impl GetContext for Node<Stmt> {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
-                name.name = format!("{}.{}", name.name, self.scope);
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 match &type_annotation {
                     Some(x) => assert!(t.is_compatible(x)),
@@ -491,7 +500,6 @@ impl GetContext for Node<Stmt> {
                 (c, t)
             },
             Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
-                name.name = format!("{}.{}", name.name, self.scope);
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 let expected_type = c.get_type(self.scope, name);
                 assert!(t.is_compatible(&expected_type));
@@ -731,10 +739,6 @@ impl GetContext for Node<Expr> {
                 let t = match context.safe_get_type(self.scope, name) {
                     Some(t2) => t2,
                     None => {
-                        println!("name: {:?}", name);
-                        println!("context: {:?}", context.get_scope(self.scope));
-                        println!("types: {:?}", context.type_map);
-                        name.name = format!("{}.{}", name, self.scope);
                         context.get_type(self.scope, name)
                     }
                 };
@@ -921,11 +925,11 @@ mod test {
         fn test_block_scope() {
             let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
             e1.mod_scope(1);
-            let s1 = Stmt::LetStmt{name: Identifier::from("a.1"), type_annotation: None, expression: Node::from(e1)};
+            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
 
             let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
             e2.mod_scope(1);
-            let s2 = Stmt::LetStmt{name: Identifier::from("b.1"), type_annotation: None, expression: Node::from(e2)};
+            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
 
             let input = r#"
             let a = 5 + -1
@@ -935,10 +939,10 @@ mod test {
             let scope = context.get_scope(block.scope);
             assert_eq!(scope.declarations.len(), 2);
 
-            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a.1")).unwrap();
+            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
             check_ptr_stmt(stmt1_pointer, &s1);
 
-            let stmt2_pointer = context.get_declaration(block.scope, &Identifier::from("b.1")).unwrap();
+            let stmt2_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
             check_ptr_stmt(stmt2_pointer, &s2);
         }
         
@@ -974,8 +978,7 @@ mod test {
                 assert_eq!(context.scopes.len(), 2);
                 let scope = context.get_scope(block.scope);
                 assert_eq!(scope.declarations.len(), 1);
-                println!("scope: {:?}", scope);
-                assert!(scope.declarations.contains_key(&Identifier::from("a.1")));
+                assert!(scope.declarations.contains_key(&Identifier::from("a")));
             }
 
             #[test]

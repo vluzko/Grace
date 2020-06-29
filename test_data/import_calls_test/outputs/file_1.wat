@@ -8,11 +8,11 @@
 (import "file_2" "func_2" (func $.file_2.func_2  (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $func_1  (result i32) (local $x.7 i32)
+(func $func_1  (result i32) (local $x i32)
 i32.const 1
 i32.const 2
 call $.file_2.A
-set_local $x.7
+set_local $x
 call $.file_2.func_2
 )
 (export "func_1" (func $func_1))

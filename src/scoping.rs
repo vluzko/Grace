@@ -77,7 +77,9 @@ pub fn builtin_context() -> (usize, Context) {
         containing_scopes: HashMap::new(),
         type_map: HashMap::new(), 
         defined_types: HashMap::new(),
-        gradual_constraints: HashMap::new()
+        gradual_constraints: HashMap::new(),
+        traits: vec!(),
+        trait_implementations: HashMap::new()
     };
     return (id, context);
 }
@@ -124,7 +126,9 @@ impl Context {
             containing_scopes: HashMap::new(),
             type_map: HashMap::new(),
             defined_types: HashMap::new(),
-            gradual_constraints: HashMap::new()
+            gradual_constraints: HashMap::new(),
+            traits: vec!(),
+            trait_implementations: HashMap::new()
         };
     }
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
@@ -137,7 +141,9 @@ impl Context {
             containing_scopes: HashMap::new(),
             type_map: type_map,
             defined_types: HashMap::new(),
-            gradual_constraints: HashMap::new()
+            gradual_constraints: HashMap::new(),
+            traits: vec!(),
+            trait_implementations: HashMap::new()
         };
     }
 

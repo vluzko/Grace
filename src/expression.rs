@@ -26,10 +26,11 @@ impl <T> Node<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
-    pub imports: Vec<Box<Import>>
+    pub imports: Vec<Box<Import>>,
+    pub traits: Vec<Trait>,
 }
 
 #[derive(Debug, Clone, Eq, Hash)]

@@ -137,7 +137,6 @@ impl Type {
 
     /// Check if it is possible to convert from one type to the other
     pub fn is_compatible(&self, other: &Type) -> bool {
-        println!("Self is {:?} and other is {:?} ", self, other);
         if self == other {
             return true
         } else {
@@ -344,7 +343,7 @@ impl Typed<Node<Module>> for Node<Module> {
         let new_decs = self.data.declarations.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
         return Node{
             id: self.id,
-            data: Module{declarations: new_decs, imports: self.data.imports},
+            data: Module{declarations: new_decs, imports: self.data.imports, traits: self.data.traits},
             scope: self.scope
         };
     }

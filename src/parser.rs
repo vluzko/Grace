@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::{Type, Refinement};
+use typing::{Type, Refinement, Trait};
 use general_utils::{
     get_next_id,
     get_next_var,
@@ -19,6 +19,7 @@ use general_utils::{
 };
 
 use self::stmt_parsers::struct_declaration_stmt;
+use self::type_parser::any_type;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -121,6 +122,11 @@ impl ParserContext {
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let mut context = ParserContext::empty();
 
+    enum ModuleDec {
+        Stmt        (Node<Stmt>),
+        TraitDec    (Trait)
+    };
+
     let just_imports = preceded!(input,
         opt!(between_statement),
         many0c!(
@@ -141,20 +147,36 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         _ => panic!()
     };
 
-    let statements = terminated!(remaining,
+    let declarations = terminated!(remaining,
         many1c!(
             terminated!(
-                alt_complete!(m!(context.function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
-                
+                alt_complete!(
+                    map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
+                    map!(call!(struct_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
+                    map!(trait_parser, |x| ModuleDec::TraitDec(x))
+                ),
                 between_statement
             )
         ),
         alt_complete!(eof!() | EMPTY)
     );
 
-    return fmap_node(statements, |x| Module{
-        imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(), 
-        declarations: x.into_iter().map(|y| Box::new(y)).collect()
+    return fmap_node(declarations, |just_decs| {
+        let mut traits = vec!();
+        let mut stmts = vec!();
+
+        for d in just_decs {
+            match d {
+                ModuleDec::Stmt(x) => {stmts.push(Box::new(x));},
+                ModuleDec::TraitDec(x) => {traits.push(x);}
+            };
+        }
+
+        return Module {
+            imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
+            declarations: stmts,
+            traits: traits
+        };
     });
 }
 
@@ -167,6 +189,51 @@ fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
         )
     );
     return fmap_iresult(parse_result, |(x, y)| Import{id: get_next_id(), path: x, alias: y, values: vec!()});
+}
+
+
+/// Match a trait declaration.
+/// trait NameOfTrait:
+///     method_name: function_type_signature
+fn trait_parser<'a>(input: PosStr<'a>) -> Res<'a, Trait> {
+    let header = delimited!(input,
+        TRAIT, IDENTIFIER, tuple!(COLON, between_statement)
+    );
+
+    // let first_res_parser = |i: PosStr<'a> | tuple!(i, many1!(inline_whitespace_char), trait_method);
+
+    let body_parser = |i: PosStr<'a> | do_parse!(i,
+        indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
+        first_line: terminated!(trait_method, between_statement) >>
+        remaining: many0c!(terminated!(indented!(trait_method, indent), between_statement)) >>
+        (first_line, remaining)
+    );
+
+    let full_res = chain(header, body_parser);
+
+    let trait_val = fmap_iresult(full_res, |(name, (l1, other))| {
+        let mut m = HashMap::new();
+        m.insert(l1.0, l1.1);
+
+        for (k, v) in other {
+            m.insert(k, v);
+        }
+        return Trait{
+            name: name,
+            functions: m
+        }
+    });
+
+    return trait_val;
+}
+
+fn trait_method<'a>(input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
+    let parse_result = tuple!(input,
+        terminated!(IDENTIFIER, COLON),
+        any_type
+    );
+
+    return parse_result;
 }
 
 /// All statement parsers.
@@ -2274,7 +2341,8 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0)).0),
                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
             ),
-            imports: vec!()
+            imports: vec!(),
+            traits: vec!()
         }))
     }
 
@@ -2288,6 +2356,7 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
+            traits: vec!()
         }));
         
         // let e = ParserContext::empty();
@@ -2313,6 +2382,7 @@ mod tests {
                 })
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
+            traits: vec!()
         }));
     }        
 
@@ -2342,6 +2412,20 @@ mod tests {
         };
 
         check_match(" x=0\n y=true\n\n  \n", |x| e.block(x, 1), Node::from(exp_block));
+    }
+
+    #[test]
+    fn parse_trait_impl() {
+        let mut m = HashMap::new();
+
+        m.insert(Identifier::from("ident1"), Type::i32);
+        m.insert(Identifier::from("ident2"), Type::i32);
+        m.insert(Identifier::from("ident3"), Type::i32);
+        check_match("trait Trait:\n    ident1: i32\n    ident2: i32\n    ident3: i32", trait_parser, Trait{
+            name: Identifier::from("Trait"),
+            functions: m
+        })
+
     }
 
     #[cfg(test)]

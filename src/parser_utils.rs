@@ -157,8 +157,6 @@ macro_rules! w_followed (
     );
 );
 
-
-
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
     return tag!(input, " ");
@@ -374,6 +372,8 @@ pub mod tokens {
     }
 
     // Keywords
+    keyword!(TRAIT, "trait");
+    keyword!(IMPL, "impl");
     keyword!(FN, "fn");
     keyword!(STRUCT, "struct");
     keyword!(IF, "if");
@@ -494,6 +494,17 @@ pub mod tokens {
 pub mod iresult_helpers {
 
     use super::*;
+
+    pub fn chain<'a, X, F, T>(res: Res<'a, X>, parser: F) -> Res<'a, (X, T)>
+        where F: Fn(PosStr<'a>) -> Res<'a, T> {
+            return match res {
+                Ok((i, o)) => match parser(i) {
+                    Ok((i_final, parser_o)) => Ok((i_final, (o, parser_o))),
+                    Err(e) => Err(e)
+                },
+                Err(e) => Err(e)
+            };
+    }
 
     /// Map the contents of an IResult.
     /// Rust functors plox

@@ -1,6 +1,7 @@
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
+use std::collections::HashMap;
 use std::convert::From;
 
 use itertools::join;
@@ -31,6 +32,7 @@ pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
     pub imports: Vec<Box<Import>>,
     pub traits: Vec<Trait>,
+    pub trait_implementations: Vec<(Identifier, Identifier, Vec<Node<Stmt>>)>
 }
 
 #[derive(Debug, Clone, Eq, Hash)]

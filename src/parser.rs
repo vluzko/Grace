@@ -124,7 +124,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
     enum ModuleDec {
         Stmt        (Node<Stmt>),
-        TraitDec    (Trait)
+        TraitDec    (Trait),
+        TraitImpl   ((Identifier, Identifier, Vec<Node<Stmt>>))
     };
 
     let just_imports = preceded!(input,
@@ -153,7 +154,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
                 alt_complete!(
                     map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
                     map!(call!(struct_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
-                    map!(trait_parser, |x| ModuleDec::TraitDec(x))
+                    map!(trait_parser, |x| ModuleDec::TraitDec(x)) |
+                    map!(m!(context.trait_impl), |x| ModuleDec::TraitImpl(x))
                 ),
                 between_statement
             )
@@ -164,18 +166,21 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     return fmap_node(declarations, |just_decs| {
         let mut traits = vec!();
         let mut stmts = vec!();
+        let mut trait_impls = vec!();
 
         for d in just_decs {
             match d {
                 ModuleDec::Stmt(x) => {stmts.push(Box::new(x));},
-                ModuleDec::TraitDec(x) => {traits.push(x);}
+                ModuleDec::TraitDec(x) => {traits.push(x);},
+                ModuleDec::TraitImpl(x) => {trait_impls.push(x);}
             };
         }
 
         return Module {
             imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
             declarations: stmts,
-            traits: traits
+            traits: traits,
+            trait_implementations: trait_impls
         };
     });
 }
@@ -199,23 +204,21 @@ fn trait_parser<'a>(input: PosStr<'a>) -> Res<'a, Trait> {
     let header = delimited!(input,
         TRAIT, IDENTIFIER, tuple!(COLON, between_statement)
     );
-
-    // let first_res_parser = |i: PosStr<'a> | tuple!(i, many1!(inline_whitespace_char), trait_method);
-
+  
     let body_parser = |i: PosStr<'a> | do_parse!(i,
         indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
-        first_line: terminated!(trait_method, between_statement) >>
-        remaining: many0c!(terminated!(indented!(trait_method, indent), between_statement)) >>
-        (first_line, remaining)
+        statements: separated_nonempty_list_complete!(
+            tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))), trait_method) >>
+        (statements)
     );
 
     let full_res = chain(header, body_parser);
 
-    let trait_val = fmap_iresult(full_res, |(name, (l1, other))| {
+ 
+    let trait_val = fmap_iresult(full_res, |(name, (signatures))| {
         let mut m = HashMap::new();
-        m.insert(l1.0, l1.1);
 
-        for (k, v) in other {
+        for (k, v) in signatures {
             m.insert(k, v);
         }
         return Trait{
@@ -234,6 +237,22 @@ fn trait_method<'a>(input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
     );
 
     return parse_result;
+}
+
+impl ParserContext {
+    fn trait_impl<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
+        let header = tuple!(input, preceded!(IMPL, IDENTIFIER), delimited!(FOR, IDENTIFIER, COLON)); 
+        let body_parser = |i: PosStr<'a> | do_parse!(i,
+            indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
+            declarations: separated_nonempty_list_complete!(
+                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))), 
+                m!(self.function_declaration_stmt, indent)) >>
+            (declarations)
+        );
+        
+        let full_res = chain(header, body_parser);
+        return fmap_iresult(full_res, |((trait_name, struct_name), declarations)| (trait_name, struct_name, declarations));
+    }
 }
 
 /// All statement parsers.
@@ -2342,7 +2361,8 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
             ),
             imports: vec!(),
-            traits: vec!()
+            traits: vec!(),
+            trait_implementations: vec!()
         }))
     }
 
@@ -2356,7 +2376,8 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
-            traits: vec!()
+            traits: vec!(),
+            trait_implementations: vec!()
         }));
         
         // let e = ParserContext::empty();
@@ -2382,7 +2403,8 @@ mod tests {
                 })
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
-            traits: vec!()
+            traits: vec!(),
+            trait_implementations: vec!()
         }));
     }        
 
@@ -2415,7 +2437,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_trait_impl() {
+    fn parse_trait_dec() {
         let mut m = HashMap::new();
 
         m.insert(Identifier::from("ident1"), Type::i32);
@@ -2425,6 +2447,23 @@ mod tests {
             name: Identifier::from("Trait"),
             functions: m
         })
+
+    }
+
+    #[test]
+    fn parse_trait_impl() {
+        let mut m = HashMap::new();
+
+        m.insert(Identifier::from("ident1"), Type::i32);
+        m.insert(Identifier::from("ident2"), Type::i32);
+        m.insert(Identifier::from("ident3"), Type::i32);
+        let e = ParserContext::empty();
+
+        let tiny_function = Node::<Stmt>::parse(PosStr::from("fn x() -> i32:\n    return 0"));
+
+        check_match("impl Foo for Baz:\nfn x() -> i32:\n    return 0", |x| e.trait_impl(x),
+            (Identifier::from("Foo"), Identifier::from("Baz"), vec!(tiny_function))
+        )
 
     }
 

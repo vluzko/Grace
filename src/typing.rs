@@ -1,4 +1,5 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, BTreeMap, HashSet};
+use std::iter::FromIterator;
 use std::usize;
 use std::convert::From;
 
@@ -223,11 +224,25 @@ impl Type {
         };
     }
 
+    pub fn has_attribute(&self, attribute: &Identifier) -> bool {
+        return match self {
+            Type::Record (_, attributes) | Type::Module(_, attributes) => {
+                for (attr_name, attr_type) in attributes {
+                    if attribute == attr_name {
+                        return true;
+                    }
+                }
+                return false;
+            },
+            _ => false
+        };
+    }
+
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
                 let mut t = None;
-                
+
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         t = Some(attr_type.clone());
@@ -239,6 +254,15 @@ impl Type {
                 }
             },
             _ => panic!("The provided type doesn't have attributes.")
+        };
+    }
+
+    pub fn all_attributes(&self) -> HashSet<Identifier> {
+        return match self {
+            Type::Record (_, attributes) | Type::Module(_, attributes) => {
+                attributes.keys().cloned().collect::<HashSet<Identifier>>()
+            },
+            _ => HashSet::new()
         };
     }
 

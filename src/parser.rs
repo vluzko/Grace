@@ -164,14 +164,14 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     );
 
     return fmap_node(declarations, |just_decs| {
-        let mut traits = vec!();
+        let mut traits = HashMap::new();
         let mut stmts = vec!();
         let mut trait_impls = vec!();
 
         for d in just_decs {
             match d {
                 ModuleDec::Stmt(x) => {stmts.push(Box::new(x));},
-                ModuleDec::TraitDec(x) => {traits.push(x);},
+                ModuleDec::TraitDec(x) => {traits.insert(x.name.clone(), x);},
                 ModuleDec::TraitImpl(x) => {trait_impls.push(x);}
             };
         }
@@ -2363,7 +2363,7 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
             ),
             imports: vec!(),
-            traits: vec!(),
+            traits: HashMap::new(),
             trait_implementations: vec!()
         }))
     }
@@ -2378,7 +2378,7 @@ mod tests {
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
-            traits: vec!(),
+            traits: HashMap::new(),
             trait_implementations: vec!()
         }));
         
@@ -2405,7 +2405,7 @@ mod tests {
                 })
             ),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
-            traits: vec!(),
+            traits: HashMap::new(),
             trait_implementations: vec!()
         }));
     }        

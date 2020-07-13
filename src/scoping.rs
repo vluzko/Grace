@@ -1,6 +1,7 @@
 use std::collections::BTreeMap;
 use std::collections::HashSet;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 
 use expression::*;
 use general_utils;
@@ -50,7 +51,7 @@ pub struct Context {
     // A vector containing all the gradual types in context.
     pub gradual_constraints: HashMap<usize, Vec<Type>>,
     // A vectgor of all the traits in context.
-    pub traits: Vec<Trait>,
+    pub traits: HashMap<Identifier, Trait>,
     // A map from tuples (struct_name, trait_name) to [maps from method name to method definition]
     pub trait_implementations: HashMap<(Identifier, Identifier), HashMap<Identifier, Node<Stmt>>>
 }
@@ -78,7 +79,7 @@ pub fn builtin_context() -> (usize, Context) {
         type_map: HashMap::new(), 
         defined_types: HashMap::new(),
         gradual_constraints: HashMap::new(),
-        traits: vec!(),
+        traits: HashMap::new(),
         trait_implementations: HashMap::new()
     };
     return (id, context);
@@ -115,6 +116,7 @@ impl Scope {
     }
 }
 
+// Scoping
 impl Context {
     pub fn empty() -> Context {
         let root_id = general_utils::get_next_scope_id();
@@ -127,7 +129,7 @@ impl Context {
             type_map: HashMap::new(),
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
-            traits: vec!(),
+            traits: HashMap::new(),
             trait_implementations: HashMap::new()
         };
     }
@@ -142,7 +144,7 @@ impl Context {
             type_map: type_map,
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
-            traits: vec!(),
+            traits: HashMap::new(),
             trait_implementations: HashMap::new()
         };
     }
@@ -383,6 +385,63 @@ impl GetContext for Node<Module> {
         let mut new_context = context;
         for stmt in self.data.declarations.iter_mut() {
             new_context = stmt.scopes_and_types(scope_id, new_context).0;
+        }
+
+        // Add all traits to the context.
+        for (k, v) in &self.data.traits {
+            new_context.traits.insert(k.clone(), v.clone());
+        }
+
+        // Add all trait implementations to the context.
+        let mut ambiguous_names = HashMap::new();
+
+        for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
+            assert!(self.data.traits.contains_key(&trait_name));
+            let trait_dec = self.data.traits.get(&trait_name).unwrap();
+            let struct_type = new_context.get_type(scope_id, struct_name).clone();
+            let mut existing_attributes = struct_type.all_attributes();
+
+            let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits.keys());
+            let mut decs_map = HashMap::new();
+            for dec in decs.iter_mut() {
+                let res = dec.scopes_and_types(scope_id, new_context);
+                new_context = res.0;
+                let func_type = res.1;
+                let func_name = dec.data.get_name();
+
+                // Check that this function declaration is an actual method of the trait.
+                assert!(need_impl.contains(&func_name));
+                // Check that the declaration type and the expected type are the same.
+                let expected_type = trait_dec.functions.get(&func_name).unwrap();
+                assert!(expected_type == &func_type);
+
+                // Remove this function from the set of functions that need to be implemented.
+                need_impl.remove(&func_name);
+
+                decs_map.insert(func_name.clone(), dec.clone());
+
+                // If we have ambiguous names
+                if existing_attributes.contains(&func_name) {
+                    let mut struct_ambig_names = match ambiguous_names.remove(struct_name) {
+                        Some(v) => v,
+                        None => HashMap::new()
+                    };
+                    struct_ambig_names.insert(func_name.clone(), trait_name.clone());
+
+                    if struct_type.has_attribute(&func_name) {
+                        struct_ambig_names.insert(func_name.clone(), Identifier::from("Attrib"));
+                    }
+
+                    ambiguous_names.insert(struct_name.clone(), struct_ambig_names);
+
+                } else {
+
+                }
+            }
+            // Demand that all methods of the trait have implementations.
+            assert!(need_impl.len() == 0);
+
+            new_context.trait_implementations.insert((trait_name.clone(), struct_name.clone()), decs_map);
         }
 
         return (new_context, Type::empty);

@@ -31,7 +31,9 @@ impl <T> Node<T> {
 pub struct Module {
     pub declarations: Vec<Box<Node<Stmt>>>,
     pub imports: Vec<Box<Import>>,
-    pub traits: Vec<Trait>,
+    // Map from trait_name to trait
+    pub traits: HashMap<Identifier, Trait>,
+    // (trait_name, struct_name, function_declarations)
     pub trait_implementations: Vec<(Identifier, Identifier, Vec<Node<Stmt>>)>
 }
 

@@ -239,13 +239,15 @@ fn trait_method<'a>(input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
     return parse_result;
 }
 
+/// Parser for trait implementations.
 impl ParserContext {
     fn trait_impl<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
-        let header = tuple!(input, preceded!(IMPL, IDENTIFIER), delimited!(FOR, IDENTIFIER, COLON)); 
+        let header = tuple!(input, preceded!(IMPL, IDENTIFIER), delimited!(FOR, IDENTIFIER, terminated!(COLON, between_statement)));
+        println!("Header: {:?}", header);
         let body_parser = |i: PosStr<'a> | do_parse!(i,
             indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
             declarations: separated_nonempty_list_complete!(
-                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))), 
+                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))),
                 m!(self.function_declaration_stmt, indent)) >>
             (declarations)
         );
@@ -2461,7 +2463,7 @@ mod tests {
 
         let tiny_function = Node::<Stmt>::parse(PosStr::from("fn x() -> i32:\n    return 0"));
 
-        check_match("impl Foo for Baz:\nfn x() -> i32:\n    return 0", |x| e.trait_impl(x),
+        check_match("impl Foo for Baz:\n    fn x() -> i32:\n        return 0", |x| e.trait_impl(x),
             (Identifier::from("Foo"), Identifier::from("Baz"), vec!(tiny_function))
         )
 

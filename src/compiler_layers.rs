@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::fmt::Debug;
 use std::io::prelude::*;
@@ -62,7 +62,7 @@ impl CompiledModule {
             attribute_map.insert(func_dec.data.get_name(), func_type);
         }
 
-        return Type::Record(attribute_order, attribute_map);
+        return Type::Record(attribute_order, attribute_map, BTreeSet::new(), BTreeMap::new());
     }
 
     pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {

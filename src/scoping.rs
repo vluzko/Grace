@@ -52,8 +52,8 @@ pub struct Context {
     pub gradual_constraints: HashMap<usize, Vec<Type>>,
     // A vectgor of all the traits in context.
     pub traits: HashMap<Identifier, Trait>,
-    // A map from tuples (struct_name, trait_name) to [maps from method name to method definition]
-    pub trait_implementations: HashMap<(Identifier, Identifier), HashMap<Identifier, Node<Stmt>>>
+    // A map from tuples (trait_name, implementing_type) to [maps from method name to method definition]
+    pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Node<Stmt>>>
 }
 
 pub trait GetContext {
@@ -116,7 +116,7 @@ impl Scope {
     }
 }
 
-// Scoping
+/// Scoping
 impl Context {
     pub fn empty() -> Context {
         let root_id = general_utils::get_next_scope_id();
@@ -228,7 +228,6 @@ impl Context {
         scope.declarations.insert(import_name.clone(), scope_mod);
     }
 
-
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         if scope_id == 0 {
@@ -274,6 +273,46 @@ impl Context {
 
 /// Typechecking
 impl Context {
+
+    /// Resolve an attribute access within the current context.
+    pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
+
+        // Check if this is a direct attribute access
+        let direct_type = match base_type {
+            Type::Record(_, ref attributes) => attributes.get(name),
+            x => None
+        };
+
+        return match direct_type {
+            Some(x) => x.clone(),
+            None => {
+                // Check if this is a trait access
+                let mut possible_traits = vec!();
+
+                for (trait_name, trait_struct) in self.traits.iter() {
+                    // Check if this trait has a function with the desired name.
+                    if trait_struct.functions.contains_key(name) {
+                        // Check if base_type implements this trait.
+                        // OPT: We shouldn't be cloning these things. Everything's staying a reference.
+                        if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                            possible_traits.push(trait_struct);
+                        }
+                    }
+                }
+
+                // Just resolve the trait.
+                if possible_traits.len() == 1 {
+                    // Get the type of the trait function and return it.
+                    return possible_traits[0].functions.get(name).unwrap().clone();
+                }// TODO: Handle ambiguous traits.
+                else if possible_traits.len() > 1 {
+                    panic!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
+                } else {
+                    panic!("No matching attributed found for: {:?}, {:?}", base_type, name);
+                }
+            }
+        }
+    }
 
     pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
         return match op {
@@ -441,7 +480,8 @@ impl GetContext for Node<Module> {
             // Demand that all methods of the trait have implementations.
             assert!(need_impl.len() == 0);
 
-            new_context.trait_implementations.insert((trait_name.clone(), struct_name.clone()), decs_map);
+            let alias_type = Type::Named(struct_name.clone());
+            new_context.trait_implementations.insert((trait_name.clone(), alias_type), decs_map);
         }
 
         return (new_context, Type::empty);
@@ -791,6 +831,9 @@ impl GetContext for Node<Expr> {
             },
             Expr::AttributeAccess{ref mut base, ref attribute} => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context);
+                // base_t = A (which is a struct)
+                // attribute = "b"
+                // A.internal_map.get("b")
                 let attr_t = base_t.resolve_attribute(attribute);
                 (new_c, attr_t)
             },

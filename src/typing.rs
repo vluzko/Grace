@@ -25,6 +25,7 @@ pub enum Type {
     Vector(Box<Type>),
     Function(Vec<(Identifier, Type)>, Box<Type>),
     Named(Identifier),
+    // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
     Parameterized(Identifier, Vec<Type>),
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),

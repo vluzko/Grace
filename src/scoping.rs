@@ -432,7 +432,7 @@ impl GetContext for Node<Module> {
         }
 
         // Add all trait implementations to the context.
-        let mut ambiguous_names = HashMap::new();
+        // let mut ambiguous_names = HashMap::new();
 
         for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
             assert!(self.data.traits.contains_key(&trait_name));
@@ -458,24 +458,6 @@ impl GetContext for Node<Module> {
                 need_impl.remove(&func_name);
 
                 decs_map.insert(func_name.clone(), dec.clone());
-
-                // If we have ambiguous names
-                if existing_attributes.contains(&func_name) {
-                    let mut struct_ambig_names = match ambiguous_names.remove(struct_name) {
-                        Some(v) => v,
-                        None => HashMap::new()
-                    };
-                    struct_ambig_names.insert(func_name.clone(), trait_name.clone());
-
-                    if struct_type.has_attribute(&func_name) {
-                        struct_ambig_names.insert(func_name.clone(), Identifier::from("Attrib"));
-                    }
-
-                    ambiguous_names.insert(struct_name.clone(), struct_ambig_names);
-
-                } else {
-
-                }
             }
             // Demand that all methods of the trait have implementations.
             assert!(need_impl.len() == 0);

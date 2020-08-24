@@ -789,7 +789,7 @@ impl GetContext for Node<Expr> {
                     let arg_t = res.1;
 
                     let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
-                    
+
                     assert!(new_c.check_subtype(&arg, &arg_t, &expected_type));
                     // assert_eq!(arg_types.get(i).unwrap().1, arg_t);
                 }
@@ -813,10 +813,7 @@ impl GetContext for Node<Expr> {
             },
             Expr::AttributeAccess{ref mut base, ref attribute} => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context);
-                // base_t = A (which is a struct)
-                // attribute = "b"
-                // A.internal_map.get("b")
-                let attr_t = base_t.resolve_attribute(attribute);
+                let attr_t = new_c.resolve_attribute(&base_t, attribute);
                 (new_c, attr_t)
             },
             Expr::ModuleAccess(ref id, ref mut names) => {

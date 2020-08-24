@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap, HashSet};
+use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
 use std::iter::FromIterator;
 use std::usize;
 use std::convert::From;
@@ -27,7 +27,8 @@ pub enum Type {
     Named(Identifier),
     // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
     Parameterized(Identifier, Vec<Type>),
-    Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    // Attribute names, attribute types, traits implemented, map from attributes to sources (traits)
+    Record(Vec<Identifier>, BTreeMap<Identifier, Type>, BTreeSet<Identifier>, BTreeMap<Identifier, Vec<Identifier>>),
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
     Gradual(usize),
     Refinement(Box<Type>, Vec<Refinement>),
@@ -207,7 +208,7 @@ impl Type {
             Type::string => 1,
             Type::Vector(ref t) => t.size(),
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
-            Type::Record(_, ref fields)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
+            Type::Record(_, ref fields, _, _)  | Type::Module(_, ref fields) => fields.iter().map(|(_, t)| t.size()).sum(),
             _ => panic!()
         }
     }
@@ -227,7 +228,7 @@ impl Type {
 
     pub fn has_attribute(&self, attribute: &Identifier) -> bool {
         return match self {
-            Type::Record (_, attributes) | Type::Module(_, attributes) => {
+            Type::Record (_, attributes, _, _) | Type::Module(_, attributes) => {
                 for (attr_name, attr_type) in attributes {
                     if attribute == attr_name {
                         return true;
@@ -241,7 +242,7 @@ impl Type {
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
         return match self {
-            Type::Record (_, attributes) | Type::Module(_, attributes) => {
+            Type::Record (_, attributes, _, _) | Type::Module(_, attributes) => {
                 let mut t = None;
 
                 for (attr_name, attr_type) in attributes {
@@ -260,7 +261,7 @@ impl Type {
 
     pub fn all_attributes(&self) -> HashSet<Identifier> {
         return match self {
-            Type::Record (_, attributes) | Type::Module(_, attributes) => {
+            Type::Record (_, attributes, _, _) | Type::Module(_, attributes) => {
                 attributes.keys().cloned().collect::<HashSet<Identifier>>()
             },
             _ => HashSet::new()
@@ -268,13 +269,13 @@ impl Type {
     }
 
     pub fn flatten_to_record(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
-        let mut rec = Type::Record(base.keys().map(|x| x.clone()).collect(), base);
+        let mut rec = Type::Record(base.keys().map(|x| x.clone()).collect(), base, BTreeSet::new(), BTreeMap::new());
         for ident in idents[1..].iter().rev() {
             let mut map = BTreeMap::new();
             let mut order = vec!();
             map.insert(ident.clone(), rec);
             order.push(ident.clone());
-            rec = Type::Record(order, map);
+            rec = Type::Record(order, map, BTreeSet::new(), BTreeMap::new());
         }
         return rec;
     }
@@ -311,7 +312,7 @@ impl Type {
 
     pub fn identifier_to_index(&self, ident: &Identifier) -> usize {
         return match self {
-            Type::Record(ref order, ref fields) => {
+            Type::Record(ref order, ref fields, _, _) => {
                 let mut words = 0;
                 for i in order {
                     if i == ident {
@@ -329,7 +330,7 @@ impl Type {
 
     pub fn get_constructor_type(&self) -> (Vec<(Identifier, Type)>, Type) {
         return match &self {
-            Type::Record(_, ref fields) => {
+            Type::Record(_, ref fields, _, _) => {
                 let args: Vec<(Identifier, Type)> = fields.clone().into_iter().collect();
                 (args, Type::i32)
             },
@@ -528,14 +529,15 @@ impl Typed<Node<Expr>> for Node<Expr> {
 }
 
 pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
+    panic!();
     // Topological ordering of numeric types.
     // i32, f32, i64, f64
-    let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
-    let indices = hashmap!{Type::i32 => 0, Type::f32 => 1, Type::i64 => 2, Type::f64 => 3};
-    let t1 = &order[*indices.get(left_type).unwrap()];
-    let t2 = &order[*indices.get(right_type).unwrap()];
-    let join = general_utils::vec_c_int(t1, t2);
-    return join[0].clone();
+    // let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
+    // let indices = hashmap!{Type::i32 => 0, Type::f32 => 1, Type::i64 => 2, Type::f64 => 3};
+    // let t1 = &order[*indices.get(left_type).unwrap()];
+    // let t2 = &order[*indices.get(right_type).unwrap()];
+    // let join = general_utils::vec_c_int(t1, t2);
+    // return join[0].clone();
 }
 
 // TODO: Return an option.
@@ -686,9 +688,9 @@ mod test {
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap!{
-                Identifier::from("b") => Type::Record(vec!(Identifier::from("c")), bottom_map),
+                Identifier::from("b") => Type::Record(vec!(Identifier::from("c")), bottom_map, BTreeSet::new(), BTreeMap::new()),
             };
-            assert_eq!(record_type, Type::Record(vec!(Identifier::from("b")), second_map));
+            assert_eq!(record_type, Type::Record(vec!(Identifier::from("b")), second_map, BTreeSet::new(), BTreeMap::new()));
         }
     }
 

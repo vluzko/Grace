@@ -365,7 +365,7 @@ impl ToLLR for Node<Expr> {
                 llr.append(&mut base.to_llr(context));
                 let base_type = context.get_node_type(base.id);
                 match base_type {
-                    Type::Record(ref names, ref fields) => {
+                    Type::Record(ref names, ref fields, _, _) => {
                         let attr_type = fields.get(attribute).unwrap();
                         // Calculate the offset of `attribute` from the start of the expression result.
                         let offset = calculate_offset(attribute, names, fields);

@@ -18,7 +18,8 @@ use typing::Type;
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMModule {
     pub imports: Vec<WASMImport>,
-    pub functions: Vec<WASMFunc>
+    pub functions: Vec<WASMFunc>,
+    pub trait_implementations: Vec<WASMFunc>
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -94,8 +95,9 @@ impl WASMType {
 
 
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
-    let mut functions = vec!();
     let mut imports = vec!();
+    let mut functions = vec!();
+    let mut trait_implementations = vec!();
 
     for import in &module.data.imports {
         let typing_info = context.get_node_type(import.id);
@@ -132,7 +134,25 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
     }
 
     for declaration in &module.data.declarations {
-        match declaration.data {
+        functions.push(handle_declaration(declaration, context, cfg_map));
+    }
+
+    for (_, _, function_decs) in &module.data.trait_implementations {
+        for declaration in function_decs {
+            trait_implementations.push(handle_declaration(declaration, context, cfg_map));
+        }
+    }
+    return WASMModule {
+        imports: imports,
+        functions: functions,
+        trait_implementations: trait_implementations
+    };
+}
+
+// Helper for module_to_llr
+pub fn handle_declaration(declaration: &Node<Stmt>, context: &Context, 
+cfg_map: &HashMap<Identifier, Cfg>) -> WASMFunc {
+    return match declaration.data {
             Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref return_type, ..} => {
                 let local_variables = declaration.get_true_declarations(context);
                 let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables.iter().map(
@@ -149,7 +169,7 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     result: WASMType::from(return_type),
                     code: block_llr
                 };
-                functions.push(wasm_func)
+                wasm_func
             },
             Stmt::StructDec{ref name, ref fields} => {
                 let wasm_args: Vec<(String, WASMType)>  = fields.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
@@ -175,15 +195,10 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                     result: WASMType::i32,
                     code: block_llr
                 };
-                functions.push(wasm_func)                
+                wasm_func                
             }
             _ => panic!()
         }
-    }
-    return WASMModule {
-        imports: imports,
-        functions: functions
-    };
 }
 
 pub trait ToLLR {
@@ -365,7 +380,7 @@ impl ToLLR for Node<Expr> {
                 llr.append(&mut base.to_llr(context));
                 let base_type = context.get_node_type(base.id);
                 match base_type {
-                    Type::Record(ref names, ref fields, _, _) => {
+                    Type::Record(ref names, ref fields) => {
                         let attr_type = fields.get(attribute).unwrap();
                         // Calculate the offset of `attribute` from the start of the expression result.
                         let offset = calculate_offset(attribute, names, fields);

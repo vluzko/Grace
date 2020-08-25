@@ -87,6 +87,18 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
             _ => panic!()
         }
     }
+    for (trait_name, struct_name, function_decs) in &module.data.trait_implementations {
+        for decl in function_decs {
+            match decl.data {
+                Stmt::FunctionDecStmt{ref name, ref block, ..} => {
+                    let cfg = block_to_cfg(block, context, Cfg::empty(), None).0;
+                    cfg_map.insert(Identifier::from(format!("{}.{}.{}", trait_name, struct_name, name)), cfg);
+                },
+                Stmt::StructDec{..} => {},
+                _ => panic!()
+            }
+        }
+    }
     return cfg_map;
 }
 

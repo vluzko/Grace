@@ -62,7 +62,7 @@ impl CompiledModule {
             attribute_map.insert(func_dec.data.get_name(), func_type);
         }
 
-        return Type::Record(attribute_order, attribute_map, BTreeSet::new(), BTreeMap::new());
+        return Type::Record(attribute_order, attribute_map);
     }
 
     pub fn get_internal_module_name(idents: &Vec<Identifier>) -> String {

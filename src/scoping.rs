@@ -439,11 +439,6 @@ impl GetContext for Node<Module> {
             assert!(self.data.traits.contains_key(&trait_name));
             let trait_dec = self.data.traits.get(&trait_name).unwrap();
             let mut struct_type = new_context.get_type(scope_id, struct_name).clone();
-            let (mut traits_implemented, mut attribute_providers) = match struct_type {
-                Type::Record(_, _, x, y) => (x, y),
-                _ => panic!()  // This should never happen
-            };
-            traits_implemented.add(trait_name.clone());
             let mut existing_attributes = struct_type.all_attributes();
 
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits.keys());
@@ -694,7 +689,7 @@ impl GetContext for Node<Stmt> {
                     order.push(n.clone());
                     records.insert(n.clone(), t.clone());
                 }
-                let record = Type::Record(order, records, BTreeSet::new(), BTreeMap::new());
+                let record = Type::Record(order, records);
                 context.define_type(name.clone(), record);
                 (context, Type::Named(name.clone()))
             },

@@ -301,6 +301,8 @@ impl Context {
                     }
                 }
 
+                // a.foo()
+
                 // Just resolve the trait.
                 if possible_traits.len() == 1 {
                     // Get the type of the trait function and return it.
@@ -313,6 +315,29 @@ impl Context {
                 }
             }
         }
+    }
+
+    /// Resolve an attribute access within the current context.
+    pub fn trait_information(&self, base_type: &Type, name: &Identifier) -> Option<Identifier> {
+
+        let mut possible_traits = vec!();
+
+        for (trait_name, trait_struct) in self.traits.iter() {
+            // Check if this trait has a function with the desired name.
+            if trait_struct.functions.contains_key(name) {
+                // Check if base_type implements this trait.
+                // OPT: We shouldn't be cloning these things. Everything's staying a reference.
+                if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                    possible_traits.push(trait_struct);
+                }
+            }
+        }
+
+        return match possible_traits.len() {
+            0 => None,
+            1 => Some(possible_traits[0].name.clone()),
+            _ => panic!("Ambiguous trait")
+        };
     }
 
     pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {

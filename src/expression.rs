@@ -96,6 +96,7 @@ pub enum Expr {
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
     StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
+    TraitAccess     {base: Box<Node<Expr>>, trait_name: Identifier, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     ModuleAccess    (usize, Vec<Identifier>),
     IdentifierExpr  (Identifier),

@@ -511,7 +511,21 @@ impl Typed<Node<Expr>> for Node<Expr> {
                 let new_kwargs = kwargs.into_iter().map(|x| (x.0, x.1.type_based_rewrite(context))).collect();
                 Expr::FunctionCall {function: new_func_expr, args: new_args, kwargs: new_kwargs}
             },
+            Expr::AttributeAccess {base, attribute} => {
+                let rewritten_base = base.type_based_rewrite(context);
 
+                let base_type = context.get_node_type(rewritten_base.id);
+                let trait_info = context.trait_information(&base_type, &attribute);
+
+                match trait_info {
+                    Some(trait_name) => Expr::TraitAccess {
+                        base: Box::new(rewritten_base),
+                        trait_name: trait_name,
+                        attribute: attribute
+                    },
+                    None => Expr::AttributeAccess{base: Box::new(rewritten_base), attribute: attribute}
+                }
+            },
             Expr::Int(_) | Expr::Float(_) => {
                 let current_type = context.get_node_type(self.id);
                 context.add_type(self.id, choose_return_type(&current_type));

@@ -353,6 +353,10 @@ impl ToLLR for Node<Expr> {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     },
+                    Expr::AttributeAccess{ref base, ref attribute} => {
+                        let obj_t = context.get_node_type(base.id);
+                        panic!();
+                    },
                     x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
                 }
                 llr

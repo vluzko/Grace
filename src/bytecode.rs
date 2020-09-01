@@ -21,6 +21,7 @@ impl ToBytecode for WASMModule {
     fn to_bytecode(&self, context: &Context) -> String {
         let mut import_strings = vec!();
         let mut function_declarations = vec!();
+        let mut trait_function_declarations = vec!();
         for import in &self.imports {
             //(import "memory_management" "alloc_words" (func $.memory_management.alloc_words (param $a i32) (result i32)))
             let params = join(import.params.iter().map(|(n,t)| format!("(param ${} {})", n, t)), " ");
@@ -33,6 +34,10 @@ impl ToBytecode for WASMModule {
         for function in &self.functions {
             let declaration_string = function.to_bytecode(context);
             function_declarations.push(declaration_string)
+        }
+        for trait_function in &self.trait_implementations {
+            let declaration_string = trait_function.to_bytecode(context);
+            trait_function_declarations.push(declaration_string)
         }
         return format!("(module\n{}\n(import \"memory_management\" \"mem\" (memory (;0;) 1))\n\n{}\n)\n", join(import_strings, "\n"), join(function_declarations, "\n\n"));
     }
@@ -76,46 +81,6 @@ impl ToBytecode for WASM {
 
     }
 }
-
-
-// impl ToBytecode for Node<Module> {
-
-//     /// Generate bytecode for a module.
-//     /// Is this code unbelievably ugly? Yes. Can I think of an easy way to make it prettier? No.
-//     fn to_bytecode(&self, context: &Context2) -> String {
-//         let mut imports = vec!();
-//         for import in &self.data.imports {
-//             let import_stmt = context.get_declaration(self.scope, &import.path.get(0).unwrap()).unwrap();
-//             let import_type = context.type_map.get(&import_stmt.get_id()).unwrap();
-//             for value in &import.values {
-//                 let mut ident_vec = import.path[1..].to_vec().clone();
-//                 ident_vec.push(value.clone());
-//                 let func_type = import_type.resolve_nested_record(&ident_vec);
-//                 let module_name = CompiledModule::get_internal_module_name(&import.path);
-//                 let type_str = func_type.wast_name();
-//                 let import_stmt = format!("(import \"{mod}\" \"{func}\" (func $.{mod}.{func} {type}))", 
-//                     mod=module_name, 
-//                     func=value.name,
-//                     type=type_str
-//                 );
-//                 imports.push(import_stmt);
-//             }
-//         }
-
-//         let decls = self.data.declarations.iter().map(|x| x.to_bytecode(context));
-//         let import_str = itertools::join(imports.iter(), "\n");
-//         let joined = itertools::join(decls, "\n");
-//         return format!("(module\n\
-//         (import \"memory_management\" \"alloc_words\" (func $.memory_management.alloc_words (param $a i32) (result i32)))\n\
-//         (import \"memory_management\" \"free_chunk\" (func $.memory_management.free_chunk (param $a i32) (result i32)))\n\
-//         (import \"memory_management\" \"copy_many\" (func $.memory_management.copy_many (param $a i32) (param $b i32) (param $size i32) (result i32)))\n\
-//         (import \"memory_management\" \"mem\" (memory (;0;) 1))\n\
-//         {}\n\
-//         {}\n)\n", import_str, joined).to_string();
-//     }
-// }
-
-
 
 #[cfg(test)]
 mod tests {

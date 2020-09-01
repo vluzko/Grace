@@ -364,7 +364,10 @@ impl ToLLR for Node<Expr> {
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     },
                     Expr::TraitAccess{ref base, ref trait_name, ref attribute} => {
-
+                        let base_type = context.get_node_type(base.id);
+                        let full_func_name = match base_type {
+                            Type::Named(base_name) => format!("{}.{}.{}", trait_name, base_name, attribute),
+                            x => panic!("Cannot acces")
                     },
                     x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
                 }

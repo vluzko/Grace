@@ -19,6 +19,7 @@ use typing::Type;
 pub struct WASMModule {
     pub imports: Vec<WASMImport>,
     pub functions: Vec<WASMFunc>,
+    // (Trait name, Struct name, Function declaration)
     pub trait_implementations: Vec<WASMFunc>
 }
 
@@ -35,10 +36,10 @@ pub struct WASMImport {
 /// A WASM function declaration
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMFunc {
-    pub name: String, 
-    pub args: Vec<(String, WASMType)>, 
-    pub locals: Vec<(String, WASMType)>, 
-    pub result: WASMType, 
+    pub name: String,
+    pub args: Vec<(String, WASMType)>,
+    pub locals: Vec<(String, WASMType)>,
+    pub result: WASMType,
     pub code: Vec<WASM>
 }
 
@@ -137,9 +138,18 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
         functions.push(handle_declaration(declaration, context, cfg_map));
     }
 
-    for (_, _, function_decs) in &module.data.trait_implementations {
+    for (trait_name, struct_name, function_decs) in &module.data.trait_implementations {
         for declaration in function_decs {
-            trait_implementations.push(handle_declaration(declaration, context, cfg_map));
+            let ambiguous_name_func = handle_declaration(declaration, context, cfg_map);
+            let full_name = format!("{}.{}.{}", trait_name, struct_name, ambiguous_name_func.name);
+            let full_name_func = WASMFunc{
+                name: full_name,
+                args: ambiguous_name_func.args,
+                locals: ambiguous_name_func.locals,
+                result: ambiguous_name_func.result,
+                code: ambiguous_name_func.code
+            }
+            trait_implementations.push(full_name_func);
         }
     }
     return WASMModule {
@@ -353,9 +363,8 @@ impl ToLLR for Node<Expr> {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     },
-                    Expr::AttributeAccess{ref base, ref attribute} => {
-                        let obj_t = context.get_node_type(base.id);
-                        panic!();
+                    Expr::TraitAccess{ref base, ref trait_name, ref attribute} => {
+
                     },
                     x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
                 }

@@ -33,7 +33,7 @@ pub struct Module {
     pub imports: Vec<Box<Import>>,
     // Map from trait_name to trait
     pub traits: HashMap<Identifier, Trait>,
-    // (trait_name, struct_name, function_declarations)
+    // (trait_name, internal_type_name (often a struct name), function_declarations)
     pub trait_implementations: Vec<(Identifier, Identifier, Vec<Node<Stmt>>)>
 }
 

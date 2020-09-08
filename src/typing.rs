@@ -71,6 +71,27 @@ impl Type {
         }
     }
 
+    /// Get the name of this type in WAST.
+    pub fn trait_impl_name(&self) -> String {
+        match self {
+            &Type::i32 => "i32".to_string(),
+            &Type::i64 => "i64".to_string(),
+            &Type::f32 => "f32".to_string(),
+            &Type::f64 => "f64".to_string(),
+            &Type::ui32 => "ui32".to_string(),
+            &Type::ui64 => "ui64".to_string(),
+            &Type::boolean => "boolean".to_string(),
+            &Type::empty => panic!(),
+            &Type::Function(..) => panic!(),
+            &Type::Record(..) => panic!("TODO: handle trait_impl_name for Record."),
+            &Type::Sum(..) => panic!("TODO: handle trait_impl_name for Sum."),
+            &Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
+            &Type::Vector(..) => panic!("TODO: handle trait_impl_name for Vector."),
+            &Type::Named(ref name) => name.name.clone(),
+            _ => panic!()
+        }
+    }
+
     /// Get _s or _u for signed values, otherwise an empty string.
     pub fn sign(&self) -> String {
         match &self {

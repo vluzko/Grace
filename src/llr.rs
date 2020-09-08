@@ -138,17 +138,17 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
         functions.push(handle_declaration(declaration, context, cfg_map));
     }
 
-    for (trait_name, struct_name, function_decs) in &module.data.trait_implementations {
+    for (trait_name, internal_type_name, function_decs) in &module.data.trait_implementations {
         for declaration in function_decs {
             let ambiguous_name_func = handle_declaration(declaration, context, cfg_map);
-            let full_name = format!("{}.{}.{}", trait_name, struct_name, ambiguous_name_func.name);
+            let full_name = format!("{}.{}.{}", trait_name, internal_type_name, ambiguous_name_func.name);
             let full_name_func = WASMFunc{
                 name: full_name,
                 args: ambiguous_name_func.args,
                 locals: ambiguous_name_func.locals,
                 result: ambiguous_name_func.result,
                 code: ambiguous_name_func.code
-            }
+            };
             trait_implementations.push(full_name_func);
         }
     }
@@ -365,9 +365,8 @@ impl ToLLR for Node<Expr> {
                     },
                     Expr::TraitAccess{ref base, ref trait_name, ref attribute} => {
                         let base_type = context.get_node_type(base.id);
-                        let full_func_name = match base_type {
-                            Type::Named(base_name) => format!("{}.{}.{}", trait_name, base_name, attribute),
-                            x => panic!("Cannot acces")
+                        let full_func_name = format!("{}.{}.{}", trait_name, base_type.trait_impl_name(), attribute);
+                        llr.push(WASM::Call(format!(".{}", full_func_name)));
                     },
                     x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
                 }

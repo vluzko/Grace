@@ -571,12 +571,19 @@ pub mod rust_trait_impls {
 #[cfg(test)]
 mod tests {
 
+    #[test]
+    fn trait_impl_test() {
+        // Load file, compile to llr step, check function names for trait implementations,
+        // check function calls for trait implementations
+        panic!()
+    }
+
     #[cfg(test)]
     mod exprs {
 
         #[test]
         fn test_constants() {
-            
+            panic!()
         }
     }
 

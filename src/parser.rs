@@ -18,7 +18,7 @@ use general_utils::{
     join
 };
 
-use self::stmt_parsers::struct_declaration_stmt;
+use self::stmt_parsers::{struct_declaration_stmt, fn_dec_args};
 use self::type_parser::any_type;
 
 type StmtNode = Node<Stmt>;
@@ -197,9 +197,10 @@ fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
 }
 
 
-/// Match a trait declaration.
+/// Parse a trait declaration.
 /// trait NameOfTrait:
-///     method_name: function_type_signature
+///     fn method_name: (arg1: type1, ...) -> return_type
+///     ...
 fn trait_parser<'a>(input: PosStr<'a>) -> Res<'a, Trait> {
     let header = delimited!(input,
         TRAIT, IDENTIFIER, tuple!(COLON, between_statement)
@@ -230,13 +231,16 @@ fn trait_parser<'a>(input: PosStr<'a>) -> Res<'a, Trait> {
     return trait_val;
 }
 
+/// Parse a single function description in a trait.
+/// fn method_name: (arg1: type1, ... -> return_type)
 fn trait_method<'a>(input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
     let parse_result = tuple!(input,
-        terminated!(IDENTIFIER, COLON),
-        any_type
+        delimited!(FN, IDENTIFIER, COLON),
+        delimited!(OPEN_PAREN, fn_dec_args, CLOSE_PAREN),
+        preceded!(TARROW, any_type)
     );
 
-    return parse_result;
+    return fmap_iresult(parse_result, |(name, args, ret)| (name, Type::Function(args, Box::new(ret))));
 }
 
 /// Parser for trait implementations.
@@ -469,7 +473,7 @@ pub mod stmt_parsers {
     }
 
     /// Match the standard arguments in a function declaration.
-    fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
+    pub fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
         let result = separated_list_complete!(input,
             COMMA,
             tuple!(
@@ -2454,10 +2458,9 @@ mod tests {
     fn parse_trait_dec() {
         let mut m = HashMap::new();
 
-        m.insert(Identifier::from("ident1"), Type::i32);
-        m.insert(Identifier::from("ident2"), Type::i32);
-        m.insert(Identifier::from("ident3"), Type::i32);
-        check_match("trait Trait:\n    ident1: i32\n    ident2: i32\n    ident3: i32", trait_parser, Trait{
+        m.insert(Identifier::from("ident1"), Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32)));
+        m.insert(Identifier::from("ident2"), Type::Function(vec!((Identifier::from("b"), Type::i64)), Box::new(Type::i64)));
+        check_match("trait Trait:\n    fn ident1: (a: i32) -> i32\n    fn ident2: (b: i64) ->i64", trait_parser, Trait{
             name: Identifier::from("Trait"),
             functions: m
         })

@@ -466,7 +466,8 @@ impl GetContext for Node<Module> {
             let mut struct_type = new_context.get_type(scope_id, struct_name).clone();
             let mut existing_attributes = struct_type.all_attributes();
 
-            let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits.keys());
+            // The names of functions the trait needs implementations for.
+            let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
             let mut decs_map = HashMap::new();
             for dec in decs.iter_mut() {
                 let res = dec.scopes_and_types(scope_id, new_context);

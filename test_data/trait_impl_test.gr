@@ -1,5 +1,5 @@
 trait faketrait:
-    fn a (x: i32, y: i32) -> i32
+    fn a: (x: i32, y: i32) -> i32
 
 struct fakestruct:
     a: i32

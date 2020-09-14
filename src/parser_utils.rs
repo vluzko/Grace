@@ -633,6 +633,7 @@ pub mod iresult_helpers {
         }
     }
 
+    /// Check that the parser applied to the input returns the expect result.
     pub fn check_match<'a, T>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
@@ -663,7 +664,7 @@ pub mod iresult_helpers {
         }
     }
 
-    /// Check just the data of the result of a parser. Skips the containing node and the update.
+    /// Check just the data of the result of a parser that includes an update. Skips the containing node and the update.
     pub fn check_data<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
@@ -672,6 +673,22 @@ pub mod iresult_helpers {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0.data);
                 assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
                 assert_eq!(o.0.data, expected, "Results were: {}\nInput was: {}", l_r, input);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}.\nInput was: {}", e, input)
+            }
+        };
+    }
+
+    /// Check just the data of the result of a parser. Skips the containing node.
+    pub fn check_data_no_update<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        return match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.data);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
+                assert_eq!(o.data, expected, "Results were: {}\nInput was: {}", l_r, input);
             },
             Result::Err(e) => {
                 panic!("Error: {:?}.\nInput was: {}", e, input)

@@ -2439,6 +2439,18 @@ mod tests {
     }
 
     #[test]
+    fn parse_struct_dec() {
+        let input = "struct A:\n  a: i64\n  b: i32";
+        let expected = Stmt::StructDec{
+            name: Identifier::from("A"),
+            fields: vec!(
+                (Identifier::from("a"), Type::i64), (Identifier::from("b"), Type::i32)
+            )
+        };
+        check_data_no_update(input, |x| struct_declaration_stmt(x, 0), expected);
+    }
+
+    #[test]
     fn parse_trait_dec() {
         let mut m = HashMap::new();
 

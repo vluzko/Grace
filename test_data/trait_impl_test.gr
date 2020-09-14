@@ -1,10 +1,10 @@
-trait faketrait:
+trait testtrait:
     fn a: (x: i32, y: i32) -> i32
 
-struct fakestruct:
+struct teststruct:
     a: i32
     b: f64
 
-impl faketrait for fakestruct:
+impl testtrait for teststruct:
     fn a (x: i32, y: i32) -> i32:
         return 7

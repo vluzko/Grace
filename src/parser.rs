@@ -187,7 +187,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
 /// Match an import statement.
 fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
-    let parse_result = preceded!(input, IMPORT, 
+    let parse_result = preceded!(input, IMPORT,
         pair!(
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
             optc!(preceded!(AS, IDENTIFIER))
@@ -247,7 +247,6 @@ fn trait_method<'a>(input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
 impl ParserContext {
     fn trait_impl<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
         let header = tuple!(input, preceded!(IMPL, IDENTIFIER), delimited!(FOR, IDENTIFIER, terminated!(COLON, between_statement)));
-        println!("Header: {:?}", header);
         let body_parser = |i: PosStr<'a> | do_parse!(i,
             indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
             declarations: separated_nonempty_list_complete!(

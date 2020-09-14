@@ -43,6 +43,7 @@ pub struct WASMFunc {
     pub code: Vec<WASM>
 }
 
+/// A WASM expression.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASM {
     Block,
@@ -94,7 +95,7 @@ impl WASMType {
     }
 }
 
-
+/// Convert a module to LLR.
 pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
     let mut imports = vec!();
     let mut functions = vec!();
@@ -601,6 +602,7 @@ pub mod rust_trait_impls {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
     use std::io::Read;
     use std::fs::File;
 
@@ -613,9 +615,11 @@ mod tests {
         f.read_to_string(&mut file_contents).unwrap();
 
         let (module, context, cfg_map, llr) = compiler_layers::to_llr(file_contents.as_bytes());
-        // Load file, compile to llr step, check function names for trait implementations,
-        // check function calls for trait implementations
-        println!("{:?}", llr);
+        let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
+        assert_eq!(func_names, vec!("teststruct".to_string()));
+
+        let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();;
+        assert_eq!(trait_impl_names, vec!("testtrait.teststruct.a".to_string()));
     }
 
     #[cfg(test)]

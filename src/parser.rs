@@ -123,7 +123,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let mut context = ParserContext::empty();
 
     enum ModuleDec {
-        Stmt        (Node<Stmt>),
+        Func        (Node<Stmt>),
+        Struct      (Node<Stmt>),
         TraitDec    (Trait),
         TraitImpl   ((Identifier, Identifier, Vec<Node<Stmt>>))
     };
@@ -152,8 +153,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         many1c!(
             terminated!(
                 alt_complete!(
-                    map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
-                    map!(call!(struct_declaration_stmt, 0), |x| ModuleDec::Stmt(x)) |
+                    map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Func(x)) |
+                    map!(call!(struct_declaration_stmt, 0), |x| ModuleDec::Struct(x)) |
                     map!(trait_parser, |x| ModuleDec::TraitDec(x)) |
                     map!(m!(context.trait_impl), |x| ModuleDec::TraitImpl(x))
                 ),
@@ -165,12 +166,14 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
     return fmap_node(declarations, |just_decs| {
         let mut traits = HashMap::new();
-        let mut stmts = vec!();
+        let mut funcs = vec!();
+        let mut structs = vec!();
         let mut trait_impls = vec!();
 
         for d in just_decs {
             match d {
-                ModuleDec::Stmt(x) => {stmts.push(Box::new(x));},
+                ModuleDec::Func(x) => {funcs.push(Box::new(x));},
+                ModuleDec::Struct(x) => {structs.push(Box::new(x));},
                 ModuleDec::TraitDec(x) => {traits.insert(x.name.clone(), x);},
                 ModuleDec::TraitImpl(x) => {trait_impls.push(x);}
             };
@@ -178,7 +181,8 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
 
         return Module {
             imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
-            declarations: stmts,
+            functions: funcs,
+            structs: structs,
             traits: traits,
             trait_implementations: trait_impls
         };
@@ -964,10 +968,12 @@ pub mod expr_parsers {
             );
             let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
                 let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
-                for attribute in idents[1..idents.len()-1].iter() {
-                    tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
-                    attribute: attribute.clone()};
-                };
+                if idents.len() > 1 {
+                    for attribute in idents[1..idents.len()-1].iter() {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
+                        attribute: attribute.clone()};
+                    }
+                }
 
                 let rewritten = self.rewrite_access(tree_base, idents.get(idents.len()-1).unwrap().clone());
 
@@ -2361,10 +2367,11 @@ mod tests {
         let e = ParserContext::empty();
         let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
         check_match(module_str, module, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0)).0),
                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
             ),
+            structs: vec!(),
             imports: vec!(),
             traits: HashMap::new(),
             trait_implementations: vec!()
@@ -2376,10 +2383,11 @@ mod tests {
         let e = ParserContext::empty();
         let module_str = "import foo\nfn a() -> i64:\n return 0\n\nfn b() -> i64:\n return 1";
         check_match(module_str, module, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 Box::new(output(e.statement(PosStr::from("fn a() -> i64:\n return 0"), 0)).0),
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
+            structs: vec!(),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
             traits: HashMap::new(),
             trait_implementations: vec!()
@@ -2390,7 +2398,7 @@ mod tests {
         let parsed = module(PosStr::from(module_str)).unwrap();
         let import_id = parsed.1.data.imports[0].id;
         assert_eq!(parsed.1, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 wrap(Stmt::FunctionDecStmt{
                     name: Identifier::from("a"), 
                     args: vec!(),
@@ -2407,6 +2415,7 @@ mod tests {
                     return_type: Type::i64
                 })
             ),
+            structs: vec!(),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
             traits: HashMap::new(),
             trait_implementations: vec!()

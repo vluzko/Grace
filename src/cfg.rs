@@ -77,12 +77,17 @@ impl Cfg {
 /// Add the contents of a module to a CFG
 pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
     let mut cfg_map = HashMap::new();
-    for decl in &module.data.declarations {
+    for decl in &module.data.functions {
         match decl.data {
             Stmt::FunctionDecStmt{ref name, ref block, ..} => {
                 let cfg = block_to_cfg(block, context, Cfg::empty(), None).0;
                 cfg_map.insert(name.clone(), cfg);
             },
+            _ => panic!()
+        }
+    }
+    for decl in &module.data.structs {
+        match decl.data {
             Stmt::StructDec{..} => {},
             _ => panic!()
         }

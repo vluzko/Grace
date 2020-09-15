@@ -135,7 +135,11 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
         }
     }
 
-    for declaration in &module.data.declarations {
+    for declaration in &module.data.functions {
+        functions.push(handle_declaration(declaration, context, cfg_map));
+    }
+
+    for declaration in &module.data.structs {
         functions.push(handle_declaration(declaration, context, cfg_map));
     }
 
@@ -616,11 +620,13 @@ mod tests {
 
         let (module, context, cfg_map, llr) = compiler_layers::to_llr(file_contents.as_bytes());
         let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
-        assert_eq!(func_names, vec!("teststruct".to_string()));
+        assert_eq!(func_names, vec!("teststruct".to_string(), "call_trait_func".to_string()));
 
         let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();;
-        assert_eq!(trait_impl_names, vec!("testtrait.teststruct.a".to_string()));
+        assert_eq!(trait_impl_names, vec!("testtrait.teststruct.baz".to_string()));
+        println!("{:?}", llr);
     }
+
 
     #[cfg(test)]
     mod exprs {

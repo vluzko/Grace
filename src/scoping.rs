@@ -289,6 +289,9 @@ impl Context {
             None => {
                 // Check if this is a trait access
                 let mut possible_traits = vec!();
+                println!("self.traits is {:?}", name);
+                println!("self.traits is {:?}", self.traits);
+                println!("self.traits is {:?}", self.trait_implementations);
 
                 for (trait_name, trait_struct) in self.traits.iter() {
                     // Check if this trait has a function with the desired name.
@@ -311,7 +314,7 @@ impl Context {
                 else if possible_traits.len() > 1 {
                     panic!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    panic!("No matching attributed found for: {:?}, {:?}", base_type, name);
+                    panic!("No matching attribute found for: {:?}, {:?}", base_type, name);
                 }
             }
         }
@@ -440,15 +443,19 @@ impl GetContext for Node<Module> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let mut new_scope = Scope::child(parent_id);
         
-        for stmt in &self.data.declarations {
+        for stmt in &self.data.functions {
+            new_scope.append_declaration(&stmt.data.get_name(), &stmt);
+        }
+        
+        for stmt in &self.data.structs {
             new_scope.append_declaration(&stmt.data.get_name(), &stmt);
         }
 
         let scope_id = context.new_scope(new_scope);
         self.scope = scope_id;
-
         let mut new_context = context;
-        for stmt in self.data.declarations.iter_mut() {
+
+        for stmt in self.data.structs.iter_mut() {
             new_context = stmt.scopes_and_types(scope_id, new_context).0;
         }
 
@@ -458,8 +465,6 @@ impl GetContext for Node<Module> {
         }
 
         // Add all trait implementations to the context.
-        // let mut ambiguous_names = HashMap::new();
-
         for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
             assert!(self.data.traits.contains_key(&trait_name));
             let trait_dec = self.data.traits.get(&trait_name).unwrap();
@@ -493,6 +498,10 @@ impl GetContext for Node<Module> {
             new_context.trait_implementations.insert((trait_name.clone(), alias_type), decs_map);
         }
 
+        for stmt in self.data.functions.iter_mut() {
+            new_context = stmt.scopes_and_types(scope_id, new_context).0;
+        }
+
         return (new_context, Type::empty);
     }
 
@@ -502,7 +511,10 @@ impl GetContext for Node<Module> {
             let t = context.get_type(self.scope, &x);
             (x, t)
         }).collect();
-        for stmt in &self.data.declarations {
+        for stmt in &self.data.functions {
+            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
+        }
+        for stmt in &self.data.structs {
             with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
         }
         return with_types;
@@ -949,7 +961,7 @@ mod test {
         let compilation = compiler_layers::Compilation::compile(
             &file_name);
         let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
-        let first_func_id = compiled_module.ast.data.declarations.get(0).unwrap().id;
+        let first_func_id = compiled_module.ast.data.functions.get(0).unwrap().id;
         let actual_type = compiled_module.context.type_map.get(&first_func_id).unwrap();
         let expected_type = Type::Function(vec!((Identifier::from("arg"), Type::i32)), Box::new(Type::i32));
         assert_eq!(&expected_type, actual_type);

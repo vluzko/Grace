@@ -29,8 +29,9 @@ impl <T> Node<T> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
-    pub declarations: Vec<Box<Node<Stmt>>>,
+    pub functions: Vec<Box<Node<Stmt>>>,
     pub imports: Vec<Box<Import>>,
+    pub structs: Vec<Box<Node<Stmt>>>,
     // Map from trait_name to trait
     pub traits: HashMap<Identifier, Trait>,
     // (trait_name, internal_type_name (often a struct name), function_declarations)

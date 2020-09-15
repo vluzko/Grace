@@ -27,7 +27,7 @@ use typing::{
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;
-use general_utils::{extend_map, get_next_id};
+use general_utils::{extend_map, get_next_id, join as join_vec};
 
 
 #[derive(Debug, Clone)]
@@ -56,10 +56,15 @@ impl CompiledModule {
     pub fn get_type(&self) -> Type {
         let mut attribute_map = BTreeMap::new();
         let mut attribute_order = vec!();
-        for func_dec in &self.ast.data.declarations {
+        for func_dec in &self.ast.data.functions {
             let func_type = self.context.type_map.get(&func_dec.id).unwrap().clone();
             attribute_order.push(func_dec.data.get_name());
             attribute_map.insert(func_dec.data.get_name(), func_type);
+        }
+        for struct_dec in &self.ast.data.structs {
+            let struct_type = self.context.type_map.get(&struct_dec.id).unwrap().clone();
+            attribute_order.push(struct_dec.data.get_name());
+            attribute_map.insert(struct_dec.data.get_name(), struct_type);
         }
 
         return Type::Record(attribute_order, attribute_map);
@@ -103,9 +108,13 @@ impl Compilation {
 
         // Add the types of all the imported functions to the record type.
         let mut record_type = BTreeMap::new();
-        for func_dec in &submodule.ast.data.declarations {
+        for func_dec in &submodule.ast.data.functions {
             let func_type = submodule.context.type_map.get(&func_dec.id).unwrap().clone();
             record_type.insert(func_dec.data.get_name(), func_type);
+        }
+        for struct_dec in &submodule.ast.data.structs {
+            let struct_type = submodule.context.type_map.get(&struct_dec.id).unwrap().clone();
+            record_type.insert(struct_dec.data.get_name(), struct_type);
         }
 
         // The type of the full module (including all the parent modules).
@@ -182,7 +191,9 @@ impl Compilation {
         };
 
         // A vector containing all the names of the imported functions.
-        let exports = submodule.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
+        let func_exports = submodule.ast.data.functions.iter().map(|x| x.data.get_name().clone()).collect();
+        let struct_exports = submodule.ast.data.structs.iter().map(|x| x.data.get_name().clone()).collect();
+        let exports = join_vec(func_exports, struct_exports);
 
         // Add the imported functions to scope.
         context.append_import(&import);

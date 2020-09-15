@@ -389,11 +389,8 @@ impl Typed<Node<Module>> for Node<Module> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Module> {
         let vec_stmt_rewrite = |x: Box<Node<Stmt>>| Box::new(x.type_based_rewrite(context));
 
-        let new_decs: Vec<Box<Node<Stmt>>> = self.data.declarations.into_iter().map(vec_stmt_rewrite).collect();
-
-        // let impl_map = |(trait_name, type_name, functions): (Identifier, Identifier, Vec<Node<Stmt>>)| (trait_name, type_name, functions.into_iter().map(vec_stmt_rewrite).collect()).collect();
-
-        // let new_imples = self.data.trait_implementations.into_iter().map(impl_map);
+        let new_func_decs: Vec<Box<Node<Stmt>>> = self.data.functions.into_iter().map(Box::new(vec_stmt_rewrite)).collect();
+        let new_struct_decs: Vec<Box<Node<Stmt>>> = self.data.structs.into_iter().map(Box::new(vec_stmt_rewrite)).collect();
 
         let mut new_impls = vec!();
         for (trait_name, type_name, functions) in self.data.trait_implementations.into_iter() {
@@ -403,7 +400,7 @@ impl Typed<Node<Module>> for Node<Module> {
 
         return Node{
             id: self.id,
-            data: Module{declarations: new_decs, imports: self.data.imports, traits: self.data.traits, trait_implementations: new_impls},
+            data: Module{functions: new_func_decs, structs: new_struct_decs, imports: self.data.imports, traits: self.data.traits, trait_implementations: new_impls},
             scope: self.scope
         };
     }

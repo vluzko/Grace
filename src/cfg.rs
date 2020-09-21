@@ -88,7 +88,9 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
     }
     for decl in &module.data.structs {
         match decl.data {
-            Stmt::StructDec{..} => {},
+            Stmt::StructDec{..} => {
+
+            },
             _ => panic!()
         }
     }

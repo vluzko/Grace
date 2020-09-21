@@ -390,7 +390,8 @@ impl Typed<Node<Module>> for Node<Module> {
         let vec_stmt_rewrite = |x: Box<Node<Stmt>>| Box::new(x.type_based_rewrite(context));
 
         let new_func_decs: Vec<Box<Node<Stmt>>> = self.data.functions.into_iter().map(Box::new(vec_stmt_rewrite)).collect();
-        let new_struct_decs: Vec<Box<Node<Stmt>>> = self.data.structs.into_iter().map(Box::new(vec_stmt_rewrite)).collect();
+        let vec_stmt_rewrite_2= |x: Box<Node<Stmt>>| Box::new(x.type_based_rewrite(context));
+        let new_struct_decs: Vec<Box<Node<Stmt>>> = self.data.structs.into_iter().map(Box::new(vec_stmt_rewrite_2)).collect();
 
         let mut new_impls = vec!();
         for (trait_name, type_name, functions) in self.data.trait_implementations.into_iter() {

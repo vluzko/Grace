@@ -21,10 +21,16 @@ pub enum Type {
     string,
     boolean,
     empty,
+    self_type,
+    // A sum type, e.g. a union type
     Sum(Vec<Type>),
+    // A product type, e.g. a tuple
     Product(Vec<Type>),
+    // A vector type.
     Vector(Box<Type>),
+    // A vector of argument names and types, and the return type
     Function(Vec<(Identifier, Type)>, Box<Type>),
+    // A referenced to a named type.
     Named(Identifier),
     // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
     Parameterized(Identifier, Vec<Type>),
@@ -439,7 +445,6 @@ pub trait GetContext {
     fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
-
 /// Create a Context containing all Grace builtins.
 pub fn builtin_context() -> (usize, Context) {
     let empty = Scope::empty();
@@ -691,6 +696,10 @@ impl Context {
                 }
             }
         }
+    }
+
+    pub fn resolve_self_type(&self, expr: &Node<Expr>) {
+        panic!()
     }
 
     /// Resolve an attribute access within the current context.
@@ -1428,6 +1437,7 @@ impl <'a> From<&'a Identifier> for Type {
             "ui64" => Type::ui64,
             "boolean" => Type::boolean,
             "string" => Type::string,
+            "any" => Type::Gradual(general_utils::get_next_grad()),
             _ => Type::Named(input.clone())
         };
     }
@@ -1435,18 +1445,7 @@ impl <'a> From<&'a Identifier> for Type {
 
 impl From<Identifier> for Type {
     fn from(input: Identifier) -> Self {
-        return match input.name.as_ref() {
-            "i32" => Type::i32,
-            "i64" => Type::i64,
-            "f32" => Type::f32,
-            "f64" => Type::f64,
-            "ui32" => Type::ui32,
-            "ui64" => Type::ui64,
-            "boolean" => Type::boolean,
-            "string" => Type::string,
-            "any" => Type::Gradual(general_utils::get_next_grad()),
-            _ => Type::Named(input)
-        };
+        return Type::from(&input);
     }
 }
 

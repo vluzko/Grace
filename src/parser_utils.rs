@@ -394,6 +394,7 @@ pub mod tokens {
     keyword!(BREAK, "break");
     keyword!(CONTINUE, "continue");
     keyword!(MATCH, "match");
+    keyword!(SELF, "self");
 
     // Syntax
     token!(COMMA, ",");

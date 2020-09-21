@@ -21,7 +21,7 @@ use scoping::{
     builtin_context,
 };
 
-use typing::TypeRewritable;
+use pre_cfg_rewrites::TypeRewritable;
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;

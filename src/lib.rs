@@ -22,7 +22,7 @@ pub mod grace_error;
 pub mod expression;
 pub mod bytecode;
 pub mod scoping;
-pub mod typing;
+pub mod pre_cfg_rewrites;
 pub mod compiler_layers;
 pub mod cfg;
 pub mod llr;

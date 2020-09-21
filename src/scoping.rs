@@ -6,7 +6,6 @@ use std::iter::FromIterator;
 
 use expression::*;
 use general_utils;
-// use typing::{Type, Refinement, Trait};
 use refinements::check_constraints;
 
 /// Types

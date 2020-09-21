@@ -1,0 +1,2 @@
+fn gradual_add(x: any, y: any) -> any:
+    return x+y

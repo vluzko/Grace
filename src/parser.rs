@@ -11,14 +11,15 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use typing::{Type, Refinement};
+use scoping::{Type, Refinement, Trait};
 use general_utils::{
     get_next_id,
     get_next_var,
     join
 };
 
-use self::stmt_parsers::struct_declaration_stmt;
+use self::stmt_parsers::{fn_dec_args};
+use self::type_parser::any_type;
 
 type StmtNode = Node<Stmt>;
 type ExprNode = Node<Expr>;
@@ -65,7 +66,8 @@ impl Parseable for Node<Expr> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserContext {
-    imported: HashMap<Identifier, Import>
+    imported: HashMap<Identifier, Import>,
+    can_use_self: bool
 }
 
 impl ParserContext {
@@ -112,7 +114,8 @@ impl ParserContext {
 
     pub fn empty() -> ParserContext {
         return ParserContext{
-            imported: HashMap::new()
+            imported: HashMap::new(),
+            can_use_self: false
         };
     }
 }
@@ -120,6 +123,13 @@ impl ParserContext {
 /// Match a module.
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let mut context = ParserContext::empty();
+
+    enum ModuleDec {
+        Func        (Node<Stmt>),
+        Struct      (Node<Stmt>),
+        TraitDec    (Trait),
+        TraitImpl   ((Identifier, Identifier, Vec<Node<Stmt>>))
+    };
 
     let just_imports = preceded!(input,
         opt!(between_statement),
@@ -141,32 +151,124 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
         _ => panic!()
     };
 
-    let statements = terminated!(remaining,
+    let w_self_type = ParserContext{
+        imported: context.imported.clone(),
+        can_use_self: true
+    };
+    let declarations = terminated!(remaining,
         many1c!(
             terminated!(
-                alt_complete!(m!(context.function_declaration_stmt, 0) | call!(struct_declaration_stmt, 0)),
-                
+                alt_complete!(
+                    map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Func(x)) |
+                    map!(m!(context.struct_declaration_stmt, 0), |x| ModuleDec::Struct(x)) |
+                    map!(m!(w_self_type.trait_parser), |x| ModuleDec::TraitDec(x)) |
+                    map!(m!(w_self_type.trait_impl), |x| ModuleDec::TraitImpl(x))
+                ),
                 between_statement
             )
         ),
         alt_complete!(eof!() | EMPTY)
     );
 
-    return fmap_node(statements, |x| Module{
-        imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(), 
-        declarations: x.into_iter().map(|y| Box::new(y)).collect()
+    return fmap_node(declarations, |just_decs| {
+        let mut traits = HashMap::new();
+        let mut funcs = vec!();
+        let mut structs = vec!();
+        let mut trait_impls = vec!();
+
+        for d in just_decs {
+            match d {
+                ModuleDec::Func(x) => {funcs.push(Box::new(x));},
+                ModuleDec::Struct(x) => {structs.push(Box::new(x));},
+                ModuleDec::TraitDec(x) => {traits.insert(x.name.clone(), x);},
+                ModuleDec::TraitImpl(x) => {trait_impls.push(x);}
+            };
+        }
+
+        return Module {
+            imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
+            functions: funcs,
+            structs: structs,
+            traits: traits,
+            trait_implementations: trait_impls
+        };
     });
 }
 
 /// Match an import statement.
 fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
-    let parse_result = preceded!(input, IMPORT, 
+    let parse_result = preceded!(input, IMPORT,
         pair!(
             separated_nonempty_list_complete!(DOT, IDENTIFIER), 
             optc!(preceded!(AS, IDENTIFIER))
         )
     );
     return fmap_iresult(parse_result, |(x, y)| Import{id: get_next_id(), path: x, alias: y, values: vec!()});
+}
+
+/// Parser for trait implementations.
+impl ParserContext {
+
+    /// Parse a trait declaration.
+    /// trait NameOfTrait:
+    ///     fn method_name: (arg1: type1, ...) -> return_type
+    ///     ...
+    fn trait_parser<'a>(&self, input: PosStr<'a>) -> Res<'a, Trait> {
+        let header = delimited!(input,
+            TRAIT, IDENTIFIER, tuple!(COLON, between_statement)
+        );
+
+        let body_parser = |i: PosStr<'a> | do_parse!(i,
+            indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
+            statements: separated_nonempty_list_complete!(
+                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))), m!(self.trait_method)) >>
+            (statements)
+        );
+
+        let full_res = chain(header, body_parser);
+
+
+        let trait_val = fmap_iresult(full_res, |(name, (signatures))| {
+            let mut m = HashMap::new();
+
+            for (k, v) in signatures {
+                m.insert(k, v);
+            }
+            return Trait{
+                name: name,
+                functions: m
+            }
+        });
+
+        return trait_val;
+    }
+
+    /// Parse a single function description in a trait.
+    /// fn method_name: (arg1: type1, ... -> return_type)
+    fn trait_method<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
+        let parse_result = tuple!(input,
+            delimited!(FN, IDENTIFIER, COLON),
+            delimited!(OPEN_PAREN, fn_dec_args, CLOSE_PAREN),
+            preceded!(TARROW, any_type)
+        );
+
+        return fmap_iresult(parse_result, |(name, args, ret)| (name, Type::Function(args, Box::new(ret))));
+    }
+
+
+    fn trait_impl<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
+        let header = tuple!(input, preceded!(IMPL, IDENTIFIER), delimited!(FOR, IDENTIFIER, terminated!(COLON, between_statement)));
+        let body_parser = |i: PosStr<'a> | do_parse!(i,
+            indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
+            declarations: separated_nonempty_list_complete!(
+                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))),
+                m!(self.function_declaration_stmt, indent)) >>
+            (declarations)
+        );
+        
+        let full_res = chain(header, body_parser);
+        return fmap_iresult(full_res, |((trait_name, struct_name), declarations)| (trait_name, struct_name, declarations));
+    }
 }
 
 /// All statement parsers.
@@ -296,6 +398,59 @@ pub mod stmt_parsers {
             });
         }
 
+        pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
+            let header = tuple!(input,
+                delimited!(
+                    STRUCT,
+                    IDENTIFIER,
+                    terminated!(
+                        COLON,
+                        between_statement
+                    )
+                ),
+                many0c!(inline_whitespace_char)
+            );
+    
+            // Horrifying? Yes.
+            let result = match header {
+                Ok((i, o)) => {
+                    let new_indent = o.1.len();
+                    if new_indent > indent {
+                        let rest = tuple!(i,
+                             terminated!(
+                                tuple!(
+                                    IDENTIFIER,
+                                    preceded!(COLON, m!(self.parse_type))
+                                ),
+                                between_statement
+                            ), many1c!(
+                                terminated!(
+                                    indented!(tuple!(
+                                        IDENTIFIER,
+                                        preceded!(COLON, m!(self.parse_type))
+                                    ), new_indent),
+                                    between_statement
+                                )
+                            )
+                        );
+                        match rest {
+                            Ok((i, mut r)) => {
+                                r.1.insert(0, r.0);
+                                Ok((i, (o.0, r.1)))
+                            },
+                            Err(x) => Err(x)
+                        }
+                    } else {
+                        // TODO: Return an indentation error.
+                        panic!()
+                    }
+                },
+                Err(x) => Err(x)
+            };
+    
+            return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
+        }
+
         /// Match an if statement.
         fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
             let parse_result = tuple!(input,
@@ -381,7 +536,7 @@ pub mod stmt_parsers {
     }
 
     /// Match the standard arguments in a function declaration.
-    fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
+    pub fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
         let result = separated_list_complete!(input,
             COMMA,
             tuple!(
@@ -393,59 +548,6 @@ pub mod stmt_parsers {
             )
         );
         return result;
-    }
-
-    pub fn struct_declaration_stmt<'a>(input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
-        let header = tuple!(input,
-            delimited!(
-                STRUCT,
-                IDENTIFIER,
-                terminated!(
-                    COLON,
-                    between_statement
-                )
-            ),
-            many0c!(inline_whitespace_char)
-        );
-
-        // Horrifying? Yes.
-        let result = match header {
-            Ok((i, o)) => {
-                let new_indent = o.1.len();
-                if new_indent > indent {
-                    let rest = tuple!(i,
-                         terminated!(
-                            tuple!(
-                                IDENTIFIER,
-                                preceded!(COLON, any_type)
-                            ),
-                            between_statement
-                        ), many1c!(
-                            terminated!(
-                                indented!(tuple!(
-                                    IDENTIFIER,
-                                    preceded!(COLON, any_type)
-                                ), new_indent),
-                                between_statement
-                            )
-                        )
-                    );
-                    match rest {
-                        Ok((i, mut r)) => {
-                            r.1.insert(0, r.0);
-                            Ok((i, (o.0, r.1)))
-                        },
-                        Err(x) => Err(x)
-                    }
-                } else {
-                    // TODO: Return an indentation error.
-                    panic!()
-                }
-            },
-            Err(x) => Err(x)
-        };
-
-        return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 
     /// Match a break statement.
@@ -587,7 +689,8 @@ pub mod stmt_parsers {
         #[test]
         fn parse_struct_dec() {
             let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
-            check_match(input, |x| struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
+            let e = ParserContext::empty();
+            check_match(input, |x| e.struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
                 name: Identifier::from("A"),
                 fields: vec!(
                     (Identifier::from("x"), Type::i32),
@@ -873,10 +976,12 @@ pub mod expr_parsers {
             );
             let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
                 let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
-                for attribute in idents[1..idents.len()-1].iter() {
-                    tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
-                    attribute: attribute.clone()};
-                };
+                if idents.len() > 1 {
+                    for attribute in idents[1..idents.len()-1].iter() {
+                        tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
+                        attribute: attribute.clone()};
+                    }
+                }
 
                 let rewritten = self.rewrite_access(tree_base, idents.get(idents.len()-1).unwrap().clone());
 
@@ -1909,6 +2014,24 @@ pub mod type_parser {
     use self::expr_parsers::{bool_expr, int_expr, float_expr};
 
     type JustExpr<'a> = IResult<PosStr<'a>, ExprNode>;
+
+    impl ParserContext {
+        pub fn parse_type<'a>(&self, input: PosStr<'a>) -> TypeRes<'a> {
+            if self.can_use_self {
+                return with_self(input);
+            } else {
+                return any_type(input.clone());
+            }
+        }
+    }
+
+    pub fn with_self<'a>(input: PosStr<'a>) -> TypeRes {
+        return alt_complete!(input,
+            map!(SELF, |x| Type::self_type) |
+            any_type
+        );
+    }
+
     /// Parse a type.
     pub fn any_type<'a>(input: PosStr<'a>) -> TypeRes {
         return alt_complete!(input, product_type | sum_type);
@@ -1948,7 +2071,7 @@ pub mod type_parser {
     }
 
     pub fn parameterized_type<'a>(input: PosStr<'a>) -> TypeRes {
-        let result = tuple!(input, 
+        let result = tuple!(input,
             IDENTIFIER,
             optc!(delimited!(
                 LANGLE,
@@ -2074,7 +2197,6 @@ pub mod type_parser {
         ));
         return node;
     }
-    
 
     #[cfg(test)]
     mod test {
@@ -2270,11 +2392,14 @@ mod tests {
         let e = ParserContext::empty();
         let module_str = "fn a():\n return 0\n\nfn b():\n return 1";
         check_match(module_str, module, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 Box::new(output(e.statement(PosStr::from("fn a():\n return 0"), 0)).0),
                 Box::new(output(e.statement(PosStr::from("fn b():\n return 1"), 0)).0)
             ),
-            imports: vec!()
+            structs: vec!(),
+            imports: vec!(),
+            traits: HashMap::new(),
+            trait_implementations: vec!()
         }))
     }
 
@@ -2283,11 +2408,14 @@ mod tests {
         let e = ParserContext::empty();
         let module_str = "import foo\nfn a() -> i64:\n return 0\n\nfn b() -> i64:\n return 1";
         check_match(module_str, module, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 Box::new(output(e.statement(PosStr::from("fn a() -> i64:\n return 0"), 0)).0),
                 Box::new(output(e.statement(PosStr::from("fn b() -> i64:\n return 1"), 0)).0)
             ),
+            structs: vec!(),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("foo")), alias: None, values: vec!()})),
+            traits: HashMap::new(),
+            trait_implementations: vec!()
         }));
         
         // let e = ParserContext::empty();
@@ -2295,7 +2423,7 @@ mod tests {
         let parsed = module(PosStr::from(module_str)).unwrap();
         let import_id = parsed.1.data.imports[0].id;
         assert_eq!(parsed.1, Node::from(Module{
-            declarations: vec!(
+            functions: vec!(
                 wrap(Stmt::FunctionDecStmt{
                     name: Identifier::from("a"), 
                     args: vec!(),
@@ -2312,7 +2440,10 @@ mod tests {
                     return_type: Type::i64
                 })
             ),
+            structs: vec!(),
             imports: vec!(Box::new(Import{id: 0, path: vec!(Identifier::from("file_2")), alias: None, values: vec!()})),
+            traits: HashMap::new(),
+            trait_implementations: vec!()
         }));
     }        
 
@@ -2342,6 +2473,50 @@ mod tests {
         };
 
         check_match(" x=0\n y=true\n\n  \n", |x| e.block(x, 1), Node::from(exp_block));
+    }
+
+    #[test]
+    fn parse_struct_dec() {
+        let input = "struct A:\n  a: i64\n  b: i32";
+        let e = ParserContext::empty();
+        let expected = Stmt::StructDec{
+            name: Identifier::from("A"),
+            fields: vec!(
+                (Identifier::from("a"), Type::i64), (Identifier::from("b"), Type::i32)
+            )
+        };
+        check_data_no_update(input, |x| e.struct_declaration_stmt(x, 0), expected);
+    }
+
+    #[test]
+    fn parse_trait_dec() {
+        let mut m = HashMap::new();
+
+        m.insert(Identifier::from("ident1"), Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32)));
+        m.insert(Identifier::from("ident2"), Type::Function(vec!((Identifier::from("b"), Type::i64)), Box::new(Type::i64)));
+        let e = ParserContext::empty();
+        check_match("trait Trait:\n    fn ident1: (a: i32) -> i32\n    fn ident2: (b: i64) ->i64", |x| e.trait_parser(x), Trait{
+            name: Identifier::from("Trait"),
+            functions: m
+        })
+
+    }
+
+    #[test]
+    fn parse_trait_impl() {
+        let mut m = HashMap::new();
+
+        m.insert(Identifier::from("ident1"), Type::i32);
+        m.insert(Identifier::from("ident2"), Type::i32);
+        m.insert(Identifier::from("ident3"), Type::i32);
+        let e = ParserContext::empty();
+
+        let tiny_function = Node::<Stmt>::parse(PosStr::from("fn x() -> i32:\n    return 0"));
+
+        check_match("impl Foo for Baz:\n    fn x() -> i32:\n        return 0", |x| e.trait_impl(x),
+            (Identifier::from("Foo"), Identifier::from("Baz"), vec!(tiny_function))
+        )
+
     }
 
     #[cfg(test)]

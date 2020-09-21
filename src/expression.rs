@@ -1,11 +1,12 @@
 use std::fmt;
 use std::fmt::Display;
 use std::str::from_utf8;
+use std::collections::HashMap;
 use std::convert::From;
 
 use itertools::join;
 
-use typing::*;
+use scoping::{Type, Refinement, Trait};
 use position_tracker::PosStr;
 use general_utils;
 
@@ -26,10 +27,15 @@ impl <T> Node<T> {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
-    pub declarations: Vec<Box<Node<Stmt>>>,
-    pub imports: Vec<Box<Import>>
+    pub functions: Vec<Box<Node<Stmt>>>,
+    pub imports: Vec<Box<Import>>,
+    pub structs: Vec<Box<Node<Stmt>>>,
+    // Map from trait_name to trait
+    pub traits: HashMap<Identifier, Trait>,
+    // (trait_name, internal_type_name (often a struct name), function_declarations)
+    pub trait_implementations: Vec<(Identifier, Identifier, Vec<Node<Stmt>>)>
 }
 
 #[derive(Debug, Clone, Eq, Hash)]
@@ -91,6 +97,7 @@ pub enum Expr {
     FunctionCall    {function: Box<Node<Expr>>, args: Vec<Node<Expr>>, kwargs: Vec<(Identifier, Node<Expr>)>},
     StructLiteral   {base: Box<Node<Expr>>, fields: Vec<Node<Expr>>},
     AttributeAccess {base: Box<Node<Expr>>, attribute: Identifier},
+    TraitAccess     {base: Box<Node<Expr>>, trait_name: Identifier, attribute: Identifier},
     Index           {base: Box<Node<Expr>>, slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>},
     ModuleAccess    (usize, Vec<Identifier>),
     IdentifierExpr  (Identifier),
@@ -407,6 +414,16 @@ pub mod rust_trait_impls {
             }
         }
 
+        impl From<i32> for Node<Expr> {
+            fn from(input: i32) -> Self {
+                let expr: Expr = Expr::from(input);
+                return Node {
+                    id: general_utils::get_next_id(),
+                    data: expr,
+                    scope: 0
+                }
+            }
+        }
         impl From<i64> for Node<Expr> {
             fn from(input: i64) -> Self {
                 let expr: Expr = Expr::from(input);
@@ -417,7 +434,6 @@ pub mod rust_trait_impls {
                 }
             }
         }
-
         impl From<f64> for Node<Expr> {
             fn from(input: f64) -> Self {
                 let expr: Expr = Expr::from(input);
@@ -448,6 +464,11 @@ pub mod rust_trait_impls {
         impl From<bool> for Expr {
             fn from(input: bool) -> Self {
                 return Expr::Bool(input);
+            }
+        }
+        impl From<i32> for Expr {
+            fn from(input: i32) -> Self {
+                return Expr::Int(input.to_string());
             }
         }
         impl From<i64> for Expr {

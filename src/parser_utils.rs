@@ -157,8 +157,6 @@ macro_rules! w_followed (
     );
 );
 
-
-
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
     return tag!(input, " ");
@@ -180,7 +178,7 @@ pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let"];
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let", b"trait", b"impl"];
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
@@ -374,6 +372,8 @@ pub mod tokens {
     }
 
     // Keywords
+    keyword!(TRAIT, "trait");
+    keyword!(IMPL, "impl");
     keyword!(FN, "fn");
     keyword!(STRUCT, "struct");
     keyword!(IF, "if");
@@ -394,6 +394,7 @@ pub mod tokens {
     keyword!(BREAK, "break");
     keyword!(CONTINUE, "continue");
     keyword!(MATCH, "match");
+    keyword!(SELF, "self");
 
     // Syntax
     token!(COMMA, ",");
@@ -494,6 +495,17 @@ pub mod tokens {
 pub mod iresult_helpers {
 
     use super::*;
+
+    pub fn chain<'a, X, F, T>(res: Res<'a, X>, parser: F) -> Res<'a, (X, T)>
+        where F: Fn(PosStr<'a>) -> Res<'a, T> {
+            return match res {
+                Ok((i, o)) => match parser(i) {
+                    Ok((i_final, parser_o)) => Ok((i_final, (o, parser_o))),
+                    Err(e) => Err(e)
+                },
+                Err(e) => Err(e)
+            };
+    }
 
     /// Map the contents of an IResult.
     /// Rust functors plox
@@ -622,6 +634,7 @@ pub mod iresult_helpers {
         }
     }
 
+    /// Check that the parser applied to the input returns the expect result.
     pub fn check_match<'a, T>(input: &'a str, parser:  impl Fn(PosStr<'a>) -> Res<'a, T>, expected: T)
         where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
@@ -652,7 +665,7 @@ pub mod iresult_helpers {
         }
     }
 
-    /// Check just the data of the result of a parser. Skips the containing node and the update.
+    /// Check just the data of the result of a parser that includes an update. Skips the containing node and the update.
     pub fn check_data<'a, T, U>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, (Node<T>, U)>, expected: T)
     where T: Debug + PartialEq + Eq {
         let res = parser(PosStr::from(input));
@@ -661,6 +674,22 @@ pub mod iresult_helpers {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0.data);
                 assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
                 assert_eq!(o.0.data, expected, "Results were: {}\nInput was: {}", l_r, input);
+            },
+            Result::Err(e) => {
+                panic!("Error: {:?}.\nInput was: {}", e, input)
+            }
+        };
+    }
+
+    /// Check just the data of the result of a parser. Skips the containing node.
+    pub fn check_data_no_update<'a, T>(input: &'a str, parser: impl Fn(PosStr<'a>) -> Res<'a, Node<T>>, expected: T)
+    where T: Debug + PartialEq + Eq {
+        let res = parser(PosStr::from(input));
+        return match res {
+            Ok((i, o)) => {
+                let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.data);
+                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
+                assert_eq!(o.data, expected, "Results were: {}\nInput was: {}", l_r, input);
             },
             Result::Err(e) => {
                 panic!("Error: {:?}.\nInput was: {}", e, input)

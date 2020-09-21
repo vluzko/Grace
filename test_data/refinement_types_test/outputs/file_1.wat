@@ -12,13 +12,13 @@ i32.add
 )
 (export "require_ref" (func $require_ref))
 
-(func $call_require  (result i32) (local $b i32) (local $a i32)
+(func $call_require  (result i32) (local $b.26 i32) (local $a.26 i32)
 i32.const 1
-set_local $a
+set_local $a.26
 i32.const 2
-set_local $b
-get_local $a
-get_local $b
+set_local $b.26
+get_local $a.26
+get_local $b.26
 call $require_ref
 )
 (export "call_require" (func $call_require))

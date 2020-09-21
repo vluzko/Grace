@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::fmt::Debug;
 use std::io::prelude::*;
@@ -15,19 +15,17 @@ use expression::{
     Import
 };
 use scoping::{
+    Type,
     Context,
     GetContext,
     builtin_context,
 };
 
-use typing::{
-    Type,
-    Typed
-};
+use pre_cfg_rewrites::TypeRewritable;
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;
-use general_utils::{extend_map, get_next_id};
+use general_utils::{extend_map, get_next_id, join as join_vec};
 
 
 #[derive(Debug, Clone)]
@@ -56,10 +54,15 @@ impl CompiledModule {
     pub fn get_type(&self) -> Type {
         let mut attribute_map = BTreeMap::new();
         let mut attribute_order = vec!();
-        for func_dec in &self.ast.data.declarations {
+        for func_dec in &self.ast.data.functions {
             let func_type = self.context.type_map.get(&func_dec.id).unwrap().clone();
             attribute_order.push(func_dec.data.get_name());
             attribute_map.insert(func_dec.data.get_name(), func_type);
+        }
+        for struct_dec in &self.ast.data.structs {
+            let struct_type = self.context.type_map.get(&struct_dec.id).unwrap().clone();
+            attribute_order.push(struct_dec.data.get_name());
+            attribute_map.insert(struct_dec.data.get_name(), struct_type);
         }
 
         return Type::Record(attribute_order, attribute_map);
@@ -103,9 +106,13 @@ impl Compilation {
 
         // Add the types of all the imported functions to the record type.
         let mut record_type = BTreeMap::new();
-        for func_dec in &submodule.ast.data.declarations {
+        for func_dec in &submodule.ast.data.functions {
             let func_type = submodule.context.type_map.get(&func_dec.id).unwrap().clone();
             record_type.insert(func_dec.data.get_name(), func_type);
+        }
+        for struct_dec in &submodule.ast.data.structs {
+            let struct_type = submodule.context.type_map.get(&struct_dec.id).unwrap().clone();
+            record_type.insert(struct_dec.data.get_name(), struct_type);
         }
 
         // The type of the full module (including all the parent modules).
@@ -150,17 +157,15 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        // Create the initial context for the current module.
-        // let init_context = Context::new_context(init_scope, init_type_map);
-
         // 
-        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
-        let cfg_map = module_to_cfg(&parsed_module, &context);
-        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
+        let mut context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
+        let rewritten = parsed_module.type_based_rewrite(&mut context);
+        let cfg_map = module_to_cfg(&rewritten, &context);
+        let wasm = module_to_llr(&rewritten, &context, &cfg_map);
 
         // Put the results in the tree.
         let compiled = CompiledModule {
-            ast: parsed_module,
+            ast: rewritten,
             context: context,
             cfg_map: cfg_map,
             llr: wasm,
@@ -184,7 +189,9 @@ impl Compilation {
         };
 
         // A vector containing all the names of the imported functions.
-        let exports = submodule.ast.data.declarations.iter().map(|x| x.data.get_name().clone()).collect();
+        let func_exports = submodule.ast.data.functions.iter().map(|x| x.data.get_name().clone()).collect();
+        let struct_exports = submodule.ast.data.structs.iter().map(|x| x.data.get_name().clone()).collect();
+        let exports = join_vec(func_exports, struct_exports);
 
         // Add the imported functions to scope.
         context.append_import(&import);
@@ -307,15 +314,34 @@ fn default_imports() -> Vec<(Import, Type)> {
         (Identifier::from("value"), Type::i32)), 
         Box::new(Type::i32)
     );
-    let mut func_map = BTreeMap::new();
-    func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
-    func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
-    func_map.insert(Identifier::from("copy_many"), copy_type);
-    func_map.insert(Identifier::from("tee_memory"), tee_type);
+    let mut mem_management_func_map = BTreeMap::new();
+    mem_management_func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
+    mem_management_func_map.insert(Identifier::from("free_chunk"), alloc_and_free_type);
+    mem_management_func_map.insert(Identifier::from("copy_many"), copy_type);
+    mem_management_func_map.insert(Identifier::from("tee_memory"), tee_type);
 
-    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), func_map);
+    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), mem_management_func_map);
 
-    return vec!((mem_management, mem_type));
+    let bin_ops_id = get_next_id();
+
+    let binary_operations = Import{
+        id: bin_ops_id,
+        path: vec!(Identifier::from("gradual_binary_ops")),
+        alias: Some(Identifier::from(".gradual_binary_ops")),
+        values: vec!(Identifier::from("call_gradual"))
+    };
+    let call_gradual_type = Type::Function(vec!(
+        (Identifier::from("i"), Type::i32),
+        (Identifier::from("a"), Type::i32),
+        (Identifier::from("b"), Type::i32)), 
+        Box::new(Type::i32)
+    );
+    let mut bin_ops_func_map = BTreeMap::new();
+    bin_ops_func_map.insert(Identifier::from("call_gradual"), call_gradual_type.clone());
+
+    let binary_operations_type = Type::Module(vec!(Identifier::from("gradual_binary_ops")), bin_ops_func_map);
+
+    return vec!((mem_management, mem_type), (binary_operations, binary_operations_type));
 }
 
 fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
@@ -357,7 +383,7 @@ where T: Parseable, T: GetContext {
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context) 
-where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
+where T: Parseable, T: GetContext, T: TypeRewritable<T>, T: Debug {
     let (result, mut context): (T, Context) = to_context(input);
     let rewritten = result.type_based_rewrite(&mut context);
     return (rewritten, context);
@@ -381,6 +407,8 @@ mod tests {
     use std::fs::{
         read_to_string, read_dir
     };
+    use difference::{Difference, Changeset};
+    use regex::Regex;
 
     fn compile_folder(subfolder: &str) {
         let folder_path = format!("./test_data/{}", subfolder);
@@ -401,13 +429,27 @@ mod tests {
                 let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
                 let actual = read_to_string(output_file).unwrap();
                 let expected = read_to_string(expected_file).unwrap();
-                assert_eq!(actual, expected);
+                let changeset = Changeset::new(expected.as_str(), actual.as_str(), "");
+                let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
+                for diff in changeset.diffs {
+                    match diff {
+                        Difference::Same(_) => {},
+                        Difference::Rem(x) => panic!("Removed {:?} in {:?}", x, name),
+                        Difference::Add(added_string) => {
+                            // Check if the thing being added is a scope ID on the end
+                            // of a variable
+                            // Scope IDs aren't the same every time, so instead of comparing
+                            // the string, check that the diff is plausibly a scope_id
+                            assert!(scope_suffix_regex.is_match(added_string.as_str()), "Added {:?} in {:?}", added_string, name);
+                        }
+                    }
+                }
             }
         }
     }
 
     #[test]
-    fn simple_imports_compile_test() {
+    fn simple_imports_test() {
         compile_folder("simple_imports_test");
     }
 
@@ -417,13 +459,18 @@ mod tests {
     }
 
     #[test]
-    fn simple_ref_types_test() {
+    fn refinement_types_test() {
         compile_folder("refinement_types_test");
+    }
+
+    #[test]
+    fn gradual_add_test() {
+        compile_folder("gradual_add_test");
     }
 
     #[test]
     #[should_panic]
     fn refinement_failures_test() {
-        compile_folder("refinements_failure");
+        compile_folder("refinement_failures_test");
     }
 }

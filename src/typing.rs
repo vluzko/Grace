@@ -381,11 +381,11 @@ impl Type {
     }
 }
 
-pub trait Typed<T> {
+pub trait TypeRewritable<T> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> T;
 }
 
-impl Typed<Node<Module>> for Node<Module> {
+impl TypeRewritable<Node<Module>> for Node<Module> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Module> {
         let vec_stmt_rewrite = |x: Box<Node<Stmt>>| Box::new(x.type_based_rewrite(context));
 
@@ -407,7 +407,7 @@ impl Typed<Node<Module>> for Node<Module> {
     }
 }
 
-impl Typed<Node<Block>> for Node<Block> {
+impl TypeRewritable<Node<Block>> for Node<Block> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Block> {
         let new_stmts = self.data.statements.into_iter().map(|x| Box::new(x.type_based_rewrite(context))).collect();
 
@@ -429,7 +429,7 @@ impl Typed<Node<Block>> for Node<Block> {
     }
 }
 
-impl Typed<Node<Stmt>> for Node<Stmt> {
+impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Stmt> {
         let new_stmt = match self.data {
             Stmt::LetStmt {name, type_annotation, expression} => {
@@ -485,7 +485,7 @@ impl Typed<Node<Stmt>> for Node<Stmt> {
     }
 }
 
-impl Typed<Node<Expr>> for Node<Expr> {
+impl TypeRewritable<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self, context: &mut scoping::Context) -> Node<Expr> {
         let new_expr = match self.data {
             Expr::ComparisonExpr {left, right, operator} => {

@@ -22,7 +22,7 @@ use scoping::{
 
 use typing::{
     Type,
-    Typed
+    TypeRewritable
 };
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
@@ -385,7 +385,7 @@ where T: Parseable, T: GetContext {
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context) 
-where T: Parseable, T: GetContext, T: Typed<T>, T: Debug {
+where T: Parseable, T: GetContext, T: TypeRewritable<T>, T: Debug {
     let (result, mut context): (T, Context) = to_context(input);
     let rewritten = result.type_based_rewrite(&mut context);
     return (rewritten, context);

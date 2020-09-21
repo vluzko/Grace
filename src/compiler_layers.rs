@@ -15,15 +15,13 @@ use expression::{
     Import
 };
 use scoping::{
+    Type,
     Context,
     GetContext,
     builtin_context,
 };
 
-use typing::{
-    Type,
-    TypeRewritable
-};
+use typing::TypeRewritable;
 use cfg::{CfgMap, Cfg, module_to_cfg};
 use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;

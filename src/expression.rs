@@ -6,7 +6,7 @@ use std::convert::From;
 
 use itertools::join;
 
-use typing::*;
+use scoping::{Type, Refinement, Trait};
 use position_tracker::PosStr;
 use general_utils;
 

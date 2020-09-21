@@ -10,8 +10,7 @@ use petgraph::{Outgoing, visit::EdgeRef};
 
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
-use scoping::{Context, GetContext};
-use typing::Type;
+use scoping::{Context, GetContext, Type};
 
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.

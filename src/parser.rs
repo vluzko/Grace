@@ -71,47 +71,6 @@ pub struct ParserContext {
 }
 
 impl ParserContext {
-    pub fn block<'a>(&self, input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<Block>> {
-        let first_indent_parse = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
-        let full_indent = match first_indent_parse {
-            Ok((i, o)) => (i, o),
-            _ => panic!()
-        };
-
-        // Break if the block is not indented enough.
-        let parse_result = if full_indent.1.len() < indent {
-            // TODO: This will happen if the indentation level is too low. Throw a proper error.
-            Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
-        } else {
-            let expected_indent = full_indent.1.len();
-            // We end up reparsing the initial indent, but that's okay. The alternative is joining two
-            // vectors, which is much slower.
-            // TODO: See if we can clean this up with a separated_list_complete.
-            let statements = preceded!(input,
-                opt!(between_statement),
-                many1!(
-                    complete!(
-                        terminated!(
-                            indented!(m!(self.statement, expected_indent), expected_indent),
-                            between_statement
-                        )
-                    )
-                )
-            );
-            statements
-        };
-
-        return fmap_node(parse_result, |x| {
-            let mut statements = vec!();
-            // Add all the updates to the block. Updates always go before the statement that created them.
-            for (stmt, mut update) in x {
-                statements.append(&mut update);
-                statements.push(Box::new(stmt));
-            }
-            Block{statements}
-        });
-    }
-
     pub fn empty() -> ParserContext {
         return ParserContext{
             imported: HashMap::new(),
@@ -120,7 +79,7 @@ impl ParserContext {
     }
 }
 
-/// Match a module.
+/// Parse a module.
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     let mut context = ParserContext::empty();
 
@@ -195,7 +154,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
     });
 }
 
-/// Match an import statement.
+/// Parse an import statement.
 fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
     let parse_result = preceded!(input, IMPORT,
         pair!(
@@ -204,6 +163,50 @@ fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
         )
     );
     return fmap_iresult(parse_result, |(x, y)| Import{id: get_next_id(), path: x, alias: y, values: vec!()});
+}
+
+/// Parser for blocks
+impl ParserContext {
+    pub fn block<'a>(&self, input: PosStr<'a>, indent: usize) -> IResult<PosStr<'a>, Node<Block>> {
+        let first_indent_parse = preceded!(input, opt!(between_statement), many0c!(tag!(" ")));
+        let full_indent = match first_indent_parse {
+            Ok((i, o)) => (i, o),
+            _ => panic!()
+        };
+
+        // Break if the block is not indented enough.
+        let parse_result = if full_indent.1.len() < indent {
+            // TODO: This will happen if the indentation level is too low. Throw a proper error.
+            Result::Err(Err::Error(Context::Code(input, ErrorKind::Count)))
+        } else {
+            let expected_indent = full_indent.1.len();
+            // We end up reparsing the initial indent, but that's okay. The alternative is joining two
+            // vectors, which is much slower.
+            // TODO: See if we can clean this up with a separated_list_complete.
+            let statements = preceded!(input,
+                opt!(between_statement),
+                many1!(
+                    complete!(
+                        terminated!(
+                            indented!(m!(self.statement, expected_indent), expected_indent),
+                            between_statement
+                        )
+                    )
+                )
+            );
+            statements
+        };
+
+        return fmap_node(parse_result, |x| {
+            let mut statements = vec!();
+            // Add all the updates to the block. Updates always go before the statement that created them.
+            for (stmt, mut update) in x {
+                statements.append(&mut update);
+                statements.push(Box::new(stmt));
+            }
+            Block{statements}
+        });
+    }
 }
 
 /// Parser for trait implementations.
@@ -226,7 +229,6 @@ impl ParserContext {
         );
 
         let full_res = chain(header, body_parser);
-
 
         let trait_val = fmap_iresult(full_res, |(name, (signatures))| {
             let mut m = HashMap::new();
@@ -268,6 +270,90 @@ impl ParserContext {
         
         let full_res = chain(header, body_parser);
         return fmap_iresult(full_res, |((trait_name, struct_name), declarations)| (trait_name, struct_name, declarations));
+    }
+}
+
+/// Parser for struct declarations.
+impl ParserContext {
+    /// Parse a struct declaration.
+    pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
+        let header = delimited!(input,
+            STRUCT,
+            IDENTIFIER,
+            terminated!(
+                COLON,
+                between_statement
+            )
+        );
+
+        let field_parser = |i: PosStr<'a>| tuple!(i,
+            IDENTIFIER,
+            preceded!(COLON, m!(self.parse_type))
+        );
+
+        let body_parser = |i: PosStr<'a> | do_parse!(i,
+            indent: map!(many1c!(inline_whitespace_char), |x| x.len()) >>
+            fields: separated_nonempty_list_complete!(
+                tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))), field_parser) >>
+            (fields)
+        );
+
+        let full_res = chain(header, body_parser);
+        // println!("called");
+        let struct_dec = fmap_node(full_res, |(name, (fields))| {
+            // println!("{:?}", fields);
+            // panic!()
+            // let mut m = HashMap::new();
+
+            // for (k, v) in signatures {
+            //     m.insert(k, v);
+            // }
+            return Stmt::StructDec{
+                name: name,
+                fields: fields
+            }
+        });
+
+        return struct_dec;
+        // panic!()
+        // // Horrifying? Yes.
+        // let result = match header {
+        //     Ok((i, o)) => {
+        //         let new_indent = o.1.len();
+        //         if new_indent > indent {
+        //             let rest = tuple!(i,
+        //                     terminated!(
+        //                     tuple!(
+        //                         IDENTIFIER,
+        //                         preceded!(COLON, m!(self.parse_type))
+        //                     ),
+        //                     between_statement
+        //                 ), many1c!(
+        //                     terminated!(
+        //                         indented!(tuple!(
+        //                             IDENTIFIER,
+        //                             preceded!(COLON, m!(self.parse_type))
+        //                         ), new_indent),
+        //                         between_statement
+        //                     )
+        //                 )
+        //             );
+        //             match rest {
+        //                 Ok((i, mut r)) => {
+        //                     r.1.insert(0, r.0);
+        //                     Ok((i, (o.0, r.1)))
+        //                 },
+        //                 Err(x) => Err(x)
+        //             }
+        //         } else {
+        //             // TODO: Return an indentation error.
+        //             panic!()
+        //         }
+        //     },
+        //     Err(x) => Err(x)
+        // };
+
+        // return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 }
 
@@ -396,59 +482,6 @@ pub mod stmt_parsers {
 
                 return stmt;
             });
-        }
-
-        pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
-            let header = tuple!(input,
-                delimited!(
-                    STRUCT,
-                    IDENTIFIER,
-                    terminated!(
-                        COLON,
-                        between_statement
-                    )
-                ),
-                many0c!(inline_whitespace_char)
-            );
-    
-            // Horrifying? Yes.
-            let result = match header {
-                Ok((i, o)) => {
-                    let new_indent = o.1.len();
-                    if new_indent > indent {
-                        let rest = tuple!(i,
-                             terminated!(
-                                tuple!(
-                                    IDENTIFIER,
-                                    preceded!(COLON, m!(self.parse_type))
-                                ),
-                                between_statement
-                            ), many1c!(
-                                terminated!(
-                                    indented!(tuple!(
-                                        IDENTIFIER,
-                                        preceded!(COLON, m!(self.parse_type))
-                                    ), new_indent),
-                                    between_statement
-                                )
-                            )
-                        );
-                        match rest {
-                            Ok((i, mut r)) => {
-                                r.1.insert(0, r.0);
-                                Ok((i, (o.0, r.1)))
-                            },
-                            Err(x) => Err(x)
-                        }
-                    } else {
-                        // TODO: Return an indentation error.
-                        panic!()
-                    }
-                },
-                Err(x) => Err(x)
-            };
-    
-            return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
         }
 
         /// Match an if statement.
@@ -686,19 +719,6 @@ pub mod stmt_parsers {
             });
         }
 
-        #[test]
-        fn parse_struct_dec() {
-            let input = "struct A:  \n   \n\n  x: i32\n  y: i32\n";
-            let e = ParserContext::empty();
-            check_match(input, |x| e.struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
-                name: Identifier::from("A"),
-                fields: vec!(
-                    (Identifier::from("x"), Type::i32),
-                    (Identifier::from("y"), Type::i32)
-                )
-            }));
-        }
-        
         #[test]
         fn parse_if_stmt() {
             let e = ParserContext::empty();
@@ -2383,10 +2403,10 @@ mod property_based_tests {
 
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn parse_module() {
         let e = ParserContext::empty();
@@ -2486,6 +2506,17 @@ mod tests {
             )
         };
         check_data_no_update(input, |x| e.struct_declaration_stmt(x, 0), expected);
+
+        // Test 2
+        let input = "struct A:  \n   \n\n  x: i32\n  y: i32";
+        let e = ParserContext::empty();
+        check_match(input, |x| e.struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
+            name: Identifier::from("A"),
+            fields: vec!(
+                (Identifier::from("x"), Type::i32),
+                (Identifier::from("y"), Type::i32)
+            )
+        }));
     }
 
     #[test]

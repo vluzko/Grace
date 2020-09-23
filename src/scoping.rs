@@ -21,7 +21,7 @@ pub enum Type {
     string,
     boolean,
     empty,
-    self_type,
+    self_type(Box<Type>),
     // A sum type, e.g. a union type
     Sum(Vec<Type>),
     // A product type, e.g. a tuple
@@ -411,7 +411,11 @@ pub struct Scope {
     /// The identifiers declared in this scope, and raw pointers to the statements that created them.
     pub declarations: BTreeMap<Identifier, CanModifyScope>,
     /// The order in which each identifier was declared. (Important for blocks.)
-    pub declaration_order: BTreeMap<Identifier, usize>
+    pub declaration_order: BTreeMap<Identifier, usize>,
+    // The trait we're in, if we're in one.
+    pub maybe_trait: Option<Identifier>,
+    // The struct we're in, if we're in one.
+    pub maybe_struct: Option<Identifier>,
 }
 
 /// The full scoping and typing context for a compilation.
@@ -470,7 +474,9 @@ impl Scope {
         return Scope{
             parent_id: None,
             declarations: BTreeMap::new(),
-            declaration_order: BTreeMap::new()
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: None
         };
     }
 
@@ -479,7 +485,31 @@ impl Scope {
         return Scope{
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
-            declaration_order: BTreeMap::new()
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: None
+        };
+    }
+
+    /// Create a child of the given parent with a struct
+    pub fn child_struct_impl(parent_id: usize, structname: &Identifier) -> Scope {
+        return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: Some(structname.clone())
+        };
+    }
+
+    /// Create a child of the given parent with a trait and a struct
+    pub fn child_trait_impl(parent_id: usize, structname: &Identifier, traitname: &Identifier) -> Scope {
+        return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: Some(traitname.clone()),
+            maybe_struct: Some(structname.clone())
         };
     }
 
@@ -526,51 +556,6 @@ impl Context {
             traits: HashMap::new(),
             trait_implementations: HashMap::new()
         };
-    }
-
-    /// Record the type of a node.
-    pub fn add_type(&mut self, id: usize, t: Type) {
-        self.type_map.insert(id, t);
-    }
-
-    /// Define a named type.
-    pub fn define_type(&mut self, name: Identifier, t: Type) {
-        self.defined_types.insert(name.clone(), t);
-    }
-
-    /// Get the type of the identifier in the given scope.
-    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
-        let scope_mod = self.get_declaration(scope_id, name).unwrap();
-        let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) => {
-                self.type_map.get(id).unwrap().clone()
-            },
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
-        };
-        return t;
-    }
-
-    /// Get the type of the identifier in the given scope, except it never panics.
-    /// Use this one when checking whether to give an identifier a globally unique name.
-    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
-        let maybe_scope_mod = self.get_declaration(scope_id, name);
-        return match maybe_scope_mod ? {
-            CanModifyScope::Statement(_, ref id) => {
-                Some(self.type_map.get(id).unwrap().clone())
-            },
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
-        };
-    }
-
-    /// Get the type of the given node.
-    pub fn get_node_type(&self, node_id: usize) -> Type {
-        return self.type_map.get(&node_id).unwrap().clone();
-    }
-
-    pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        return self.defined_types.get(name).unwrap().clone();
     }
 
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
@@ -698,7 +683,7 @@ impl Context {
         }
     }
 
-    pub fn resolve_self_type(&self, expr: &Node<Expr>) {
+    pub fn resolve_self_type(&self, scope_id: usize) -> Type {
         panic!()
     }
 
@@ -794,6 +779,51 @@ impl Context {
         }
     }
 
+    /// Record the type of a node.
+    pub fn add_type(&mut self, id: usize, t: Type) {
+        self.type_map.insert(id, t);
+    }
+
+    /// Define a named type.
+    pub fn define_type(&mut self, name: Identifier, t: Type) {
+        self.defined_types.insert(name.clone(), t);
+    }
+
+    /// Get the type of the identifier in the given scope.
+    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
+        let scope_mod = self.get_declaration(scope_id, name).unwrap();
+        let t = match scope_mod {
+            CanModifyScope::Statement(_, ref id) => {
+                self.type_map.get(id).unwrap().clone()
+            },
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
+        };
+        return t;
+    }
+
+    /// Get the type of the identifier in the given scope, except it never panics.
+    /// Use this one when checking whether to give an identifier a globally unique name.
+    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
+        let maybe_scope_mod = self.get_declaration(scope_id, name);
+        return match maybe_scope_mod ? {
+            CanModifyScope::Statement(_, ref id) => {
+                Some(self.type_map.get(id).unwrap().clone())
+            },
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
+        };
+    }
+
+    /// Get the type of the given node.
+    pub fn get_node_type(&self, node_id: usize) -> Type {
+        return self.type_map.get(&node_id).unwrap().clone();
+    }
+
+    pub fn get_defined_type(&self, name: &Identifier) -> Type {
+        return self.defined_types.get(name).unwrap().clone();
+    }
+
 }
 
 impl CanModifyScope {
@@ -815,6 +845,7 @@ impl CanModifyScope {
         };
     }
 }
+
 
 impl GetContext for Node<Module> {
 
@@ -1005,7 +1036,13 @@ impl GetContext for Node<Stmt> {
             Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 match &type_annotation {
-                    Some(x) => assert!(t.is_compatible(x)),
+                    Some(x) => {
+                        let actual_type = match x {
+                            Type::self_type(a) => c.resolve_self_type(self.scope),
+                            b => b.clone()
+                        };
+                        assert!(c.check_subtype(&expression, &t, &actual_type));
+                    },
                     None => {}
                 };
 
@@ -1014,7 +1051,7 @@ impl GetContext for Node<Stmt> {
             Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
                 let (c, t) = expression.scopes_and_types(parent_id, context);
                 let expected_type = c.get_type(self.scope, name);
-                assert!(t.is_compatible(&expected_type));
+                assert!(c.check_subtype(&expression, &t, &expected_type));
                 (c, t)
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
@@ -1071,9 +1108,8 @@ impl GetContext for Node<Stmt> {
                 let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
                 assert_eq!(condition_type, Type::boolean);
 
-                let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                };
+                let block_scope = Scope::child(parent_id);
+
                 let scope_id = condition_context.new_scope(block_scope);
                 block.scopes_and_types(scope_id, condition_context)
             },
@@ -1081,9 +1117,7 @@ impl GetContext for Node<Stmt> {
                 let (mut new_context, condition_type) = condition.scopes_and_types(parent_id, context);
                 assert_eq!(condition_type, Type::boolean);
 
-                let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                };
+                let block_scope = Scope::child(parent_id); 
                 let scope_id = new_context.new_scope(block_scope);
                 let res = block.scopes_and_types(scope_id, new_context);
                 new_context = res.0;
@@ -1091,9 +1125,7 @@ impl GetContext for Node<Stmt> {
 
                 match else_block {
                     Some(b) => {
-                        let else_scope = Scope{
-                            parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                        };
+                        let else_scope = Scope::child(parent_id);
                         let else_scope_id = new_context.new_scope(else_scope);
                         let (else_context, else_type) = b.scopes_and_types(else_scope_id, new_context);
                         if_type = if_type.merge(&else_type);

@@ -2047,7 +2047,7 @@ pub mod type_parser {
 
     pub fn with_self<'a>(input: PosStr<'a>) -> TypeRes {
         return alt_complete!(input,
-            map!(SELF, |x| Type::self_type) |
+            map!(SELF, |x| Type::self_type(Box::new(Type::Undetermined))) |
             any_type
         );
     }

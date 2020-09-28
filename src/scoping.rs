@@ -773,33 +773,38 @@ impl Context {
         if expr_t == desired_type {
             return true;
         } else {
+            let unwrapped_self = match expr_t {
+                Type::self_type(x) => (**x).clone(),
+                x => x.clone()
+            };
             return match desired_type {
                 Type::Undetermined => true,
                 Type::empty => false,
-                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match expr_t {
+                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match unwrapped_self {
                     Type::Refinement(ref base, ..) => self.check_subtype(expr, base, desired_type),
-                    Type::Gradual(id) => self.update_gradual(*id, desired_type),
+                    Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
                     x => x.has_simple_conversion(desired_type)
                 },
-                Type::Product(ref types) => match expr_t {
+                Type::Product(ref types) => match &unwrapped_self {
                     Type::Product(ref expr_types) => expr_types.iter().enumerate().all(|(i, x)| self.check_subtype(expr, x, &types[i])),
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
-                Type::Function(ref args, ref ret) => match expr_t {
+                Type::Function(ref args, ref ret) => match &unwrapped_self {
                     Type::Function(ref e_args, ref e_ret) => {
                         let args_match = args.iter().enumerate().all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
                         args_match && self.check_subtype(expr, ret, e_ret)
                     },
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
-                Type::Vector(ref t) => match expr_t {
+                Type::Vector(ref t) => match &unwrapped_self {
                     Type::Vector(ref e_t) => self.check_subtype(expr, e_t, t),
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
                 Type::Refinement(_, ref d_conds) => check_constraints(expr.scope, self, d_conds.clone()),
-                Type::Gradual(id) => self.update_gradual(*id, expr_t),
-                Type::Named(..) => desired_type == expr_t,
-                _ => panic!()
+                Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
+                Type::Named(..) => desired_type == &unwrapped_self,
+                Type::self_type(x) => self.check_subtype(expr, &unwrapped_self, x),
+                x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x)
             };
         }
     }

@@ -542,6 +542,8 @@ impl Context {
             trait_implementations: HashMap::new()
         };
     }
+
+    /// Create a new Context.
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scope_map = HashMap::new();
@@ -558,18 +560,17 @@ impl Context {
         };
     }
 
+    /// Get a scope by its ID.
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
         return self.scopes.get(&scope_id).unwrap();
     }
 
+    /// Get a mutable reference to a Scope.
     pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
         return self.scopes.get_mut(&scope_id).unwrap();
     }
 
-    pub fn add_scope(&mut self, scope_id: usize, scope: Scope) {
-        self.scopes.insert(scope_id, scope);
-    }
-
+    /// Create a new scope, returning the ID.
     pub fn new_scope(&mut self, scope: Scope) -> usize {
         let scope_id = general_utils::get_next_scope_id();
         self.scopes.insert(scope_id, scope);
@@ -622,6 +623,18 @@ impl Context {
                 None => panic!()
             };
         }
+    }
+
+    pub fn get_struct_and_trait(&self, scope_id: usize) -> (Option<Identifier>, Option<Identifier>) {
+        let initial_scope = self.scopes.get(&scope_id).unwrap();
+        return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
+            (initial_scope.maybe_struct.clone(), initial_scope.maybe_trait.clone())
+        } else {
+            match initial_scope.parent_id {
+                Some(id) => self.get_struct_and_trait(id),
+                None => (None, None)
+            }
+        };
     }
 
     pub fn print_all_variables(&self) -> Vec<Identifier> {
@@ -686,7 +699,13 @@ impl Context {
     /// Modify a Type::Self so it contains whatever Self actually is.
     pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
         return match base_type {
-            Type::self_type(t) => panic!(),
+            Type::self_type(t) => {
+                let (struct_name, trait_name) = self.get_struct_and_trait(scope_id);
+                match struct_name {
+                    Some(x) => Type::self_type(Box::new(Type::Named(x))),
+                    None => panic!("Type error: Self used outside of a method implementation.")
+                }
+            },
             t => t.clone()
         };
     }
@@ -886,15 +905,19 @@ impl GetContext for Node<Module> {
         // Add all trait implementations to the context.
         for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
             assert!(self.data.traits.contains_key(&trait_name));
+
+            // Create the scope for this trait implementation
+            let implementation_scope = Scope::child_trait_impl(scope_id, struct_name, trait_name);
+            let impl_scope_id = new_context.new_scope(implementation_scope);
+
             let trait_dec = self.data.traits.get(&trait_name).unwrap();
-            let mut struct_type = new_context.get_type(scope_id, struct_name).clone();
-            let mut existing_attributes = struct_type.all_attributes();
 
             // The names of functions the trait needs implementations for.
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
+
             let mut decs_map = HashMap::new();
             for dec in decs.iter_mut() {
-                let res = dec.scopes_and_types(scope_id, new_context);
+                let res = dec.scopes_and_types(impl_scope_id, new_context);
                 new_context = res.0;
                 let func_type = res.1;
                 let func_name = dec.data.get_name();

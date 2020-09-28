@@ -683,8 +683,12 @@ impl Context {
         }
     }
 
-    pub fn resolve_self_type(&self, scope_id: usize) -> Type {
-        panic!()
+    /// Modify a Type::Self so it contains whatever Self actually is.
+    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
+        return match base_type {
+            Type::self_type(t) => panic!(),
+            t => t.clone()
+        };
     }
 
     /// Resolve an attribute access within the current context.
@@ -710,6 +714,7 @@ impl Context {
         };
     }
 
+    /// Get the return type of a binary operator.
     pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
         return match op {
             // TODO: 540: Update left and right with an "addable" constraint.
@@ -730,6 +735,7 @@ impl Context {
         };
     }
 
+    /// Update a gradual type with a new constraint.
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
         let maybe_constraints = self.gradual_constraints.get_mut(&gradual_id);
         match maybe_constraints {
@@ -1034,13 +1040,10 @@ impl GetContext for Node<Stmt> {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
-                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context);
                 match &type_annotation {
-                    Some(x) => {
-                        let actual_type = match x {
-                            Type::self_type(a) => c.resolve_self_type(self.scope),
-                            b => b.clone()
-                        };
+                    Some(ref x) => {
+                        let actual_type = c.resolve_self_type(x, self.scope);
                         assert!(c.check_subtype(&expression, &t, &actual_type));
                     },
                     None => {}
@@ -1049,7 +1052,7 @@ impl GetContext for Node<Stmt> {
                 (c, t)
             },
             Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
-                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context);
                 let expected_type = c.get_type(self.scope, name);
                 assert!(c.check_subtype(&expression, &t, &expected_type));
                 (c, t)
@@ -1059,7 +1062,16 @@ impl GetContext for Node<Stmt> {
                 let mut new_scope = Scope::child(parent_id);
 
                 // Copy the types for non-keyword arguments
-                let mut arg_types = args.clone();
+                let mut arg_types = vec!();
+
+                for (key, t) in args.iter() {
+                    let resolved = context.resolve_self_type(t, self.scope);
+                    arg_types.push((key.clone(), resolved.clone()));
+
+                    // Add kwargs to
+                    let modification = CanModifyScope::Argument(resolved);
+                    new_scope.append_modification(key, modification);
+                }
 
                 // Evaluate scopes and types for all keyword expressions.
                 // This must be done *before* any arguments are actually added to scope,
@@ -1074,23 +1086,19 @@ impl GetContext for Node<Stmt> {
                     assert_eq!(*t, res.1);
 
                     // Add the type to the function type.
-                    arg_types.push((key.clone(), t.clone()));
+                    let resolved = context.resolve_self_type(t, self.scope);
+                    arg_types.push((key.clone(), resolved.clone()));
+
+                    // Add kwargs to
+                    let modification = CanModifyScope::Argument(resolved);
+                    new_scope.append_modification(key, modification);
                 }
 
-                let function_type = Type::Function(arg_types, Box::new(return_type.clone()));
+                let resolved_return_t = context.resolve_self_type(return_type, self.scope);
+
+                let function_type = Type::Function(arg_types, Box::new(resolved_return_t));
 
                 context.add_type(self.id, function_type.clone());
-
-                // Add arguments to declarations.
-                for (key, t) in args {
-                    let modification = CanModifyScope::Argument(t.clone());
-                    new_scope.append_modification(key, modification);
-                }
-
-                for (key, t, _) in kwargs {
-                    let modification = CanModifyScope::Argument(t.clone());
-                    new_scope.append_modification(key, modification);
-                }
 
                 let ret_modification = CanModifyScope::Return(return_type.clone());
                 new_scope.append_modification(&Identifier::from("$ret"), ret_modification);

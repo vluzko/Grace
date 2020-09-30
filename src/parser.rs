@@ -2037,6 +2037,7 @@ pub mod type_parser {
 
     impl ParserContext {
         pub fn parse_type<'a>(&self, input: PosStr<'a>) -> TypeRes<'a> {
+            println!("can_use_self: {}", self.can_use_self);
             if self.can_use_self {
                 return with_self(input);
             } else {

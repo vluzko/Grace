@@ -1523,6 +1523,8 @@ mod test {
     use compiler_layers;
     use difference::{Difference, Changeset};
     use regex::Regex;
+    use std::fs::File;
+    use std::io::Read;
 
     #[cfg(test)]
     mod expected_failures {
@@ -1579,6 +1581,18 @@ mod test {
             }
         }
     }
+
+    #[test]
+    // One trait, one struct, one implmentation block  that uses self, and a function that uses it
+    fn traits_and_self() {
+        let mut f = File::open("test_data/trait_impl_self_test.gr").expect("File not found");
+        let mut file_contents = String::new();
+        f.read_to_string(&mut file_contents).unwrap();
+
+        let compilation = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+
+    }
+
 
     #[cfg(test)]
     mod scope_generation {

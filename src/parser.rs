@@ -18,7 +18,6 @@ use general_utils::{
     join
 };
 
-use self::stmt_parsers::{fn_dec_args};
 use self::type_parser::any_type;
 
 type StmtNode = Node<Stmt>;
@@ -250,7 +249,7 @@ impl ParserContext {
     fn trait_method<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
         let parse_result = tuple!(input,
             delimited!(FN, IDENTIFIER, COLON),
-            delimited!(OPEN_PAREN, fn_dec_args, CLOSE_PAREN),
+            delimited!(OPEN_PAREN, m!(self.simple_args), CLOSE_PAREN),
             preceded!(TARROW, any_type)
         );
 
@@ -315,45 +314,6 @@ impl ParserContext {
         });
 
         return struct_dec;
-        // panic!()
-        // // Horrifying? Yes.
-        // let result = match header {
-        //     Ok((i, o)) => {
-        //         let new_indent = o.1.len();
-        //         if new_indent > indent {
-        //             let rest = tuple!(i,
-        //                     terminated!(
-        //                     tuple!(
-        //                         IDENTIFIER,
-        //                         preceded!(COLON, m!(self.parse_type))
-        //                     ),
-        //                     between_statement
-        //                 ), many1c!(
-        //                     terminated!(
-        //                         indented!(tuple!(
-        //                             IDENTIFIER,
-        //                             preceded!(COLON, m!(self.parse_type))
-        //                         ), new_indent),
-        //                         between_statement
-        //                     )
-        //                 )
-        //             );
-        //             match rest {
-        //                 Ok((i, mut r)) => {
-        //                     r.1.insert(0, r.0);
-        //                     Ok((i, (o.0, r.1)))
-        //                 },
-        //                 Err(x) => Err(x)
-        //             }
-        //         } else {
-        //             // TODO: Return an indentation error.
-        //             panic!()
-        //         }
-        //     },
-        //     Err(x) => Err(x)
-        // };
-
-        // return fmap_node(result, |x| Stmt::StructDec{name: x.0, fields: x.1});
     }
 }
 
@@ -451,7 +411,7 @@ pub mod stmt_parsers {
         pub fn function_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
             let arg_parser = |i: PosStr<'a>| tuple!(i,
                 IDENTIFIER,
-                preceded!(OPEN_PAREN, fn_dec_args),
+                preceded!(OPEN_PAREN, m!(self.simple_args)),
                 terminated!(m!(self.keyword_args), CLOSE_PAREN),
                 optc!(preceded!(
                     TARROW,
@@ -566,21 +526,21 @@ pub mod stmt_parsers {
                 None => vec!()
             });
         }
-    }
 
-    /// Match the standard arguments in a function declaration.
-    pub fn fn_dec_args<'a>(input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
-        let result = separated_list_complete!(input,
-            COMMA,
-            tuple!(
-                IDENTIFIER,
-                preceded!(
-                    COLON,
-                    terminated!(any_type, not!(complete!(EQUALS)))
+        /// Match the standard arguments in a function declaration.
+        pub fn simple_args<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
+            let result = separated_list_complete!(input,
+                COMMA,
+                tuple!(
+                    IDENTIFIER,
+                    preceded!(
+                        COLON,
+                        terminated!(m!(self.parse_type), not!(complete!(EQUALS)))
+                    )
                 )
-            )
-        );
-        return result;
+            );
+            return result;
+        }
     }
 
     /// Match a break statement.
@@ -669,9 +629,10 @@ pub mod stmt_parsers {
         #[test]
         fn parse_func_dec_parts() {
             // Args
-            let actual = output(fn_dec_args(PosStr::from("a: i32)")));
+            let e = ParserContext::empty();
+            let actual = output(e.simple_args(PosStr::from("a: i32)")));
             assert_eq!(vec!((Identifier::from("a"), Type::i32)), actual);
-            check_match("a: i32, b: i64", fn_dec_args, vec!(
+            check_match("a: i32, b: i64", |x| e.simple_args(x), vec!(
                 (Identifier::from("a"), Type::i32),
                 (Identifier::from("b"), Type::i64)
             ));
@@ -682,7 +643,7 @@ pub mod stmt_parsers {
                    (Identifier::from("d"), Type::i32, (Node::from(7), vec!()))
             );
 
-            let e = ParserContext::empty();
+
             check_match(", c: i32=5, d: i32=7", |x| e.keyword_args(x), expected);
         }
        
@@ -2037,7 +1998,6 @@ pub mod type_parser {
 
     impl ParserContext {
         pub fn parse_type<'a>(&self, input: PosStr<'a>) -> TypeRes<'a> {
-            println!("can_use_self: {}", self.can_use_self);
             if self.can_use_self {
                 return with_self(input);
             } else {

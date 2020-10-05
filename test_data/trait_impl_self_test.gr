@@ -1,14 +1,14 @@
 trait testtrait:
-    fn baz: (w: i32,  x: i32, y: i32) -> i32
+    fn baz: (w: self,  x: i32, y: i32) -> i32
 
 struct teststruct:
     a: i32
     b: f64
 
 impl testtrait for teststruct:
-    fn baz (w: i32, x: i32, y: i32) -> i32:
+    fn baz (w: self, x: i32, y: i32) -> i32:
         return 7 + w.a
 
 fn call_trait_func():
-    foo = teststruct{0,1}
-    qux = foo.baz(7,8)
+    let foo = teststruct{0,1}
+    let qux = foo.baz(7,8)

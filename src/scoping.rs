@@ -655,12 +655,24 @@ impl Context {
     pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
 
         // Check if this is a direct attribute access
-        let direct_type = match base_type {
+        let unwrapped_self = match base_type {
+            Type::self_type(x) => *x.clone(),
+            x => x.clone()
+        };
+        let attribute_type = match &unwrapped_self {
             Type::Record(_, ref attributes) => attributes.get(name),
-            x => None
+            Type::Named(ref t_name) => {
+                let record_t = self.defined_types.get(t_name).unwrap();
+                println!("record type: {:?}", record_t);
+                match record_t {
+                    Type::Record(_, ref attributes) => attributes.get(name),
+                    _ => None
+                }
+            },
+            _ => None
         };
 
-        return match direct_type {
+        return match attribute_type {
             Some(x) => x.clone(),
             None => {
                 // Check if this is a trait access
@@ -674,13 +686,11 @@ impl Context {
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.
                         // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                        if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                        if self.trait_implementations.contains_key(&(trait_name.clone(), unwrapped_self.clone())) {
                             possible_traits.push(trait_struct);
                         }
                     }
                 }
-
-                // a.foo()
 
                 // Just resolve the trait.
                 if possible_traits.len() == 1 {
@@ -688,9 +698,9 @@ impl Context {
                     return possible_traits[0].functions.get(name).unwrap().clone();
                 }// TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
-                    panic!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
+                    panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    panic!("No matching attribute found for: {:?}, {:?}", base_type, name);
+                    panic!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", base_type, name);
                 }
             }
         }
@@ -908,7 +918,7 @@ impl GetContext for Node<Module> {
         }
 
         // Add all trait implementations to the context.
-        for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
+        for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter_mut() {
             assert!(self.data.traits.contains_key(&trait_name));
 
             // Create the scope for this trait implementation
@@ -920,8 +930,8 @@ impl GetContext for Node<Module> {
             // The names of functions the trait needs implementations for.
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
 
-            let mut decs_map = HashMap::new();
-            for dec in decs.iter_mut() {
+            let mut func_impls_map = HashMap::new();
+            for dec in func_impls.iter_mut() {
                 let res = dec.scopes_and_types(impl_scope_id, new_context);
                 new_context = res.0;
                 let func_type = res.1;
@@ -931,18 +941,19 @@ impl GetContext for Node<Module> {
                 assert!(need_impl.contains(&func_name));
                 // Check that the declaration type and the expected type are the same.
                 let expected_type = trait_dec.functions.get(&func_name).unwrap();
-                assert!(expected_type == &func_type);
+
+                assert!(expected_type == &func_type, "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type);
 
                 // Remove this function from the set of functions that need to be implemented.
                 need_impl.remove(&func_name);
 
-                decs_map.insert(func_name.clone(), dec.clone());
+                func_impls_map.insert(func_name.clone(), dec.clone());
             }
             // Demand that all methods of the trait have implementations.
             assert!(need_impl.len() == 0);
 
             let alias_type = Type::Named(struct_name.clone());
-            new_context.trait_implementations.insert((trait_name.clone(), alias_type), decs_map);
+            new_context.trait_implementations.insert((trait_name.clone(), alias_type), func_impls_map);
         }
 
         for stmt in self.data.functions.iter_mut() {
@@ -1384,31 +1395,6 @@ impl GetContext for Node<Expr> {
 
     fn get_true_declarations(&self, _context: &Context) -> HashSet<(Identifier, Type)> {
         panic!()
-    }
-}
-
-pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
-    panic!();
-    // Topological ordering of numeric types.
-    // i32, f32, i64, f64
-    // let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
-    // let indices = hashmap!{Type::i32 => 0, Type::f32 => 1, Type::i64 => 2, Type::f64 => 3};
-    // let t1 = &order[*indices.get(left_type).unwrap()];
-    // let t2 = &order[*indices.get(right_type).unwrap()];
-    // let join = general_utils::vec_c_int(t1, t2);
-    // return join[0].clone();
-}
-
-// TODO: Return an option.
-pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
-    let current_type = type_map.get(&expr.id).unwrap().clone();
-    if &current_type == new_type {
-        return expr.clone();
-    } else {
-        let operator = UnaryOperator::from(new_type);
-        return expr.replace(Expr::UnaryExpr{
-            operator, operand: Box::new(expr.clone())
-        });
     }
 }
 

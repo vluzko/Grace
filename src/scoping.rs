@@ -942,7 +942,26 @@ impl GetContext for Node<Module> {
                 // Check that the declaration type and the expected type are the same.
                 let expected_type = trait_dec.functions.get(&func_name).unwrap();
 
-                assert!(expected_type == &func_type, "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type);
+                match (expected_type, &func_type) {
+                    (Type::Function(ref args_1, ref ret_1), Type::Function(ref args_2, ref ret_2)) => {
+                        for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
+                            match (t1, t2) {
+                                (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
+                                    "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
+                                (x, y) => assert!(x == y,
+                                    "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
+                            };
+                        }
+                        match (&**ret_1, &**ret_2) {
+                            (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
+                                "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
+                            (x, y) => assert!(x == y,
+                                "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
+                        };
+                    },
+                    x => panic!("TYPE ERROR: Somehow got a non function type.")
+                }
+
 
                 // Remove this function from the set of functions that need to be implemented.
                 need_impl.remove(&func_name);

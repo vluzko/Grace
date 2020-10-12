@@ -637,7 +637,7 @@ mod tests {
 
         let (module, context, cfg_map, llr) = compiler_layers::to_llr(file_contents.as_bytes());
         let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
-        assert_eq!(func_names, vec!("teststruct".to_string(), "call_trait_func".to_string()));
+        assert_eq!(func_names, vec!("call_trait_func".to_string(), "teststruct".to_string()));
 
         let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();;
         assert_eq!(trait_impl_names, vec!("testtrait.teststruct.baz".to_string()));

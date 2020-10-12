@@ -957,14 +957,16 @@ pub mod expr_parsers {
             );
             let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
                 let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
-                if idents.len() > 1 {
+                let rewritten = if idents.len() > 1 {
                     for attribute in idents[1..idents.len()-1].iter() {
                         tree_base = Expr::AttributeAccess {base: Box::new(Node::from(tree_base)), 
                         attribute: attribute.clone()};
                     }
-                }
+                    self.rewrite_access(tree_base, idents.get(idents.len()-1).unwrap().clone())
+                } else {
+                    tree_base
+                };
 
-                let rewritten = self.rewrite_access(tree_base, idents.get(idents.len()-1).unwrap().clone());
 
                 let mut args = vec!();
                 let mut update = vec!();

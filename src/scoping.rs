@@ -1322,6 +1322,7 @@ impl GetContext for Node<Expr> {
             },
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
+                println!("Start of StructLiteral: Base is {:?}", base);
                 let (mut new_c, base_t) = base.scopes_and_types(parent_id, context);
                 for field in fields {
                     let res = field.scopes_and_types(parent_id, new_c);
@@ -1332,6 +1333,7 @@ impl GetContext for Node<Expr> {
             },
             Expr::AttributeAccess{ref mut base, ref attribute} => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context);
+                println!("Start of AttributeAccess: Base is {:?}", base);
                 let attr_t = new_c.resolve_attribute(&base_t, attribute);
                 (new_c, attr_t)
             },

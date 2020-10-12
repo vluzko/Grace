@@ -38,7 +38,7 @@ pub struct WASMFunc {
     pub name: String,
     pub args: Vec<(String, WASMType)>,
     pub locals: Vec<(String, WASMType)>,
-    pub result: WASMType,
+    pub result: Option<WASMType>,
     pub code: Vec<WASM>
 }
 
@@ -180,7 +180,7 @@ pub fn handle_declaration(declaration: &Node<Stmt>, context: &Context, cfg_map: 
                 name: name.name.clone(),
                 args: wasm_args,
                 locals: locals_with_wasm_types,
-                result: WASMType::from(return_type),
+                result: Option::<WASMType>::from(return_type),
                 code: block_llr
             };
             wasm_func
@@ -206,7 +206,7 @@ pub fn handle_declaration(declaration: &Node<Stmt>, context: &Context, cfg_map: 
                 name: name.name.clone(),
                 args: wasm_args,
                 locals: vec!((".x".to_string(), WASMType::i32)),
-                result: WASMType::i32,
+                result: Some(WASMType::i32),
                 code: block_llr
             };
             wasm_func                
@@ -237,7 +237,7 @@ pub fn handle_trait_func_dec(declaration: &Node<Stmt>, name_prefix: &String, con
                 name: name.name.clone(),
                 args: wasm_args,
                 locals: locals_with_wasm_types,
-                result: WASMType::from(return_type),
+                result: Option::<WASMType>::from(return_type),
                 code: block_llr
             };
             wasm_func
@@ -534,6 +534,24 @@ fn calculate_offset(name: &Identifier, order: &Vec<Identifier>, type_map: &BTree
 /// Implementations of Rust builtin traits.
 pub mod rust_trait_impls {
     use super::*;
+
+    impl From<&Type> for Option<WASMType> {
+        fn from(input: &Type) -> Self {
+            match &input {
+                Type::i32 => Some(WASMType::i32),
+                Type::i64 => Some(WASMType::i64),
+                Type::f32 => Some(WASMType::f32),
+                Type::f64 => Some(WASMType::f64),
+                Type::boolean => Some(WASMType::i32),
+                Type::Sum(..) => Some(WASMType::i32),
+                Type::Named(..) => Some(WASMType::i32),
+                Type::Refinement(ref base, ..) => Option::<WASMType>::from(&**base),
+                Type::Gradual(_) => Some(WASMType::i32),
+                Type::empty => None,
+                x => panic!("Tried to convert {:?} to WASM", x)
+            }
+        }
+    }
 
     impl From<&Type> for WASMType {
         fn from(input: &Type) -> Self {

@@ -831,6 +831,7 @@ impl Context {
 
     /// Get the type of the identifier in the given scope.
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
+        println!("Get_type: name is {:?} and print_all_variables is {:?}", name, self.print_all_variables());
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
             CanModifyScope::Statement(_, ref id) => {

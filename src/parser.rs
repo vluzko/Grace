@@ -832,9 +832,6 @@ pub mod expr_parsers {
                     let operator = ComparisonOperator::from(o.slice);
                     let (left, mut update) = x.0;
                     update.append(&mut u);
-                //     (Node::from(Expr::BinaryExpr {operator: op, left: Box::new(left), right: Box::new(right)}), update)
-                // },
-                    // let operator = ComparisonOperator::from(y.0);
                     (Node::from(Expr::ComparisonExpr{operator, left: Box::new(left), right: Box::new(right)}), update)
                 }
             };

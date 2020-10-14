@@ -18,7 +18,6 @@ use scoping::{
     Type,
     Context,
     GetContext,
-    builtin_context,
 };
 
 use pre_cfg_rewrites::TypeRewritable;
@@ -377,7 +376,7 @@ pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context)
 where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
-    let (id, init) = builtin_context();
+    let (id, init) = Context::builtin();
     let context = result.scopes_and_types(id, init).0;
     return (result, context);
 }

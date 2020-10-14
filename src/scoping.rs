@@ -1,7 +1,4 @@
-use std::collections::BTreeSet;
-use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, BTreeMap, HashSet, HashMap};
 use std::iter::FromIterator;
 
 use expression::*;
@@ -434,10 +431,11 @@ pub struct Context {
     pub defined_types: HashMap<Identifier, Type>,
     // A vector containing all the gradual types in context.
     pub gradual_constraints: HashMap<usize, Vec<Type>>,
-    // A vectgor of all the traits in context.
+    // A vector of all the traits in context.
     pub traits: HashMap<Identifier, Trait>,
-    // A map from tuples (trait_name, implementing_type) to [maps from method name to method definition]
-    pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Node<Stmt>>>
+    // The set of pairs (trait_name, type) available, where type implements trait_name
+    // (or the trait corresponding to trait_name, rather).
+    pub trait_implementations: HashSet<(Identifier, Type)>
 }
 
 pub trait GetContext {
@@ -447,25 +445,6 @@ pub trait GetContext {
 
     /// Get all *non-Argument* declarations.
     fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
-}
-
-/// Create a Context containing all Grace builtins.
-pub fn builtin_context() -> (usize, Context) {
-    let empty = Scope::empty();
-    let mut init_scopes = HashMap::new();
-    let id = general_utils::get_next_scope_id();
-    init_scopes.insert(id, empty);
-    let context = Context {
-        root_id: id, 
-        scopes: init_scopes, 
-        containing_scopes: HashMap::new(),
-        type_map: HashMap::new(), 
-        defined_types: HashMap::new(),
-        gradual_constraints: HashMap::new(),
-        traits: HashMap::new(),
-        trait_implementations: HashMap::new()
-    };
-    return (id, context);
 }
 
 impl Scope {
@@ -525,8 +504,43 @@ impl Scope {
     }
 }
 
-/// Scoping
+/// Constructors
 impl Context {
+
+    /// Create a context containing all builtin types and functions.
+    pub fn builtin() -> (usize, Context) {
+        let empty = Scope::empty();
+        let mut init_scopes = HashMap::new();
+        let id = general_utils::get_next_scope_id();
+        init_scopes.insert(id, empty);
+
+        let add_trait = Trait {
+            name: Identifier::from("Add"),
+            functions: hashmap!{
+                Identifier::from("add") => Type::Function(
+                    vec!(
+                        (Identifier::from("a"), Type::self_type(Box::new(Type::Undetermined))),
+                        (Identifier::from("a"), Type::self_type(Box::new(Type::Undetermined)))
+                    ),
+                    Box::new(Type::self_type(Box::new(Type::Undetermined)))
+                )
+            }
+        };
+
+        let context = Context {
+            root_id: id,
+            scopes: init_scopes,
+            containing_scopes: HashMap::new(),
+            type_map: HashMap::new(),
+            defined_types: HashMap::new(),
+            gradual_constraints: HashMap::new(),
+            traits: HashMap::new(),
+            trait_implementations: HashSet::new()
+        };
+        return (id, context);
+    }
+
+    /// Create a context that contains only an empty scope.
     pub fn empty() -> Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scopes = HashMap::new();
@@ -539,9 +553,15 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashMap::new()
+            trait_implementations: HashSet::new()
         };
     }
+
+}
+
+
+/// Scoping
+impl Context {
 
     /// Create a new Context.
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
@@ -556,7 +576,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashMap::new()
+            trait_implementations: HashSet::new()
         };
     }
 
@@ -677,16 +697,13 @@ impl Context {
             None => {
                 // Check if this is a trait access
                 let mut possible_traits = vec!();
-                println!("self.traits is {:?}", name);
-                println!("self.traits is {:?}", self.traits);
-                println!("self.traits is {:?}", self.trait_implementations);
 
                 for (trait_name, trait_struct) in self.traits.iter() {
                     // Check if this trait has a function with the desired name.
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.
                         // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                        if self.trait_implementations.contains_key(&(trait_name.clone(), unwrapped_self.clone())) {
+                        if self.trait_implementations.contains(&(trait_name.clone(), unwrapped_self.clone())) {
                             possible_traits.push(trait_struct);
                         }
                     }
@@ -730,7 +747,7 @@ impl Context {
             if trait_struct.functions.contains_key(name) {
                 // Check if base_type implements this trait.
                 // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                if self.trait_implementations.contains(&(trait_name.clone(), base_type.clone())) {
                     possible_traits.push(trait_struct);
                 }
             }
@@ -931,7 +948,6 @@ impl GetContext for Node<Module> {
             // The names of functions the trait needs implementations for.
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
 
-            let mut func_impls_map = HashMap::new();
             for dec in func_impls.iter_mut() {
                 let res = dec.scopes_and_types(impl_scope_id, new_context);
                 new_context = res.0;
@@ -966,14 +982,12 @@ impl GetContext for Node<Module> {
 
                 // Remove this function from the set of functions that need to be implemented.
                 need_impl.remove(&func_name);
-
-                func_impls_map.insert(func_name.clone(), dec.clone());
             }
             // Demand that all methods of the trait have implementations.
             assert!(need_impl.len() == 0);
 
             let alias_type = Type::Named(struct_name.clone());
-            new_context.trait_implementations.insert((trait_name.clone(), alias_type), func_impls_map);
+            new_context.trait_implementations.insert((trait_name.clone(), alias_type));
         }
 
         for stmt in self.data.functions.iter_mut() {
@@ -1693,7 +1707,7 @@ mod test {
                     Node::from(true)
                 ];
                 for literal in literals.iter_mut() {
-                    let (id, mut context) = builtin_context();
+                    let (id, mut context) = Context::builtin();
                     context = literal.scopes_and_types(id, context).0;
                     assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
                 }

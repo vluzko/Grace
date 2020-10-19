@@ -132,6 +132,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     // TODO: Once typeclasses are implemented, call the typeclass method with
                     // the operator, the left type, and the right type to figure out what all
                     // the other types need to be.
+
                     let merged_type = operator.get_return_types(&left_type, &right_type);
                     let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
                     let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
@@ -188,10 +189,6 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
         };
     }
 }
-
-
-
-
 
 
 #[cfg(test)]

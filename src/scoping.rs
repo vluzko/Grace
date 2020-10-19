@@ -557,12 +557,6 @@ impl Context {
         };
     }
 
-}
-
-
-/// Scoping
-impl Context {
-
     /// Create a new Context.
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
         let root_id = general_utils::get_next_scope_id();
@@ -579,7 +573,10 @@ impl Context {
             trait_implementations: HashSet::new()
         };
     }
+}
 
+/// Basic methods
+impl Context {
     /// Get a scope by its ID.
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
         return self.scopes.get(&scope_id).unwrap();
@@ -589,6 +586,56 @@ impl Context {
     pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
         return self.scopes.get_mut(&scope_id).unwrap();
     }
+
+    /// Record the type of a node.
+    pub fn add_type(&mut self, id: usize, t: Type) {
+        self.type_map.insert(id, t);
+    }
+
+    /// Define a named type.
+    pub fn define_type(&mut self, name: Identifier, t: Type) {
+        self.defined_types.insert(name.clone(), t);
+    }
+
+    /// Get the type associated with a particular name.
+    pub fn get_defined_type(&self, name: &Identifier) -> Type {
+        return self.defined_types.get(name).unwrap().clone();
+    }
+
+    /// Get the type of the identifier in the given scope.
+    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
+        let scope_mod = self.get_declaration(scope_id, name).unwrap();
+        let t = match scope_mod {
+            CanModifyScope::Statement(_, ref id) => {
+                self.type_map.get(id).unwrap().clone()
+            },
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
+        };
+        return t;
+    }
+
+    /// Get the type of the identifier in the given scope, except it never panics.
+    /// Use this one when checking whether to give an identifier a globally unique name.
+    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
+        let maybe_scope_mod = self.get_declaration(scope_id, name);
+        return match maybe_scope_mod ? {
+            CanModifyScope::Statement(_, ref id) => {
+                Some(self.type_map.get(id).unwrap().clone())
+            },
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
+            CanModifyScope::ImportedModule(ref _id) => panic!()
+        };
+    }
+
+    /// Get the type of the given node.
+    pub fn get_node_type(&self, node_id: usize) -> Type {
+        return self.type_map.get(&node_id).unwrap().clone();
+    }
+}
+
+/// Scoping
+impl Context {
 
     /// Create a new scope, returning the ID.
     pub fn new_scope(&mut self, scope: Scope) -> usize {
@@ -683,7 +730,6 @@ impl Context {
             Type::Record(_, ref attributes) => attributes.get(name),
             Type::Named(ref t_name) => {
                 let record_t = self.defined_types.get(t_name).unwrap();
-                println!("record type: {:?}", record_t);
                 match record_t {
                     Type::Record(_, ref attributes) => attributes.get(name),
                     _ => None
@@ -737,7 +783,7 @@ impl Context {
         };
     }
 
-    /// Resolve an attribute access within the current context.
+    /// Check if this is a trait method call or an attribute access.
     pub fn trait_information(&self, base_type: &Type, name: &Identifier) -> Option<Identifier> {
 
         let mut possible_traits = vec!();
@@ -758,6 +804,23 @@ impl Context {
             1 => Some(possible_traits[0].name.clone()),
             _ => panic!("Ambiguous trait")
         };
+    }
+
+    /// Check that a trait method call is valid, and get the return type.
+    pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, arg_types: Vec<&Type>) -> Type {
+        let trt = self.traits.get(trait_name).unwrap();
+        let method_type = trt.functions.get(method_name).unwrap();
+        return match method_type {
+            Type::Function(ref args, ref return_type) => {
+
+                for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                    assert_eq!(&expected_t, actual_t);
+                }
+
+                *return_type.clone()
+            },
+            x => panic!("TYPE ERROR: Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)
+        }
     }
 
     /// Get the return type of a binary operator.
@@ -836,52 +899,6 @@ impl Context {
         }
     }
 
-    /// Record the type of a node.
-    pub fn add_type(&mut self, id: usize, t: Type) {
-        self.type_map.insert(id, t);
-    }
-
-    /// Define a named type.
-    pub fn define_type(&mut self, name: Identifier, t: Type) {
-        self.defined_types.insert(name.clone(), t);
-    }
-
-    /// Get the type of the identifier in the given scope.
-    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
-        println!("Get_type: name is {:?} and print_all_variables is {:?}", name, self.print_all_variables());
-        let scope_mod = self.get_declaration(scope_id, name).unwrap();
-        let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) => {
-                self.type_map.get(id).unwrap().clone()
-            },
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
-        };
-        return t;
-    }
-
-    /// Get the type of the identifier in the given scope, except it never panics.
-    /// Use this one when checking whether to give an identifier a globally unique name.
-    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
-        let maybe_scope_mod = self.get_declaration(scope_id, name);
-        return match maybe_scope_mod ? {
-            CanModifyScope::Statement(_, ref id) => {
-                Some(self.type_map.get(id).unwrap().clone())
-            },
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
-        };
-    }
-
-    /// Get the type of the given node.
-    pub fn get_node_type(&self, node_id: usize) -> Type {
-        return self.type_map.get(&node_id).unwrap().clone();
-    }
-
-    pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        return self.defined_types.get(name).unwrap().clone();
-    }
-
 }
 
 impl CanModifyScope {
@@ -903,7 +920,6 @@ impl CanModifyScope {
         };
     }
 }
-
 
 impl GetContext for Node<Module> {
 
@@ -1304,7 +1320,12 @@ impl GetContext for Node<Expr> {
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
-                let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
+
+                let (trait_name, method_name) = operator.get_builtin_trait();
+
+                let return_type = right_c.check_trait_method_call(&trait_name, &method_name, vec!(&left_t, &right_t));
+
+                // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)
             },
             Expr::UnaryExpr{ref mut operand, ..} => {
@@ -1501,6 +1522,15 @@ impl BinaryOperator {
             BinaryOperator::Mult => 2,
             _ => panic!()
         };
+    }
+
+    pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
+        let (x, y) = match self {
+            BinaryOperator::Add => ("Add", "add"),
+            _ => panic!()
+        };
+
+        return (Identifier::from(x), Identifier::from(y));
     }
 }
 

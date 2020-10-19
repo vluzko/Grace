@@ -519,8 +519,8 @@ impl Context {
             functions: hashmap!{
                 Identifier::from("add") => Type::Function(
                     vec!(
-                        (Identifier::from("a"), Type::self_type(Box::new(Type::Undetermined))),
-                        (Identifier::from("a"), Type::self_type(Box::new(Type::Undetermined)))
+                        (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
+                        (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
                     ),
                     Box::new(Type::self_type(Box::new(Type::Undetermined)))
                 )
@@ -773,6 +773,7 @@ impl Context {
     pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
         return match base_type {
             Type::self_type(t) => {
+                assert!(matches!(**t, Type::Undetermined), "TYPE ERROR: Matching against a self type that is not undetermined: {:?}", base_type);
                 let (struct_name, trait_name) = self.get_struct_and_trait(scope_id);
                 match struct_name {
                     Some(x) => Type::self_type(Box::new(Type::Named(x))),
@@ -1615,7 +1616,7 @@ mod test {
     #[test]
     fn test_get_declarations() {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
-        let new_ident = Identifier::from("x");
+        // let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
         for ptr in actual {
@@ -1665,17 +1666,17 @@ mod test {
             }
         }
 
-        impl Node<Stmt> {
-            fn mod_scope(&mut self, new_scope: usize) {
-                self.scope = new_scope;
-                match self.data {
-                    Stmt::LetStmt{ref mut expression, ..} => {
-                        expression.mod_scope(new_scope);
-                    }
-                    _ => {}
-                }
-            }
-        }
+        // impl Node<Stmt> {
+        //     fn mod_scope(&mut self, new_scope: usize) {
+        //         self.scope = new_scope;
+        //         match self.data {
+        //             Stmt::LetStmt{ref mut expression, ..} => {
+        //                 expression.mod_scope(new_scope);
+        //             }
+        //             _ => {}
+        //         }
+        //     }
+        // }
 
         /// Utility function to recursively modify the scope of an Expr AST.
         impl Node<Expr> {

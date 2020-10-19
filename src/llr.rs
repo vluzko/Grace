@@ -446,7 +446,7 @@ impl ToLLR for Node<Expr> {
                 llr
             },
             Expr::UnaryExpr{ref operator, ref operand} => {
-                let mut llr = operand.to_llr(context);
+                let llr = operand.to_llr(context);
                 match operator {
                     UnaryOperator::Convert(to_type, from_type) => match to_type {
                         Type::Gradual(_) => match from_type {
@@ -456,7 +456,7 @@ impl ToLLR for Node<Expr> {
                         _ => panic!()
 
                     },
-                    x => panic!()
+                    x => panic!("Got an unexpected unary operator: {:?}", x)
                 };
                 llr
             },
@@ -635,7 +635,7 @@ mod tests {
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
-        let (module, context, cfg_map, llr) = compiler_layers::to_llr(file_contents.as_bytes());
+        let (_, _, _, llr) = compiler_layers::to_llr(file_contents.as_bytes());
         let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
         assert_eq!(func_names, vec!("call_trait_func".to_string(), "teststruct".to_string()));
 

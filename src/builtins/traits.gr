@@ -1,0 +1,14 @@
+trait Add:
+    fn add(left: Self, right: Self) -> Self
+
+
+trait Sub:
+    fn sub(left: Self, right: Self) -> Self
+
+
+trait Mul:
+    fn mul(left: Self, right: Self) -> Self
+
+
+trait Div:
+    fn div(left: Self, right: Self) -> Self

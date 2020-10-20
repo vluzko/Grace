@@ -513,7 +513,45 @@ pub struct Context {
     pub traits: HashMap<Identifier, Trait>,
     // The set of pairs (trait_name, type) available, where type implements trait_name
     // (or the trait corresponding to trait_name, rather).
-    pub trait_implementations: HashSet<(Identifier, Type)>
+    // The value is the map from method implementations to types.
+    pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Type>>,
+}
+
+/// Generate a single binary trait.
+fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
+    return Trait {
+        name: trait_name,
+        functions: hashmap!{
+            method_name => Type::Function(
+                vec!(
+                    (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
+                    (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
+                ),
+                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+            )
+        }
+    };
+}
+
+/// Generate all the builtin binary traits.
+fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
+    let names = vec!(("Add", "add"), ("Sub", "sub"), ("Mul", "mul"), ("Div", "div"));
+    let mut traits = HashMap::new();
+    for (tn, mn) in names.into_iter() {
+        let trait_name = Identifier::from(tn);
+        let trt = binary_trait(trait_name.clone(), Identifier::from(mn));
+        traits.insert(trait_name, trt);
+    }
+    return traits;
+}
+
+/// Generate all the builtin trait implementations
+fn builtin_trait_implementations() -> HashSet<(Identifier, Type)> {
+    let mut impls = HashSet::new();
+    for tn in vec!("Add", "Sub", "Mul", "Div") {
+
+    }
+    return impls;
 }
 
 /// Constructors
@@ -526,19 +564,6 @@ impl Context {
         let id = general_utils::get_next_scope_id();
         init_scopes.insert(id, empty);
 
-        let add_trait = Trait {
-            name: Identifier::from("Add"),
-            functions: hashmap!{
-                Identifier::from("add") => Type::Function(
-                    vec!(
-                        (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
-                        (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
-                    ),
-                    Box::new(Type::self_type(Box::new(Type::Undetermined)))
-                )
-            }
-        };
-
         let context = Context {
             root_id: id,
             scopes: init_scopes,
@@ -546,8 +571,8 @@ impl Context {
             type_map: HashMap::new(),
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
-            traits: HashMap::new(),
-            trait_implementations: HashSet::new()
+            traits: builtin_binary_traits(),
+            trait_implementations: HashMap::new()
         };
         return (id, context);
     }
@@ -565,7 +590,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashSet::new()
+            trait_implementations: HashMap::new()
         };
     }
 
@@ -582,7 +607,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashSet::new()
+            trait_implementations: HashMap::new()
         };
     }
 }
@@ -762,7 +787,7 @@ impl Context {
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.
                         // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                        if self.trait_implementations.contains(&(trait_name.clone(), unwrapped_self.clone())) {
+                        if self.trait_implementations.contains_key(&(trait_name.clone(), unwrapped_self.clone())) {
                             possible_traits.push(trait_struct);
                         }
                     }
@@ -807,7 +832,7 @@ impl Context {
             if trait_struct.functions.contains_key(name) {
                 // Check if base_type implements this trait.
                 // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                if self.trait_implementations.contains(&(trait_name.clone(), base_type.clone())) {
+                if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
                     possible_traits.push(trait_struct);
                 }
             }
@@ -821,7 +846,7 @@ impl Context {
     }
 
     /// Check that a trait method call is valid, and get the return type.
-    pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, arg_types: Vec<&Type>) -> Type {
+    pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
         let trt = self.traits.get(trait_name).unwrap();
         let method_type = trt.functions.get(method_name).unwrap();
         return match method_type {
@@ -964,6 +989,8 @@ impl GetContext for Node<Module> {
             // The names of functions the trait needs implementations for.
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
 
+            let mut func_types = HashMap::new();
+
             for dec in func_impls.iter_mut() {
                 let res = dec.scopes_and_types(impl_scope_id, new_context);
                 new_context = res.0;
@@ -995,6 +1022,8 @@ impl GetContext for Node<Module> {
                     x => panic!("TYPE ERROR: Somehow got a non function type.")
                 }
 
+                // Add the function type to the map
+                func_types.insert(func_name.clone(), func_type.clone());
 
                 // Remove this function from the set of functions that need to be implemented.
                 need_impl.remove(&func_name);
@@ -1003,7 +1032,7 @@ impl GetContext for Node<Module> {
             assert!(need_impl.len() == 0);
 
             let alias_type = Type::Named(struct_name.clone());
-            new_context.trait_implementations.insert((trait_name.clone(), alias_type));
+            new_context.trait_implementations.insert((trait_name.clone(), alias_type), func_types);
         }
 
         for stmt in self.data.functions.iter_mut() {
@@ -1257,7 +1286,7 @@ impl GetContext for Node<Expr> {
 
                 let (trait_name, method_name) = operator.get_builtin_trait();
 
-                let return_type = right_c.check_trait_method_call(&trait_name, &method_name, vec!(&left_t, &right_t));
+                let return_type = right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t));
 
                 // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)

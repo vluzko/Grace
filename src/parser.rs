@@ -763,31 +763,31 @@ pub mod expr_parsers {
         }
 
         /// Match a match expression.
-        fn match_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
+        // fn match_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
-            let parse_result = tuple!(input,
-                delimited!(
-                    MATCH,
-                    m!(self.expression),
-                    tuple!(
-                        COLON,
-                        between_statement
-                    )
-                ),
-                separated_nonempty_list_complete!(
-                    between_statement,
-                    separated_pair!(
-                        alt!(float_expr | int_expr | string_expr),
-                        ARROW,
-                        m!(self.expression)
-                    )
-                )
-            );
+        //     let parse_result = tuple!(input,
+        //         delimited!(
+        //             MATCH,
+        //             m!(self.expression),
+        //             tuple!(
+        //                 COLON,
+        //                 between_statement
+        //             )
+        //         ),
+        //         separated_nonempty_list_complete!(
+        //             between_statement,
+        //             separated_pair!(
+        //                 alt!(float_expr | int_expr | string_expr),
+        //                 ARROW,
+        //                 m!(self.expression)
+        //             )
+        //         )
+        //     );
 
-            // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-            // panic!("{:?}", parse_result)
-            panic!()
-        }
+        //     // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
+        //     // panic!("{:?}", parse_result)
+        //     panic!()
+        // }
 
         /// Match any unary expression.
         /// Implemented as a single parser because all unary expressions have the same precedence.
@@ -1251,9 +1251,21 @@ pub mod expr_parsers {
 
     }
 
-    fn rewrite_match() {
-        panic!()
-    }
+    /// Rewrite a match statement into an expression and a set of conditionals.
+    // fn rewrite_match(main_expr: Node<Expr>, matches: Vec<(Expr, Expr)>) -> ExprU {
+    //     // The name of the variable we'll match on
+    //     let expr_to_match = next_hidden();
+    //     // The name of the variable to store the match result in.
+    //     let match_name = next_hidden();
+
+    //     let mut outer_conditional = Stmt::IfStmt()
+    //     for (value, result) in matches {
+
+    //     }
+
+
+    //     panic!();
+    // }
 
     /// Rewrite a comprehension into an expression and a for loop.
     /// 

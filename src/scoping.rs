@@ -1299,8 +1299,9 @@ impl GetContext for Node<Expr> {
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
 
                 let (trait_name, method_name) = operator.get_builtin_trait();
-
-                let return_type = right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t));
+                if !left_t.is_gradual() || !right_t.is_gradual() {
+                    let return_type = right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t));
+                }
 
                 // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)

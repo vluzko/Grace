@@ -533,23 +533,36 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
     };
 }
 
+fn builtin_binary_names() -> Vec<(Identifier, Identifier)> {
+    return vec!(("Add", "add"), ("Sub", "sub"), ("Mul", "mul"), ("Div", "div")).into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
+}
+
 /// Generate all the builtin binary traits.
 fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
-    let names = vec!(("Add", "add"), ("Sub", "sub"), ("Mul", "mul"), ("Div", "div"));
     let mut traits = HashMap::new();
-    for (tn, mn) in names.into_iter() {
-        let trait_name = Identifier::from(tn);
-        let trt = binary_trait(trait_name.clone(), Identifier::from(mn));
-        traits.insert(trait_name, trt);
+    for (tn, mn) in builtin_binary_names().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
     }
     return traits;
 }
 
 /// Generate all the builtin trait implementations
-fn builtin_trait_implementations() -> HashSet<(Identifier, Type)> {
-    let mut impls = HashSet::new();
-    for tn in vec!("Add", "Sub", "Mul", "Div") {
-
+fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identifier, Type>> {
+    let mut impls = HashMap::new();
+    for (tn, mn) in builtin_binary_names().into_iter() {
+        for t in vec!(Type::i32, Type::i64, Type::f32, Type::f64) {
+            let func_t = Type::Function(
+                vec!(
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone())
+                ),
+                Box::new(t.clone())
+            );
+            let func_types = hashmap!{mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
     }
     return impls;
 }
@@ -572,7 +585,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: builtin_binary_traits(),
-            trait_implementations: HashMap::new()
+            trait_implementations: builtin_trait_implementations()
         };
         return (id, context);
     }
@@ -847,8 +860,9 @@ impl Context {
 
     /// Check that a trait method call is valid, and get the return type.
     pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
-        let trt = self.traits.get(trait_name).unwrap();
-        let method_type = trt.functions.get(method_name).unwrap();
+        let func_types = self.trait_implementations.get(&(trait_name.clone(), implementing_type.clone()))
+            .expect("TYPE ERROR: No trait implementation found.");
+        let method_type = func_types.get(method_name).unwrap();
         return match method_type {
             Type::Function(ref args, ref return_type) => {
 

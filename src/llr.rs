@@ -639,7 +639,7 @@ mod tests {
         let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
         assert_eq!(func_names, vec!("call_trait_func".to_string(), "teststruct".to_string()));
 
-        let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();;
+        let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();
         assert_eq!(trait_impl_names, vec!("testtrait.teststruct.baz".to_string()));
         println!("{:?}", llr);
     }

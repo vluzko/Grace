@@ -399,6 +399,27 @@ pub enum CanModifyScope {
     ImportedModule(usize)
 }
 
+impl CanModifyScope {
+
+    pub fn extract_stmt(&self) -> Stmt {
+        return unsafe {
+            match self {
+                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
+                _ => panic!()
+            }
+        };
+    }
+
+    pub fn get_id(&self) -> usize {
+        return match self {
+            CanModifyScope::Statement(ref _ptr, ref id) => *id,
+            CanModifyScope::ImportedModule(ref id) => *id,
+            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
+        };
+    }
+}
+
+
 /// A single layer of scope.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {
@@ -413,38 +434,6 @@ pub struct Scope {
     pub maybe_trait: Option<Identifier>,
     // The struct we're in, if we're in one.
     pub maybe_struct: Option<Identifier>,
-}
-
-/// The full scoping and typing context for a compilation.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Context {
-    // The ID of the root scope of the context.
-    pub root_id: usize,
-    // A map from Scope IDs to Scopes.
-    pub scopes: HashMap<usize, Scope>,
-    // A map from Node IDs to Scope IDs. Each node that modifies scope
-    // maps to the scope it's contained in.
-    pub containing_scopes: HashMap<usize, usize>,
-    // A map from Node IDs to types.
-    pub type_map: HashMap<usize, Type>, 
-    // The user-defined types
-    pub defined_types: HashMap<Identifier, Type>,
-    // A vector containing all the gradual types in context.
-    pub gradual_constraints: HashMap<usize, Vec<Type>>,
-    // A vector of all the traits in context.
-    pub traits: HashMap<Identifier, Trait>,
-    // The set of pairs (trait_name, type) available, where type implements trait_name
-    // (or the trait corresponding to trait_name, rather).
-    pub trait_implementations: HashSet<(Identifier, Type)>
-}
-
-pub trait GetContext {
-    fn get_usages(&self) -> HashSet<Identifier>;
-
-    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
-
-    /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
 impl Scope {
@@ -502,6 +491,29 @@ impl Scope {
         self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
         self.declarations.insert(name.clone(), modification);
     }
+}
+
+/// The full scoping and typing context for a compilation.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Context {
+    // The ID of the root scope of the context.
+    pub root_id: usize,
+    // A map from Scope IDs to Scopes.
+    pub scopes: HashMap<usize, Scope>,
+    // A map from Node IDs to Scope IDs. Each node that modifies scope
+    // maps to the scope it's contained in.
+    pub containing_scopes: HashMap<usize, usize>,
+    // A map from Node IDs to types.
+    pub type_map: HashMap<usize, Type>, 
+    // The user-defined types
+    pub defined_types: HashMap<Identifier, Type>,
+    // A vector containing all the gradual types in context.
+    pub gradual_constraints: HashMap<usize, Vec<Type>>,
+    // A vector of all the traits in context.
+    pub traits: HashMap<Identifier, Trait>,
+    // The set of pairs (trait_name, type) available, where type implements trait_name
+    // (or the trait corresponding to trait_name, rather).
+    pub trait_implementations: HashSet<(Identifier, Type)>
 }
 
 /// Constructors
@@ -719,6 +731,7 @@ impl Context {
 impl Context {
 
     /// Resolve an attribute access within the current context.
+    /// # Arguments:
     pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
 
         // Check if this is a direct attribute access
@@ -777,7 +790,7 @@ impl Context {
                 let (struct_name, trait_name) = self.get_struct_and_trait(scope_id);
                 match struct_name {
                     Some(x) => Type::self_type(Box::new(Type::Named(x))),
-                    None => panic!("Type error: Self used outside of a method implementation.")
+                    None => panic!("TYPE ERROR: Self used outside of a method implementation.")
                 }
             },
             t => t.clone()
@@ -902,31 +915,17 @@ impl Context {
 
 }
 
-impl CanModifyScope {
 
-    pub fn extract_stmt(&self) -> Stmt {
-        return unsafe {
-            match self {
-                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
-                _ => panic!()
-            }
-        };
-    }
+pub trait GetContext {
 
-    pub fn get_id(&self) -> usize {
-        return match self {
-            CanModifyScope::Statement(ref _ptr, ref id) => *id,
-            CanModifyScope::ImportedModule(ref id) => *id,
-            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
-        };
-    }
+    /// Compute the scopes and types for an AST node.
+    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
+
+    /// Get all *non-Argument* declarations.
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
 impl GetContext for Node<Module> {
-
-    fn get_usages(&self) -> HashSet<Identifier> {
-        panic!();
-    }
 
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let mut new_scope = Scope::child(parent_id);
@@ -1031,14 +1030,6 @@ impl GetContext for Node<Module> {
 }
 
 impl GetContext for Node<Block> {
-    fn get_usages(&self) -> HashSet<Identifier> {
-        let mut usages = HashSet::new();
-        for stmt in &self.data.statements {
-            usages = general_utils::m_union(usages, stmt.get_usages());
-        }
-        return usages;
-    }
-
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let new_scope = Scope::child(parent_id);
         let scope_id = context.new_scope(new_scope);
@@ -1106,26 +1097,6 @@ impl GetContext for Node<Block> {
 
 impl GetContext for Node<Stmt> {
     
-    fn get_usages(&self) -> HashSet<Identifier> {
-        return match self.data {
-            Stmt::IfStmt{ref condition, ref block, ref else_block} => {
-                let usages = general_utils::m_union(condition.get_usages(), block.get_usages());
-                match else_block {
-                    Some(y) => general_utils::m_union(usages, y.get_usages()),
-                    None => usages
-                }
-            },
-            Stmt::WhileStmt{ref condition, ref block} => general_utils::m_union(condition.get_usages(), block.get_usages()),
-            Stmt::FunctionDecStmt{ref block, ..} => block.get_usages(),
-            Stmt::ReturnStmt(ref expression) | 
-            Stmt::YieldStmt(ref expression) | 
-            Stmt::LetStmt{ref expression, ..} |
-            Stmt::AssignmentStmt{ref expression, ..} => expression.get_usages(),
-            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::PassStmt => HashSet::new(),
-            _ => panic!()
-        };
-    }
-
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
@@ -1269,44 +1240,6 @@ impl GetContext for Node<Stmt> {
 }
 
 impl GetContext for Node<Expr> {
-
-    fn get_usages(&self) -> HashSet<Identifier> {
-        return match self.data {
-            Expr::BinaryExpr{ref left, ref right, ..} => {
-                general_utils::m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::ComparisonExpr{ref left, ref right, ..} => {
-                general_utils::m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::UnaryExpr{ref operand, ..} => {
-                operand.get_usages()
-            },
-            Expr::FunctionCall{ref args, ref kwargs, ..} => {
-                let mut usages = HashSet::new();
-                for expr in args {
-                    usages = general_utils::m_union(usages, expr.get_usages());
-                }
-
-                for (_, expr) in kwargs {
-                    usages = general_utils::m_union(usages, expr.get_usages());
-                }
-
-                usages
-            },
-            Expr::Index{ref base, ref slices} => {
-                let first_slice = slices.get(0).unwrap().clone();
-                let first_usages = first_slice.0.unwrap().get_usages();
-                general_utils::m_union(base.get_usages(), first_usages)
-            },
-            Expr::IdentifierExpr(ref name) => {
-                let mut usages = HashSet::new();
-                usages.insert(name.clone());
-                usages
-            },
-            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
-            _ => panic!()
-        };
-    }
 
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
@@ -1600,17 +1533,6 @@ mod test {
         let actual_type = compiled_module.context.type_map.get(&first_func_id).unwrap();
         let expected_type = Type::Function(vec!((Identifier::from("arg"), Type::i32)), Box::new(Type::i32));
         assert_eq!(&expected_type, actual_type);
-    }
-
-    #[test]
-    fn test_function_locals() {
-        let func_str = r#"fn a(b: i32, c: i32) -> i32:
-        return b + c
-        "#;
-        let (func_stmt, _) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
-        let usages = func_stmt.get_usages();
-        assert!(usages.contains(&Identifier::from("b")));
-        assert!(usages.contains(&Identifier::from("c")));
     }
 
     #[test]

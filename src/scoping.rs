@@ -533,15 +533,25 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
     };
 }
 
-fn builtin_binary_names() -> Vec<(Identifier, Identifier)> {
-    return vec!(("Add", "add"), ("Sub", "sub"), ("Mul", "mul"), ("Div", "div")).into_iter()
+fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
+    return vec!(("Add", "add"), ("Sub", "sub"), ("Mult", "mult"), ("Div", "div")).into_iter()
         .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
+}
+
+fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
+    return vec!(("And", "and"), ("Or", "or")).into_iter()
+    .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
 }
 
 /// Generate all the builtin binary traits.
 fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
     let mut traits = HashMap::new();
-    for (tn, mn) in builtin_binary_names().into_iter() {
+    for (tn, mn) in builtin_numeric().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
+    }
+
+    for (tn, mn) in builtin_binary_bool().into_iter() {
         let trt = binary_trait(tn.clone(), mn);
         traits.insert(tn, trt);
     }
@@ -551,8 +561,21 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
 /// Generate all the builtin trait implementations
 fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identifier, Type>> {
     let mut impls = HashMap::new();
-    for (tn, mn) in builtin_binary_names().into_iter() {
+    for (tn, mn) in builtin_numeric().into_iter() {
         for t in vec!(Type::i32, Type::i64, Type::f32, Type::f64) {
+            let func_t = Type::Function(
+                vec!(
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone())
+                ),
+                Box::new(t.clone())
+            );
+            let func_types = hashmap!{mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+    for (tn, mn) in builtin_binary_bool().into_iter() {
+        for t in vec!(Type::boolean) {
             let func_t = Type::Function(
                 vec!(
                     (Identifier::from("left"), t.clone()),
@@ -860,8 +883,11 @@ impl Context {
 
     /// Check that a trait method call is valid, and get the return type.
     pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
-        let func_types = self.trait_implementations.get(&(trait_name.clone(), implementing_type.clone()))
-            .expect("TYPE ERROR: No trait implementation found.");
+
+        let func_types =  match self.trait_implementations.get(&(trait_name.clone(), implementing_type.clone())) {
+            Some(x) => x,
+            None => panic!("TYPE ERROR: No trait implementation found for trait {} and type {:?}", trait_name, implementing_type)
+        };
         let method_type = func_types.get(method_name).unwrap();
         return match method_type {
             Type::Function(ref args, ref return_type) => {
@@ -884,7 +910,7 @@ impl Context {
                 Type::Gradual(_) => match right {
                     Type::Gradual(_) => Type::Gradual(general_utils::get_next_grad()),
                     Type::i32 | Type::i64 | Type::f32 | Type::f64 => right.clone(),
-                    _ => panic!("Type error. Tried to add {:?} and {:?}", left, right)
+                    _ => panic!("TYPE ERROR. Tried to add {:?} and {:?}", left, right)
                 }
                 x => match right {
                     Type::Gradual(_) => left.clone(),
@@ -1299,9 +1325,10 @@ impl GetContext for Node<Expr> {
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
 
                 let (trait_name, method_name) = operator.get_builtin_trait();
-                if !left_t.is_gradual() || !right_t.is_gradual() {
-                    let return_type = right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t));
-                }
+                let return_type = match !left_t.is_gradual() || !right_t.is_gradual() {
+                    true  => right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t)),
+                    false => Type::Gradual(general_utils::get_next_grad())
+                };
 
                 // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)
@@ -1505,6 +1532,11 @@ impl BinaryOperator {
     pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
         let (x, y) = match self {
             BinaryOperator::Add => ("Add", "add"),
+            BinaryOperator::Sub => ("Sub", "sub"),
+            BinaryOperator::Mult => ("Mult", "mult"),
+            BinaryOperator::Div => ("Div", "div"),
+            BinaryOperator::And => ("And", "and"),
+            BinaryOperator::Or => ("Or", "or"),
             _ => panic!()
         };
 

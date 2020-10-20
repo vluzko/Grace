@@ -765,24 +765,24 @@ pub mod expr_parsers {
         /// Match a match expression.
         fn match_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
 
-            // let parse_result = tuple!(input,
-            //     delimited!(
-            //         MATCH,
-            //         m!(self.expression),
-            //         tuple!(
-            //             COLON,
-            //             between_statement
-            //         )
-            //     ),
-            //     separated_nonempty_list_complete!(
-            //         between_statement,
-            //         separated_pair!(
-            //             alt!(float_expr | int_expr | string_expr),
-            //             ARROW,
-            //             m!(self.expression)
-            //         )
-            //     )
-            // );
+            let parse_result = tuple!(input,
+                delimited!(
+                    MATCH,
+                    m!(self.expression),
+                    tuple!(
+                        COLON,
+                        between_statement
+                    )
+                ),
+                separated_nonempty_list_complete!(
+                    between_statement,
+                    separated_pair!(
+                        alt!(float_expr | int_expr | string_expr),
+                        ARROW,
+                        m!(self.expression)
+                    )
+                )
+            );
 
             // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
             // panic!("{:?}", parse_result)
@@ -893,7 +893,7 @@ pub mod expr_parsers {
                 tuple!(bool_expr, value!(vec!())) |
                 tuple!(float_expr, value!(vec!())) |
                 tuple!(int_expr, value!(vec!())) |
-                string_expr |
+                tuple!(string_expr, value!(vec!())) |
                 delimited!(
                     OPEN_BRACE,
                     alt_complete!(m!(self.map_or_set_comprehension)  | m!(self.map_literal) | m!(self.set_literal)),
@@ -1251,6 +1251,10 @@ pub mod expr_parsers {
 
     }
 
+    fn rewrite_match() {
+        panic!()
+    }
+
     /// Rewrite a comprehension into an expression and a for loop.
     /// 
     /// # Arguments
@@ -1433,7 +1437,7 @@ pub mod expr_parsers {
     /// Match a floating point literal expression.
     pub (super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         
-        let exponent = |x: PosStr<'a>| preceded!(x, 
+        let exponent = |x: PosStr<'a>| preceded!(x,
             alt!(tag!("e") | tag!("E")),
             tuple!(
                 opt!(SIGN),
@@ -1463,7 +1467,7 @@ pub mod expr_parsers {
     }
 
     /// Match a string literal expression.
-    fn string_expr<'a>(input: PosStr<'a>) -> ExprRes {
+    fn string_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         let result = w_followed!(input, 
                 delimited!(
                     tag!("\""),
@@ -1471,7 +1475,7 @@ pub mod expr_parsers {
                     tag!("\"")
                 )
         );
-        return fmap_nodeu(result, |x| (Expr::String(from_utf8(x.slice).unwrap().to_string()), vec!()))
+        return fmap_node(result, |x| Expr::String(from_utf8(x.slice).unwrap().to_string()))
     }
 
     // END SIMPLE LITERALS
@@ -1957,7 +1961,7 @@ pub mod expr_parsers {
             let mut f = File::open(f_path).expect("File not found");
             let mut file_contents = String::new();
             f.read_to_string(&mut file_contents).unwrap();
-            check_data(file_contents.as_str(), string_expr, Expr::String("\\\"\\n\'\\\\\\\'".to_string()));
+            check_data_no_update(file_contents.as_str(), string_expr, Expr::String("\\\"\\n\'\\\\\\\'".to_string()));
         }
 
         #[test]

@@ -11,6 +11,7 @@ use self::nom::*;
 use expression::Node;
 use position_tracker::PosStr;
 
+use self::tokens::*;
 use self::iresult_helpers::*;
 
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
@@ -164,6 +165,16 @@ pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
     return alt!(input, eof!() | tag!("\n"));
+}
+
+pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
+    return recognize!(input,
+        delimited!(
+            tuple!(DIV, DIV),
+            any,
+            eof_or_line
+        )
+    );
 }
 
 pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {

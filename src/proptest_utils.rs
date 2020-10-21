@@ -1,5 +1,6 @@
 /// Helpers for writing property based tests.
 use expression::*;
+use scoping::Type;
 
 /// Strategies for use in property-based testing.
 #[allow(unused)]
@@ -228,6 +229,33 @@ pub(crate) mod strategies {
                 Expr::IdentifierExpr(v) => v.name.clone(),
                 x => panic!("{:?}", x)
             };
+        }
+    }
+
+    
+    pub(crate) mod fixed_types {
+        use super::*;
+        /// Generate an expression of a given type.
+        fn literal_of_type(output_type: Type) -> impl Strategy<Value = Expr> {
+            if output_type == Type::i64 {
+                return any::<i64>().prop_map(Expr::from);
+            }
+            if output_type == Type::f64 {
+                return any::<f64>().prop_map(|x| {
+                    return if x.fract() == 0.0 {
+                    Expr::Float(format!("{}.", x))
+                   } else {
+                       Expr::Float(format!("{}", x))
+                   }
+               });
+            }
+            if output_type == Type::string {
+                return string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x));
+            }
+            if output_type == Type::boolean {
+                return any::<bool>().prop_map(Expr::from);
+            }
+            panic!();
         }
     }
 

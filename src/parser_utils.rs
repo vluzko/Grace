@@ -33,6 +33,13 @@ macro_rules! m (
   );
 );
 
+/// Take until the given parser matches.
+macro_rules! take_until_parse (
+    ($i:expr, $submac:ident!( $($args:tt)* )) => (
+        opt!($i, complete!($submac!($($args)*)))
+    );
+);
+
 /// Alias for opt!(complete!())
 macro_rules! optc (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
@@ -158,6 +165,7 @@ macro_rules! w_followed (
     );
 );
 
+
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
     return tag!(input, " ");
@@ -167,17 +175,15 @@ pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
     return alt!(input, eof!() | tag!("\n"));
 }
 
-/*
 pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
     return recognize!(input,
         delimited!(
             tuple!(DIV, DIV),
-            any,
+            many0!(recognize!(not!(eof_or_line))),
             eof_or_line
         )
     );
 }
-*/
 
 pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {
     let n = many0c!(input,
@@ -746,5 +752,12 @@ pub mod iresult_helpers {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    #[test]
+    fn parse_single_line_comment() {
+        let input = PosStr::from("//asdf");
+        let res = single_line_comment(input);
+        println!("{:?}", res);
 
+    }
 }

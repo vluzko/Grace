@@ -17,7 +17,8 @@ pub(crate) mod strategies {
     };
     use proptest::strategy::{
         Map,
-        Flatten
+        Flatten,
+        ValueTree
     };
     use proptest::arbitrary::{
         StrategyFor
@@ -92,20 +93,39 @@ pub(crate) mod strategies {
     pub fn literal_strategy() -> impl Strategy<Value = Expr> {
         prop_oneof![
             // i64 Strategy
-            any::<i64>().prop_map(Expr::from),
+            int_strat(),
             // f64 Strategy
-            any::<f64>().prop_map(|x| {
-                if x.fract() == 0.0 {
-                    Expr::Float(format!("{}.", x))
-                } else {
-                    Expr::Float(format!("{}", x))
-                }
-            }),
+            float_strat(),
             // Boolean strategy
-            any::<bool>().prop_map(Expr::from),
+            bool_strat(),
             // ASCII string strategy
-            string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)),
+            string_strat()
         ]
+    }
+
+    /// Strategy for an arbitrary integer
+    fn int_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<i64>().prop_map(Expr::from));
+    }
+
+    /// Strategy for an arbitrary floating point
+    fn float_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<f64>().prop_map(|x| {
+            if x.fract() == 0.0 {
+                Expr::Float(format!("{}.", x))
+            } else {
+                Expr::Float(format!("{}", x))
+            }
+        }));
+    }
+
+    /// A strategy for an arbitrary boolean
+    fn bool_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<bool>().prop_map(Expr::from));
+    }
+
+    fn string_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)));
     }
 
     fn identifier_strategy() -> impl Strategy<Value = Identifier> {
@@ -237,25 +257,13 @@ pub(crate) mod strategies {
         use super::*;
         /// Generate an expression of a given type.
         fn literal_of_type(output_type: Type) -> impl Strategy<Value = Expr> {
-            if output_type == Type::i64 {
-                return any::<i64>().prop_map(Expr::from);
-            }
-            if output_type == Type::f64 {
-                return any::<f64>().prop_map(|x| {
-                    return if x.fract() == 0.0 {
-                    Expr::Float(format!("{}.", x))
-                   } else {
-                       Expr::Float(format!("{}", x))
-                   }
-               });
-            }
-            if output_type == Type::string {
-                return string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x));
-            }
-            if output_type == Type::boolean {
-                return any::<bool>().prop_map(Expr::from);
-            }
-            panic!();
+            return match output_type {
+                Type::i64 => int_strat(),
+                Type::f64 => float_strat(),
+                Type::boolean => bool_strat(),
+                Type::string => string_strat(),
+                _ => panic!()
+            };
         }
     }
 

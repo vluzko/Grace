@@ -7,6 +7,7 @@ use std::cmp::PartialEq;
 
 
 extern crate nom;
+// use self::nom;
 use self::nom::*;
 use expression::Node;
 use position_tracker::PosStr;
@@ -19,23 +20,27 @@ type Res<'a, T> = IResult<PosStr<'a>, T>;
 
 /// A macro for calling methods.
 macro_rules! m (
-  ($i:expr, $self_:ident.$method:ident) => (
-    {
-      let res = $self_.$method($i);
-      res
-    }
-  );
-  ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
-    {
-      let res = $self_.$method($i, $($args),*);
-      res
-    }
-  );
+    ($i:expr, $self_:ident.$method:ident) => (
+        {
+            let res = $self_.$method($i);
+            res
+        }
+    );
+    ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
+        {
+            let res = $self_.$method($i, $($args),*);
+            res
+        }
+    );
 );
 
 /// Take until the given parser matches.
 macro_rules! take_until_parse (
     ($i:expr, $submac:ident!( $($args:tt)* )) => (
+        // let f = |x| match $submac(x) {
+        //     Ok(_) => true,
+        //     _ => false
+        // };
         opt!($i, complete!($submac!($($args)*)))
     );
 );
@@ -71,6 +76,36 @@ macro_rules! many1c (
   ($i:expr, $f:expr) => (
     many1c!($i, call!($f));
   );
+);
+
+/// Take until, but not terrible
+// macro_rules! allow_inc (
+//     ($input:expr, $submac:ident!( $($args:tt)* )) => (
+//         match $submac!(i, $($args)*) {
+//             Ok((leftover, o)) => Ok((leftover, o)),
+//             Err(Err::Incomplete(_)) => Ok()
+//         }
+//             // input.split_at_position(|c| $submac!(c, $($args)*))
+//     );
+//     ($input:expr, $f:expr) => (
+//         allow_inc!($input, call!($f));
+//     );
+//   );
+
+macro_rules! g_take_till (
+    ($input:expr, $submac:ident!( $($args:tt)* )) => (
+        {
+            // use nom::InputTakeAtPosition;
+            let input = $input;
+            match input.split_at_position(|c| $submac!(c, $($args)*)) {
+                Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
+                x => x
+            }
+        }
+    );
+    ($input:expr, $f:expr) => (
+        g_take_till!($input, call!($f));
+    );
 );
 
 /// Check that a macro is indented correctly.
@@ -176,11 +211,17 @@ pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
 }
 
 pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
+    let f = |x: u8| {
+        return if x == b'\n' {
+            true
+        } else {
+            false
+        }
+    };
     return recognize!(input,
-        delimited!(
-            tuple!(DIV, DIV),
-            many0!(recognize!(not!(eof_or_line))),
-            eof_or_line
+        preceded!(
+            tag!("//"),
+            g_take_till!(f)
         )
     );
 }
@@ -753,11 +794,11 @@ pub mod iresult_helpers {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // use nom::AtEof;
     #[test]
     fn parse_single_line_comment() {
-        let input = PosStr::from("//asdf");
+        let input = PosStr::from("//asdf\n");
         let res = single_line_comment(input);
-        println!("{:?}", res);
 
     }
 }

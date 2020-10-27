@@ -14,6 +14,11 @@ use memchr;
 extern crate nom;
 // use self::nom::*;
 use self::nom::{
+    IResult,
+    Err,
+    Needed,
+    ErrorKind,
+    Context,
     Compare,
     CompareResult,
     FindSubstring,
@@ -23,6 +28,7 @@ use self::nom::{
     Slice,
     AtEof,
     InputTake,
+    InputTakeAtPosition
 };
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -267,6 +273,30 @@ impl <'a> InputTake for PosStr<'a> {
     }
 }
 
+impl <'a> InputTakeAtPosition for PosStr<'a> {
+    type Item = u8;
+
+    fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        match (0..self.slice.len()).find(|b| predicate(self.slice[*b])) {
+            Some(i) => Ok(self.take_split(i)),
+            None => Err(Err::Incomplete(Needed::Size(1))),
+        }
+    }
+
+    fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+    where
+        P: Fn(Self::Item) -> bool,
+    {
+        match (0..self.slice.len()).find(|b| predicate(self.slice[*b])) {
+            Some(0) => Err(Err::Incomplete(Needed::Size(1))),
+            Some(i) => Ok(self.take_split(i)),
+            None => Err(Err::Incomplete(Needed::Size(1))),
+        }
+    }
+}
 
 impl <'a> Offset for PosStr<'a> {
     fn offset(&self, second: &Self) -> usize {

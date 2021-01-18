@@ -5,7 +5,7 @@ use expression::*;
 use general_utils;
 use refinements::check_constraints;
 
-/// Types
+/// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum Type {
@@ -39,6 +39,7 @@ pub enum Type {
     Undetermined
 }
 
+/// A refinement on a type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Refinement {
     pub operator: ComparisonOperator,
@@ -46,6 +47,7 @@ pub struct Refinement {
     pub right: Box<Node<Expr>>
 }
 
+/// A Grace trait / typeclass
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trait {
     pub name: Identifier,
@@ -110,6 +112,14 @@ impl Type {
         return match self {
             Type::Refinement(..) => false,
             _ => true
+        };
+    }
+
+    /// Check if a type is a primitive type
+    pub fn is_primitive(&self) -> bool {
+        return match self {
+            Type::i32 | Type::i64 | Type::f32 | Type::f64  | Type::ui32 | Type::ui64 | Type::boolean => true,
+            _ => false
         };
     }
 
@@ -203,6 +213,8 @@ impl Type {
         }
     }
 
+    /// Check if the left type can be converted to the right type with a WASM operator.
+    /// Only true for primitive numeric types.
     pub fn has_simple_conversion(&self, other: &Type) -> bool {
         return match self {
             Type::i32 => {
@@ -251,6 +263,8 @@ impl Type {
         };
     }
 
+    /// Check if the type has an attribute corresponding to the given identifier
+    /// Only Records and Modules have attributes.
     pub fn has_attribute(&self, attribute: &Identifier) -> bool {
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
@@ -594,7 +608,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
 impl Context {
 
     /// Create a context containing all builtin types and functions.
-    pub fn builtin() -> (usize, Context) {
+    pub fn builtin() -> Context {
         let empty = Scope::empty();
         let mut init_scopes = HashMap::new();
         let id = general_utils::get_next_scope_id();
@@ -610,7 +624,7 @@ impl Context {
             traits: builtin_binary_traits(),
             trait_implementations: builtin_trait_implementations()
         };
-        return (id, context);
+        return context;
     }
 
     /// Create a context that contains only an empty scope.
@@ -884,7 +898,12 @@ impl Context {
     /// Check that a trait method call is valid, and get the return type.
     pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
 
-        let func_types =  match self.trait_implementations.get(&(trait_name.clone(), implementing_type.clone())) {
+        // println!("Trait implementations: {:?}", self.trait_implementations);
+        let base_t =  match implementing_type {
+            Type::Refinement(t, _) => t,
+            x => x
+        };
+        let func_types =  match self.trait_implementations.get(&(trait_name.clone(), base_t.clone())) {
             Some(x) => x,
             None => panic!("TYPE ERROR: No trait implementation found for trait {} and type {:?}", trait_name, implementing_type)
         };
@@ -1602,8 +1621,7 @@ mod test {
     #[test]
     fn test_basic_grace_function_dec() {
         let file_name = "test_data/basic_grace.gr".to_string();
-        let compilation = compiler_layers::Compilation::compile(
-            &file_name);
+        let compilation = compiler_layers::Compilation::compile(&file_name);
         let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
         let first_func_id = compiled_module.ast.data.functions.get(0).unwrap().id;
         let actual_type = compiled_module.context.type_map.get(&first_func_id).unwrap();
@@ -1736,7 +1754,8 @@ mod test {
                     Node::from(true)
                 ];
                 for literal in literals.iter_mut() {
-                    let (id, mut context) = Context::builtin();
+                    let mut context = Context::builtin();
+                    let id = context.root_id;
                     context = literal.scopes_and_types(id, context).0;
                     assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
                 }

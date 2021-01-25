@@ -78,33 +78,37 @@ macro_rules! many1c (
   );
 );
 
-/// Take until, but not terrible
-// macro_rules! allow_inc (
-//     ($input:expr, $submac:ident!( $($args:tt)* )) => (
-//         match $submac!(i, $($args)*) {
-//             Ok((leftover, o)) => Ok((leftover, o)),
-//             Err(Err::Incomplete(_)) => Ok()
-//         }
-//             // input.split_at_position(|c| $submac!(c, $($args)*))
-//     );
-//     ($input:expr, $f:expr) => (
-//         allow_inc!($input, call!($f));
-//     );
-//   );
+fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
+  where
+    T: InputLength + InputIter + InputTake + AtEof + Clone,
+    P: Fn(<T as InputIter>::RawItem) -> bool,
+  {
+    match sequence.position(predicate) {
+      Some(n) => Ok(sequence.take_split(n+1)),
+      None => {
+        if sequence.at_eof() {
+          Ok(sequence.take_split(sequence.input_len()))
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
 
-macro_rules! g_take_till (
+
+macro_rules! take_till_inclusive (
     ($input:expr, $submac:ident!( $($args:tt)* )) => (
         {
             // use nom::InputTakeAtPosition;
             let input = $input;
-            match input.split_at_position(|c| $submac!(c, $($args)*)) {
+            match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
                 Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
                 x => x
             }
         }
     );
     ($input:expr, $f:expr) => (
-        g_take_till!($input, call!($f));
+        take_till_inclusive!($input, call!($f));
     );
 );
 
@@ -221,7 +225,7 @@ pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
     return recognize!(input,
         preceded!(
             tag!("//"),
-            g_take_till!(f)
+            take_till_inclusive!(f)
         )
     );
 }
@@ -797,8 +801,7 @@ mod tests {
     // use nom::AtEof;
     #[test]
     fn parse_single_line_comment() {
-        let input = PosStr::from("//asdf\n");
-        let res = single_line_comment(input);
-
+        check_match_and_leftover("//foo() type if then else blaaah asdf\n aFLKdjfa ", 
+        single_line_comment, PosStr::from("//foo() type if then else blaaah asdf\n"), " aFLKdjfa ");
     }
 }

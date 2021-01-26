@@ -388,7 +388,7 @@ pub mod stmt_parsers {
                     assignments,
                     m!(self.expression)
                 ),
-                alt_complete!(NEWLINE | eof!() | EMPTY)
+                eof_or_line
             );
 
             return fmap_nodeu(parse_result, |(name, assn, (expr, u))| (Stmt::AssignmentStmt{
@@ -547,9 +547,7 @@ pub mod stmt_parsers {
     pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             BREAK,
-            peek!(alt_complete!(
-                eof!() | NEWLINE | EMPTY
-            ))
+            peek!(eof_or_line)
         );
 
         return fmap_nodeu(parse_result, |_| (Stmt::BreakStmt, vec!()));
@@ -559,9 +557,7 @@ pub mod stmt_parsers {
     pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             PASS,
-            peek!(alt_complete!(
-                eof!() | NEWLINE | EMPTY
-            ))
+            peek!(eof_or_line)
         );
 
         return fmap_nodeu(parse_result, |_| (Stmt::PassStmt, vec!()));
@@ -571,9 +567,7 @@ pub mod stmt_parsers {
     pub fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
         let parse_result = terminated!(input,
             CONTINUE,
-            peek!(alt_complete!(
-                eof!() | NEWLINE | EMPTY
-            ))
+            peek!(eof_or_line)
         );
 
         return fmap_nodeu(parse_result, |_| (Stmt::ContinueStmt, vec!()));
@@ -735,10 +729,13 @@ pub mod stmt_parsers {
             let e = ParserContext::empty();
             check_data("pass", |x| e.statement(x, 0), Stmt::PassStmt);
             check_data_and_leftover("pass   \n  ", |x| e.statement(x, 0), Stmt::PassStmt, "\n  ");
+            check_data_and_leftover("pass  //comment \n  ", |x| e.statement(x, 0), Stmt::PassStmt, "//comment \n  ");
             check_data("continue", |x| e.statement(x, 0), Stmt::ContinueStmt);
             check_data_and_leftover("continue   \n  ", |x| e.statement(x, 0), Stmt::ContinueStmt, "\n  ");
+            check_data_and_leftover("continue  //comment  \n  ", |x| e.statement(x, 0), Stmt::ContinueStmt, "//comment  \n  ");
             check_data("break", |x| e.statement(x, 0), Stmt::BreakStmt);
             check_data_and_leftover("break   \n  ", |x| e.statement(x, 0), Stmt::BreakStmt, "\n  ");
+            check_data_and_leftover("break  // comment \n  ", |x| e.statement(x, 0), Stmt::BreakStmt, "// comment \n  ");
         }
 
         #[test]

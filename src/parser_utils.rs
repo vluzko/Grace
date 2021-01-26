@@ -211,7 +211,7 @@ pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
 }
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
-    return alt!(input, eof!() | tag!("\n"));
+    return alt!(input, eof!() | NEWLINE | EMPTY);
 }
 
 pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
@@ -423,7 +423,7 @@ pub mod tokens {
     }
 
     pub fn NEWLINE <'a> (input: PosStr<'a>) -> IO<'a> {
-        return tag!(input, "\n");
+        return alt_complete!(input, tag!("\n") | single_line_comment);
     }
 
     pub fn SIGN <'a> (input: PosStr<'a>) -> IO<'a> {

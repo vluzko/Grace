@@ -382,13 +382,10 @@ pub mod stmt_parsers {
                 );
             }
 
-            let parse_result = terminated!(input,
-                tuple!(
-                    IDENTIFIER,
-                    assignments,
-                    m!(self.expression)
-                ),
-                eof_or_line
+            let parse_result = tuple!(input,
+                IDENTIFIER,
+                assignments,
+                m!(self.expression)
             );
 
             return fmap_nodeu(parse_result, |(name, assn, (expr, u))| (Stmt::AssignmentStmt{
@@ -545,30 +542,21 @@ pub mod stmt_parsers {
 
     /// Match a break statement.
     pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = terminated!(input,
-            BREAK,
-            peek!(eof_or_line)
-        );
+        let parse_result = BREAK(input);
 
         return fmap_nodeu(parse_result, |_| (Stmt::BreakStmt, vec!()));
     }
 
     /// Match a pass statement.
     pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = terminated!(input,
-            PASS,
-            peek!(eof_or_line)
-        );
+        let parse_result = PASS(input);
 
         return fmap_nodeu(parse_result, |_| (Stmt::PassStmt, vec!()));
     }
 
     /// Match a continue statement.
     pub fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
-        let parse_result = terminated!(input,
-            CONTINUE,
-            peek!(eof_or_line)
-        );
+        let parse_result = CONTINUE(input);
 
         return fmap_nodeu(parse_result, |_| (Stmt::ContinueStmt, vec!()));
     }
@@ -601,10 +589,10 @@ pub mod stmt_parsers {
                 expression: Node::from(true)
             });
 
-            check_data("x = 0\n", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
+            check_data_and_leftover("x = 0\n", |x| e.assignment_stmt(x), Stmt::AssignmentStmt {
                 name: Identifier::from("x"),
                 expression: Node::from(0)
-            });
+            }, "\n");
 
             let all_ops = vec!["&=", "|=", "^=", "+=", "-=", "*=", "/=", "%=", ">>=", "<<=", "**="];
             for op in all_ops {

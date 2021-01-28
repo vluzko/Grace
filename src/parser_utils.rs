@@ -34,17 +34,6 @@ macro_rules! m (
     );
 );
 
-/// Take until the given parser matches.
-macro_rules! take_until_parse (
-    ($i:expr, $submac:ident!( $($args:tt)* )) => (
-        // let f = |x| match $submac(x) {
-        //     Ok(_) => true,
-        //     _ => false
-        // };
-        opt!($i, complete!($submac!($($args)*)))
-    );
-);
-
 /// Alias for opt!(complete!())
 macro_rules! optc (
   ($i:expr, $submac:ident!( $($args:tt)* )) => (
@@ -211,9 +200,13 @@ pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
 }
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
-    return alt!(input, eof!() | NEWLINE | EMPTY);
+    let val = alt!(input, eof!() | NEWLINE | EMPTY);
+    println!("output for {:?} is {:?}", input, val);
+    return val
 }
 
+/// Recognize a single line comment.
+/// Single line comments can be placed anywhere a new line can be placed.
 pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
     let f = |x: u8| {
         return if x == b'\n' {
@@ -223,17 +216,23 @@ pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
         }
     };
     return recognize!(input,
-        preceded!(
+        delimited!(
             tag!("//"),
-            take_till_inclusive!(f)
+            take_till!(f),
+            alt!(tag!("\n") | END_OF_INPUT)
         )
     );
 }
 
-pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {
-    let n = many0c!(input,
-        terminated!(many0c!(inline_whitespace_char), eof_or_line)
-    );
+
+/// Recognize any sequence of whitespace, newlines, and comments, possibly ending with end of input.
+pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
+    let n = recognize!(input, terminated!(
+        many0c!(
+            recognize!(terminated!(many0c!(inline_whitespace_char), NEWLINE))
+        ),
+        optc!(END_OF_INPUT)
+    ));
 
     return n;
 }
@@ -263,6 +262,15 @@ pub mod tokens {
     /// Recognize an empty input.
     pub fn EMPTY<'a>(input: PosStr<'a>) -> IO<'a> {
         if input.input_len() == 0 {
+            return Ok((input, PosStr::empty()));
+        } else {
+            return wrap_err(input, ErrorKind::NonEmpty);
+        }
+    }
+
+    /// Recognize an empty input or an end of file
+    pub fn END_OF_INPUT<'a>(input: PosStr<'a>) -> IO<'a> {
+        if input.input_len() == 0 || input.at_eof(){
             return Ok((input, PosStr::empty()));
         } else {
             return wrap_err(input, ErrorKind::NonEmpty);
@@ -663,10 +671,7 @@ pub mod iresult_helpers {
     pub fn output<'a, T>(res: Res<'a, T>) -> T {
         return match res {
             Ok((_, o)) => o,
-            Err(e) => {
-                println!("Output error: {:?}.", e);
-                panic!()
-            }
+            Err(e) => panic!("Output error: {:?}.", e)
         };
     }
 
@@ -803,5 +808,25 @@ mod tests {
     fn parse_single_line_comment() {
         check_match_and_leftover("//foo() type if then else blaaah asdf\n aFLKdjfa ", 
         single_line_comment, PosStr::from("//foo() type if then else blaaah asdf\n"), " aFLKdjfa ");
+    }
+
+    #[test]
+    fn parse_new_line() {
+        check_match("\n", NEWLINE, PosStr::from("\n"));
+        check_match_and_leftover("\n ", NEWLINE, PosStr::from("\n"), " ");
+    }
+
+    #[test]
+    fn parse_eof_or_line() {
+        check_match("\n", eof_or_line, PosStr::from("\n"));
+        check_match("", eof_or_line, PosStr::from(""));
+    }
+
+    #[test]
+    fn parse_between_stmt() {
+        check_match("\n", between_statement, PosStr::from("\n"));
+        check_match("    \n", between_statement, PosStr::from("    \n"));
+        check_match("   \n  \n  \n", between_statement, PosStr::from("   \n  \n  \n"));
+        check_match_and_leftover("   \n  \n  \n   ", between_statement, PosStr::from("   \n  \n  \n"), "   ");
     }
 }

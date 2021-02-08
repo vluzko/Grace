@@ -1,5 +1,6 @@
 /// Helpers for writing property based tests.
 use expression::*;
+use scoping::Type;
 
 /// Strategies for use in property-based testing.
 #[allow(unused)]
@@ -15,7 +16,9 @@ pub(crate) mod strategies {
         RegexGeneratorStrategy
     };
     use proptest::strategy::{
-        Map
+        Map,
+        Flatten,
+        ValueTree
     };
     use proptest::arbitrary::{
         StrategyFor
@@ -90,20 +93,39 @@ pub(crate) mod strategies {
     pub fn literal_strategy() -> impl Strategy<Value = Expr> {
         prop_oneof![
             // i64 Strategy
-            any::<i64>().prop_map(Expr::from),
+            int_strat(),
             // f64 Strategy
-            any::<f64>().prop_map(|x| {
-                if x.fract() == 0.0 {
-                    Expr::Float(format!("{}.", x))
-                } else {
-                    Expr::Float(format!("{}", x))
-                }
-            }),
+            float_strat(),
             // Boolean strategy
-            any::<bool>().prop_map(Expr::from),
+            bool_strat(),
             // ASCII string strategy
-            string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)),
+            string_strat()
         ]
+    }
+
+    /// Strategy for an arbitrary integer
+    fn int_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<i64>().prop_map(Expr::from));
+    }
+
+    /// Strategy for an arbitrary floating point
+    fn float_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<f64>().prop_map(|x| {
+            if x.fract() == 0.0 {
+                Expr::Float(format!("{}.", x))
+            } else {
+                Expr::Float(format!("{}", x))
+            }
+        }));
+    }
+
+    /// A strategy for an arbitrary boolean
+    fn bool_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(any::<bool>().prop_map(Expr::from));
+    }
+
+    fn string_strat() -> BoxedStrategy<Expr> {
+        return Strategy::boxed(string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)));
     }
 
     fn identifier_strategy() -> impl Strategy<Value = Identifier> {
@@ -122,37 +144,79 @@ pub(crate) mod strategies {
         ]
     }
 
-    fn let_strategy() -> impl Strategy<Value = Stmt> {
-        return (identifier_strategy(), expr_strategy()).prop_map(|(n, v)| Stmt::LetStmt{
-            name: n, expression: Node::from(v), type_annotation: None
+    // fn chain_let(current: Vec<Identifier>) -> (impl Strategy<Value = Stmt>, Vec<Identifier>) {
+    //     panic!()
+    // }
+
+    fn chain_ident(current: impl Strategy<Value = Vec<Identifier>>) -> impl Strategy<Value = Vec<Identifier>>{
+        return (current, identifier_strategy()).prop_filter_map("Non unique identifier", |(mut x, y)| match x.contains(&y) {
+            true => None,
+            false => {
+                x.push(y);
+                Some(x)
+            }
         });
     }
 
-    fn assignment_strategy() -> impl Strategy<Value = Stmt> {
-        return (identifier_strategy(), expr_strategy()).prop_map(|(n, v)| Stmt::AssignmentStmt{name: n, expression: Node::from(v)});
+    fn chain_stmt(current: impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)>) -> impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)> {
+        // Choose a new identifier
+        return (current, identifier_strategy()).prop_filter_map("Non unique identifier", |((mut stmts, mut idents), y)|
+            match idents.contains(&y) {
+                true => None,
+                false => {
+                    idents.push(y);
+                    Some((stmts, idents))
+                }
+            }
+        )
+        // Create a new statement.
+        .prop_flat_map(|(stmts, new_idents)| {
+            // let n = new_idents.last().unwrap();
+            let s = stmt_strategy(new_idents.clone());
+            s.prop_map(move |s| {
+                let mut new_stmts = stmts.clone();
+                new_stmts.push(s);
+                (new_stmts, new_idents.clone())
+            })
+        });
+    }
+
+    fn let_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
+        let n = used.last().unwrap().clone();
+        return expr_strategy().prop_map(move |v|
+            Stmt::LetStmt{name: n.clone(), expression: Node::from(v), type_annotation: None},
+        );
+    }
+
+    fn assignment_strategy(used: Vec<Identifier>, i: usize) -> impl Strategy<Value = Stmt> {
+        let n = used[i].clone();
+        return expr_strategy().prop_map(move |v|
+            Stmt::AssignmentStmt{name: n.clone(), expression: Node::from(v)},
+        );
     }
 
 
-    pub fn stmt_strategy() -> impl Strategy<Value = Stmt> {
+    pub fn stmt_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
+        let other = used.clone();
         return prop_oneof![
-            let_strategy(),
-            assignment_strategy()
+            let_strategy(used.clone()),
+            (0..used.len()).prop_flat_map(move |i| assignment_strategy(other.clone(), i))
         ];
     }
 
-    pub fn scoped_stmt_strategy(used_names: Vec<String>) -> impl Strategy<Value = (Stmt, Option<String>)> {
-        return stmt_strategy().prop_map(|stmt| {
-            let s = match &stmt {
-                Stmt::LetStmt{ref name, ..} => Some(name.name.clone()),
-                _ => None
-            };
-            (stmt, s)
-        });
-    }
+    // pub fn scoped_stmt_strategy(used_names: Vec<String>) -> impl Strategy<Value = (Stmt, Option<String>)> {
+    //     return stmt_strategy().prop_map(|stmt| {
+    //         let s = match &stmt {
+    //             Stmt::LetStmt{ref name, ..} => Some(name.name.clone()),
+    //             _ => None
+    //         };
+    //         (stmt, s)
+    //     });
+    // }
 
-    pub fn block_strategy() -> impl Strategy<Value = Block> {
-        return collection::vec(stmt_strategy(), 5).prop_map(|x| Block{statements: x.into_iter().map(wrap).collect()});
-    }
+    // pub fn block_strategy() -> impl Strategy<Value = Block> {
+    //     return collection::vec(stmt_strategy(), 5).prop_map(|x| Block{statements: x.into_iter().map(wrap).collect()});
+    // }
 
     impl Expr {
         /// Turn an expression into a PosStr that should parse to that expression.
@@ -184,6 +248,21 @@ pub(crate) mod strategies {
                 Expr::Bool(v) => format!("{}{}", v, " ".repeat(post_space)),
                 Expr::IdentifierExpr(v) => v.name.clone(),
                 x => panic!("{:?}", x)
+            };
+        }
+    }
+
+    
+    pub(crate) mod fixed_types {
+        use super::*;
+        /// Generate an expression of a given type.
+        fn literal_of_type(output_type: Type) -> impl Strategy<Value = Expr> {
+            return match output_type {
+                Type::i64 => int_strat(),
+                Type::f64 => float_strat(),
+                Type::boolean => bool_strat(),
+                Type::string => string_strat(),
+                _ => panic!()
             };
         }
     }

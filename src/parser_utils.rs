@@ -7,10 +7,12 @@ use std::cmp::PartialEq;
 
 
 extern crate nom;
+// use self::nom;
 use self::nom::*;
 use expression::Node;
 use position_tracker::PosStr;
 
+use self::tokens::*;
 use self::iresult_helpers::*;
 
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
@@ -18,18 +20,18 @@ type Res<'a, T> = IResult<PosStr<'a>, T>;
 
 /// A macro for calling methods.
 macro_rules! m (
-  ($i:expr, $self_:ident.$method:ident) => (
-    {
-      let res = $self_.$method($i);
-      res
-    }
-  );
-  ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
-    {
-      let res = $self_.$method($i, $($args),*);
-      res
-    }
-  );
+    ($i:expr, $self_:ident.$method:ident) => (
+        {
+            let res = $self_.$method($i);
+            res
+        }
+    );
+    ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
+        {
+            let res = $self_.$method($i, $($args),*);
+            res
+        }
+    );
 );
 
 /// Alias for opt!(complete!())
@@ -63,6 +65,40 @@ macro_rules! many1c (
   ($i:expr, $f:expr) => (
     many1c!($i, call!($f));
   );
+);
+
+fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
+  where
+    T: InputLength + InputIter + InputTake + AtEof + Clone,
+    P: Fn(<T as InputIter>::RawItem) -> bool,
+  {
+    match sequence.position(predicate) {
+      Some(n) => Ok(sequence.take_split(n+1)),
+      None => {
+        if sequence.at_eof() {
+          Ok(sequence.take_split(sequence.input_len()))
+        } else {
+          Err(Err::Incomplete(Needed::Size(1)))
+        }
+      }
+    }
+  }
+
+
+macro_rules! take_till_inclusive (
+    ($input:expr, $submac:ident!( $($args:tt)* )) => (
+        {
+            // use nom::InputTakeAtPosition;
+            let input = $input;
+            match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
+                Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
+                x => x
+            }
+        }
+    );
+    ($input:expr, $f:expr) => (
+        take_till_inclusive!($input, call!($f));
+    );
 );
 
 /// Check that a macro is indented correctly.
@@ -157,19 +193,46 @@ macro_rules! w_followed (
     );
 );
 
+
 #[inline]
 pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
     return tag!(input, " ");
 }
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
-    return alt!(input, eof!() | tag!("\n"));
+    let val = alt!(input, eof!() | NEWLINE | EMPTY);
+    println!("output for {:?} is {:?}", input, val);
+    return val
 }
 
-pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Vec<PosStr<'a>>>> {
-    let n = many0c!(input,
-        terminated!(many0c!(inline_whitespace_char), eof_or_line)
+/// Recognize a single line comment.
+/// Single line comments can be placed anywhere a new line can be placed.
+pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
+    let f = |x: u8| {
+        return if x == b'\n' {
+            true
+        } else {
+            false
+        }
+    };
+    return recognize!(input,
+        delimited!(
+            tag!("//"),
+            take_till!(f),
+            alt!(tag!("\n") | END_OF_INPUT)
+        )
     );
+}
+
+
+/// Recognize any sequence of whitespace, newlines, and comments, possibly ending with end of input.
+pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
+    let n = recognize!(input, terminated!(
+        many0c!(
+            recognize!(terminated!(many0c!(inline_whitespace_char), NEWLINE))
+        ),
+        optc!(END_OF_INPUT)
+    ));
 
     return n;
 }
@@ -178,7 +241,7 @@ pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let", b"trait", b"impl"];
+    static RESERVED_WORDS: &'static [&[u8]] = &[b"if", b"else", b"elif", b"for", b"while", b"and", b"or", b"not", b"xor", b"fn", b"import", b"true", b"false", b"in", b"match", b"pass", b"continue", b"break", b"yield", b"let", b"trait", b"impl", b"self"];
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
@@ -199,6 +262,15 @@ pub mod tokens {
     /// Recognize an empty input.
     pub fn EMPTY<'a>(input: PosStr<'a>) -> IO<'a> {
         if input.input_len() == 0 {
+            return Ok((input, PosStr::empty()));
+        } else {
+            return wrap_err(input, ErrorKind::NonEmpty);
+        }
+    }
+
+    /// Recognize an empty input or an end of file
+    pub fn END_OF_INPUT<'a>(input: PosStr<'a>) -> IO<'a> {
+        if input.input_len() == 0 || input.at_eof(){
             return Ok((input, PosStr::empty()));
         } else {
             return wrap_err(input, ErrorKind::NonEmpty);
@@ -359,7 +431,7 @@ pub mod tokens {
     }
 
     pub fn NEWLINE <'a> (input: PosStr<'a>) -> IO<'a> {
-        return tag!(input, "\n");
+        return alt_complete!(input, tag!("\n") | single_line_comment);
     }
 
     pub fn SIGN <'a> (input: PosStr<'a>) -> IO<'a> {
@@ -599,10 +671,7 @@ pub mod iresult_helpers {
     pub fn output<'a, T>(res: Res<'a, T>) -> T {
         return match res {
             Ok((_, o)) => o,
-            Err(e) => {
-                println!("Output error: {:?}.", e);
-                panic!()
-            }
+            Err(e) => panic!("Output error: {:?}.", e)
         };
     }
 
@@ -733,5 +802,31 @@ pub mod iresult_helpers {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    // use nom::AtEof;
+    #[test]
+    fn parse_single_line_comment() {
+        check_match_and_leftover("//foo() type if then else blaaah asdf\n aFLKdjfa ", 
+        single_line_comment, PosStr::from("//foo() type if then else blaaah asdf\n"), " aFLKdjfa ");
+    }
 
+    #[test]
+    fn parse_new_line() {
+        check_match("\n", NEWLINE, PosStr::from("\n"));
+        check_match_and_leftover("\n ", NEWLINE, PosStr::from("\n"), " ");
+    }
+
+    #[test]
+    fn parse_eof_or_line() {
+        check_match("\n", eof_or_line, PosStr::from("\n"));
+        check_match("", eof_or_line, PosStr::from(""));
+    }
+
+    #[test]
+    fn parse_between_stmt() {
+        check_match("\n", between_statement, PosStr::from("\n"));
+        check_match("    \n", between_statement, PosStr::from("    \n"));
+        check_match("   \n  \n  \n", between_statement, PosStr::from("   \n  \n  \n"));
+        check_match_and_leftover("   \n  \n  \n   ", between_statement, PosStr::from("   \n  \n  \n"), "   ");
+    }
 }

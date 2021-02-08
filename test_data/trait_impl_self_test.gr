@@ -1,13 +1,13 @@
 trait testtrait:
-    fn baz: (x: i32, y: i32) -> i32
+    fn baz: (w: self,  x: i32, y: i32) -> i32
 
 struct teststruct:
     a: i32
     b: f64
 
 impl testtrait for teststruct:
-    fn baz (x: i32, y: i32) -> i32:
-        return 7
+    fn baz (w: self, x: i32, y: i32) -> i32:
+        return 7 + w.a
 
 fn call_trait_func():
     let foo = teststruct{0,1}

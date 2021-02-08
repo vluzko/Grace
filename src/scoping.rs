@@ -1,14 +1,11 @@
-use std::collections::BTreeSet;
-use std::collections::BTreeMap;
-use std::collections::HashSet;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, BTreeMap, HashSet, HashMap};
 use std::iter::FromIterator;
 
 use expression::*;
 use general_utils;
 use refinements::check_constraints;
 
-/// Types
+/// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[allow(non_camel_case_types)]
 pub enum Type {
@@ -21,7 +18,7 @@ pub enum Type {
     string,
     boolean,
     empty,
-    self_type,
+    self_type(Box<Type>),
     // A sum type, e.g. a union type
     Sum(Vec<Type>),
     // A product type, e.g. a tuple
@@ -42,6 +39,7 @@ pub enum Type {
     Undetermined
 }
 
+/// A refinement on a type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Refinement {
     pub operator: ComparisonOperator,
@@ -49,6 +47,7 @@ pub struct Refinement {
     pub right: Box<Node<Expr>>
 }
 
+/// A Grace trait / typeclass
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Trait {
     pub name: Identifier,
@@ -113,6 +112,14 @@ impl Type {
         return match self {
             Type::Refinement(..) => false,
             _ => true
+        };
+    }
+
+    /// Check if a type is a primitive type
+    pub fn is_primitive(&self) -> bool {
+        return match self {
+            Type::i32 | Type::i64 | Type::f32 | Type::f64  | Type::ui32 | Type::ui64 | Type::boolean => true,
+            _ => false
         };
     }
 
@@ -206,6 +213,8 @@ impl Type {
         }
     }
 
+    /// Check if the left type can be converted to the right type with a WASM operator.
+    /// Only true for primitive numeric types.
     pub fn has_simple_conversion(&self, other: &Type) -> bool {
         return match self {
             Type::i32 => {
@@ -254,6 +263,8 @@ impl Type {
         };
     }
 
+    /// Check if the type has an attribute corresponding to the given identifier
+    /// Only Records and Modules have attributes.
     pub fn has_attribute(&self, attribute: &Identifier) -> bool {
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
@@ -402,6 +413,27 @@ pub enum CanModifyScope {
     ImportedModule(usize)
 }
 
+impl CanModifyScope {
+
+    pub fn extract_stmt(&self) -> Stmt {
+        return unsafe {
+            match self {
+                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
+                _ => panic!()
+            }
+        };
+    }
+
+    pub fn get_id(&self) -> usize {
+        return match self {
+            CanModifyScope::Statement(ref _ptr, ref id) => *id,
+            CanModifyScope::ImportedModule(ref id) => *id,
+            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
+        };
+    }
+}
+
+
 /// A single layer of scope.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {
@@ -411,7 +443,68 @@ pub struct Scope {
     /// The identifiers declared in this scope, and raw pointers to the statements that created them.
     pub declarations: BTreeMap<Identifier, CanModifyScope>,
     /// The order in which each identifier was declared. (Important for blocks.)
-    pub declaration_order: BTreeMap<Identifier, usize>
+    pub declaration_order: BTreeMap<Identifier, usize>,
+    // The trait we're in, if we're in one.
+    pub maybe_trait: Option<Identifier>,
+    // The struct we're in, if we're in one.
+    pub maybe_struct: Option<Identifier>,
+}
+
+impl Scope {
+    /// Create an empty scope.
+    pub fn empty() -> Scope {
+        return Scope{
+            parent_id: None,
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: None
+        };
+    }
+
+    /// Create a child of the given parent
+    pub fn child(parent_id: usize) -> Scope {
+        return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: None
+        };
+    }
+
+    /// Create a child of the given parent with a struct
+    pub fn child_struct_impl(parent_id: usize, structname: &Identifier) -> Scope {
+        return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: None,
+            maybe_struct: Some(structname.clone())
+        };
+    }
+
+    /// Create a child of the given parent with a trait and a struct
+    pub fn child_trait_impl(parent_id: usize, structname: &Identifier, traitname: &Identifier) -> Scope {
+        return Scope{
+            parent_id: Some(parent_id),
+            declarations: BTreeMap::new(),
+            declaration_order: BTreeMap::new(),
+            maybe_trait: Some(traitname.clone()),
+            maybe_struct: Some(structname.clone())
+        };
+    }
+
+    pub fn append_declaration(&mut self, name: &Identifier, stmt: &Box<Node<Stmt>>) {
+        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
+        let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+        self.declarations.insert(name.clone(), scope_mod);
+    }
+
+    pub fn append_modification(&mut self, name: &Identifier, modification: CanModifyScope) {
+        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
+        self.declarations.insert(name.clone(), modification);
+    }
 }
 
 /// The full scoping and typing context for a compilation.
@@ -430,73 +523,111 @@ pub struct Context {
     pub defined_types: HashMap<Identifier, Type>,
     // A vector containing all the gradual types in context.
     pub gradual_constraints: HashMap<usize, Vec<Type>>,
-    // A vectgor of all the traits in context.
+    // A vector of all the traits in context.
     pub traits: HashMap<Identifier, Trait>,
-    // A map from tuples (trait_name, implementing_type) to [maps from method name to method definition]
-    pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Node<Stmt>>>
+    // The set of pairs (trait_name, type) available, where type implements trait_name
+    // (or the trait corresponding to trait_name, rather).
+    // The value is the map from method implementations to types.
+    pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Type>>,
 }
 
-pub trait GetContext {
-    fn get_usages(&self) -> HashSet<Identifier>;
-
-    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
-
-    /// Get all *non-Argument* declarations.
-    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
-}
-
-/// Create a Context containing all Grace builtins.
-pub fn builtin_context() -> (usize, Context) {
-    let empty = Scope::empty();
-    let mut init_scopes = HashMap::new();
-    let id = general_utils::get_next_scope_id();
-    init_scopes.insert(id, empty);
-    let context = Context {
-        root_id: id, 
-        scopes: init_scopes, 
-        containing_scopes: HashMap::new(),
-        type_map: HashMap::new(), 
-        defined_types: HashMap::new(),
-        gradual_constraints: HashMap::new(),
-        traits: HashMap::new(),
-        trait_implementations: HashMap::new()
+/// Generate a single binary trait.
+fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
+    return Trait {
+        name: trait_name,
+        functions: hashmap!{
+            method_name => Type::Function(
+                vec!(
+                    (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
+                    (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
+                ),
+                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+            )
+        }
     };
-    return (id, context);
 }
 
-impl Scope {
-    /// Create an empty scope.
-    pub fn empty() -> Scope {
-        return Scope{
-            parent_id: None,
-            declarations: BTreeMap::new(),
-            declaration_order: BTreeMap::new()
-        };
-    }
-
-    /// Create a child of the given parent
-    pub fn child(parent_id: usize) -> Scope {
-        return Scope{
-            parent_id: Some(parent_id),
-            declarations: BTreeMap::new(),
-            declaration_order: BTreeMap::new()
-        };
-    }
-
-    pub fn append_declaration(&mut self, name: &Identifier, stmt: &Box<Node<Stmt>>) {
-        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
-        let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
-        self.declarations.insert(name.clone(), scope_mod);
-    }
-
-    pub fn append_modification(&mut self, name: &Identifier, modification: CanModifyScope) {
-        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
-        self.declarations.insert(name.clone(), modification);
-    }
+fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
+    return vec!(("Add", "add"), ("Sub", "sub"), ("Mult", "mult"), ("Div", "div")).into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
 }
 
-/// Scoping
+fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
+    return vec!(("And", "and"), ("Or", "or")).into_iter()
+    .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
+}
+
+/// Generate all the builtin binary traits.
+fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
+    let mut traits = HashMap::new();
+    for (tn, mn) in builtin_numeric().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
+    }
+
+    for (tn, mn) in builtin_binary_bool().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
+    }
+    return traits;
+}
+
+/// Generate all the builtin trait implementations
+fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identifier, Type>> {
+    let mut impls = HashMap::new();
+    for (tn, mn) in builtin_numeric().into_iter() {
+        for t in vec!(Type::i32, Type::i64, Type::f32, Type::f64) {
+            let func_t = Type::Function(
+                vec!(
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone())
+                ),
+                Box::new(t.clone())
+            );
+            let func_types = hashmap!{mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+    for (tn, mn) in builtin_binary_bool().into_iter() {
+        for t in vec!(Type::boolean) {
+            let func_t = Type::Function(
+                vec!(
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone())
+                ),
+                Box::new(t.clone())
+            );
+            let func_types = hashmap!{mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+    return impls;
+}
+
+/// Constructors
 impl Context {
+
+    /// Create a context containing all builtin types and functions.
+    pub fn builtin() -> Context {
+        let empty = Scope::empty();
+        let mut init_scopes = HashMap::new();
+        let id = general_utils::get_next_scope_id();
+        init_scopes.insert(id, empty);
+
+        let context = Context {
+            root_id: id,
+            scopes: init_scopes,
+            containing_scopes: HashMap::new(),
+            type_map: HashMap::new(),
+            defined_types: HashMap::new(),
+            gradual_constraints: HashMap::new(),
+            traits: builtin_binary_traits(),
+            trait_implementations: builtin_trait_implementations()
+        };
+        return context;
+    }
+
+    /// Create a context that contains only an empty scope.
     pub fn empty() -> Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scopes = HashMap::new();
@@ -512,6 +643,8 @@ impl Context {
             trait_implementations: HashMap::new()
         };
     }
+
+    /// Create a new Context.
     pub fn new_context(scope: Scope, type_map: HashMap<usize, Type>) -> Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scope_map = HashMap::new();
@@ -527,6 +660,19 @@ impl Context {
             trait_implementations: HashMap::new()
         };
     }
+}
+
+/// Basic methods
+impl Context {
+    /// Get a scope by its ID.
+    pub fn get_scope(&self, scope_id: usize) -> &Scope {
+        return self.scopes.get(&scope_id).unwrap();
+    }
+
+    /// Get a mutable reference to a Scope.
+    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
+        return self.scopes.get_mut(&scope_id).unwrap();
+    }
 
     /// Record the type of a node.
     pub fn add_type(&mut self, id: usize, t: Type) {
@@ -536,6 +682,11 @@ impl Context {
     /// Define a named type.
     pub fn define_type(&mut self, name: Identifier, t: Type) {
         self.defined_types.insert(name.clone(), t);
+    }
+
+    /// Get the type associated with a particular name.
+    pub fn get_defined_type(&self, name: &Identifier) -> Type {
+        return self.defined_types.get(name).unwrap().clone();
     }
 
     /// Get the type of the identifier in the given scope.
@@ -568,23 +719,12 @@ impl Context {
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
     }
+}
 
-    pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        return self.defined_types.get(name).unwrap().clone();
-    }
+/// Scoping
+impl Context {
 
-    pub fn get_scope(&self, scope_id: usize) -> &Scope {
-        return self.scopes.get(&scope_id).unwrap();
-    }
-
-    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
-        return self.scopes.get_mut(&scope_id).unwrap();
-    }
-
-    pub fn add_scope(&mut self, scope_id: usize, scope: Scope) {
-        self.scopes.insert(scope_id, scope);
-    }
-
+    /// Create a new scope, returning the ID.
     pub fn new_scope(&mut self, scope: Scope) -> usize {
         let scope_id = general_utils::get_next_scope_id();
         self.scopes.insert(scope_id, scope);
@@ -639,6 +779,18 @@ impl Context {
         }
     }
 
+    pub fn get_struct_and_trait(&self, scope_id: usize) -> (Option<Identifier>, Option<Identifier>) {
+        let initial_scope = self.scopes.get(&scope_id).unwrap();
+        return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
+            (initial_scope.maybe_struct.clone(), initial_scope.maybe_trait.clone())
+        } else {
+            match initial_scope.parent_id {
+                Some(id) => self.get_struct_and_trait(id),
+                None => (None, None)
+            }
+        };
+    }
+
     pub fn print_all_variables(&self) -> Vec<Identifier> {
         let mut all_variables = vec!();
         for scope in self.scopes.values() {
@@ -654,35 +806,42 @@ impl Context {
 impl Context {
 
     /// Resolve an attribute access within the current context.
+    /// # Arguments:
     pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
 
         // Check if this is a direct attribute access
-        let direct_type = match base_type {
+        let unwrapped_self = match base_type {
+            Type::self_type(x) => *x.clone(),
+            x => x.clone()
+        };
+        let attribute_type = match &unwrapped_self {
             Type::Record(_, ref attributes) => attributes.get(name),
-            x => None
+            Type::Named(ref t_name) => {
+                let record_t = self.defined_types.get(t_name).unwrap();
+                match record_t {
+                    Type::Record(_, ref attributes) => attributes.get(name),
+                    _ => None
+                }
+            },
+            _ => None
         };
 
-        return match direct_type {
+        return match attribute_type {
             Some(x) => x.clone(),
             None => {
                 // Check if this is a trait access
                 let mut possible_traits = vec!();
-                println!("self.traits is {:?}", name);
-                println!("self.traits is {:?}", self.traits);
-                println!("self.traits is {:?}", self.trait_implementations);
 
                 for (trait_name, trait_struct) in self.traits.iter() {
                     // Check if this trait has a function with the desired name.
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.
                         // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                        if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                        if self.trait_implementations.contains_key(&(trait_name.clone(), unwrapped_self.clone())) {
                             possible_traits.push(trait_struct);
                         }
                     }
                 }
-
-                // a.foo()
 
                 // Just resolve the trait.
                 if possible_traits.len() == 1 {
@@ -690,19 +849,30 @@ impl Context {
                     return possible_traits[0].functions.get(name).unwrap().clone();
                 }// TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
-                    panic!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
+                    panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    panic!("No matching attribute found for: {:?}, {:?}", base_type, name);
+                    panic!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", base_type, name);
                 }
             }
         }
     }
 
-    pub fn resolve_self_type(&self, expr: &Node<Expr>) {
-        panic!()
+    /// Modify a Type::Self so it contains whatever Self actually is.
+    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
+        return match base_type {
+            Type::self_type(t) => {
+                assert!(matches!(**t, Type::Undetermined), "TYPE ERROR: Matching against a self type that is not undetermined: {:?}", base_type);
+                let (struct_name, trait_name) = self.get_struct_and_trait(scope_id);
+                match struct_name {
+                    Some(x) => Type::self_type(Box::new(Type::Named(x))),
+                    None => panic!("TYPE ERROR: Self used outside of a method implementation.")
+                }
+            },
+            t => t.clone()
+        };
     }
 
-    /// Resolve an attribute access within the current context.
+    /// Check if this is a trait method call or an attribute access.
     pub fn trait_information(&self, base_type: &Type, name: &Identifier) -> Option<Identifier> {
 
         let mut possible_traits = vec!();
@@ -725,6 +895,33 @@ impl Context {
         };
     }
 
+    /// Check that a trait method call is valid, and get the return type.
+    pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
+
+        // println!("Trait implementations: {:?}", self.trait_implementations);
+        let base_t =  match implementing_type {
+            Type::Refinement(t, _) => t,
+            x => x
+        };
+        let func_types =  match self.trait_implementations.get(&(trait_name.clone(), base_t.clone())) {
+            Some(x) => x,
+            None => panic!("TYPE ERROR: No trait implementation found for trait {} and type {:?}", trait_name, implementing_type)
+        };
+        let method_type = func_types.get(method_name).unwrap();
+        return match method_type {
+            Type::Function(ref args, ref return_type) => {
+
+                for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                    assert_eq!(&expected_t, actual_t);
+                }
+
+                *return_type.clone()
+            },
+            x => panic!("TYPE ERROR: Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)
+        }
+    }
+
+    /// Get the return type of a binary operator.
     pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
         return match op {
             // TODO: 540: Update left and right with an "addable" constraint.
@@ -732,7 +929,7 @@ impl Context {
                 Type::Gradual(_) => match right {
                     Type::Gradual(_) => Type::Gradual(general_utils::get_next_grad()),
                     Type::i32 | Type::i64 | Type::f32 | Type::f64 => right.clone(),
-                    _ => panic!("Type error. Tried to add {:?} and {:?}", left, right)
+                    _ => panic!("TYPE ERROR. Tried to add {:?} and {:?}", left, right)
                 }
                 x => match right {
                     Type::Gradual(_) => left.clone(),
@@ -745,6 +942,7 @@ impl Context {
         };
     }
 
+    /// Update a gradual type with a new constraint.
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
         let maybe_constraints = self.gradual_constraints.get_mut(&gradual_id);
         match maybe_constraints {
@@ -763,64 +961,55 @@ impl Context {
         if expr_t == desired_type {
             return true;
         } else {
+            let unwrapped_self = match expr_t {
+                Type::self_type(x) => (**x).clone(),
+                x => x.clone()
+            };
             return match desired_type {
                 Type::Undetermined => true,
                 Type::empty => false,
-                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match expr_t {
+                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match unwrapped_self {
                     Type::Refinement(ref base, ..) => self.check_subtype(expr, base, desired_type),
-                    Type::Gradual(id) => self.update_gradual(*id, desired_type),
+                    Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
                     x => x.has_simple_conversion(desired_type)
                 },
-                Type::Product(ref types) => match expr_t {
+                Type::Product(ref types) => match &unwrapped_self {
                     Type::Product(ref expr_types) => expr_types.iter().enumerate().all(|(i, x)| self.check_subtype(expr, x, &types[i])),
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
-                Type::Function(ref args, ref ret) => match expr_t {
+                Type::Function(ref args, ref ret) => match &unwrapped_self {
                     Type::Function(ref e_args, ref e_ret) => {
                         let args_match = args.iter().enumerate().all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
                         args_match && self.check_subtype(expr, ret, e_ret)
                     },
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
-                Type::Vector(ref t) => match expr_t {
+                Type::Vector(ref t) => match &unwrapped_self {
                     Type::Vector(ref e_t) => self.check_subtype(expr, e_t, t),
-                    x => panic!("Can't get {:?} from {:?}", expr_t, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
                 },
                 Type::Refinement(_, ref d_conds) => check_constraints(expr.scope, self, d_conds.clone()),
-                Type::Gradual(id) => self.update_gradual(*id, expr_t),
-                Type::Named(..) => desired_type == expr_t,
-                _ => panic!()
+                Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
+                Type::Named(..) => desired_type == &unwrapped_self,
+                Type::self_type(x) => self.check_subtype(expr, &unwrapped_self, x),
+                x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x)
             };
         }
     }
 
 }
 
-impl CanModifyScope {
 
-    pub fn extract_stmt(&self) -> Stmt {
-        return unsafe {
-            match self {
-                CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
-                _ => panic!()
-            }
-        };
-    }
+pub trait GetContext {
 
-    pub fn get_id(&self) -> usize {
-        return match self {
-            CanModifyScope::Statement(ref _ptr, ref id) => *id,
-            CanModifyScope::ImportedModule(ref id) => *id,
-            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
-        };
-    }
+    /// Compute the scopes and types for an AST node.
+    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
+
+    /// Get all *non-Argument* declarations.
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
 }
 
 impl GetContext for Node<Module> {
-
-    fn get_usages(&self) -> HashSet<Identifier> {
-        panic!();
-    }
 
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let mut new_scope = Scope::child(parent_id);
@@ -847,17 +1036,22 @@ impl GetContext for Node<Module> {
         }
 
         // Add all trait implementations to the context.
-        for (trait_name, struct_name, decs) in self.data.trait_implementations.iter_mut() {
+        for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter_mut() {
             assert!(self.data.traits.contains_key(&trait_name));
+
+            // Create the scope for this trait implementation
+            let implementation_scope = Scope::child_trait_impl(scope_id, struct_name, trait_name);
+            let impl_scope_id = new_context.new_scope(implementation_scope);
+
             let trait_dec = self.data.traits.get(&trait_name).unwrap();
-            let mut struct_type = new_context.get_type(scope_id, struct_name).clone();
-            let mut existing_attributes = struct_type.all_attributes();
 
             // The names of functions the trait needs implementations for.
             let mut need_impl = HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
-            let mut decs_map = HashMap::new();
-            for dec in decs.iter_mut() {
-                let res = dec.scopes_and_types(scope_id, new_context);
+
+            let mut func_types = HashMap::new();
+
+            for dec in func_impls.iter_mut() {
+                let res = dec.scopes_and_types(impl_scope_id, new_context);
                 new_context = res.0;
                 let func_type = res.1;
                 let func_name = dec.data.get_name();
@@ -866,18 +1060,38 @@ impl GetContext for Node<Module> {
                 assert!(need_impl.contains(&func_name));
                 // Check that the declaration type and the expected type are the same.
                 let expected_type = trait_dec.functions.get(&func_name).unwrap();
-                assert!(expected_type == &func_type);
+
+                match (expected_type, &func_type) {
+                    (Type::Function(ref args_1, ref ret_1), Type::Function(ref args_2, ref ret_2)) => {
+                        for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
+                            match (t1, t2) {
+                                (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
+                                    "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
+                                (x, y) => assert!(x == y,
+                                    "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
+                            };
+                        }
+                        match (&**ret_1, &**ret_2) {
+                            (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
+                                "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
+                            (x, y) => assert!(x == y,
+                                "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
+                        };
+                    },
+                    x => panic!("TYPE ERROR: Somehow got a non function type.")
+                }
+
+                // Add the function type to the map
+                func_types.insert(func_name.clone(), func_type.clone());
 
                 // Remove this function from the set of functions that need to be implemented.
                 need_impl.remove(&func_name);
-
-                decs_map.insert(func_name.clone(), dec.clone());
             }
             // Demand that all methods of the trait have implementations.
             assert!(need_impl.len() == 0);
 
             let alias_type = Type::Named(struct_name.clone());
-            new_context.trait_implementations.insert((trait_name.clone(), alias_type), decs_map);
+            new_context.trait_implementations.insert((trait_name.clone(), alias_type), func_types);
         }
 
         for stmt in self.data.functions.iter_mut() {
@@ -904,14 +1118,6 @@ impl GetContext for Node<Module> {
 }
 
 impl GetContext for Node<Block> {
-    fn get_usages(&self) -> HashSet<Identifier> {
-        let mut usages = HashSet::new();
-        for stmt in &self.data.statements {
-            usages = general_utils::m_union(usages, stmt.get_usages());
-        }
-        return usages;
-    }
-
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         let new_scope = Scope::child(parent_id);
         let scope_id = context.new_scope(new_scope);
@@ -979,42 +1185,25 @@ impl GetContext for Node<Block> {
 
 impl GetContext for Node<Stmt> {
     
-    fn get_usages(&self) -> HashSet<Identifier> {
-        return match self.data {
-            Stmt::IfStmt{ref condition, ref block, ref else_block} => {
-                let usages = general_utils::m_union(condition.get_usages(), block.get_usages());
-                match else_block {
-                    Some(y) => general_utils::m_union(usages, y.get_usages()),
-                    None => usages
-                }
-            },
-            Stmt::WhileStmt{ref condition, ref block} => general_utils::m_union(condition.get_usages(), block.get_usages()),
-            Stmt::FunctionDecStmt{ref block, ..} => block.get_usages(),
-            Stmt::ReturnStmt(ref expression) | 
-            Stmt::YieldStmt(ref expression) | 
-            Stmt::LetStmt{ref expression, ..} |
-            Stmt::AssignmentStmt{ref expression, ..} => expression.get_usages(),
-            Stmt::BreakStmt | Stmt::ContinueStmt | Stmt::PassStmt => HashSet::new(),
-            _ => panic!()
-        };
-    }
-
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
-                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context);
                 match &type_annotation {
-                    Some(x) => assert!(t.is_compatible(x)),
+                    Some(ref x) => {
+                        let actual_type = c.resolve_self_type(x, self.scope);
+                        assert!(c.check_subtype(&expression, &t, &actual_type));
+                    },
                     None => {}
                 };
 
                 (c, t)
             },
             Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
-                let (c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context);
                 let expected_type = c.get_type(self.scope, name);
-                assert!(t.is_compatible(&expected_type));
+                assert!(c.check_subtype(&expression, &t, &expected_type));
                 (c, t)
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
@@ -1022,7 +1211,16 @@ impl GetContext for Node<Stmt> {
                 let mut new_scope = Scope::child(parent_id);
 
                 // Copy the types for non-keyword arguments
-                let mut arg_types = args.clone();
+                let mut arg_types = vec!();
+
+                for (key, t) in args.iter() {
+                    let resolved = context.resolve_self_type(t, self.scope);
+                    arg_types.push((key.clone(), resolved.clone()));
+
+                    // Add kwargs to
+                    let modification = CanModifyScope::Argument(resolved);
+                    new_scope.append_modification(key, modification);
+                }
 
                 // Evaluate scopes and types for all keyword expressions.
                 // This must be done *before* any arguments are actually added to scope,
@@ -1037,23 +1235,19 @@ impl GetContext for Node<Stmt> {
                     assert_eq!(*t, res.1);
 
                     // Add the type to the function type.
-                    arg_types.push((key.clone(), t.clone()));
+                    let resolved = context.resolve_self_type(t, self.scope);
+                    arg_types.push((key.clone(), resolved.clone()));
+
+                    // Add kwargs to
+                    let modification = CanModifyScope::Argument(resolved);
+                    new_scope.append_modification(key, modification);
                 }
 
-                let function_type = Type::Function(arg_types, Box::new(return_type.clone()));
+                let resolved_return_t = context.resolve_self_type(return_type, self.scope);
+
+                let function_type = Type::Function(arg_types, Box::new(resolved_return_t));
 
                 context.add_type(self.id, function_type.clone());
-
-                // Add arguments to declarations.
-                for (key, t) in args {
-                    let modification = CanModifyScope::Argument(t.clone());
-                    new_scope.append_modification(key, modification);
-                }
-
-                for (key, t, _) in kwargs {
-                    let modification = CanModifyScope::Argument(t.clone());
-                    new_scope.append_modification(key, modification);
-                }
 
                 let ret_modification = CanModifyScope::Return(return_type.clone());
                 new_scope.append_modification(&Identifier::from("$ret"), ret_modification);
@@ -1071,9 +1265,8 @@ impl GetContext for Node<Stmt> {
                 let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
                 assert_eq!(condition_type, Type::boolean);
 
-                let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                };
+                let block_scope = Scope::child(parent_id);
+
                 let scope_id = condition_context.new_scope(block_scope);
                 block.scopes_and_types(scope_id, condition_context)
             },
@@ -1081,9 +1274,7 @@ impl GetContext for Node<Stmt> {
                 let (mut new_context, condition_type) = condition.scopes_and_types(parent_id, context);
                 assert_eq!(condition_type, Type::boolean);
 
-                let block_scope = Scope{
-                    parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                };
+                let block_scope = Scope::child(parent_id); 
                 let scope_id = new_context.new_scope(block_scope);
                 let res = block.scopes_and_types(scope_id, new_context);
                 new_context = res.0;
@@ -1091,9 +1282,7 @@ impl GetContext for Node<Stmt> {
 
                 match else_block {
                     Some(b) => {
-                        let else_scope = Scope{
-                            parent_id: Some(parent_id), declarations: BTreeMap::new(), declaration_order: BTreeMap::new()
-                        };
+                        let else_scope = Scope::child(parent_id);
                         let else_scope_id = new_context.new_scope(else_scope);
                         let (else_context, else_type) = b.scopes_and_types(else_scope_id, new_context);
                         if_type = if_type.merge(&else_type);
@@ -1140,44 +1329,6 @@ impl GetContext for Node<Stmt> {
 
 impl GetContext for Node<Expr> {
 
-    fn get_usages(&self) -> HashSet<Identifier> {
-        return match self.data {
-            Expr::BinaryExpr{ref left, ref right, ..} => {
-                general_utils::m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::ComparisonExpr{ref left, ref right, ..} => {
-                general_utils::m_union(left.get_usages(), right.get_usages())
-            },
-            Expr::UnaryExpr{ref operand, ..} => {
-                operand.get_usages()
-            },
-            Expr::FunctionCall{ref args, ref kwargs, ..} => {
-                let mut usages = HashSet::new();
-                for expr in args {
-                    usages = general_utils::m_union(usages, expr.get_usages());
-                }
-
-                for (_, expr) in kwargs {
-                    usages = general_utils::m_union(usages, expr.get_usages());
-                }
-
-                usages
-            },
-            Expr::Index{ref base, ref slices} => {
-                let first_slice = slices.get(0).unwrap().clone();
-                let first_usages = first_slice.0.unwrap().get_usages();
-                general_utils::m_union(base.get_usages(), first_usages)
-            },
-            Expr::IdentifierExpr(ref name) => {
-                let mut usages = HashSet::new();
-                usages.insert(name.clone());
-                usages
-            },
-            Expr::Int(_) | Expr::Bool(_) | Expr::String(_) | Expr::Float(_) => HashSet::new(),
-            _ => panic!()
-        };
-    }
-
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
@@ -1191,7 +1342,14 @@ impl GetContext for Node<Expr> {
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context);
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
-                let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
+
+                let (trait_name, method_name) = operator.get_builtin_trait();
+                let return_type = match !left_t.is_gradual() || !right_t.is_gradual() {
+                    true  => right_c.check_trait_method_call(&trait_name, &method_name, &left_t, vec!(&left_t, &right_t)),
+                    false => Type::Gradual(general_utils::get_next_grad())
+                };
+
+                // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 (right_c, return_type)
             },
             Expr::UnaryExpr{ref mut operand, ..} => {
@@ -1224,6 +1382,7 @@ impl GetContext for Node<Expr> {
             },
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
+                println!("Start of StructLiteral: Base is {:?}", base);
                 let (mut new_c, base_t) = base.scopes_and_types(parent_id, context);
                 for field in fields {
                     let res = field.scopes_and_types(parent_id, new_c);
@@ -1234,6 +1393,7 @@ impl GetContext for Node<Expr> {
             },
             Expr::AttributeAccess{ref mut base, ref attribute} => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context);
+                println!("Start of AttributeAccess: Base is {:?}", base);
                 let attr_t = new_c.resolve_attribute(&base_t, attribute);
                 (new_c, attr_t)
             },
@@ -1319,31 +1479,6 @@ impl GetContext for Node<Expr> {
     }
 }
 
-pub fn numeric_join(left_type: &Type, right_type: &Type) -> Type {
-    panic!();
-    // Topological ordering of numeric types.
-    // i32, f32, i64, f64
-    // let order = vec![vec![Type::i32, Type::i64, Type::f64], vec![Type::f32, Type::f64], vec![Type::i64], vec![Type::f64]];
-    // let indices = hashmap!{Type::i32 => 0, Type::f32 => 1, Type::i64 => 2, Type::f64 => 3};
-    // let t1 = &order[*indices.get(left_type).unwrap()];
-    // let t2 = &order[*indices.get(right_type).unwrap()];
-    // let join = general_utils::vec_c_int(t1, t2);
-    // return join[0].clone();
-}
-
-// TODO: Return an option.
-pub fn convert_expr(expr: &Node<Expr>, new_type: &Type, type_map: &mut HashMap<usize, Type>) -> Node<Expr> {
-    let current_type = type_map.get(&expr.id).unwrap().clone();
-    if &current_type == new_type {
-        return expr.clone();
-    } else {
-        let operator = UnaryOperator::from(new_type);
-        return expr.replace(Expr::UnaryExpr{
-            operator, operand: Box::new(expr.clone())
-        });
-    }
-}
-
 pub fn get_convert_expr(from: &Type, to: &Type, base: Node<Expr>, context: &mut Context) -> Node<Expr> {
     return match from == to {
         false => {
@@ -1412,6 +1547,20 @@ impl BinaryOperator {
             _ => panic!()
         };
     }
+
+    pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
+        let (x, y) = match self {
+            BinaryOperator::Add => ("Add", "add"),
+            BinaryOperator::Sub => ("Sub", "sub"),
+            BinaryOperator::Mult => ("Mult", "mult"),
+            BinaryOperator::Div => ("Div", "div"),
+            BinaryOperator::And => ("And", "and"),
+            BinaryOperator::Or => ("Or", "or"),
+            _ => panic!()
+        };
+
+        return (Identifier::from(x), Identifier::from(y));
+    }
 }
 
 impl UnaryOperator {
@@ -1455,6 +1604,8 @@ mod test {
     use compiler_layers;
     use difference::{Difference, Changeset};
     use regex::Regex;
+    use std::fs::File;
+    use std::io::Read;
 
     #[cfg(test)]
     mod expected_failures {
@@ -1470,8 +1621,7 @@ mod test {
     #[test]
     fn test_basic_grace_function_dec() {
         let file_name = "test_data/basic_grace.gr".to_string();
-        let compilation = compiler_layers::Compilation::compile(
-            &file_name);
+        let compilation = compiler_layers::Compilation::compile(&file_name);
         let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
         let first_func_id = compiled_module.ast.data.functions.get(0).unwrap().id;
         let actual_type = compiled_module.context.type_map.get(&first_func_id).unwrap();
@@ -1480,20 +1630,9 @@ mod test {
     }
 
     #[test]
-    fn test_function_locals() {
-        let func_str = r#"fn a(b: i32, c: i32) -> i32:
-        return b + c
-        "#;
-        let (func_stmt, _) = compiler_layers::to_context::<Node<Stmt>>(func_str.as_bytes());
-        let usages = func_stmt.get_usages();
-        assert!(usages.contains(&Identifier::from("b")));
-        assert!(usages.contains(&Identifier::from("c")));
-    }
-
-    #[test]
     fn test_get_declarations() {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
-        let new_ident = Identifier::from("x");
+        // let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
         for ptr in actual {
@@ -1511,6 +1650,18 @@ mod test {
             }
         }
     }
+
+    #[test]
+    // One trait, one struct, one implmentation block  that uses self, and a function that uses it
+    fn traits_and_self() {
+        let mut f = File::open("test_data/trait_impl_self_test.gr").expect("File not found");
+        let mut file_contents = String::new();
+        f.read_to_string(&mut file_contents).unwrap();
+
+        let compilation = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+
+    }
+
 
     #[cfg(test)]
     mod scope_generation {
@@ -1531,17 +1682,17 @@ mod test {
             }
         }
 
-        impl Node<Stmt> {
-            fn mod_scope(&mut self, new_scope: usize) {
-                self.scope = new_scope;
-                match self.data {
-                    Stmt::LetStmt{ref mut expression, ..} => {
-                        expression.mod_scope(new_scope);
-                    }
-                    _ => {}
-                }
-            }
-        }
+        // impl Node<Stmt> {
+        //     fn mod_scope(&mut self, new_scope: usize) {
+        //         self.scope = new_scope;
+        //         match self.data {
+        //             Stmt::LetStmt{ref mut expression, ..} => {
+        //                 expression.mod_scope(new_scope);
+        //             }
+        //             _ => {}
+        //         }
+        //     }
+        // }
 
         /// Utility function to recursively modify the scope of an Expr AST.
         impl Node<Expr> {
@@ -1603,7 +1754,8 @@ mod test {
                     Node::from(true)
                 ];
                 for literal in literals.iter_mut() {
-                    let (id, mut context) = builtin_context();
+                    let mut context = Context::builtin();
+                    let id = context.root_id;
                     context = literal.scopes_and_types(id, context).0;
                     assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
                 }

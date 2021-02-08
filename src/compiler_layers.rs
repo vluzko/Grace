@@ -18,7 +18,6 @@ use scoping::{
     Type,
     Context,
     GetContext,
-    builtin_context,
 };
 
 use pre_cfg_rewrites::TypeRewritable;
@@ -137,7 +136,7 @@ impl Compilation {
         // let mut init_scope = base_scope();
         // let mut init_type_map = HashMap::new();
 
-        let mut init_context = Context::empty();
+        let mut init_context = Context::builtin();
 
         // Add builtin imports
         for (import, t) in default_imports().into_iter() {
@@ -377,12 +376,13 @@ pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context)
 where T: Parseable, T: GetContext {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
-    let (id, init) = builtin_context();
+    let init = Context::builtin();
+    let id = init.root_id;
     let context = result.scopes_and_types(id, init).0;
     return (result, context);
 }
 
-pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context) 
+pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context)
 where T: Parseable, T: GetContext, T: TypeRewritable<T>, T: Debug {
     let (result, mut context): (T, Context) = to_context(input);
     let rewritten = result.type_based_rewrite(&mut context);

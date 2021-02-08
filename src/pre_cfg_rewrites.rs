@@ -129,13 +129,16 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
 
                 // If neither type is gradual, proceed as normal
                 if !left_type.is_gradual() && !right_type.is_gradual() {
-                    // TODO: Once typeclasses are implemented, call the typeclass method with
-                    // the operator, the left type, and the right type to figure out what all
-                    // the other types need to be.
-                    let merged_type = operator.get_return_types(&left_type, &right_type);
-                    let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
-                    let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
-                    Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
+                    // If the left type is not primitive, call trait method corresponding to this operator
+                    if !left_type.is_primitive() {
+                        panic!("Operator -> trait method call not implemented yet.")
+                    } else {
+                        // If the left type is primitive, it stays an operator
+                        let merged_type = operator.get_return_types(&left_type, &right_type);
+                        let converted_left = get_convert_expr(&left_type, &merged_type, new_left, context);
+                        let converted_right = get_convert_expr(&right_type, &merged_type, new_right, context);
+                        Expr::BinaryExpr{operator, left: Box::new(converted_left), right: Box::new(converted_right)}
+                    }
                 } else {
                     // If either is gradual, we have to call the gradual version of the operator. 
                     let func_name_expr = wrap(Expr::from(".gradual_binary_ops.call_gradual"));
@@ -188,10 +191,6 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
         };
     }
 }
-
-
-
-
 
 
 #[cfg(test)]

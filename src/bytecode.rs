@@ -46,7 +46,10 @@ impl ToBytecode for WASMModule {
 impl ToBytecode for WASMFunc {
     fn to_bytecode(&self, context: &Context) -> String {
         let param_string = join(self.args.iter().map(|(n, t)| format!("(param ${} {})", n, t)), " ");
-        let result_string = format!("(result {})", self.result);
+        let result_string = match &self.result {
+            Some(x) => format!("(result {})", x),
+            None => "".to_string()
+        };
         let local_string = join(self.locals.iter().map(|(n, t)| format!("(local ${} {})", n, t)), " ");
         let header = format!("func ${} {} {} {}", self.name, param_string, result_string, local_string);
 

@@ -1,6 +1,6 @@
 /// Helpers for writing property based tests.
 use expression::*;
-use type_checking::scoping::Type;
+use type_checking::types::Type;
 
 /// Strategies for use in property-based testing.
 #[allow(unused)]

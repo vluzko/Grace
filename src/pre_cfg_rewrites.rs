@@ -5,8 +5,8 @@ use std::convert::From;
 
 use expression::*;
 use general_utils;
-use type_checking::scoping;
-use type_checking::scoping::{Context, Type, get_convert_expr, choose_return_type};
+use type_checking::types::Type;
+use type_checking::scoping::{Context, get_convert_expr, choose_return_type};
 
 
 pub trait TypeRewritable<T> {
@@ -239,10 +239,6 @@ mod test {
     #[test]
     fn test_identifier_resolution() {
         let block_str = "let a = 1\nlet b = a";
-        // let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        // let (id, init) = scoping::initial_context();
-        // let context = parsed.gen_scopes(id, &init);
-        // let (types, _) = parsed.resolve_types(&context, HashMap::new());
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
         assert_eq!(context.get_node_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;

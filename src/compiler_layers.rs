@@ -14,7 +14,7 @@ use expression::{
     Identifier,
     Import
 };
-use scoping::{
+use type_checking::scoping::{
     Type,
     Context,
     GetContext,

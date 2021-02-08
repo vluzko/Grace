@@ -5,8 +5,8 @@ use std::convert::From;
 
 use expression::*;
 use general_utils;
-use scoping;
-use scoping::{Context, Type, get_convert_expr, choose_return_type};
+use type_checking::scoping;
+use type_checking::scoping::{Context, Type, get_convert_expr, choose_return_type};
 
 
 pub trait TypeRewritable<T> {

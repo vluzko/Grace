@@ -433,7 +433,6 @@ impl CanModifyScope {
     }
 }
 
-
 /// A single layer of scope.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Scope {

@@ -4,7 +4,7 @@ use std::process::Command;
 use itertools::join;
 
 use expression::*;
-use scoping::{Context, CanModifyScope, Type, Refinement};
+use type_checking::scoping::{Context, CanModifyScope, Type, Refinement};
 use general_utils::{m_union};
 
 

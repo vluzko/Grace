@@ -11,7 +11,7 @@ use parser_utils::*;
 use parser_utils::iresult_helpers::*;
 use parser_utils::tokens::*;
 
-use scoping::{Type, Refinement, Trait};
+use type_checking::scoping::{Type, Refinement, Trait};
 use general_utils::{
     get_next_id,
     get_next_var,

@@ -1,6 +1,6 @@
 use itertools::join;
 
-use scoping::Context;
+use type_checking::scoping::Context;
 use llr::{
     WASMModule,
     WASMFunc,

@@ -1,6 +1,7 @@
 /// Low-level representation of WebAssembly.
 use itertools::join;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::BTreeMap;
 use std::convert::From;
 use std::fmt;
@@ -9,9 +10,11 @@ use petgraph::{Outgoing, visit::EdgeRef};
 
 
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
+use expression::{Node, Module, Expr, Stmt, Block, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
 use type_checking::types::Type;
-use type_checking::scoping::{Context, GetContext};
+use type_checking::scoping::GetContext;
+use type_checking::context::Context;
+use general_utils;
 
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
@@ -91,6 +94,35 @@ impl WASMType {
         return match self {
             WASMType::i32 | WASMType::f32 => 1,
             WASMType::i64 | WASMType::f64 => 2
+        };
+    }
+}
+
+trait GetTrueDeclarations {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
+}
+
+impl GetTrueDeclarations for Node<Block> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        let top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        let mut with_types = top_level.into_iter().map(|x| {
+            let t = context.get_type(self.scope, &x);
+            (x, t)
+        }).collect();
+        for stmt in &self.data.statements {
+            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
+        }
+        return with_types;
+    }
+}
+
+impl GetTrueDeclarations for Node<Stmt> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        return match self.data {
+            Stmt::FunctionDecStmt{ref block, ..} => {
+                block.get_true_declarations(context)
+            },
+            _ => HashSet::new()
         };
     }
 }
@@ -629,6 +661,8 @@ mod tests {
     use std::fs::File;
 
     use compiler_layers;
+    use difference::{Difference, Changeset};
+    use regex::Regex;
 
     #[test]
     fn trait_impl_test() {
@@ -654,5 +688,28 @@ mod tests {
             panic!()
         }
     }
+
+    #[test]
+    fn test_get_declarations() {
+        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
+        // let new_ident = Identifier::from("x");
+        let actual = func_dec.get_true_declarations(&context);
+        let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
+        for ptr in actual {
+            let changeset = Changeset::new("x", ptr.0.name.as_str(), "");
+            for diff in changeset.diffs {
+                match diff {
+                    Difference::Same(_) => {},
+                    Difference::Rem(_) => panic!(),
+                    Difference::Add(added_string) => {
+                        // Check if the thing being added is a scope ID on the end
+                        // of a variable
+                        assert!(scope_suffix_regex.is_match(added_string.as_str()));
+                    }
+                }
+            }
+        }
+    }
+
 
 }

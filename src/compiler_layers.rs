@@ -15,7 +15,8 @@ use expression::{
     Import
 };
 use type_checking::types::Type;
-use type_checking::scoping::{Context, GetContext};
+use type_checking::scoping::GetContext;
+use type_checking::context::Context;
 
 use pre_cfg_rewrites::TypeRewritable;
 use cfg::{CfgMap, Cfg, module_to_cfg};

@@ -3,7 +3,7 @@ use std::iter::FromIterator;
 
 use expression::*;
 use general_utils;
-use type_checking::scoping::GetContext;
+// use type_checking::type_check::GetContext;
 use type_checking::context::Context;
 use type_checking::refinements::check_constraints;
 

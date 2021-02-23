@@ -155,22 +155,28 @@ impl Compilation {
         parsed_module.data.imports = new_imports;
 
         // 
-        let mut context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
-        let rewritten = parsed_module.type_based_rewrite(&mut context);
-        let cfg_map = module_to_cfg(&rewritten, &context);
-        let wasm = module_to_llr(&rewritten, &context, &cfg_map);
+        let mut context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
+        match context_res {
+            Ok((context, _)) => {
+                let rewritten = parsed_module.type_based_rewrite(&mut context);
+                let cfg_map = module_to_cfg(&rewritten, &context);
+                let wasm = module_to_llr(&rewritten, &context, &cfg_map);
 
-        // Put the results in the tree.
-        let compiled = CompiledModule {
-            ast: rewritten,
-            context: context,
-            cfg_map: cfg_map,
-            llr: wasm,
-            path: file_name.clone(),
-            dependencies: dependencies,
-            hash: 0
+                // Put the results in the tree.
+                let compiled = CompiledModule {
+                    ast: rewritten,
+                    context: context,
+                    cfg_map: cfg_map,
+                    llr: wasm,
+                    path: file_name.clone(),
+                    dependencies: dependencies,
+                    hash: 0
+                };
+                self.modules.insert(module_name, compiled);
+            },
+            Err(e) => panic!("Unimplemented error handling.")
         };
-        self.modules.insert(module_name, compiled);
+
     }
 
     fn add_import(&mut self, base_dir: &Box<Path>, import: &Import, context: &mut Context) -> Import {
@@ -255,22 +261,28 @@ impl Compilation {
             panic!()
         }
 
-        let context = parsed_module.scopes_and_types(init_context.root_id, init_context).0;
-        let cfg_map = module_to_cfg(&parsed_module, &context);
-        let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
+        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
+        return match context_res {
+            Ok((context, _)) => {
+                let cfg_map = module_to_cfg(&parsed_module, &context);
+                let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
 
-        // Put the results in the tree.
-        let compiled = CompiledModule {
-            ast: parsed_module,
-            context: context,
-            cfg_map: cfg_map,
-            llr: wasm,
-            path: Box::from(Path::new(".")),
-            dependencies: vec!(),
-            hash: 0
-        };
-        compilation.modules.insert("$cli".to_string(), compiled);
-        return compilation;
+                // Put the results in the tree.
+                let compiled = CompiledModule {
+                    ast: parsed_module,
+                    context: context,
+                    cfg_map: cfg_map,
+                    llr: wasm,
+                    path: Box::from(Path::new(".")),
+                    dependencies: vec!(),
+                    hash: 0
+                };
+                compilation.modules.insert("$cli".to_string(), compiled);
+                compilation
+            },
+            Err(_) => panic!("Unimplemented error handling")
+        }
+
     }
 
     /// Merge two Compilations together.
@@ -376,8 +388,11 @@ where T: Parseable, T: GetContext {
     let mut result = T::parse(new_input);
     let init = Context::builtin();
     let id = init.root_id;
-    let context = result.scopes_and_types(id, init).0;
-    return (result, context);
+    let context_res = result.scopes_and_types(id, init);
+    return match context_res {
+        Ok((context, _)) => (result, context),
+        Err(e) => panic!()
+    };
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context)

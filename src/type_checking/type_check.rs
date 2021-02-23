@@ -7,16 +7,20 @@ use type_checking::refinements::check_constraints;
 use type_checking::types::{Type, Refinement, Trait};
 use type_checking::context::Context;
 use type_checking::scoping::{Scope, CanModifyScope};
+use grace_error::GraceError;
+
+type TypeCheckRes = Result<(Context, Type), GraceError>;
 
 /// A trait for everything that can be type-checked / lives in a context.
 pub trait GetContext {
 
     /// Compute the scopes and types for an AST node.
-    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> (Context, Type);
+    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> TypeCheckRes;
 }
 
+
 impl GetContext for Node<Module> {
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         let mut new_scope = Scope::child(parent_id);
         
         for stmt in &self.data.functions {
@@ -32,7 +36,7 @@ impl GetContext for Node<Module> {
         let mut new_context = context;
 
         for stmt in self.data.structs.iter_mut() {
-            new_context = stmt.scopes_and_types(scope_id, new_context).0;
+            new_context = stmt.scopes_and_types(scope_id, new_context)?.0;
         }
 
         // Add all traits to the context.
@@ -56,7 +60,7 @@ impl GetContext for Node<Module> {
             let mut func_types = HashMap::new();
 
             for dec in func_impls.iter_mut() {
-                let res = dec.scopes_and_types(impl_scope_id, new_context);
+                let res = dec.scopes_and_types(impl_scope_id, new_context)?;
                 new_context = res.0;
                 let func_type = res.1;
                 let func_name = dec.data.get_name();
@@ -100,15 +104,16 @@ impl GetContext for Node<Module> {
         }
 
         for stmt in self.data.functions.iter_mut() {
-            new_context = stmt.scopes_and_types(scope_id, new_context).0;
+            new_context = stmt.scopes_and_types(scope_id, new_context)?.0;
         }
 
-        return (new_context, Type::empty);
+        return Ok((new_context, Type::empty));
     }
 }
 
+
 impl GetContext for Node<Block> {
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         let new_scope = Scope::child(parent_id);
         let scope_id = context.new_scope(new_scope);
         self.scope = scope_id;
@@ -119,7 +124,7 @@ impl GetContext for Node<Block> {
         for stmt in self.data.statements.iter_mut() {
 
             // Get scopes and types for the current statement.
-            let res = stmt.scopes_and_types(scope_id, new_context);
+            let res = stmt.scopes_and_types(scope_id, new_context)?;
             new_context = res.0;
 
             // Update the block type if it's a return statement.
@@ -157,16 +162,17 @@ impl GetContext for Node<Block> {
 
         new_context.add_type(self.id, block_type.clone());
 
-        return (new_context, block_type);
+        return Ok((new_context, block_type));
     }
 }
 
+
 impl GetContext for Node<Stmt> {
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         self.scope = parent_id;
-        let (mut final_c, final_t) = match self.data {
+        let final_res: TypeCheckRes = match self.data {
             Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
-                let (mut c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context)?;
                 match &type_annotation {
                     Some(ref x) => {
                         let actual_type = c.resolve_self_type(x, self.scope);
@@ -175,13 +181,13 @@ impl GetContext for Node<Stmt> {
                     None => {}
                 };
 
-                (c, t)
+                Ok((c, t))
             },
             Stmt::AssignmentStmt{ref mut expression, ref mut name} => {
-                let (mut c, t) = expression.scopes_and_types(parent_id, context);
+                let (mut c, t) = expression.scopes_and_types(parent_id, context)?;
                 let expected_type = c.get_type(self.scope, name);
                 assert!(c.check_subtype(&expression, &t, &expected_type));
-                (c, t)
+                Ok((c, t))
             },
             Stmt::FunctionDecStmt{ref args, ref mut kwargs, ref mut block, ref return_type, ..} => {
                 // TODO: Type checking
@@ -205,7 +211,7 @@ impl GetContext for Node<Stmt> {
                 for (key, t, ref mut val) in kwargs.iter_mut() {
 
                     // Get context for each expression
-                    let res = val.scopes_and_types(parent_id, context);
+                    let res = val.scopes_and_types(parent_id, context)?;
                     context = res.0;
 
                     // Check kwarg expression type matches annotation
@@ -232,14 +238,14 @@ impl GetContext for Node<Stmt> {
                 let scope_id = context.new_scope(new_scope);
                 self.scope = scope_id;
 
-                let (block_context, block_type) = block.scopes_and_types(scope_id, context);
+                let (block_context, block_type) = block.scopes_and_types(scope_id, context)?;
 
                 assert!(return_type.is_compatible(&block_type), "{:?} not compatible with {:?}", return_type, block_type);
 
-                (block_context, function_type)
+                Ok((block_context, function_type))
             },
             Stmt::WhileStmt{ref mut condition, ref mut block} => {
-                let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                let (mut condition_context, condition_type) = condition.scopes_and_types(parent_id, context)?;
                 assert_eq!(condition_type, Type::boolean);
 
                 let block_scope = Scope::child(parent_id);
@@ -248,24 +254,30 @@ impl GetContext for Node<Stmt> {
                 block.scopes_and_types(scope_id, condition_context)
             },
             Stmt::IfStmt{ref mut condition, ref mut block, ref mut else_block} => {
-                let (mut new_context, condition_type) = condition.scopes_and_types(parent_id, context);
+                let (mut new_context, condition_type) = condition.scopes_and_types(parent_id, context)?;
                 assert_eq!(condition_type, Type::boolean);
 
                 let block_scope = Scope::child(parent_id); 
                 let scope_id = new_context.new_scope(block_scope);
                 let res = block.scopes_and_types(scope_id, new_context);
-                new_context = res.0;
-                let mut if_type = res.1;
 
-                match else_block {
-                    Some(b) => {
-                        let else_scope = Scope::child(parent_id);
-                        let else_scope_id = new_context.new_scope(else_scope);
-                        let (else_context, else_type) = b.scopes_and_types(else_scope_id, new_context);
-                        if_type = if_type.merge(&else_type);
-                        (else_context, if_type)
+                match res {
+                    Ok(v) => {
+                        new_context = v.0;
+                        let mut if_type = v.1;
+        
+                        match else_block {
+                            Some(b) => {
+                                let else_scope = Scope::child(parent_id);
+                                let else_scope_id = new_context.new_scope(else_scope);
+                                let (else_context, else_type) = b.scopes_and_types(else_scope_id, new_context)?;
+                                if_type = if_type.merge(&else_type);
+                                Ok((else_context, if_type))
+                            },
+                            None => Ok((new_context, if_type))
+                        }
                     },
-                    None => (new_context, if_type)
+                    Err(e) => Err(e)
                 }
             },
             Stmt::StructDec{ref name, ref fields} => {
@@ -277,38 +289,45 @@ impl GetContext for Node<Stmt> {
                 }
                 let record = Type::Record(order, records);
                 context.define_type(name.clone(), record);
-                (context, Type::Named(name.clone()))
+                Ok((context, Type::Named(name.clone())))
             },
             Stmt::ReturnStmt(ref mut expression) => {
                 let ret_name = Identifier::from("$ret");
                 let exp_type = context.get_type(self.scope, &ret_name);
-                let (mut new_c, new_t) = expression.scopes_and_types(parent_id, context);
+                let (mut new_c, new_t) = expression.scopes_and_types(parent_id, context)?;
                 assert!(new_c.check_subtype(expression, &new_t, &exp_type));
                 
-                (new_c, new_t)
+                Ok((new_c, new_t))
             },
-            Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => (context, Type::empty),
+            Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => Ok((context, Type::empty)),
             _ => panic!("scopes_and_types not implemented for {:?}", self.data)
         };
-        final_c.add_type(self.id, final_t.clone());
-        return (final_c, final_t);
+        return match final_res {
+            Ok((mut final_c, final_t)) => {
+                final_c.add_type(self.id, final_t.clone());
+                Ok((final_c, final_t))
+            },
+            Err(e) => Err(e)
+        }
+
     }
 }
 
+
 impl GetContext for Node<Expr> {
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> (Context, Type) {
+    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         self.scope = parent_id;
-        let (mut final_c, final_t) = match self.data {
+        let final_res: TypeCheckRes = match self.data {
             Expr::ComparisonExpr{ref mut left, ref mut right, ..} => {
-                let (left_c, left_t) = left.scopes_and_types(parent_id, context);
-                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
+                let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
+                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
                 assert_eq!(left_t, right_t);
-                (right_c, Type::boolean)
+                Ok((right_c, Type::boolean))
             },
             // TODO: Type checking
             Expr::BinaryExpr{ref operator, ref mut left, ref mut right} => {
-                let (left_c, left_t) = left.scopes_and_types(parent_id, context);
-                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c);
+                let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
+                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
 
                 let (trait_name, method_name) = operator.get_builtin_trait();
                 let return_type = match !left_t.is_gradual() || !right_t.is_gradual() {
@@ -317,20 +336,20 @@ impl GetContext for Node<Expr> {
                 };
 
                 // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
-                (right_c, return_type)
+                Ok((right_c, return_type))
             },
             Expr::UnaryExpr{ref mut operand, ..} => {
                 operand.scopes_and_types(parent_id, context)
             }
             // TODO: Type checking
             Expr::FunctionCall{ref mut function, ref mut args, ref mut kwargs} => {
-                let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context);
+                let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
                 let (arg_types, ret) = match wrapped_func {
                     Type::Function(a, b) => (a, *b.clone()),
                     x => panic!("Expected function type. Got: {:?}", x)
                 };
                 for (i, arg) in args.into_iter().enumerate() {
-                    let res = arg.scopes_and_types(parent_id, new_c);
+                    let res = arg.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
                     let arg_t = res.1;
 
@@ -341,37 +360,49 @@ impl GetContext for Node<Expr> {
                 }
 
                 for (_, value) in kwargs {
-                    let res = value.scopes_and_types(parent_id, new_c);
+                    let res = value.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
                     let _kwarg_t = res.1;
                 }
-                (new_c, ret)
+                Ok((new_c, ret))
             },
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
-                println!("Start of StructLiteral: Base is {:?}", base);
-                let (mut new_c, base_t) = base.scopes_and_types(parent_id, context);
+                let (mut new_c, base_t) = base.scopes_and_types(parent_id, context)?;
+                let mut error = None;
                 for field in fields {
                     let res = field.scopes_and_types(parent_id, new_c);
-                    new_c = res.0;
-                    let _field_t = res.1;
+                    match res {
+                        Ok(v) => {
+                            new_c = v.0;
+                            let _field_t = v.1;
+                        },
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    }
+
                 }
-                (new_c, base_t.clone())
+                match error {
+                    None => Ok((new_c, base_t.clone())),
+                    Some(e) => Err(e)
+                }
+
             },
             Expr::AttributeAccess{ref mut base, ref attribute} => {
-                let (new_c, base_t) = base.scopes_and_types(parent_id, context);
-                println!("Start of AttributeAccess: Base is {:?}", base);
+                let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
                 let attr_t = new_c.resolve_attribute(&base_t, attribute);
-                (new_c, attr_t)
+                Ok((new_c, attr_t))
             },
             Expr::ModuleAccess(ref id, ref mut names) => {
                 let module_type = context.get_node_type(*id);
                 let t = module_type.resolve_nested_record(&names[1..].to_vec());
                 context.add_type(self.id, t.clone());
-                (context, t)
+                Ok((context, t))
             },
             Expr::Index{ref mut base, ..} => {
-                let (_new_c, _base_t) = base.scopes_and_types(parent_id, context);
+                let (_new_c, _base_t) = base.scopes_and_types(parent_id, context)?;
                 panic!()
             },
             Expr::IdentifierExpr(ref mut name) => {
@@ -382,63 +413,111 @@ impl GetContext for Node<Expr> {
                     }
                 };
                 context.add_type(self.id, t.clone());
-                (context, t)
+                Ok((context, t))
             },
             Expr::Int(_) => {
                 // let t = Numeric();
                 context.add_type(self.id, Type::i32);
-                (context, Type::i32)
+                Ok((context, Type::i32))
             },
             Expr::Float(_) => {
                 // let t = FloatingPoint();
                 context.add_type(self.id, Type::f32);
-                (context, Type::f32)
+                Ok((context, Type::f32))
             },
             Expr::String(_) => {
                 let t = Type::string;
                 context.add_type(self.id, t.clone());
-                (context, t)
+                Ok((context, t))
             },
             Expr::Bool(_) => {
                 let t = Type::boolean;
                 context.add_type(self.id, t.clone());
-                (context, t)
+                Ok((context, t))
             },
             Expr::VecLiteral(ref mut exprs) => {
                 let mut vec_t = Type::Undetermined;
                 let mut new_c = context;
+                let mut error = None;
                 for expr in exprs {
                     let res = expr.scopes_and_types(parent_id, new_c);
-                    new_c = res.0;
-                    vec_t = vec_t.merge(&res.1);
+                    match res {
+                        Ok(v) => {
+                            new_c = v.0;
+                            vec_t = vec_t.merge(&v.1);
+                        },
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    }
                 }
-                (new_c, Type::Vector(Box::new(vec_t)))
+                match error {
+                    None => Ok((new_c, Type::Vector(Box::new(vec_t)))),
+                    Some(e) => Err(e)
+                }
+
             },
             Expr::SetLiteral(ref mut exprs) => {
                 let mut set_t = Type::Undetermined;
                 let mut new_c = context;
+                let mut error = None;
                 for expr in exprs {
                     let res = expr.scopes_and_types(parent_id, new_c);
-                    new_c = res.0;
-                    set_t = set_t.merge(&res.1);
+                    match res {
+                        Ok(v) => {
+                            new_c = v.0;
+                            set_t = set_t.merge(&v.1);
+                        },
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    }
+
                 }
-                (new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))
+                match error {
+                    None => Ok((new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))),
+                    Some(e) => Err(e)
+                }
+
             },
             Expr::TupleLiteral(ref mut exprs) => {
                 let mut types = vec!();
                 let mut new_c = context;
+                let mut error = None;
+                // TODO
                 for expr in exprs {
                     let res = expr.scopes_and_types(parent_id, new_c);
-                    new_c = res.0;
-                    types.push(res.1);
+                    match res {
+                        Ok(v) => {
+                            new_c = v.0;
+                            types.push(v.1);
+                        },
+                        Err(e) => {
+                            error = Some(e);
+                            break;
+                        }
+                    }
                 }
-                let t = Type::Product(types);
-                (new_c, t)
+                match error {
+                    None => {
+                        let t = Type::Product(types);
+                        Ok((new_c, t))
+                    },
+                    Some(e) => Err(e)
+                }
+
             },
             _ => panic!()
         };
-        final_c.add_type(self.id, final_t.clone());
-        return (final_c, final_t);
+        return match final_res {
+            Ok((mut final_c, final_t)) => {
+                final_c.add_type(self.id, final_t.clone());
+                Ok((final_c, final_t))
+            },
+            Err(e) => Err(e)
+        }
     }
 }
 
@@ -502,8 +581,9 @@ mod tests{
             for literal in literals.iter_mut() {
                 let mut context = Context::builtin();
                 let id = context.root_id;
-                context = literal.scopes_and_types(id, context).0;
-                assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
+                panic!("Unfinished test.")
+                // context = literal.scopes_and_types(id, context)?.0;
+                // assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
             }
         }
     }

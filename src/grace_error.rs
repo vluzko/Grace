@@ -9,18 +9,18 @@ use position_tracker::PosStr;
 
 /// A Grace error
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GraceError<'a> {
-    ParserError{msg: String, nom_error: (PosStr<'a>, ErrorKind)},
+pub enum GraceError {
+    ParserError{msg: String, nom_error: ErrorKind},
     TypeError{msg: String}
 }
 
-impl <'a> fmt::Display for GraceError<'a> {
+impl fmt::Display for GraceError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         panic!()
     }
 }
 
-impl <'a> Error for GraceError<'a> {
+impl Error for GraceError {
     fn description(&self) -> &str {
         panic!()
     }

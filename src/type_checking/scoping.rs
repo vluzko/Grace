@@ -318,9 +318,8 @@ mod test {
             let stmt2_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
             check_ptr_stmt(stmt2_pointer, &s2);
         }
-        
 
-        
+
         #[cfg(test)]
         mod stmts {
             use super::*;

@@ -459,53 +459,77 @@ impl GetContext for Node<Expr> {
 
             },
             Expr::SetLiteral(ref mut exprs) => {
-                let mut set_t = Type::Undetermined;
-                let mut new_c = context;
-                let mut error = None;
-                for expr in exprs {
-                    let res = expr.scopes_and_types(parent_id, new_c);
-                    match res {
-                        Ok(v) => {
-                            new_c = v.0;
-                            set_t = set_t.merge(&v.1);
+                let element_checker = |aggregate: Result<(Context, Type), GraceError>, expr: &mut Node<Expr>| {
+                    match aggregate {
+                        Ok((new_c, mut set_t)) => {
+                            let res = expr.scopes_and_types(parent_id, new_c);
+                            match res {
+                                Ok((new_c, t)) => {
+                                    set_t = set_t.merge(&t);
+                                    Ok((new_c, set_t))
+                                },
+                                Err(x) => Err(x)
+                            }
                         },
-                        Err(e) => {
-                            error = Some(e);
-                            break;
-                        }
+                        x => x
                     }
-
+                };
+                let init:Result<(Context, Type), GraceError> = Ok((context, vec!()));
+                let res = exprs.iter_mut().fold(init, element_checker); 
+                match res {
+                    Ok((new_c, set_t)) => {
+                        let t = Type::Parameterized(Identifier::from("Set"), vec!(set_t));
+                        Ok((new_c, t))
+                    },
+                    Err(x) => Err(x)
                 }
-                match error {
-                    None => Ok((new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))),
-                    Some(e) => Err(e)
-                }
+             },
+            //     let mut set_t = Type::Undetermined;
+            //     let mut new_c = context;
+            //     let mut error = None;
+            //     for expr in exprs {
+            //         let res = expr.scopes_and_types(parent_id, new_c);
+            //         match res {
+            //             Ok(v) => {
+            //                 new_c = v.0;
+            //                 set_t = set_t.merge(&v.1);
+            //             },
+            //             Err(e) => {
+            //                 error = Some(e);
+            //                 break;
+            //             }
+            //         }
 
-            },
+            //     }
+            //     match error {
+            //         None => Ok((new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))),
+            //         Some(e) => Err(e)
+            //     }
+            // },
             Expr::TupleLiteral(ref mut exprs) => {
-                let mut types = vec!();
-                let mut new_c = context;
-                let mut error = None;
-                // TODO
-                for expr in exprs {
-                    let res = expr.scopes_and_types(parent_id, new_c);
-                    match res {
-                        Ok(v) => {
-                            new_c = v.0;
-                            types.push(v.1);
+                let element_checker = |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
+                    match aggregate {
+                        Ok((new_c, mut types)) => {
+                            let res = expr.scopes_and_types(parent_id, new_c);
+                            match res {
+                                Ok((new_c, t)) => {
+                                    types.push(t);
+                                    Ok((new_c, types))
+                                },
+                                Err(x) => Err(x)
+                            }
                         },
-                        Err(e) => {
-                            error = Some(e);
-                            break;
-                        }
+                        x => x
                     }
-                }
-                match error {
-                    None => {
+                };
+                let init:Result<(Context, Vec<Type>), GraceError> = Ok((context, vec!()));
+                let res = exprs.iter_mut().fold(init, element_checker); 
+                match res {
+                    Ok((new_c, types)) => {
                         let t = Type::Product(types);
                         Ok((new_c, t))
                     },
-                    Some(e) => Err(e)
+                    Err(x) => Err(x)
                 }
 
             },

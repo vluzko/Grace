@@ -157,7 +157,7 @@ impl Compilation {
         // 
         let mut context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
         match context_res {
-            Ok((context, _)) => {
+            Ok((mut context, _)) => {
                 let rewritten = parsed_module.type_based_rewrite(&mut context);
                 let cfg_map = module_to_cfg(&rewritten, &context);
                 let wasm = module_to_llr(&rewritten, &context, &cfg_map);

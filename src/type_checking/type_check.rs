@@ -369,24 +369,28 @@ impl GetContext for Node<Expr> {
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
                 let (mut new_c, base_t) = base.scopes_and_types(parent_id, context)?;
-                let mut error = None;
-                for field in fields {
-                    let res = field.scopes_and_types(parent_id, new_c);
-                    match res {
-                        Ok(v) => {
-                            new_c = v.0;
-                            let _field_t = v.1;
+                let element_checker = |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
+                    match aggregate {
+                        Ok((new_c, mut vec_t)) => {
+                            let res = expr.scopes_and_types(parent_id, new_c);
+                            match res {
+                                Ok((new_c, t)) => {
+                                    vec_t.push(t);
+                                    Ok((new_c, vec_t))
+                                },
+                                Err(x) => Err(x)
+                            }
                         },
-                        Err(e) => {
-                            error = Some(e);
-                            break;
-                        }
+                        x => x
                     }
-
-                }
-                match error {
-                    None => Ok((new_c, base_t.clone())),
-                    Some(e) => Err(e)
+                };
+                let init = Ok((new_c, vec!()));
+                let res = fields.iter_mut().fold(init, element_checker);
+                match res {
+                    Ok((new_c, vec_t)) => {
+                        Ok((new_c, base_t.clone()))
+                    },
+                    Err(x) => Err(x)
                 }
 
             },
@@ -436,25 +440,29 @@ impl GetContext for Node<Expr> {
                 Ok((context, t))
             },
             Expr::VecLiteral(ref mut exprs) => {
-                let mut vec_t = Type::Undetermined;
-                let mut new_c = context;
-                let mut error = None;
-                for expr in exprs {
-                    let res = expr.scopes_and_types(parent_id, new_c);
-                    match res {
-                        Ok(v) => {
-                            new_c = v.0;
-                            vec_t = vec_t.merge(&v.1);
+                let element_checker = |aggregate: Result<(Context, Type), GraceError>, expr: &mut Node<Expr>| {
+                    match aggregate {
+                        Ok((new_c, mut vec_t)) => {
+                            let res = expr.scopes_and_types(parent_id, new_c);
+                            match res {
+                                Ok((new_c, t)) => {
+                                    vec_t = vec_t.merge(&t);
+                                    Ok((new_c, vec_t))
+                                },
+                                Err(x) => Err(x)
+                            }
                         },
-                        Err(e) => {
-                            error = Some(e);
-                            break;
-                        }
+                        x => x
                     }
-                }
-                match error {
-                    None => Ok((new_c, Type::Vector(Box::new(vec_t)))),
-                    Some(e) => Err(e)
+                };
+                let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
+                let res = exprs.iter_mut().fold(init, element_checker);
+                match res {
+                    Ok((new_c, vec_t)) => {
+                        let t = Type::Vector(Box::new(vec_t));
+                        Ok((new_c, t))
+                    },
+                    Err(x) => Err(x)
                 }
 
             },
@@ -474,8 +482,8 @@ impl GetContext for Node<Expr> {
                         x => x
                     }
                 };
-                let init:Result<(Context, Type), GraceError> = Ok((context, vec!()));
-                let res = exprs.iter_mut().fold(init, element_checker); 
+                let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
+                let res = exprs.iter_mut().fold(init, element_checker);
                 match res {
                     Ok((new_c, set_t)) => {
                         let t = Type::Parameterized(Identifier::from("Set"), vec!(set_t));

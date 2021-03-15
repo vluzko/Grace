@@ -5,7 +5,6 @@ use std::fmt;
 extern crate nom;
 use self::nom::ErrorKind;
 
-use position_tracker::PosStr;
 
 /// A Grace error
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -15,7 +14,7 @@ pub enum GraceError {
 }
 
 impl fmt::Display for GraceError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, _f: &mut fmt::Formatter) -> fmt::Result {
         panic!()
     }
 }

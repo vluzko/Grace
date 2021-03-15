@@ -362,7 +362,7 @@ impl Context {
         return match base_type {
             Type::self_type(t) => {
                 assert!(matches!(**t, Type::Undetermined), "TYPE ERROR: Matching against a self type that is not undetermined: {:?}", base_type);
-                let (struct_name, trait_name) = self.get_struct_and_trait(scope_id);
+                let (struct_name, _) = self.get_struct_and_trait(scope_id);
                 match struct_name {
                     Some(x) => Type::self_type(Box::new(Type::Named(x))),
                     None => panic!("TYPE ERROR: Self used outside of a method implementation.")

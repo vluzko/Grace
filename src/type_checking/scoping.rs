@@ -1,10 +1,8 @@
-use std::collections::{BTreeSet, BTreeMap, HashSet, HashMap};
-use std::iter::FromIterator;
+use std::collections::{BTreeMap};
 
 use expression::*;
 use general_utils;
-use type_checking::refinements::check_constraints;
-use type_checking::types::{Type, Refinement, Trait};
+use type_checking::types::{Type};
 use type_checking::context::Context;
 
 
@@ -238,10 +236,6 @@ impl From<Identifier> for Type {
 mod test {
     use super::*;
     use compiler_layers;
-    use difference::{Difference, Changeset};
-    use regex::Regex;
-    use std::fs::File;
-    use std::io::Read;
 
     #[cfg(test)]
     mod scope_generation {

@@ -110,13 +110,14 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
 }
 
 
+#[allow(unused_assignments)]
 /// Add the contents of a block to a CFG.
 /// 
 /// # Arguments
 /// 
 /// * `context` - 
 /// * `current` - 
-/// * `loop_start` - 
+/// * `loop_start` -
 fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
     let mut new_cfg = current;
     // The set of statements in the current CFG block.

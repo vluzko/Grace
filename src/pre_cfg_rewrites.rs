@@ -1,10 +1,6 @@
-use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
-use std::iter::FromIterator;
-use std::usize;
 use std::convert::From;
 
 use expression::*;
-use general_utils;
 use type_checking::types::Type;
 use type_checking::scoping::{get_convert_expr, choose_return_type};
 use type_checking::context::Context;

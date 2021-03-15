@@ -1,4 +1,4 @@
-use std::collections::{HashMap, BTreeMap, BTreeSet};
+use std::collections::{HashMap, BTreeMap};
 use std::path::{Path, PathBuf};
 use std::fmt::Debug;
 use std::io::prelude::*;
@@ -154,8 +154,7 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        // 
-        let mut context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
+        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
         match context_res {
             Ok((mut context, _)) => {
                 let rewritten = parsed_module.type_based_rewrite(&mut context);
@@ -174,7 +173,7 @@ impl Compilation {
                 };
                 self.modules.insert(module_name, compiled);
             },
-            Err(e) => panic!("Unimplemented error handling.")
+            Err(e) => panic!("Unimplemented error handling: {:?}", e)
         };
 
     }
@@ -391,7 +390,7 @@ where T: Parseable, T: GetContext {
     let context_res = result.scopes_and_types(id, init);
     return match context_res {
         Ok((context, _)) => (result, context),
-        Err(e) => panic!()
+        x => panic!("COMPILER ERROR: {:?}", x)
     };
 }
 

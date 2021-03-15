@@ -1,10 +1,9 @@
-use std::collections::{BTreeSet, BTreeMap, HashSet, HashMap};
+use std::collections::{BTreeMap, HashSet, HashMap};
 use std::iter::FromIterator;
 
 use expression::*;
 use general_utils;
-use type_checking::refinements::check_constraints;
-use type_checking::types::{Type, Refinement, Trait};
+use type_checking::types::{Type};
 use type_checking::context::Context;
 use type_checking::scoping::{Scope, CanModifyScope};
 use grace_error::GraceError;
@@ -87,7 +86,7 @@ impl GetContext for Node<Module> {
                                 "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
                         };
                     },
-                    x => panic!("TYPE ERROR: Somehow got a non function type.")
+                    x => panic!("TYPE ERROR: Somehow got a non function type: {:?}", x)
                 }
 
                 // Add the function type to the map
@@ -171,7 +170,7 @@ impl GetContext for Node<Stmt> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         self.scope = parent_id;
         let final_res: TypeCheckRes = match self.data {
-            Stmt::LetStmt{ref mut expression, ref type_annotation, ref mut name} => {
+            Stmt::LetStmt{ref mut expression, ref type_annotation, ..} => {
                 let (mut c, t) = expression.scopes_and_types(parent_id, context)?;
                 match &type_annotation {
                     Some(ref x) => {
@@ -368,7 +367,7 @@ impl GetContext for Node<Expr> {
             },
             // TODO: Type checking
             Expr::StructLiteral{ref mut base, ref mut fields} => {
-                let (mut new_c, base_t) = base.scopes_and_types(parent_id, context)?;
+                let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
                 let element_checker = |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
                     match aggregate {
                         Ok((new_c, mut vec_t)) => {
@@ -387,7 +386,7 @@ impl GetContext for Node<Expr> {
                 let init = Ok((new_c, vec!()));
                 let res = fields.iter_mut().fold(init, element_checker);
                 match res {
-                    Ok((new_c, vec_t)) => {
+                    Ok((new_c, _)) => {
                         Ok((new_c, base_t.clone()))
                     },
                     Err(x) => Err(x)
@@ -558,8 +557,6 @@ impl GetContext for Node<Expr> {
 mod tests{
     use super::*;
     use compiler_layers;
-    use difference::{Difference, Changeset};
-    use regex::Regex;
     use std::fs::File;
     use std::io::Read;
 
@@ -592,8 +589,8 @@ mod tests{
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
-        let compilation = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
-
+        let _compilation = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+        panic!("Unfinished test")
     }
 
     #[cfg(test)]
@@ -610,9 +607,9 @@ mod tests{
                 Node::from(Expr::String("asdf".to_string())), 
                 Node::from(true)
             ];
-            for literal in literals.iter_mut() {
-                let mut context = Context::builtin();
-                let id = context.root_id;
+            for _ in literals.iter_mut() {
+                let context = Context::builtin();
+                let _id = context.root_id;
                 panic!("Unfinished test.")
                 // context = literal.scopes_and_types(id, context)?.0;
                 // assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());

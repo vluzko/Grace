@@ -1,11 +1,7 @@
-use std::collections::{BTreeSet, BTreeMap, HashSet, HashMap};
-use std::iter::FromIterator;
+use std::collections::{BTreeMap, HashSet, HashMap};
 
 use expression::*;
 use general_utils;
-// use type_checking::type_check::GetContext;
-use type_checking::context::Context;
-use type_checking::refinements::check_constraints;
 
 /// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -270,7 +266,7 @@ impl Type {
     pub fn has_attribute(&self, attribute: &Identifier) -> bool {
         return match self {
             Type::Record (_, attributes) | Type::Module(_, attributes) => {
-                for (attr_name, attr_type) in attributes {
+                for (attr_name, _) in attributes {
                     if attribute == attr_name {
                         return true;
                     }

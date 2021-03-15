@@ -118,7 +118,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>>{
             terminated!(
                 alt_complete!(
                     map!(m!(context.function_declaration_stmt, 0), |x| ModuleDec::Func(x)) |
-                    map!(m!(context.struct_declaration_stmt, 0), |x| ModuleDec::Struct(x)) |
+                    map!(m!(context.struct_declaration_stmt), |x| ModuleDec::Struct(x)) |
                     map!(m!(w_self_type.trait_parser), |x| ModuleDec::TraitDec(x)) |
                     map!(m!(w_self_type.trait_impl), |x| ModuleDec::TraitImpl(x))
                 ),
@@ -229,7 +229,7 @@ impl ParserContext {
 
         let full_res = chain(header, body_parser);
 
-        let trait_val = fmap_iresult(full_res, |(name, (signatures))| {
+        let trait_val = fmap_iresult(full_res, |(name, signatures)| {
             let mut m = HashMap::new();
 
             for (k, v) in signatures {
@@ -275,7 +275,7 @@ impl ParserContext {
 /// Parser for struct declarations.
 impl ParserContext {
     /// Parse a struct declaration.
-    pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> Res<'a, StmtNode> {
+    pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>) -> Res<'a, StmtNode> {
         let header = delimited!(input,
             STRUCT,
             IDENTIFIER,
@@ -298,15 +298,7 @@ impl ParserContext {
         );
 
         let full_res = chain(header, body_parser);
-        // println!("called");
-        let struct_dec = fmap_node(full_res, |(name, (fields))| {
-            // println!("{:?}", fields);
-            // panic!()
-            // let mut m = HashMap::new();
-
-            // for (k, v) in signatures {
-            //     m.insert(k, v);
-            // }
+        let struct_dec = fmap_node(full_res, |(name, fields)| {
             return Stmt::StructDec{
                 name: name,
                 fields: fields
@@ -320,7 +312,6 @@ impl ParserContext {
 /// All statement parsers.
 pub mod stmt_parsers {
     use super::*;
-    use self::type_parser::any_type;
 
     impl ParserContext {
         /// Match any statement.
@@ -2008,7 +1999,7 @@ pub mod type_parser {
 
     pub fn with_self<'a>(input: PosStr<'a>) -> TypeRes {
         return alt_complete!(input,
-            map!(SELF, |x| Type::self_type(Box::new(Type::Undetermined))) |
+            map!(SELF, |_x| Type::self_type(Box::new(Type::Undetermined))) |
             any_type
         );
     }
@@ -2466,12 +2457,12 @@ mod tests {
                 (Identifier::from("a"), Type::i64), (Identifier::from("b"), Type::i32)
             )
         };
-        check_data_no_update(input, |x| e.struct_declaration_stmt(x, 0), expected);
+        check_data_no_update(input, |x| e.struct_declaration_stmt(x), expected);
 
         // Test 2
         let input = "struct A:  \n   \n\n  x: i32\n  y: i32";
         let e = ParserContext::empty();
-        check_match(input, |x| e.struct_declaration_stmt(x, 1), Node::from(Stmt::StructDec{
+        check_match(input, |x| e.struct_declaration_stmt(x), Node::from(Stmt::StructDec{
             name: Identifier::from("A"),
             fields: vec!(
                 (Identifier::from("x"), Type::i32),

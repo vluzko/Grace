@@ -67,39 +67,39 @@ macro_rules! many1c (
   );
 );
 
-fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
-  where
-    T: InputLength + InputIter + InputTake + AtEof + Clone,
-    P: Fn(<T as InputIter>::RawItem) -> bool,
-  {
-    match sequence.position(predicate) {
-      Some(n) => Ok(sequence.take_split(n+1)),
-      None => {
-        if sequence.at_eof() {
-          Ok(sequence.take_split(sequence.input_len()))
-        } else {
-          Err(Err::Incomplete(Needed::Size(1)))
-        }
-      }
-    }
-  }
+// fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
+//   where
+//     T: InputLength + InputIter + InputTake + AtEof + Clone,
+//     P: Fn(<T as InputIter>::RawItem) -> bool,
+//   {
+//     match sequence.position(predicate) {
+//       Some(n) => Ok(sequence.take_split(n+1)),
+//       None => {
+//         if sequence.at_eof() {
+//           Ok(sequence.take_split(sequence.input_len()))
+//         } else {
+//           Err(Err::Incomplete(Needed::Size(1)))
+//         }
+//       }
+//     }
+//   }
 
 
-macro_rules! take_till_inclusive (
-    ($input:expr, $submac:ident!( $($args:tt)* )) => (
-        {
-            // use nom::InputTakeAtPosition;
-            let input = $input;
-            match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
-                Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
-                x => x
-            }
-        }
-    );
-    ($input:expr, $f:expr) => (
-        take_till_inclusive!($input, call!($f));
-    );
-);
+// macro_rules! take_till_inclusive (
+//     ($input:expr, $submac:ident!( $($args:tt)* )) => (
+//         {
+//             // use nom::InputTakeAtPosition;
+//             let input = $input;
+//             match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
+//                 Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
+//                 x => x
+//             }
+//         }
+//     );
+//     ($input:expr, $f:expr) => (
+//         take_till_inclusive!($input, call!($f));
+//     );
+// );
 
 /// Check that a macro is indented correctly.
 macro_rules! indented (

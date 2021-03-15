@@ -12,7 +12,6 @@ use petgraph::{Outgoing, visit::EdgeRef};
 use cfg::{Cfg, CfgVertex, CfgStmt};
 use expression::{Node, Module, Expr, Stmt, Block, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
 use type_checking::types::Type;
-use type_checking::type_check::GetContext;
 use type_checking::context::Context;
 use general_utils;
 

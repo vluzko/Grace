@@ -4,8 +4,7 @@ use expression::*;
 use general_utils;
 use type_checking::refinements::check_constraints;
 use type_checking::types::{Type, Trait};
-use type_checking::scoping::Scope;
-use type_checking::scoping::CanModifyScope;
+use type_checking::scope::{Scope, CanModifyScope};
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
@@ -497,4 +496,30 @@ impl Context {
         }
     }
 
+}
+
+#[cfg(test)]
+mod tests{
+    use super::*;
+    #[test]
+    fn literals_are_incompatible() {
+        let mut context = Context::builtin();
+        let bool_expr = Node::from(true);
+        let a:i32 = 2;
+        let i32_expr:Node<Expr> = Node::from(a);
+        let string_expr = Node::from(Expr::String("foo".to_string()));
+        assert!(context.check_subtype(&bool_expr, &Type::boolean, &Type::boolean));
+        assert!(context.check_subtype(&string_expr, &Type::string, &Type::string));
+        assert!(context.check_subtype(&i32_expr, &Type::i32, &Type::i32));
+        assert!(!(context.check_subtype(&bool_expr, &Type::boolean, &Type::string)));
+    }
+
+    #[test]
+    fn product_types() {
+        let mut context = Context::builtin();
+        let bool_expr = Node::from(true);
+        let product_i32 = Type::Product(vec!(Type::i32, Type::i32, Type::i32));
+        let product_bool = Type::Product(vec!(Type::boolean, Type::boolean, Type::boolean));
+        assert!(!(context.check_subtype(&bool_expr, &product_i32, &product_bool)));
+    }
 }

@@ -5,7 +5,7 @@ use itertools::join;
 
 use expression::*;
 use type_checking::types::{Type, Refinement};
-use type_checking::scoping::CanModifyScope;
+use type_checking::scope::CanModifyScope;
 use type_checking::context::Context;
 use general_utils::{m_union};
 

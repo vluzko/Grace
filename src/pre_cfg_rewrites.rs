@@ -2,7 +2,7 @@ use std::convert::From;
 
 use expression::*;
 use type_checking::types::Type;
-use type_checking::scoping::{get_convert_expr, choose_return_type};
+use type_checking::scope::{get_convert_expr, choose_return_type};
 use type_checking::context::Context;
 
 pub trait TypeRewritable<T> {

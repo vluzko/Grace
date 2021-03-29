@@ -1,5 +1,5 @@
 pub mod context;
 pub mod refinements;
-pub mod scoping;
+pub mod scope;
 pub mod types;
 pub mod type_check;

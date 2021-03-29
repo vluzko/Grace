@@ -5,7 +5,7 @@ use expression::*;
 use general_utils;
 use type_checking::types::{Type};
 use type_checking::context::Context;
-use type_checking::scoping::{Scope, CanModifyScope};
+use type_checking::scope::{Scope, CanModifyScope};
 use grace_error::GraceError;
 
 type TypeCheckRes = Result<(Context, Type), GraceError>;
@@ -583,7 +583,7 @@ mod tests{
     }
 
     #[test]
-    // One trait, one struct, one implmentation block  that uses self, and a function that uses it
+    // One trait, one struct, one implmentation block that uses self, and a function that uses it
     fn traits_and_self() {
         let mut f = File::open("test_data/trait_impl_self_test.gr").expect("File not found");
         let mut file_contents = String::new();

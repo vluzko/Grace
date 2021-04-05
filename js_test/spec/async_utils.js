@@ -90,14 +90,12 @@ function compile_grace(input, output) {
         fs.unlinkSync(wasm_file);
     } catch (err) {}
 
-
-
     // Asynchronously compile the Grace code to WAST.
     let compile_to_wast = exec(`cargo run ${input} ${output} -- --nocapture`);
     // Once that's finished, asynchronously compile the WAST to WASM.
     let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
         console.log(stdout);
-        // return exec(`wat2wasm ${output} -o ${wasm_file}`);
+        return exec(`wat2wasm ${output} -o ${wasm_file}`);
     });
 
     // Once *that's* finished, asynchronously load the generated WASM into a WASM module.

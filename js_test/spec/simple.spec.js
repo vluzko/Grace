@@ -125,46 +125,54 @@ describe("gradual tests.", () => {
     })
 })
 
-describe("Small grace tests.", function () {
-  async_desc("", () => {
-    return async_utils.compile_grace("spec/inputs/small_grace.gr",
-      "spec/outputs/small_grace.wat");
-  }, [[
-    'arithmetic operators', module => {
-    expect(module.instance.exports.add(2, 3)).toBe(5);
-    expect(module.instance.exports.sub(2, 3)).toBe(-1);
-    expect(module.instance.exports.mult(2, 3)).toBe(6);
-    expect(module.instance.exports.div(2, 3)).toBe(2/3);
-  }], [
-    'control flow', module => {
-    expect(module.instance.exports.conditional(2,3)).toBe(3);
-    expect(module.instance.exports.loop(2, 1)).toBe(1);
-    expect(module.instance.exports.loop(3, -2)).toBe(-2);
-    expect(module.instance.exports.loop(0)).toBe(0);
-  }], [
-    'comparison operators', module => {
-    expect(module.instance.exports.equality(0, 1)).toBe(0);
-    expect(module.instance.exports.equality(0, 0)).toBe(1);
+fdescribe("Small grace tests.", () => {
+    test('Arithmetic operators', async () => {
+        const module = await async_utils.compile_grace("spec/inputs/small_grace.gr", "spec/outputs/small_grace.wat");
+        expect(module.instance.exports.add(2, 3)).toBe(5);
+        expect(module.instance.exports.sub(2, 3)).toBe(-1);
+        expect(module.instance.exports.mult(2, 3)).toBe(6);
+        expect(module.instance.exports.div(2, 3)).toBe(2/3);
+    })
 
-    expect(module.instance.exports.neq(0, 0)).toBe(0);
-    expect(module.instance.exports.neq(0, 1)).toBe(1);
+//   async_desc("", () => {
+//     return async_utils.compile_grace("spec/inputs/small_grace.gr",
+//       "spec/outputs/small_grace.wat");
+//   }, [[
+//     'arithmetic operators', module => {
+//     expect(module.instance.exports.add(2, 3)).toBe(5);
+//     expect(module.instance.exports.sub(2, 3)).toBe(-1);
+//     expect(module.instance.exports.mult(2, 3)).toBe(6);
+//     expect(module.instance.exports.div(2, 3)).toBe(2/3);
+//   }], [
+//     'control flow', module => {
+//     expect(module.instance.exports.conditional(2,3)).toBe(3);
+//     expect(module.instance.exports.loop(2, 1)).toBe(1);
+//     expect(module.instance.exports.loop(3, -2)).toBe(-2);
+//     expect(module.instance.exports.loop(0)).toBe(0);
+//   }], [
+//     'comparison operators', module => {
+//     expect(module.instance.exports.equality(0, 1)).toBe(0);
+//     expect(module.instance.exports.equality(0, 0)).toBe(1);
 
-    expect(module.instance.exports.less(0, 0)).toBe(0);
-    expect(module.instance.exports.less(0, 1)).toBe(1);
-    expect(module.instance.exports.less(1, 0)).toBe(0);
+//     expect(module.instance.exports.neq(0, 0)).toBe(0);
+//     expect(module.instance.exports.neq(0, 1)).toBe(1);
 
-    expect(module.instance.exports.lesse(0, 0)).toBe(1);
-    expect(module.instance.exports.lesse(0, 1)).toBe(1);
-    expect(module.instance.exports.lesse(1, 0)).toBe(0);
-  }], [
-    'function calls', module => {
-    expect(module.instance.exports.call_func(2, 3)).toBe(5);
-  }], [
-    "logical operators", module => {
-    expect(module.instance.exports.and_test(1, 1)).toBe(1);
-    expect(module.instance.exports.or_test(1, 1)).toBe(1);
-    expect(module.instance.exports.xor_test(1, 0)).toBe(1);
-  }]]);
+//     expect(module.instance.exports.less(0, 0)).toBe(0);
+//     expect(module.instance.exports.less(0, 1)).toBe(1);
+//     expect(module.instance.exports.less(1, 0)).toBe(0);
+
+//     expect(module.instance.exports.lesse(0, 0)).toBe(1);
+//     expect(module.instance.exports.lesse(0, 1)).toBe(1);
+//     expect(module.instance.exports.lesse(1, 0)).toBe(0);
+//   }], [
+//     'function calls', module => {
+//     expect(module.instance.exports.call_func(2, 3)).toBe(5);
+//   }], [
+//     "logical operators", module => {
+//     expect(module.instance.exports.and_test(1, 1)).toBe(1);
+//     expect(module.instance.exports.or_test(1, 1)).toBe(1);
+//     expect(module.instance.exports.xor_test(1, 0)).toBe(1);
+//   }]]);
 });
 
 describe("Memory management tests.", function() {

@@ -190,7 +190,7 @@ impl BinaryOperator {
             BinaryOperator::Div => ("Div", "div"),
             BinaryOperator::And => ("And", "and"),
             BinaryOperator::Or => ("Or", "or"),
-            _ => panic!()
+            x => panic!("get_builtin_trait not implemented for {:?}", x)
         };
 
         return (Identifier::from(x), Identifier::from(y));

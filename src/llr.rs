@@ -77,6 +77,9 @@ pub enum WASMOperator {
     Gt,
     Le,
     Ge,
+    And,
+    Or,
+    Xor
 }
 
 #[allow(non_camel_case_types)]
@@ -609,7 +612,10 @@ pub mod rust_trait_impls {
                 BinaryOperator::Sub => WASMOperator::Sub,
                 BinaryOperator::Mult => WASMOperator::Mult,
                 BinaryOperator::Div => WASMOperator::Div,
-                _ => panic!()
+                BinaryOperator::And => WASMOperator::And,
+                BinaryOperator::Or => WASMOperator::Or,
+                BinaryOperator::Xor => WASMOperator::Xor,
+                x => panic!("WASMOperator not implemented for {:?}", x)
             };
         }
     }
@@ -622,7 +628,7 @@ pub mod rust_trait_impls {
                 ComparisonOperator::Greater => WASMOperator::Gt,
                 ComparisonOperator::LessEqual => WASMOperator::Le,
                 ComparisonOperator::GreaterEqual => WASMOperator::Ge,
-                _ => panic!()
+                ComparisonOperator::Unequal => WASMOperator::Ne
             };
         }
     }
@@ -647,6 +653,9 @@ pub mod rust_trait_impls {
                 WASMOperator::Div => "div",
                 WASMOperator::Eq => "eq",
                 WASMOperator::Ne => "ne",
+                WASMOperator::And => "and",
+                WASMOperator::Or => "or",
+                WASMOperator::Xor => "xor"
                 x => panic!("Display not implemented for WASMOperator: {:?}", x)
             })
         }

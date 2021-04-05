@@ -1,8 +1,10 @@
 .idea/
+.vscode/
 node_modules
 target/
 wasm_examples/a.out.js
 wasm_examples/a.out.wasm
 Cargo.lock
 Grace.iml
+*.wasm
 .metadata/

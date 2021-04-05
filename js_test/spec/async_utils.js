@@ -80,30 +80,37 @@ function get_async_desc(describe) {
  * @param {String} output - Path to the output file.
  */
 function compile_grace(input, output) {
-  // process.chdir("..");
-  // Asynchronously compile the Grace code to WAST.
-  let compile_to_wast = exec(`cargo run ${input} ${output} -- --nocapture`);
-  let wasm_file;
-  // Once that's finished, asynchronously compile the WAST to WASM.
-  let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
-    console.log(stdout);
-    wasm_file = output.replace(".wat", ".wasm");
-    return exec(`wat2wasm ${output} -o ${wasm_file}`);
-  });
+    const wasm_file = output.replace(".wat", ".wasm");
+    // First clean previous versions.
+    try {
+        fs.unlinkSync(output);
+    } catch (err) {}
 
-  // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
-  let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
-    const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
-    const memory_management = compile_wat("../src/builtins/memory_management.wat");
-    return memory_management.then(mem => {
-      return WebAssembly.instantiate(module_as_bytes, {
-        'memory_management': mem.instance.exports
-      });
+    try {
+        fs.unlinkSync(wasm_file);
+    } catch (err) {}
+
+
+
+    // Asynchronously compile the Grace code to WAST.
+    let compile_to_wast = exec(`cargo run ${input} ${output} -- --nocapture`);
+    // Once that's finished, asynchronously compile the WAST to WASM.
+    let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
+        console.log(stdout);
+        // return exec(`wat2wasm ${output} -o ${wasm_file}`);
     });
-    
-    
-  });
-  return loaded_module;
+
+    // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
+    let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
+        const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
+        const memory_management = compile_wat("../src/builtins/memory_management.wat");
+        return memory_management.then(mem => {
+            return WebAssembly.instantiate(module_as_bytes, {
+                'memory_management': mem.instance.exports
+            });
+        });
+    });
+    return loaded_module;
 
 }
 /**

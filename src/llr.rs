@@ -52,6 +52,7 @@ pub enum WASM {
     Loop,
     End,
     If,
+    Then,
     Else,
     Branch(usize),
     BranchIf(usize),
@@ -347,8 +348,9 @@ impl ToLLR for CfgVertex {
                 wasm
             },
             CfgVertex::IfStart(expression) => {
-                let mut wasm = expression.to_llr(context);
-                wasm.push(WASM::If);
+                let mut wasm = vec!(WASM::If);
+                wasm = general_utils::join(wasm, expression.to_llr(context));
+                wasm.push(WASM::Then);
                 wasm
             },
             CfgVertex::LoopStart(expression) => {

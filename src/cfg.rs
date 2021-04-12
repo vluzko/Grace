@@ -240,20 +240,23 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 need_edge_to_next_block.append(&mut res.2);
 
                 let end_index = new_cfg.add_node(CfgVertex::End);
+                
 
                 match else_block {
                     Some(b) => {
+                        let else_index = new_cfg.add_node(CfgVertex::Else);
                         
                         // Add the else block to the CFG.
-                        let mut res = block_to_cfg(b, context, new_cfg, loop_start);
-                        new_cfg = res.0;
+                        let mut else_res = block_to_cfg(b, context, new_cfg, loop_start);
+                        new_cfg = else_res.0;
                         
-                        need_edge_to_next_block.append(&mut res.2);
+                        need_edge_to_next_block.append(&mut else_res.2);
 
                         // Add an edge from the last condition to the else block.
-                        new_cfg.add_edge(condition_index, res.1, false);
+                        new_cfg.add_edge(else_index, else_res.1, false);
+                        new_cfg.add_edge(condition_index, else_index, false);
                         // Add an edge from the else block to the end.
-                        new_cfg.add_edge(res.1, end_index, false);
+                        new_cfg.add_edge(else_res.1, end_index, false);
                     },
                     None => {
                         new_cfg.add_edge(condition_index, end_index, false);

@@ -67,6 +67,7 @@ impl ToBytecode for WASM {
             WASM::Block => "block $void".to_string(),
             WASM::Loop => "loop $void".to_string(),
             WASM::If => "if".to_string(),
+            WASM::Then => "then".to_string(),
             WASM::Else => "else".to_string(),
             WASM::End => "end".to_string(),
             WASM::Branch(level) => format!("br {}", level),

@@ -51,7 +51,7 @@ pub enum WASM {
     Block,
     Loop,
     End,
-    If,
+    If(Option<WASMType>),
     Then,
     Else,
     Branch(usize),
@@ -305,7 +305,7 @@ impl ToLLR for Cfg {
                         assert_eq!(n_count, 1);
                     }
                 },
-                CfgVertex::IfStart(_) | CfgVertex::LoopStart(_) => {
+                CfgVertex::IfStart(_, _) | CfgVertex::LoopStart(_) => {
                     let mut n_count = 0;
                     let edges = self.graph.edges_directed(current_index, Outgoing);
                     let mut false_block = None;
@@ -347,8 +347,9 @@ impl ToLLR for CfgVertex {
                 }
                 wasm
             },
-            CfgVertex::IfStart(expression) => {
-                let mut wasm = vec!(WASM::If);
+            CfgVertex::IfStart(expression, block_type) => {
+                let wasm_type = Option::<WASMType>::from(block_type);
+                let mut wasm = vec!(WASM::If(wasm_type));
                 wasm = general_utils::join(wasm, expression.to_llr(context));
                 wasm.push(WASM::Then);
                 wasm

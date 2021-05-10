@@ -11,20 +11,13 @@ get_local $a
 get_local $b
 i32.add
 set_local $x
-(
-if
-(
+(if (result i32) (
 i32.const 1
-)
-(
-then
+)(then(
 get_local $a
-)
-(
-else
+))(else(
 get_local $b
-)
-)
+)))
 )
 (export "conditional" (func $conditional))
 
@@ -73,7 +66,7 @@ get_local $x
 i32.const 1
 i32.sub
 set_local $x
-end
+)))
 get_local $x
 )
 (export "loop" (func $loop))

@@ -7,6 +7,7 @@ use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
 use type_checking::context::Context;
+use type_checking::types::Type;
 
 pub type CfgMap = HashMap<Identifier, Cfg>;
 
@@ -22,7 +23,7 @@ pub enum CfgVertex {
     Entry,
     Block(Vec<Node<CfgStmt>>),
     LoopStart(Node<Expr>),
-    IfStart(Node<Expr>),
+    IfStart(Node<Expr>, Type),
     Else,
     Break(Vec<Node<CfgStmt>>),
     Continue(Vec<Node<CfgStmt>>),
@@ -225,9 +226,10 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
             Stmt::IfStmt{ref condition, ref block, ref else_block} => {
                 // Collect existing statements into a block.
                 let new_index = new_cfg.add_block(statements, previous_index);
+                let stmt_type = context.get_node_type(stmt.id);
 
                 // A block for the initial if condition.
-                let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
+                let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone(), stmt_type));
                 // Attach the condition to the previous block.
                 new_cfg.add_edge(new_index, condition_index, false);
 

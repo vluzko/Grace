@@ -27,7 +27,7 @@ pub enum CfgVertex {
     Else,
     Break(Vec<Node<CfgStmt>>),
     Continue(Vec<Node<CfgStmt>>),
-    End,
+    End(usize),
     Exit
 }
 
@@ -165,7 +165,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 // The loop body passes back to here, as do all continue statements.
                 let condition_index = new_cfg.add_node(CfgVertex::LoopStart(condition.clone()));
                 new_cfg.add_edge(new_index, condition_index, true);
-                
+
                 // Add the while loop block to the CFG.
                 let res = block_to_cfg(block, context, new_cfg, Some(condition_index));
                 new_cfg = res.0;
@@ -183,7 +183,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
 
                 // We create an empty vertex to serve as a placeholder for the next vertex.
                 // All break statements in the while loop and the while loop exit have an edge to it.
-                let empty_index = new_cfg.add_node(CfgVertex::End);
+                let empty_index = new_cfg.add_node(CfgVertex::End(2));
                 new_cfg = add_edges_to_next(new_cfg, need_edge_to_next_block, empty_index);
 
                 // Reset for the next iteration.
@@ -241,9 +241,8 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 // Track any breaks contained in the inner block.
                 need_edge_to_next_block.append(&mut res.2);
 
-                let end_index = new_cfg.add_node(CfgVertex::End);
+                let end_index = new_cfg.add_node(CfgVertex::End(3));
                 
-
                 match else_block {
                     Some(b) => {
                         let else_index = new_cfg.add_node(CfgVertex::Else);

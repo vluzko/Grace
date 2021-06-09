@@ -58,15 +58,17 @@ get_local $x
 (export "div" (func $div))
 
 (func $loop (param $x i32) (param $y i32) (result i32) 
+(block $void
+(loop $void
 get_local $x
 get_local $y
 i32.gt_s
-loop $void
+br_if 0
 get_local $x
 i32.const 1
 i32.sub
 set_local $x
-)))
+))
 get_local $x
 )
 (export "loop" (func $loop))

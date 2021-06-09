@@ -50,7 +50,7 @@ pub struct WASMFunc {
 pub enum WASM {
     Block,
     Loop,
-    End,
+    End(usize),
     If(Option<WASMType>),
     Then,
     Else,
@@ -296,7 +296,7 @@ impl ToLLR for Cfg {
             let node = self.graph.node_weight(current_index).unwrap();
             wasm.append(&mut node.to_llr(context));
             match node {
-                CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End | CfgVertex::Entry => {
+                CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End(_) | CfgVertex::Entry => {
                     let mut n_count = 0;
                     let edges = self.graph.edges_directed(current_index, Outgoing);
                     for edge in edges {
@@ -330,7 +330,10 @@ impl ToLLR for Cfg {
                         None => panic!()
                     }
                 },
-                CfgVertex::Break(_) | CfgVertex::Continue(_) | CfgVertex::Exit => {}
+                CfgVertex::Break(_) | CfgVertex::Continue(_) => {
+                    panic!("Haven't handled break or continue yet")
+                },
+                CfgVertex::Exit => {}
             };
         }
         return wasm;
@@ -355,8 +358,9 @@ impl ToLLR for CfgVertex {
                 wasm
             },
             CfgVertex::LoopStart(expression) => {
-                let mut wasm = expression.to_llr(context);
-                wasm.push(WASM::Loop);
+                let mut wasm = vec!(WASM::Block, WASM::Loop);
+                wasm = general_utils::join(wasm, expression.to_llr(context));
+                wasm.push(WASM::BranchIf(0));
                 wasm
             },
             CfgVertex::Break(block) => {
@@ -376,7 +380,7 @@ impl ToLLR for CfgVertex {
                 wasm
             },
             CfgVertex::Else => vec!(WASM::Else),
-            CfgVertex::End => vec!(WASM::End),
+            CfgVertex::End(k) => vec!(WASM::End(*k)),
             CfgVertex::Entry | CfgVertex::Exit => vec!(),
         } ;
     }

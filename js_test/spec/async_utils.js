@@ -103,8 +103,12 @@ function compile_grace(input, output) {
         const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
         const memory_management = compile_wat("../src/builtins/memory_management.wat");
         return memory_management.then(mem => {
-            return WebAssembly.instantiate(module_as_bytes, {
-                'memory_management': mem.instance.exports
+            const gradual_ops = compile_wat("../src/builtins/gradual_binary_ops.wat");
+            return gradual_ops.then(ops => {
+                return WebAssembly.instantiate(module_as_bytes, {
+                    'memory_management': mem.instance.exports,
+                    'gradual_binary_ops': ops.instance.exports
+                });
             });
         });
     });

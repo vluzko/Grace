@@ -7,7 +7,7 @@ describe("Basic array tests.", function () {
     beforeAll(async () => {
         mem_manage = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
         const imports = {'memory_management': mem_manage};
-        arrays = await (await async_utils.compile_wat('../src/builtins/arrays.wat', imports)).instance.exports;
+        arrays = (await async_utils.compile_wat('../src/builtins/arrays.wat', imports)).instance.exports;
     });
 
     afterEach(function () {

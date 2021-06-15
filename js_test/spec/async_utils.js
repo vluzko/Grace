@@ -11,14 +11,14 @@ let exec = util.promisify(child.exec);
  * @param done
  */
 function wrap_promise(promise, done) {
-  return promise
-    .then(function (data) {
-      done();
-      return data;
-    }, function (err) {
-      console.log("Promise error " + err);
-      done();
-      return err;
+    return promise
+        .then(function (data) {
+        done();
+        return data;
+        }, function (err) {
+        console.log("Promise error " + err);
+        done();
+        return err;
     });
 }
 
@@ -29,24 +29,24 @@ function wrap_promise(promise, done) {
  * @return
  */
 function get_async_it(describe) {
-  return function async_describe(test_name, promiser, expectation) {
-    describe(test_name, function () {
-      let data;
-      beforeEach(function (done) {
-        let promise = promiser();
-        data = wrap_promise(promise, done);
-      });
-      it(".it", function (done) {
-        data.then(expectation)
-          .then(function () {
-            done();
-          }, function (err) {
-            console.log(err);
-            done();
-          });
-      });
-    });
-  };
+    return function async_describe(test_name, promiser, expectation) {
+        describe(test_name, function () {
+        let data;
+        beforeEach(function (done) {
+            let promise = promiser();
+            data = wrap_promise(promise, done);
+        });
+        it(".it", function (done) {
+            data.then(expectation)
+            .then(function () {
+                done();
+            }, function (err) {
+                console.log(err);
+                done();
+            });
+        });
+        });
+    };
 }
 
 function get_async_desc(describe) {
@@ -79,7 +79,7 @@ function get_async_desc(describe) {
  * @param {String} input  - Path to the input file.
  * @param {String} output - Path to the output file.
  */
-function compile_grace(input, output) {
+async function compile_grace(input, output) {
     console.log(`Compiling ${input}`);
     const wasm_file = output.replace(".wat", ".wasm");
     // First clean previous versions.
@@ -92,55 +92,42 @@ function compile_grace(input, output) {
     } catch (err) {}
 
     // Asynchronously compile the Grace code to WAST.
-    let compile_to_wast = exec(`cargo run ${input} ${output} -- --nocapture`);
+    const wast_compilation = await exec(`cargo run ${input} ${output} -- --nocapture`);
+    console.log(wast_compilation.stdout);
     // Once that's finished, asynchronously compile the WAST to WASM.
-    let compile_to_wasm = compile_to_wast.then(({stdout, stderr})=> {
-        // console.log(stdout);
-        return exec(`wat2wasm ${output} -o ${wasm_file}`);
-    });
+    const wasm_compilation = await exec(`wat2wasm ${output} -o ${wasm_file}`);
 
     // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
-    let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
-        const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
-        const memory_management = compile_wat("../src/builtins/memory_management.wat");
-        return memory_management.then(mem => {
-            const gradual_ops = compile_wat("../src/builtins/gradual_binary_ops.wat", {
-                'memory_management': mem.instance.exports
-            });
-            return gradual_ops.then(ops => {
-                return WebAssembly.instantiate(module_as_bytes, {
-                    'memory_management': mem.instance.exports,
-                    'gradual_binary_ops': ops.instance.exports
-                });
-            });
-        });
+    const module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
+    const mem = await compile_wat("../src/builtins/memory_management.wat");
+    const ops = await compile_wat("../src/builtins/gradual_binary_ops.wat", {
+        'memory_management': mem.instance.exports
     });
-    return loaded_module;
+    return WebAssembly.instantiate(module_as_bytes, {
+        'memory_management': mem.instance.exports,
+        'gradual_binary_ops': ops.instance.exports
+    });
 }
 
 /**
- *
- * @param {String} input
- * @param {String} output
+ * Compile a WAST file to WASM.
+ * Requires wat2wasm in your path.
+ * @param {String} input - The path to the WAST file.
+ * @param {object} imports - The imports object required by the WAST module.
  */
-function compile_wat(input, imports) {
-  let wasm_file = input.replace(".wat", ".wasm");
-  // Asynchronously compile the WAST to WASM.
-  let compile_to_wasm = exec(`wat2wasm ${input} -o ${wasm_file}`);
+async function compile_wat(input, imports) {
+    let wasm_file = input.replace(".wat", ".wasm");
+    let compile_to_wasm = await exec(`wat2wasm ${input} -o ${wasm_file}`);
 
-  // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
-  let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
     let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
     // TODO: Cleanup: Log failures better (built in error message is completely opaque)
     return WebAssembly.instantiate(module_as_bytes, imports);
-  });
-  return loaded_module;
 }
 
 exports.utils = {
-  get_async_it,
-  wrap_promise,
-  compile_grace,
-  compile_wat,
-  get_async_desc
+    get_async_it,
+    wrap_promise,
+    compile_grace,
+    compile_wat,
+    get_async_desc
 };

@@ -125,7 +125,7 @@ describe("gradual tests.", () => {
     })
 })
 
-fdescribe("Small grace tests.", () => {
+describe("Small grace tests.", () => {
     test('Arithmetic operators', async () => {
         const module = await async_utils.compile_grace("spec/inputs/small_grace.gr", "spec/outputs/small_grace.wat");
         expect(module.instance.exports.add(2, 3)).toBe(5);

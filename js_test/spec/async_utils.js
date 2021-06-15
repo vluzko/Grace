@@ -116,8 +116,8 @@ function compile_grace(input, output) {
         });
     });
     return loaded_module;
-
 }
+
 /**
  *
  * @param {String} input
@@ -131,6 +131,7 @@ function compile_wat(input, imports) {
   // Once *that's* finished, asynchronously load the generated WASM into a WASM module.
   let loaded_module = compile_to_wasm.then(({stdout, stderr}) => {
     let module_as_bytes = new Uint8Array(fs.readFileSync(wasm_file));
+    // TODO: Cleanup: Log failures better (built in error message is completely opaque)
     return WebAssembly.instantiate(module_as_bytes, imports);
   });
   return loaded_module;

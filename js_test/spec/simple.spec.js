@@ -1,6 +1,6 @@
 // const async_utils = require("./async_utils").utils;
 
-import {compile_grace} from './async_utils';
+import {compile_grace} from './compilation';
 
 
 describe("Small grace tests.", () => {

@@ -1,4 +1,4 @@
-import {compile_wat} from './async_utils';
+import {compile_wat} from './compilation';
 
 describe("Memory management tests.", function() {
     let mem_manage;

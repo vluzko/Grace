@@ -1,10 +1,10 @@
-const async_utils = require("./async_utils").utils;
+import {compile_wat} from './async_utils';
 
 describe("Memory management tests.", function() {
     let mem_manage;
 
     beforeAll(async () => {
-        mem_manage = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
+        mem_manage = (await compile_wat("../src/builtins/memory_management.wat")).instance.exports;
     });
 
     afterEach(function () {

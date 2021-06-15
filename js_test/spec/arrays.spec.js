@@ -1,13 +1,14 @@
-const async_utils = require("./async_utils").utils;
+import {compile_wat} from './async_utils';
+
 
 describe("Basic array tests.", function () {
     let mem_manage;
     let arrays;
 
     beforeAll(async () => {
-        mem_manage = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
+        mem_manage = (await compile_wat("../src/builtins/memory_management.wat")).instance.exports;
         const imports = {'memory_management': mem_manage};
-        arrays = (await async_utils.compile_wat('../src/builtins/arrays.wat', imports)).instance.exports;
+        arrays = (await compile_wat('../src/builtins/arrays.wat', imports)).instance.exports;
     });
 
     afterEach(function () {

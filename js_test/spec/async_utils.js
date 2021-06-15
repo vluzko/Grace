@@ -9,7 +9,7 @@ let exec = util.promisify(child.exec);
  * @param {String} input  - Path to the input file.
  * @param {String} output - Path to the output file.
  */
-async function compile_grace(input, output) {
+export async function compile_grace(input, output) {
     console.log(`Compiling ${input}`);
     const wasm_file = output.replace(".wat", ".wasm");
     // First clean previous versions.
@@ -45,7 +45,7 @@ async function compile_grace(input, output) {
  * @param {String} input - The path to the WAST file.
  * @param {object} imports - The imports object required by the WAST module.
  */
-async function compile_wat(input, imports) {
+export async function compile_wat(input, imports) {
     let wasm_file = input.replace(".wat", ".wasm");
     let compile_to_wasm = await exec(`wat2wasm ${input} -o ${wasm_file}`);
 
@@ -53,8 +53,3 @@ async function compile_wat(input, imports) {
     // TODO: Cleanup: Log failures better (built in error message is completely opaque)
     return WebAssembly.instantiate(module_as_bytes, imports);
 }
-
-exports.utils = {
-    compile_grace,
-    compile_wat,
-};

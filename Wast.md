@@ -1,6 +1,6 @@
-# Wast
+# WAST
 
-The existing docs for wast are pretty terrible. Here are some better ones.
+The existing docs for WAST are, we think, pretty terrible. Here are some better ones.
 
 
 ## Instructions
@@ -18,11 +18,7 @@ is `10 - 5`. The same is true for all other arithmetic, logic, and comparison op
 br n branches n levels out. br 0 branches to the current block/loop/etc. br 1 branches to the block/loop containing that.
 
 ### br_if n
-Check if the top of the stack is 1, then br n if it is. Equivalent to:
-
-    if
-        br n+1
-    end
+Check if the top of the stack is 1, then br n if it is.
 
 ### loop
 Run a loop. Should contain a block, i.e.
@@ -34,20 +30,9 @@ Run a loop. Should contain a block, i.e.
         end
     end
 
-For some reason if you branch to the *block* the loop end, but branching to the *loop* continues the loop. I have no idea why this is the case.
-
-    loop
-        block
-        ...
-        br_if 0 ;; Branch to block / end the loop if the top of the stack is non-zero
-
-        br 1 ;; Branch one level out / to the loop and continue the loop.
-
-        end
-    end
+If you branch to the block the loop ends (because branching to a block goes to the end of the block). If you branch to the loop you branch to the beginning of the loop.
 
 ## Global variables
-Fuck if I know.
 
 ## Memory
 Memory is accessed in *bytes*.
@@ -57,6 +42,7 @@ Memory is accessed in *bytes*.
 
 Will get you the value stored at *bytes* n, n+1, n+2, n+3, interpreted as an integer.
 
+## Error messages
 Note on weird error messages: if you get something like " error: type mismatch in function, expected [] but got [i32, i32]
 ",
 that can mean there was more than one thing left on the stack at the end. If the function is supposed to return,
@@ -86,7 +72,7 @@ where `number` is actually a number (e.g. 0) that hasn't already been used in an
     (import "b" "a" (func $new_name_of_func (param $param_name param_type)* (result result_type)*))
 
 ### Passing Imports
-When you load a WASM module in Javascript with `module.instantiate`, you must pass an imports object to `module.instantiate`. For example: suppose wasm_module 1 is expecting to import function `a` from module `b`. Then your imports object should look like:
+When you load a WASM module in Javascript with `WebAssembly.instantiate`, you must pass an imports object to `module.instantiate`. For example: suppose wasm_module 1 is expecting to import function `a` from module `b`. Then your imports object should look like:
 
     imports = {
         "b": {
@@ -97,4 +83,4 @@ When you load a WASM module in Javascript with `module.instantiate`, you must pa
 Accomplish this by instantiating module `b` first, then create an object containing it. Note that you *don't* want `module.instantiates(b)` as the contents of imports, you want `module.instantiates(b).instance.exports`, because that's where `a` is actually defined.
 
 ## Javascript Interaction
-When calling a function from Javascript, it will pass 0 for any unfulfilled parameters. It will *not* break if you don't pass enough parameters. (AAAAAAARGH).
+When calling a function from Javascript, it will pass 0 for any unfulfilled parameters. It will *not* break if you don't pass enough parameters.

@@ -1,4 +1,4 @@
-const async_utils = require("./async_utils").utils;
+import {compile_wat} from './async_utils';
 
 describe("gradual tests.", () => {
     let mem_module;
@@ -6,9 +6,9 @@ describe("gradual tests.", () => {
     let grad_funcs;
 
     beforeAll(async () => {
-        mem_module = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
+        mem_module = (await compile_wat("../src/builtins/memory_management.wat")).instance.exports;
         const imports = {'memory_management': mem_module};
-        grad_module = await async_utils.compile_wat("../src/builtins/gradual_binary_ops.wat", imports);
+        grad_module = await compile_wat("../src/builtins/gradual_binary_ops.wat", imports);
         grad_funcs = grad_module.instance.exports;
     })
 

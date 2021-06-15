@@ -1,4 +1,3 @@
-let fs = require("fs");
 const async_utils = require("./async_utils").utils;
 
 let async_it = async_utils.get_async_it(describe);
@@ -164,62 +163,6 @@ describe("Memory management tests.", function() {
   ]]);
 });
 
-describe("Array tests.", function () {
-  let mem_manage;
-
-  afterEach(function () {
-    mem_manage.obliviate();
-  });
-
-  async_desc("", () => {
-    return async_utils.compile_wat("../src/builtins/memory_management.wat").then(module => {
-      let imports = {
-        "memory_management": module.instance.exports
-      };
-      mem_manage = module.instance.exports;
-      return async_utils.compile_wat("../src/builtins/arrays.wat", imports).then(mod => mod.instance.exports);
-    });
-
-  }, [[
-    "create arrays", module=> {
-    expect(module.create_array(10, 4)).toBe(12);
-  }], [
-    "set and get elements.", module => {
-    let array = module.create_array(10, 4);
-    expect(array).toBe(12);
-    // Set the third element of the array to 2.
-    module.set_value(-2, array, 3, 4);
-    expect(mem_manage.inspect(24)).toBe(-2);
-    expect(module.get_value(array, 3, 4)).toBe(-2);
-
-  }], [
-    "delete array.", module => {
-      module.create_array(5, 1);
-      let second = module.create_array(5, 1);
-      module.create_array(5, 1);
-      let resized = module.delete(second);
-      expect(mem_manage.inspect(0)).toBe(4);
-      expect(mem_manage.inspect(4)).toBe(60);
-    }
-  ], [
-    "resize only array.", module => {
-      let first = module.create_array(10, 4);
-      let second = module.resize(first, 10, 4);
-      expect(second).toBe(12);
-    }
-  ], [
-    "resize array in middle", module => {
-      module.create_array(5, 1);
-      let second = module.create_array(5, 1);
-      module.create_array(5, 1);
-      let resized = module.resize(second, 10, 1);
-      expect(mem_manage.inspect(0)).toBe(4);
-      expect(mem_manage.inspect(4)).toBe(60);
-      expect(mem_manage.inspect(60)).toBe(88);
-      expect(resized).toBe(96); // pointer to data segment of chunk that starts at 88
-    }
-  ]])
-});
 
 // before resize, chunks start at 4, 32, and 60
 // after resize, chunks start at 4, 60, and 88

@@ -1,6 +1,6 @@
 fn conditional(a: i32, b: i32) -> i32:
     let x = a + b
-    if 0:
+    if true:
         return a
     else:
         return b
@@ -17,7 +17,7 @@ fn mult(a: i32, b: i32) -> i32:
     let x = a * b
     return x
 
-fn div(a: i32, b: i32) -> f64:
+fn div(a: f64, b: f64) -> f64:
     let x = a / b
     return x
 
@@ -53,5 +53,5 @@ fn and_test(a: boolean, b: boolean) -> boolean:
 fn or_test(a: boolean, b: boolean) -> boolean:
     return a or b
 
-fn xor_test(a: boolean, b: boolean) -> boolean:
-    return a xor b
+//fn xor_test(a: boolean, b: boolean) -> boolean:
+//    return a xor b

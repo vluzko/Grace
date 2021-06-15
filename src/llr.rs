@@ -1,6 +1,7 @@
 /// Low-level representation of WebAssembly.
 use itertools::join;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::collections::BTreeMap;
 use std::convert::From;
 use std::fmt;
@@ -9,8 +10,10 @@ use petgraph::{Outgoing, visit::EdgeRef};
 
 
 use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, Stmt, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
-use scoping::{Context, GetContext, Type};
+use expression::{Node, Module, Expr, Stmt, Block, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
+use type_checking::types::Type;
+use type_checking::context::Context;
+use general_utils;
 
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
@@ -47,8 +50,9 @@ pub struct WASMFunc {
 pub enum WASM {
     Block,
     Loop,
-    End,
-    If,
+    End(usize),
+    If(Option<WASMType>),
+    Then,
     Else,
     Branch(usize),
     BranchIf(usize),
@@ -70,10 +74,13 @@ pub enum WASMOperator {
     Div,
     Eq,
     Ne,
-    Lt,
-    Gt,
-    Le,
-    Ge,
+    Lt_s,
+    Gt_s,
+    Le_s,
+    Ge_s,
+    And,
+    Or,
+    Xor
 }
 
 #[allow(non_camel_case_types)]
@@ -90,6 +97,35 @@ impl WASMType {
         return match self {
             WASMType::i32 | WASMType::f32 => 1,
             WASMType::i64 | WASMType::f64 => 2
+        };
+    }
+}
+
+trait GetTrueDeclarations {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
+}
+
+impl GetTrueDeclarations for Node<Block> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        let top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
+        let mut with_types = top_level.into_iter().map(|x| {
+            let t = context.get_type(self.scope, &x);
+            (x, t)
+        }).collect();
+        for stmt in &self.data.statements {
+            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
+        }
+        return with_types;
+    }
+}
+
+impl GetTrueDeclarations for Node<Stmt> {
+    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+        return match self.data {
+            Stmt::FunctionDecStmt{ref block, ..} => {
+                block.get_true_declarations(context)
+            },
+            _ => HashSet::new()
         };
     }
 }
@@ -260,7 +296,7 @@ impl ToLLR for Cfg {
             let node = self.graph.node_weight(current_index).unwrap();
             wasm.append(&mut node.to_llr(context));
             match node {
-                CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End | CfgVertex::Entry => {
+                CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End(_) | CfgVertex::Entry => {
                     let mut n_count = 0;
                     let edges = self.graph.edges_directed(current_index, Outgoing);
                     for edge in edges {
@@ -269,7 +305,7 @@ impl ToLLR for Cfg {
                         assert_eq!(n_count, 1);
                     }
                 },
-                CfgVertex::IfStart(_) | CfgVertex::LoopStart(_) => {
+                CfgVertex::IfStart(_, _) | CfgVertex::LoopStart(_) => {
                     let mut n_count = 0;
                     let edges = self.graph.edges_directed(current_index, Outgoing);
                     let mut false_block = None;
@@ -294,7 +330,10 @@ impl ToLLR for Cfg {
                         None => panic!()
                     }
                 },
-                CfgVertex::Break(_) | CfgVertex::Continue(_) | CfgVertex::Exit => {}
+                CfgVertex::Break(_) | CfgVertex::Continue(_) => {
+                    panic!("Haven't handled break or continue yet")
+                },
+                CfgVertex::Exit => {}
             };
         }
         return wasm;
@@ -311,14 +350,17 @@ impl ToLLR for CfgVertex {
                 }
                 wasm
             },
-            CfgVertex::IfStart(expression) => {
-                let mut wasm = expression.to_llr(context);
-                wasm.push(WASM::If);
+            CfgVertex::IfStart(expression, block_type) => {
+                let wasm_type = Option::<WASMType>::from(block_type);
+                let mut wasm = vec!(WASM::If(wasm_type));
+                wasm = general_utils::join(wasm, expression.to_llr(context));
+                wasm.push(WASM::Then);
                 wasm
             },
             CfgVertex::LoopStart(expression) => {
-                let mut wasm = expression.to_llr(context);
-                wasm.push(WASM::Loop);
+                let mut wasm = vec!(WASM::Block, WASM::Loop);
+                wasm = general_utils::join(wasm, expression.to_llr(context));
+                wasm.push(WASM::BranchIf(0));
                 wasm
             },
             CfgVertex::Break(block) => {
@@ -338,7 +380,7 @@ impl ToLLR for CfgVertex {
                 wasm
             },
             CfgVertex::Else => vec!(WASM::Else),
-            CfgVertex::End => vec!(WASM::End),
+            CfgVertex::End(k) => vec!(WASM::End(*k)),
             CfgVertex::Entry | CfgVertex::Exit => vec!(),
         } ;
     }
@@ -577,7 +619,10 @@ pub mod rust_trait_impls {
                 BinaryOperator::Sub => WASMOperator::Sub,
                 BinaryOperator::Mult => WASMOperator::Mult,
                 BinaryOperator::Div => WASMOperator::Div,
-                _ => panic!()
+                BinaryOperator::And => WASMOperator::And,
+                BinaryOperator::Or => WASMOperator::Or,
+                BinaryOperator::Xor => WASMOperator::Xor,
+                x => panic!("WASMOperator not implemented for {:?}", x)
             };
         }
     }
@@ -586,11 +631,11 @@ pub mod rust_trait_impls {
         fn from(input: &ComparisonOperator) -> Self {
             return match input {
                 ComparisonOperator::Equal => WASMOperator::Eq,
-                ComparisonOperator::Less => WASMOperator::Lt,
-                ComparisonOperator::Greater => WASMOperator::Gt,
-                ComparisonOperator::LessEqual => WASMOperator::Le,
-                ComparisonOperator::GreaterEqual => WASMOperator::Ge,
-                _ => panic!()
+                ComparisonOperator::Less => WASMOperator::Lt_s,
+                ComparisonOperator::Greater => WASMOperator::Gt_s,
+                ComparisonOperator::LessEqual => WASMOperator::Le_s,
+                ComparisonOperator::GreaterEqual => WASMOperator::Ge_s,
+                ComparisonOperator::Unequal => WASMOperator::Ne
             };
         }
     }
@@ -615,6 +660,13 @@ pub mod rust_trait_impls {
                 WASMOperator::Div => "div",
                 WASMOperator::Eq => "eq",
                 WASMOperator::Ne => "ne",
+                WASMOperator::Gt_s => "gt_s",
+                WASMOperator::Lt_s => "lt_s",
+                WASMOperator::Ge_s => "ge_s",
+                WASMOperator::Le_s => "le_s",
+                WASMOperator::And => "and",
+                WASMOperator::Or => "or",
+                WASMOperator::Xor => "xor",
                 x => panic!("Display not implemented for WASMOperator: {:?}", x)
             })
         }
@@ -628,6 +680,8 @@ mod tests {
     use std::fs::File;
 
     use compiler_layers;
+    use difference::{Difference, Changeset};
+    use regex::Regex;
 
     #[test]
     fn trait_impl_test() {
@@ -653,5 +707,28 @@ mod tests {
             panic!()
         }
     }
+
+    #[test]
+    fn test_get_declarations() {
+        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
+        // let new_ident = Identifier::from("x");
+        let actual = func_dec.get_true_declarations(&context);
+        let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
+        for ptr in actual {
+            let changeset = Changeset::new("x", ptr.0.name.as_str(), "");
+            for diff in changeset.diffs {
+                match diff {
+                    Difference::Same(_) => {},
+                    Difference::Rem(_) => panic!(),
+                    Difference::Add(added_string) => {
+                        // Check if the thing being added is a scope ID on the end
+                        // of a variable
+                        assert!(scope_suffix_regex.is_match(added_string.as_str()));
+                    }
+                }
+            }
+        }
+    }
+
 
 }

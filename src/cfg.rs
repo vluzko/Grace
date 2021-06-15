@@ -6,7 +6,8 @@ extern crate petgraph;
 use petgraph::{Graph, graph::NodeIndex, graph::EdgeIndex};
 
 use expression::{Identifier, Node, Module, Block, Stmt, Expr};
-use scoping::Context;
+use type_checking::context::Context;
+use type_checking::types::Type;
 
 pub type CfgMap = HashMap<Identifier, Cfg>;
 
@@ -22,11 +23,11 @@ pub enum CfgVertex {
     Entry,
     Block(Vec<Node<CfgStmt>>),
     LoopStart(Node<Expr>),
-    IfStart(Node<Expr>),
+    IfStart(Node<Expr>, Type),
     Else,
     Break(Vec<Node<CfgStmt>>),
     Continue(Vec<Node<CfgStmt>>),
-    End,
+    End(usize),
     Exit
 }
 
@@ -110,13 +111,14 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
 }
 
 
+#[allow(unused_assignments)]
 /// Add the contents of a block to a CFG.
 /// 
 /// # Arguments
 /// 
 /// * `context` - 
 /// * `current` - 
-/// * `loop_start` - 
+/// * `loop_start` -
 fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start: Option<NodeIndex>) -> (Cfg, NodeIndex, Vec<NodeIndex>) {
     let mut new_cfg = current;
     // The set of statements in the current CFG block.
@@ -163,7 +165,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 // The loop body passes back to here, as do all continue statements.
                 let condition_index = new_cfg.add_node(CfgVertex::LoopStart(condition.clone()));
                 new_cfg.add_edge(new_index, condition_index, true);
-                
+
                 // Add the while loop block to the CFG.
                 let res = block_to_cfg(block, context, new_cfg, Some(condition_index));
                 new_cfg = res.0;
@@ -181,7 +183,7 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
 
                 // We create an empty vertex to serve as a placeholder for the next vertex.
                 // All break statements in the while loop and the while loop exit have an edge to it.
-                let empty_index = new_cfg.add_node(CfgVertex::End);
+                let empty_index = new_cfg.add_node(CfgVertex::End(2));
                 new_cfg = add_edges_to_next(new_cfg, need_edge_to_next_block, empty_index);
 
                 // Reset for the next iteration.
@@ -224,9 +226,10 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
             Stmt::IfStmt{ref condition, ref block, ref else_block} => {
                 // Collect existing statements into a block.
                 let new_index = new_cfg.add_block(statements, previous_index);
+                let stmt_type = context.get_node_type(stmt.id);
 
                 // A block for the initial if condition.
-                let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone()));
+                let condition_index = new_cfg.add_node(CfgVertex::IfStart(condition.clone(), stmt_type));
                 // Attach the condition to the previous block.
                 new_cfg.add_edge(new_index, condition_index, false);
 
@@ -238,21 +241,23 @@ fn block_to_cfg(block: &Node<Block>, context: &Context, current: Cfg, loop_start
                 // Track any breaks contained in the inner block.
                 need_edge_to_next_block.append(&mut res.2);
 
-                let end_index = new_cfg.add_node(CfgVertex::End);
-
+                let end_index = new_cfg.add_node(CfgVertex::End(3));
+                
                 match else_block {
                     Some(b) => {
+                        let else_index = new_cfg.add_node(CfgVertex::Else);
                         
                         // Add the else block to the CFG.
-                        let mut res = block_to_cfg(b, context, new_cfg, loop_start);
-                        new_cfg = res.0;
+                        let mut else_res = block_to_cfg(b, context, new_cfg, loop_start);
+                        new_cfg = else_res.0;
                         
-                        need_edge_to_next_block.append(&mut res.2);
+                        need_edge_to_next_block.append(&mut else_res.2);
 
                         // Add an edge from the last condition to the else block.
-                        new_cfg.add_edge(condition_index, res.1, false);
+                        new_cfg.add_edge(else_index, else_res.1, false);
+                        new_cfg.add_edge(condition_index, else_index, false);
                         // Add an edge from the else block to the end.
-                        new_cfg.add_edge(res.1, end_index, false);
+                        new_cfg.add_edge(else_res.1, end_index, false);
                     },
                     None => {
                         new_cfg.add_edge(condition_index, end_index, false);

@@ -1,13 +1,16 @@
 {
-  "name": "grace_js_test",
-  "version": "0.0.1",
-  "description": "Javascript tests for Grace",
-  "license": "MIT",
-  "devDependencies": {
-    "jasmine": "^3.5.0",
-    "jest": "^23.6.0"
-  },
-  "scripts": {
-    "test": "jasmine"
-  }
+    "name": "grace_js_test",
+    "version": "0.0.1",
+    "description": "Javascript tests for Grace",
+    "license": "MIT",
+    "devDependencies": {
+        "@babel/core": "^7.14.6",
+        "@babel/preset-env": "^7.14.5",
+        "babel-jest": "^23.6.0",
+        "jest": "^27.0.4",
+        "regenerator-runtime": "^0.11.1"
+    },
+    "scripts": {
+        "test": "node ./node_modules/jest/bin/jest.js"
+    }
 }

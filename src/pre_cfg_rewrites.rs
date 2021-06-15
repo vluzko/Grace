@@ -1,13 +1,9 @@
-use std::collections::{HashMap, BTreeMap, HashSet, BTreeSet};
-use std::iter::FromIterator;
-use std::usize;
 use std::convert::From;
 
 use expression::*;
-use general_utils;
-use scoping;
-use scoping::{Context, Type, get_convert_expr, choose_return_type};
-
+use type_checking::types::Type;
+use type_checking::scope::{get_convert_expr, choose_return_type};
+use type_checking::context::Context;
 
 pub trait TypeRewritable<T> {
     fn type_based_rewrite(self, context: &mut Context) -> T;
@@ -239,10 +235,6 @@ mod test {
     #[test]
     fn test_identifier_resolution() {
         let block_str = "let a = 1\nlet b = a";
-        // let mut parsed = parser_utils::output(parser::block(block.as_bytes(), 0));
-        // let (id, init) = scoping::initial_context();
-        // let context = parsed.gen_scopes(id, &init);
-        // let (types, _) = parsed.resolve_types(&context, HashMap::new());
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
         assert_eq!(context.get_node_type(parsed.id), Type::empty);
         let id2 = parsed.data.statements[1].id;

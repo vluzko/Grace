@@ -1,6 +1,6 @@
 use itertools::join;
 
-use scoping::Context;
+use type_checking::context::Context;
 use llr::{
     WASMModule,
     WASMFunc,
@@ -64,11 +64,15 @@ impl ToBytecode for WASM {
     fn to_bytecode(&self, _context: &Context) -> String {
         return match self {
             // Control-flow
-            WASM::Block => "block $void".to_string(),
-            WASM::Loop => "loop $void".to_string(),
-            WASM::If => "if".to_string(),
-            WASM::Else => "else".to_string(),
-            WASM::End => "end".to_string(),
+            WASM::Block => "(block $void".to_string(),
+            WASM::Loop => "(loop $void".to_string(),
+            WASM::If(wasm_type) => match wasm_type {
+                Some(t) => format!("(if (result {}) (", t),
+                None => "(if (".to_string()
+            },
+            WASM::Then => ")(then(".to_string(),
+            WASM::Else => "))(else(".to_string(),
+            WASM::End(k) => ")".repeat(*k),
             WASM::Branch(level) => format!("br {}", level),
             WASM::BranchIf(level) => format!("br_if {}", level),
             // Expressions

@@ -18,7 +18,6 @@ use self::nom::{
     Err,
     Needed,
     ErrorKind,
-    Context,
     Compare,
     CompareResult,
     FindSubstring,
@@ -286,7 +285,7 @@ impl <'a> InputTakeAtPosition for PosStr<'a> {
         }
     }
 
-    fn split_at_position1<P>(&self, predicate: P, e: ErrorKind<u32>) -> IResult<Self, Self, u32>
+    fn split_at_position1<P>(&self, predicate: P, _e: ErrorKind<u32>) -> IResult<Self, Self, u32>
     where
         P: Fn(Self::Item) -> bool,
     {

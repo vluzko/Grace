@@ -30,24 +30,23 @@ describe("gradual tests.", () => {
     let grad_module;
     let grad_funcs;
 
-    beforeAll(async (done) => {
+    beforeAll(async () => {
         mem_module = (await async_utils.compile_wat("../src/builtins/memory_management.wat")).instance.exports;
         const imports = {'memory_management': mem_module};
         grad_module = await async_utils.compile_wat("../src/builtins/gradual_binary_ops.wat", imports);
         grad_funcs = grad_module.instance.exports;
-        done()
+        // done()
     })
 
-    test('wrap_i32.', async (done) => {
+    test('wrap_i32.', async () => {
         const wrapped = grad_funcs.wrap_i32(5);
         const type_val = mem_module.inspect(wrapped);
         const data_val = mem_module.inspect(wrapped + 4);
         expect(type_val).toBe(0);
         expect(data_val).toBe(5);
-        done();
     })
     
-    test('add_i32.', async (done) => {
+    test('add_i32.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 0);
@@ -59,10 +58,9 @@ describe("gradual tests.", () => {
         const data_res = mem_module.inspect(res_ptr + 4);
         expect(type_res).toBe(0);
         expect(data_res).toBe(9);
-        done();
     })
     
-    test('add_gradual.', async (done) => {
+    test('add_gradual.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 0);
@@ -74,10 +72,9 @@ describe("gradual tests.", () => {
         const data_res = mem_module.inspect(res_ptr + 4);
         expect(type_res).toBe(0);
         expect(data_res).toBe(9);
-        done();
     })
 
-    test('gradual_binary test add f32.', async (done) => {
+    test('gradual_binary test add f32.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 2);
@@ -89,10 +86,9 @@ describe("gradual tests.", () => {
         const data_res = mem_module.inspect_f32(res_ptr + 4);
         expect(type_res).toBe(2);
         expect(data_res).toBe(9);
-        done();
     })
 
-    test('gradual_binary test add f64.', async (done) => {
+    test('gradual_binary test add f64.', async () => {
         const a_ptr = mem_module.alloc_words(3);
         const b_ptr = mem_module.alloc_words(3);
         mem_module.set(a_ptr, 3);
@@ -104,10 +100,9 @@ describe("gradual tests.", () => {
         const data_res = mem_module.inspect_f64(res_ptr + 4);
         expect(type_res).toBe(3);
         expect(data_res).toBe(9);
-        done();
     })
     
-    test('gradual_binary_test.', async (done) => {
+    test('gradual_binary_test.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
         mem_module.set(a_ptr, 1);
@@ -121,7 +116,6 @@ describe("gradual tests.", () => {
         expect(type_res).toBe(1);
         expect(data_res).toBe(9);
         // expect(first_call).toBe(7);
-        done();
     })
 })
 
@@ -133,46 +127,6 @@ describe("Small grace tests.", () => {
         expect(module.instance.exports.mult(2, 3)).toBe(6);
         expect(module.instance.exports.div(2, 3)).toBe(2/3);
     })
-
-//   async_desc("", () => {
-//     return async_utils.compile_grace("spec/inputs/small_grace.gr",
-//       "spec/outputs/small_grace.wat");
-//   }, [[
-//     'arithmetic operators', module => {
-//     expect(module.instance.exports.add(2, 3)).toBe(5);
-//     expect(module.instance.exports.sub(2, 3)).toBe(-1);
-//     expect(module.instance.exports.mult(2, 3)).toBe(6);
-//     expect(module.instance.exports.div(2, 3)).toBe(2/3);
-//   }], [
-//     'control flow', module => {
-//     expect(module.instance.exports.conditional(2,3)).toBe(3);
-//     expect(module.instance.exports.loop(2, 1)).toBe(1);
-//     expect(module.instance.exports.loop(3, -2)).toBe(-2);
-//     expect(module.instance.exports.loop(0)).toBe(0);
-//   }], [
-//     'comparison operators', module => {
-//     expect(module.instance.exports.equality(0, 1)).toBe(0);
-//     expect(module.instance.exports.equality(0, 0)).toBe(1);
-
-//     expect(module.instance.exports.neq(0, 0)).toBe(0);
-//     expect(module.instance.exports.neq(0, 1)).toBe(1);
-
-//     expect(module.instance.exports.less(0, 0)).toBe(0);
-//     expect(module.instance.exports.less(0, 1)).toBe(1);
-//     expect(module.instance.exports.less(1, 0)).toBe(0);
-
-//     expect(module.instance.exports.lesse(0, 0)).toBe(1);
-//     expect(module.instance.exports.lesse(0, 1)).toBe(1);
-//     expect(module.instance.exports.lesse(1, 0)).toBe(0);
-//   }], [
-//     'function calls', module => {
-//     expect(module.instance.exports.call_func(2, 3)).toBe(5);
-//   }], [
-//     "logical operators", module => {
-//     expect(module.instance.exports.and_test(1, 1)).toBe(1);
-//     expect(module.instance.exports.or_test(1, 1)).toBe(1);
-//     expect(module.instance.exports.xor_test(1, 0)).toBe(1);
-//   }]]);
 });
 
 describe("Memory management tests.", function() {

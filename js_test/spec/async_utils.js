@@ -1,78 +1,8 @@
 "use strict";
 let child = require("child_process");
-let process = require("process");
 let util = require("util");
 let fs = require("fs");
 let exec = util.promisify(child.exec);
-
-/**
- * Wraps a promise to call done().
- * @param promise
- * @param done
- */
-function wrap_promise(promise, done) {
-    return promise
-        .then(function (data) {
-        done();
-        return data;
-        }, function (err) {
-        console.log("Promise error " + err);
-        done();
-        return err;
-    });
-}
-
-/**
- * Returns a function which acts as an asynchronous it.
- * Jasmine adds far too much overhead to asynchronous testing, this resolves that.
- * @param describe
- * @return
- */
-function get_async_it(describe) {
-    return function async_describe(test_name, promiser, expectation) {
-        describe(test_name, function () {
-        let data;
-        beforeEach(function (done) {
-            let promise = promiser();
-            data = wrap_promise(promise, done);
-        });
-        it(".it", function (done) {
-            data.then(expectation)
-            .then(function () {
-                done();
-            }, function (err) {
-                console.log(err);
-                done();
-            });
-        });
-        });
-    };
-}
-
-function get_async_desc(describe) {
-  return function async_describe(test_name, promiser, expectations) {
-    describe(test_name, function () {
-      let data;
-      beforeEach(function (done) {
-        let promise = promiser();
-        data = wrap_promise(promise, done);
-      });
-
-      for (let [name, expectation] of expectations) {
-        it(name, function (done) {
-          data.then(expectation)
-            .then(function () {
-              done();
-            }, function (err) {
-              console.log(err);
-              done();
-            });
-        });
-      }
-
-    });
-  };
-}
 
 /**
  * Compile a Grace file to WebAssembly.
@@ -125,9 +55,6 @@ async function compile_wat(input, imports) {
 }
 
 exports.utils = {
-    get_async_it,
-    wrap_promise,
     compile_grace,
     compile_wat,
-    get_async_desc
 };

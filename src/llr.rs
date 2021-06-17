@@ -1,19 +1,20 @@
-/// Low-level representation of WebAssembly.
+//! Low-level representation of WebAssembly.
 use itertools::join;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::collections::BTreeMap;
 use std::convert::From;
 use std::fmt;
 
-use petgraph::{Outgoing, visit::EdgeRef};
+use petgraph::{visit::EdgeRef, Outgoing};
 
-
-use cfg::{Cfg, CfgVertex, CfgStmt};
-use expression::{Node, Module, Expr, Stmt, Block, BinaryOperator, ComparisonOperator, UnaryOperator, Identifier};
-use type_checking::types::Type;
-use type_checking::context::Context;
+use cfg::{Cfg, CfgStmt, CfgVertex};
+use expression::{
+    BinaryOperator, Block, ComparisonOperator, Expr, Identifier, Module, Node, Stmt, UnaryOperator,
+};
 use general_utils;
+use type_checking::context::Context;
+use type_checking::types::Type;
 
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
@@ -22,7 +23,7 @@ pub struct WASMModule {
     pub imports: Vec<WASMImport>,
     pub functions: Vec<WASMFunc>,
     // (Trait name, Struct name, Function declaration)
-    pub trait_implementations: Vec<WASMFunc>
+    pub trait_implementations: Vec<WASMFunc>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -32,7 +33,6 @@ pub struct WASMImport {
     pub internal_name: String,
     pub params: Vec<(String, WASMType)>,
     pub return_type: WASMType,
-
 }
 
 /// A WASM function declaration
@@ -42,7 +42,7 @@ pub struct WASMFunc {
     pub args: Vec<(String, WASMType)>,
     pub locals: Vec<(String, WASMType)>,
     pub result: Option<WASMType>,
-    pub code: Vec<WASM>
+    pub code: Vec<WASM>,
 }
 
 /// A WASM expression.
@@ -80,7 +80,7 @@ pub enum WASMOperator {
     Ge_s,
     And,
     Or,
-    Xor
+    Xor,
 }
 
 #[allow(non_camel_case_types)]
@@ -89,14 +89,14 @@ pub enum WASMType {
     i64,
     i32,
     f64,
-    f32
+    f32,
 }
 
 impl WASMType {
     pub fn size(&self) -> usize {
         return match self {
             WASMType::i32 | WASMType::f32 => 1,
-            WASMType::i64 | WASMType::f64 => 2
+            WASMType::i64 | WASMType::f64 => 2,
         };
     }
 }
@@ -107,11 +107,19 @@ trait GetTrueDeclarations {
 
 impl GetTrueDeclarations for Node<Block> {
     fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
-        let top_level: HashSet<Identifier> = context.get_scope(self.scope).declarations.keys().map(|x| x.clone()).collect();
-        let mut with_types = top_level.into_iter().map(|x| {
-            let t = context.get_type(self.scope, &x);
-            (x, t)
-        }).collect();
+        let top_level: HashSet<Identifier> = context
+            .get_scope(self.scope)
+            .declarations
+            .keys()
+            .map(|x| x.clone())
+            .collect();
+        let mut with_types = top_level
+            .into_iter()
+            .map(|x| {
+                let t = context.get_type(self.scope, &x);
+                (x, t)
+            })
+            .collect();
         for stmt in &self.data.statements {
             with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
         }
@@ -122,19 +130,21 @@ impl GetTrueDeclarations for Node<Block> {
 impl GetTrueDeclarations for Node<Stmt> {
     fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
         return match self.data {
-            Stmt::FunctionDecStmt{ref block, ..} => {
-                block.get_true_declarations(context)
-            },
-            _ => HashSet::new()
+            Stmt::FunctionDecStmt { ref block, .. } => block.get_true_declarations(context),
+            _ => HashSet::new(),
         };
     }
 }
 
 /// Convert a module to LLR.
-pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMModule {
-    let mut imports = vec!();
-    let mut functions = vec!();
-    let mut trait_implementations = vec!();
+pub fn module_to_llr(
+    module: &Node<Module>,
+    context: &Context,
+    cfg_map: &HashMap<Identifier, Cfg>,
+) -> WASMModule {
+    let mut imports = vec![];
+    let mut functions = vec![];
+    let mut trait_implementations = vec![];
 
     for import in &module.data.imports {
         let typing_info = context.get_node_type(import.id);
@@ -143,19 +153,25 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
             let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value) {
                 // convert everything to WASMTypes
                 Type::Function(ref args, ref return_type) => {
-                    let wasm_args = args.iter().map( |(n, t) | (n.name.clone(), WASMType::from(t))).collect();
-                    let wasm_return = WASMType::from(&**return_type); 
+                    let wasm_args = args
+                        .iter()
+                        .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                        .collect();
+                    let wasm_return = WASMType::from(&**return_type);
                     (wasm_args, wasm_return)
-                },
+                }
                 Type::Named(name) => {
                     let full_name = format!("{}.{}", import.string_ref(), name);
                     let actual_type = context.get_defined_type(&Identifier::from(full_name));
                     let (args, return_type) = actual_type.get_constructor_type();
-                    let wasm_args = args.iter().map( |(n, t) | (n.name.clone(), WASMType::from(t))).collect();
-                    let wasm_return = WASMType::from(&return_type); 
+                    let wasm_args = args
+                        .iter()
+                        .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                        .collect();
+                    let wasm_return = WASMType::from(&return_type);
                     (wasm_args, wasm_return)
-                },
-                x => panic!("Wrong import type: {:?}", x)
+                }
+                x => panic!("Wrong import type: {:?}", x),
             };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
             let internal_name = format!(".{}.{}", joined_path, value);
@@ -164,7 +180,7 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
                 value: value.name.clone(),
                 internal_name: internal_name,
                 params: wasm_args,
-                return_type: wasm_return
+                return_type: wasm_return,
             };
             imports.push(wasm_import);
         }
@@ -181,14 +197,18 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
     for (trait_name, internal_type_name, function_decs) in &module.data.trait_implementations {
         for declaration in function_decs {
             let name_prefix = format!("{}.{}", trait_name, internal_type_name);
-            let ambiguous_name_func = handle_trait_func_dec(declaration, &name_prefix, context, cfg_map);
-            let full_name = format!("{}.{}.{}", trait_name, internal_type_name, ambiguous_name_func.name);
-            let full_name_func = WASMFunc{
+            let ambiguous_name_func =
+                handle_trait_func_dec(declaration, &name_prefix, context, cfg_map);
+            let full_name = format!(
+                "{}.{}.{}",
+                trait_name, internal_type_name, ambiguous_name_func.name
+            );
+            let full_name_func = WASMFunc {
                 name: full_name,
                 args: ambiguous_name_func.args,
                 locals: ambiguous_name_func.locals,
                 result: ambiguous_name_func.result,
-                code: ambiguous_name_func.code
+                code: ambiguous_name_func.code,
             };
             trait_implementations.push(full_name_func);
         }
@@ -196,41 +216,67 @@ pub fn module_to_llr(module: &Node<Module>, context: &Context, cfg_map: &HashMap
     return WASMModule {
         imports: imports,
         functions: functions,
-        trait_implementations: trait_implementations
+        trait_implementations: trait_implementations,
     };
 }
 
 // Helper for module_to_llr
-pub fn handle_declaration(declaration: &Node<Stmt>, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMFunc {
+pub fn handle_declaration(
+    declaration: &Node<Stmt>,
+    context: &Context,
+    cfg_map: &HashMap<Identifier, Cfg>,
+) -> WASMFunc {
     return match declaration.data {
-        Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref return_type, ..} => {
+        Stmt::FunctionDecStmt {
+            ref name,
+            ref args,
+            ref kwargs,
+            ref return_type,
+            ..
+        } => {
             let local_variables = declaration.get_true_declarations(context);
-            let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables.iter().map(
-                |(n, t)| (n.name.clone(), WASMType::from(t))).collect();
+            let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
+                .iter()
+                .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                .collect();
             let cfg = cfg_map.get(name).unwrap();
             let block_llr = cfg.to_llr(context);
-            let mut wasm_args: Vec<(String, WASMType)>  = args.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
+            let mut wasm_args: Vec<(String, WASMType)> = args
+                .iter()
+                .map(|(name, t)| (name.name.clone(), WASMType::from(t)))
+                .collect();
             // Add kwargs
-            wasm_args.append(&mut kwargs.iter().map(|(name, t, _)| (name.name.clone(), WASMType::from(t))).collect());
+            wasm_args.append(
+                &mut kwargs
+                    .iter()
+                    .map(|(name, t, _)| (name.name.clone(), WASMType::from(t)))
+                    .collect(),
+            );
             let wasm_func = WASMFunc {
                 name: name.name.clone(),
                 args: wasm_args,
                 locals: locals_with_wasm_types,
                 result: Option::<WASMType>::from(return_type),
-                code: block_llr
+                code: block_llr,
             };
             wasm_func
-        },
-        Stmt::StructDec{ref name, ref fields} => {
-            let wasm_args: Vec<(String, WASMType)>  = fields.iter().map(|(name, t)| (name.name.clone(), WASMType::from(t))).collect();
-            let mut block_llr = vec!();
+        }
+        Stmt::StructDec {
+            ref name,
+            ref fields,
+        } => {
+            let wasm_args: Vec<(String, WASMType)> = fields
+                .iter()
+                .map(|(name, t)| (name.name.clone(), WASMType::from(t)))
+                .collect();
+            let mut block_llr = vec![];
             let num_words: usize = wasm_args.iter().map(|(_, t)| t.size()).sum();
             block_llr.push(WASM::Const(format!("{}", num_words), WASMType::i32));
             block_llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
             block_llr.push(WASM::Set(".x".to_string()));
             for (index, (field_name, _)) in fields.iter().enumerate() {
                 block_llr.push(WASM::Get(".x".to_string()));
-                block_llr.push(WASM::Const(format!("{}", 8+index*4), WASMType::i32));
+                block_llr.push(WASM::Const(format!("{}", 8 + index * 4), WASMType::i32));
                 block_llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                 block_llr.push(WASM::Get(field_name.name.clone()));
                 block_llr.push(WASM::Call(".memory_management.set".to_string()));
@@ -241,17 +287,22 @@ pub fn handle_declaration(declaration: &Node<Stmt>, context: &Context, cfg_map: 
             let wasm_func = WASMFunc {
                 name: name.name.clone(),
                 args: wasm_args,
-                locals: vec!((".x".to_string(), WASMType::i32)),
+                locals: vec![(".x".to_string(), WASMType::i32)],
                 result: Some(WASMType::i32),
-                code: block_llr
+                code: block_llr,
             };
-            wasm_func                
+            wasm_func
         }
-        _ => panic!()
-    }
+        _ => panic!(),
+    };
 }
 
-pub fn handle_trait_func_dec(declaration: &Node<Stmt>, name_prefix: &String, context: &Context, cfg_map: &HashMap<Identifier, Cfg>) -> WASMFunc {
+pub fn handle_trait_func_dec(
+    declaration: &Node<Stmt>,
+    name_prefix: &String,
+    context: &Context,
+    cfg_map: &HashMap<Identifier, Cfg>,
+) -> WASMFunc {
     return match &declaration.data {
         &Stmt::FunctionDecStmt{ref name, ref args, ref kwargs, ref return_type, ..} => {
             // Get local variables as WASM.
@@ -279,7 +330,7 @@ pub fn handle_trait_func_dec(declaration: &Node<Stmt>, name_prefix: &String, con
             wasm_func
         }
         x => panic!("Found {:?} inside a trait implementation block. Only function declarations are allowed here.", x)
-    }
+    };
 }
 
 pub trait ToLLR {
@@ -288,9 +339,9 @@ pub trait ToLLR {
 
 impl ToLLR for Cfg {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
-        let mut wasm = vec!();
+        let mut wasm = vec![];
 
-        let mut unvisited = vec!(self.entry_index.unwrap());
+        let mut unvisited = vec![self.entry_index.unwrap()];
 
         while let Some(current_index) = unvisited.pop() {
             let node = self.graph.node_weight(current_index).unwrap();
@@ -304,7 +355,7 @@ impl ToLLR for Cfg {
                         n_count += 1;
                         assert_eq!(n_count, 1);
                     }
-                },
+                }
                 CfgVertex::IfStart(_, _) | CfgVertex::LoopStart(_) => {
                     let mut n_count = 0;
                     let edges = self.graph.edges_directed(current_index, Outgoing);
@@ -322,17 +373,17 @@ impl ToLLR for Cfg {
 
                     match false_block {
                         Some(x) => unvisited.push(x),
-                        None => panic!()
+                        None => panic!(),
                     };
 
                     match true_block {
                         Some(x) => unvisited.push(x),
-                        None => panic!()
+                        None => panic!(),
                     }
-                },
+                }
                 CfgVertex::Break(_) | CfgVertex::Continue(_) => {
                     panic!("Haven't handled break or continue yet")
-                },
+                }
                 CfgVertex::Exit => {}
             };
         }
@@ -344,67 +395,78 @@ impl ToLLR for CfgVertex {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match &self {
             CfgVertex::Block(statements) => {
-                let mut wasm = vec!();
+                let mut wasm = vec![];
                 for stmt in statements {
                     wasm.append(&mut stmt.to_llr(context));
                 }
                 wasm
-            },
+            }
             CfgVertex::IfStart(expression, block_type) => {
                 let wasm_type = Option::<WASMType>::from(block_type);
-                let mut wasm = vec!(WASM::If(wasm_type));
+                let mut wasm = vec![WASM::If(wasm_type)];
                 wasm = general_utils::join(wasm, expression.to_llr(context));
                 wasm.push(WASM::Then);
                 wasm
-            },
+            }
             CfgVertex::LoopStart(expression) => {
-                let mut wasm = vec!(WASM::Block, WASM::Loop);
+                let mut wasm = vec![WASM::Block, WASM::Loop];
                 wasm = general_utils::join(wasm, expression.to_llr(context));
                 wasm.push(WASM::BranchIf(0));
                 wasm
-            },
+            }
             CfgVertex::Break(block) => {
-                let mut wasm = vec!();
+                let mut wasm = vec![];
                 for stmt in block {
                     wasm.append(&mut stmt.to_llr(context));
                 }
                 wasm.push(WASM::Branch(0));
                 wasm
-            },
+            }
             CfgVertex::Continue(block) => {
-                let mut wasm = vec!();
+                let mut wasm = vec![];
                 for stmt in block {
                     wasm.append(&mut stmt.to_llr(context));
                 }
                 wasm.push(WASM::Branch(1));
                 wasm
-            },
-            CfgVertex::Else => vec!(WASM::Else),
-            CfgVertex::End(k) => vec!(WASM::End(*k)),
-            CfgVertex::Entry | CfgVertex::Exit => vec!(),
-        } ;
+            }
+            CfgVertex::Else => vec![WASM::Else],
+            CfgVertex::End(k) => vec![WASM::End(*k)],
+            CfgVertex::Entry | CfgVertex::Exit => vec![],
+        };
     }
 }
 
 impl ToLLR for Node<CfgStmt> {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match self.data {
-            CfgStmt::Assignment {ref name, ref expression} | CfgStmt::Let {ref name, ref expression} => {
+            CfgStmt::Assignment {
+                ref name,
+                ref expression,
+            }
+            | CfgStmt::Let {
+                ref name,
+                ref expression,
+            } => {
                 let mut expr_wasm = expression.to_llr(context);
                 expr_wasm.push(WASM::Set(name.name.clone()));
                 expr_wasm
-            },
-            CfgStmt::Return (ref val) | CfgStmt::Yield (ref val) | CfgStmt::Branch (ref val) => {
+            }
+            CfgStmt::Return(ref val) | CfgStmt::Yield(ref val) | CfgStmt::Branch(ref val) => {
                 val.to_llr(context)
             }
-        }
+        };
     }
 }
 
 impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context) -> Vec<WASM> {
         return match &self.data {
-            Expr::BinaryExpr{ref left, ref right, ref operator} => {
+            Expr::BinaryExpr {
+                ref left,
+                ref right,
+                ref operator,
+            } => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
                 let left_id_type = context.get_node_type(left.id);
@@ -412,10 +474,17 @@ impl ToLLR for Node<Expr> {
                 let right_id_type = context.get_node_type(right.id);
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
-                llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
+                llr.push(WASM::Operation(
+                    WASMOperator::from(operator),
+                    left_wasm_type,
+                ));
                 llr
-            },
-            Expr::ComparisonExpr{ref left, ref right, ref operator} => {
+            }
+            Expr::ComparisonExpr {
+                ref left,
+                ref right,
+                ref operator,
+            } => {
                 let mut llr = left.to_llr(context);
                 llr.append(&mut right.to_llr(context));
                 let left_id_type = context.get_node_type(left.id);
@@ -424,50 +493,72 @@ impl ToLLR for Node<Expr> {
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
                 // Convert operator to a wasm operator
-                llr.push(WASM::Operation(WASMOperator::from(operator), left_wasm_type));
+                llr.push(WASM::Operation(
+                    WASMOperator::from(operator),
+                    left_wasm_type,
+                ));
                 llr
-            },
-            Expr::FunctionCall{ref function, ref args, ..} => {
-                let mut llr = vec!();
+            }
+            Expr::FunctionCall {
+                ref function,
+                ref args,
+                ..
+            } => {
+                let mut llr = vec![];
                 for arg in args {
                     llr.append(&mut arg.to_llr(context));
                 }
                 match &function.data {
                     Expr::IdentifierExpr(ref name) => {
                         llr.push(WASM::Call(name.name.clone()));
-                    },
+                    }
                     Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
-                    },
-                    Expr::TraitAccess{ref base, ref trait_name, ref attribute} => {
+                    }
+                    Expr::TraitAccess {
+                        ref base,
+                        ref trait_name,
+                        ref attribute,
+                    } => {
                         let base_type = context.get_node_type(base.id);
-                        let full_func_name = format!("{}.{}.{}", trait_name, base_type.trait_impl_name(), attribute);
+                        let full_func_name = format!(
+                            "{}.{}.{}",
+                            trait_name,
+                            base_type.trait_impl_name(),
+                            attribute
+                        );
                         llr.push(WASM::Call(format!(".{}", full_func_name)));
-                    },
-                    x => panic!("FunctionCall to_llr not implemented for :{:?}", x)
+                    }
+                    x => panic!("FunctionCall to_llr not implemented for :{:?}", x),
                 }
                 llr
-            },
-            Expr::StructLiteral{ref base, ref fields} => {
-                let mut llr = vec!();
+            }
+            Expr::StructLiteral {
+                ref base,
+                ref fields,
+            } => {
+                let mut llr = vec![];
                 for field in fields {
                     llr.append(&mut field.to_llr(context));
                 }
                 match &base.data {
                     Expr::IdentifierExpr(ref name) => {
                         llr.push(WASM::Call(name.name.clone()));
-                    },
+                    }
                     Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
-                    },
-                    x => panic!("StructLiteral to_llr not implemented for :{:?}", x)
+                    }
+                    x => panic!("StructLiteral to_llr not implemented for :{:?}", x),
                 }
                 llr
-            },
-            Expr::AttributeAccess{ref base, ref attribute} => {
-                let mut llr = vec!();
+            }
+            Expr::AttributeAccess {
+                ref base,
+                ref attribute,
+            } => {
+                let mut llr = vec![];
                 // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context));
                 let base_type = context.get_node_type(base.id);
@@ -481,41 +572,43 @@ impl ToLLR for Node<Expr> {
                         llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                         // Get the value at that address.
                         llr.push(WASM::Load(WASMType::from(attr_type)));
-                    },
-                    x => panic!("Cannot access attribute of: {:?}", x)
+                    }
+                    x => panic!("Cannot access attribute of: {:?}", x),
                 }
 
                 llr
-            },
-            Expr::UnaryExpr{ref operator, ref operand} => {
+            }
+            Expr::UnaryExpr {
+                ref operator,
+                ref operand,
+            } => {
                 let llr = operand.to_llr(context);
                 match operator {
                     UnaryOperator::Convert(to_type, from_type) => match to_type {
                         Type::Gradual(_) => match from_type {
-                            Type::Gradual(_) => {},
-                            _ => panic!()
+                            Type::Gradual(_) => {}
+                            _ => panic!(),
                         },
-                        _ => panic!()
-
+                        _ => panic!(),
                     },
-                    x => panic!("Got an unexpected unary operator: {:?}", x)
+                    x => panic!("Got an unexpected unary operator: {:?}", x),
                 };
                 llr
-            },
+            }
             Expr::Int(ref value) | Expr::Float(ref value) => {
                 let id_type = context.get_node_type(self.id);
                 let wasm_type = WASMType::from(&id_type);
-                vec!(WASM::Const(value.clone(), wasm_type))
-            },
+                vec![WASM::Const(value.clone(), wasm_type)]
+            }
             Expr::Bool(ref value) => {
                 return match value {
-                    true => vec!(WASM::Const("1".to_string(), WASMType::i32)),
-                    false => vec!(WASM::Const("0".to_string(), WASMType::i32))
+                    true => vec![WASM::Const("1".to_string(), WASMType::i32)],
+                    false => vec![WASM::Const("0".to_string(), WASMType::i32)],
                 }
-            },
-            Expr::IdentifierExpr(ref identifier) => vec!(WASM::Get(identifier.name.clone())),
+            }
+            Expr::IdentifierExpr(ref identifier) => vec![WASM::Get(identifier.name.clone())],
             Expr::VecLiteral(ref exprs) => {
-                let mut llr = vec!();
+                let mut llr = vec![];
                 let t = context.get_node_type(self.id);
                 let vector_size = exprs.len() * t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
@@ -524,20 +617,23 @@ impl ToLLR for Node<Expr> {
                 for expr in exprs {
                     llr.append(&mut expr.to_llr(context));
                     llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    llr.push(WASM::Const(format!("{}", t.size()*4), WASMType::i32));
+                    llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
                     llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                 }
-                llr.push(WASM::Const(format!("{}", t.size()*4*(exprs.len())), WASMType::i32));
+                llr.push(WASM::Const(
+                    format!("{}", t.size() * 4 * (exprs.len())),
+                    WASMType::i32,
+                ));
                 llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
                 llr
-                //TODO this block needs a test case 
-            },
+                //TODO this block needs a test case
+            }
             Expr::TupleLiteral(ref exprs) => {
-                let mut llr = vec!();
+                let mut llr = vec![];
                 let t = context.get_node_type(self.id);
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
-                    _ => panic!()
+                    _ => panic!(),
                 };
                 let vector_size = t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
@@ -546,32 +642,38 @@ impl ToLLR for Node<Expr> {
                 for (i, expr) in exprs.iter().enumerate() {
                     llr.append(&mut expr.to_llr(context));
                     llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    llr.push(WASM::Const(format!("{}", individual_types[i].size()*4), WASMType::i32));
+                    llr.push(WASM::Const(
+                        format!("{}", individual_types[i].size() * 4),
+                        WASMType::i32,
+                    ));
                     llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                 }
-                llr.push(WASM::Const(format!("{}", t.size()*4), WASMType::i32));
+                llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
                 llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
                 llr
-                //TODO this block needs a test case 
-            },
-            x => panic!("to_llr not implemented for: {:?}", x)
-        }
+                //TODO this block needs a test case
+            }
+            x => panic!("to_llr not implemented for: {:?}", x),
+        };
     }
 }
 
 /// Calculate the offset of a field in a tuple.
-fn calculate_offset(name: &Identifier, order: &Vec<Identifier>, type_map: &BTreeMap<Identifier, Type>) -> usize {
+fn calculate_offset(
+    name: &Identifier,
+    order: &Vec<Identifier>,
+    type_map: &BTreeMap<Identifier, Type>,
+) -> usize {
     let mut offset = 8;
     for val in order {
         if val == name {
-            break
+            break;
         } else {
             offset += type_map.get(&val).unwrap().size();
         }
     }
     return offset;
 }
-
 
 /// Implementations of Rust builtin traits.
 pub mod rust_trait_impls {
@@ -590,7 +692,7 @@ pub mod rust_trait_impls {
                 Type::Refinement(ref base, ..) => Option::<WASMType>::from(&**base),
                 Type::Gradual(_) => Some(WASMType::i32),
                 Type::empty => None,
-                x => panic!("Tried to convert {:?} to WASM", x)
+                x => panic!("Tried to convert {:?} to WASM", x),
             }
         }
     }
@@ -607,7 +709,7 @@ pub mod rust_trait_impls {
                 Type::Named(..) => WASMType::i32,
                 Type::Refinement(ref base, ..) => WASMType::from(&**base),
                 Type::Gradual(_) => WASMType::i32,
-                x => panic!("Tried to convert {:?} to WASM", x)
+                x => panic!("Tried to convert {:?} to WASM", x),
             }
         }
     }
@@ -622,7 +724,7 @@ pub mod rust_trait_impls {
                 BinaryOperator::And => WASMOperator::And,
                 BinaryOperator::Or => WASMOperator::Or,
                 BinaryOperator::Xor => WASMOperator::Xor,
-                x => panic!("WASMOperator not implemented for {:?}", x)
+                x => panic!("WASMOperator not implemented for {:?}", x),
             };
         }
     }
@@ -635,40 +737,48 @@ pub mod rust_trait_impls {
                 ComparisonOperator::Greater => WASMOperator::Gt_s,
                 ComparisonOperator::LessEqual => WASMOperator::Le_s,
                 ComparisonOperator::GreaterEqual => WASMOperator::Ge_s,
-                ComparisonOperator::Unequal => WASMOperator::Ne
+                ComparisonOperator::Unequal => WASMOperator::Ne,
             };
         }
     }
 
     impl fmt::Display for WASMType {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", match self {
-                WASMType::i32 => "i32",
-                WASMType::i64 => "i64",
-                WASMType::f32 => "f32",
-                WASMType::f64 => "f64"
-            })
+            write!(
+                f,
+                "{}",
+                match self {
+                    WASMType::i32 => "i32",
+                    WASMType::i64 => "i64",
+                    WASMType::f32 => "f32",
+                    WASMType::f64 => "f64",
+                }
+            )
         }
     }
 
     impl fmt::Display for WASMOperator {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "{}", match self {
-                WASMOperator::Add => "add",
-                WASMOperator::Sub => "sub",
-                WASMOperator::Mult => "mul",
-                WASMOperator::Div => "div",
-                WASMOperator::Eq => "eq",
-                WASMOperator::Ne => "ne",
-                WASMOperator::Gt_s => "gt_s",
-                WASMOperator::Lt_s => "lt_s",
-                WASMOperator::Ge_s => "ge_s",
-                WASMOperator::Le_s => "le_s",
-                WASMOperator::And => "and",
-                WASMOperator::Or => "or",
-                WASMOperator::Xor => "xor",
-                x => panic!("Display not implemented for WASMOperator: {:?}", x)
-            })
+            write!(
+                f,
+                "{}",
+                match self {
+                    WASMOperator::Add => "add",
+                    WASMOperator::Sub => "sub",
+                    WASMOperator::Mult => "mul",
+                    WASMOperator::Div => "div",
+                    WASMOperator::Eq => "eq",
+                    WASMOperator::Ne => "ne",
+                    WASMOperator::Gt_s => "gt_s",
+                    WASMOperator::Lt_s => "lt_s",
+                    WASMOperator::Ge_s => "ge_s",
+                    WASMOperator::Le_s => "le_s",
+                    WASMOperator::And => "and",
+                    WASMOperator::Or => "or",
+                    WASMOperator::Xor => "xor",
+                    x => panic!("Display not implemented for WASMOperator: {:?}", x),
+                }
+            )
         }
     }
 }
@@ -676,11 +786,11 @@ pub mod rust_trait_impls {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Read;
     use std::fs::File;
+    use std::io::Read;
 
     use compiler_layers;
-    use difference::{Difference, Changeset};
+    use difference::{Changeset, Difference};
     use regex::Regex;
 
     #[test]
@@ -691,13 +801,22 @@ mod tests {
 
         let (_, _, _, llr) = compiler_layers::to_llr(file_contents.as_bytes());
         let func_names: Vec<String> = llr.functions.iter().map(|x| x.name.clone()).collect();
-        assert_eq!(func_names, vec!("call_trait_func".to_string(), "teststruct".to_string()));
+        assert_eq!(
+            func_names,
+            vec!("call_trait_func".to_string(), "teststruct".to_string())
+        );
 
-        let trait_impl_names: Vec<String> = llr.trait_implementations.iter().map(|x| x.name.clone()).collect();
-        assert_eq!(trait_impl_names, vec!("testtrait.teststruct.baz".to_string()));
+        let trait_impl_names: Vec<String> = llr
+            .trait_implementations
+            .iter()
+            .map(|x| x.name.clone())
+            .collect();
+        assert_eq!(
+            trait_impl_names,
+            vec!("testtrait.teststruct.baz".to_string())
+        );
         println!("{:?}", llr);
     }
-
 
     #[cfg(test)]
     mod exprs {
@@ -710,7 +829,9 @@ mod tests {
 
     #[test]
     fn test_get_declarations() {
-        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>("fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes());
+        let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>(
+            "fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(),
+        );
         // let new_ident = Identifier::from("x");
         let actual = func_dec.get_true_declarations(&context);
         let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
@@ -718,7 +839,7 @@ mod tests {
             let changeset = Changeset::new("x", ptr.0.name.as_str(), "");
             for diff in changeset.diffs {
                 match diff {
-                    Difference::Same(_) => {},
+                    Difference::Same(_) => {}
                     Difference::Rem(_) => panic!(),
                     Difference::Add(added_string) => {
                         // Check if the thing being added is a scope ID on the end
@@ -729,6 +850,4 @@ mod tests {
             }
         }
     }
-
-
 }

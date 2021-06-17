@@ -1,3 +1,4 @@
+//! Error messages.
 use std::cmp::PartialEq;
 use std::error::Error;
 use std::fmt;
@@ -5,12 +6,11 @@ use std::fmt;
 extern crate nom;
 use self::nom::ErrorKind;
 
-
 /// A Grace error
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GraceError {
-    ParserError{msg: String, nom_error: ErrorKind},
-    TypeError{msg: String}
+    ParserError { msg: String, nom_error: ErrorKind },
+    TypeError { msg: String },
 }
 
 impl fmt::Display for GraceError {

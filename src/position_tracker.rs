@@ -1,33 +1,16 @@
+use std::fmt;
 use std::iter::Enumerate;
+use std::ops::{Range, RangeFrom, RangeFull, RangeTo};
 use std::slice::Iter;
 use std::str::from_utf8;
-use std::fmt;
-use std::ops::{
-    Range,
-    RangeFrom,
-    RangeFull,
-    RangeTo
-};
 
 use bytecount;
 use memchr;
 extern crate nom;
 // use self::nom::*;
 use self::nom::{
-    IResult,
-    Err,
-    Needed,
-    ErrorKind,
-    Compare,
-    CompareResult,
-    FindSubstring,
-    InputIter,
-    InputLength,
-    Offset,
-    Slice,
-    AtEof,
-    InputTake,
-    InputTakeAtPosition
+    AtEof, Compare, CompareResult, Err, ErrorKind, FindSubstring, IResult, InputIter, InputLength,
+    InputTake, InputTakeAtPosition, Needed, Offset, Slice,
 };
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -45,26 +28,25 @@ pub struct PosStr<'a> {
     pub column: u32,
 
     /// The slice that is spanned.
-    pub slice: &'a [u8]
+    pub slice: &'a [u8],
 }
 
 impl<'a> PosStr<'a> {
-    
     pub fn new(input: &'a [u8]) -> Self {
         PosStr {
             offset: 0,
-            line  : 0,
+            line: 0,
             column: 0,
-            slice : input
+            slice: input,
         }
     }
 
     pub fn new_at(input: &'a [u8], offset: usize, line: u32, column: u32) -> Self {
         PosStr {
             offset: offset,
-            line  : line,
+            line: line,
             column: column,
-            slice : input
+            slice: input,
         }
     }
 
@@ -81,30 +63,36 @@ impl<'a> PosStr<'a> {
     // }
 }
 
-impl <'a> fmt::Debug for PosStr<'a> {
+impl<'a> fmt::Debug for PosStr<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "PosStr {{slice: {:?}, line: {}, column: {} }}", from_utf8(self.slice), self.line, self.column)
+        write!(
+            f,
+            "PosStr {{slice: {:?}, line: {}, column: {} }}",
+            from_utf8(self.slice),
+            self.line,
+            self.column
+        )
     }
 }
 
-impl <'a> From<&'a [u8]> for PosStr<'a> {
+impl<'a> From<&'a [u8]> for PosStr<'a> {
     fn from(input: &'a [u8]) -> Self {
         return PosStr {
             offset: 0,
-            line  : 0,
+            line: 0,
             column: 0,
-            slice : input
-        }
+            slice: input,
+        };
     }
 }
 
-impl <'a> From<&'a str> for PosStr<'a> {
+impl<'a> From<&'a str> for PosStr<'a> {
     fn from(input: &'a str) -> Self {
         return PosStr::new(input.as_bytes());
     }
 }
 
-impl <'a> From<&'a String> for PosStr<'a> {
+impl<'a> From<&'a String> for PosStr<'a> {
     fn from(input: &'a String) -> Self {
         return PosStr::new(input.as_bytes());
     }
@@ -118,13 +106,13 @@ impl<'a> InputLength for PosStr<'a> {
 
 impl<'a> InputIter for PosStr<'a> {
     /// Type of an element of the PosStr' slice.
-    type Item     = &'a u8;
+    type Item = &'a u8;
 
     /// Type of a raw element of the PosStr' slice.
-    type RawItem  = u8;
+    type RawItem = u8;
 
     /// Type of the enumerator iterator.
-    type Iter     = Enumerate<Iter<'a, Self::RawItem>>;
+    type Iter = Enumerate<Iter<'a, Self::RawItem>>;
 
     /// Type of the iterator.
     type IterElem = Iter<'a, Self::RawItem>;
@@ -138,7 +126,9 @@ impl<'a> InputIter for PosStr<'a> {
     }
 
     fn position<P>(&self, predicate: P) -> Option<usize>
-        where P: Fn(Self::RawItem) -> bool {
+    where
+        P: Fn(Self::RawItem) -> bool,
+    {
         self.slice.iter().position(|x| predicate(*x))
     }
 
@@ -152,7 +142,6 @@ impl<'a> InputIter for PosStr<'a> {
 }
 
 impl<'a, 'b> FindSubstring<&'b [u8]> for PosStr<'a> {
-
     fn find_substring(&self, substring: &'b [u8]) -> Option<usize> {
         let substring_length = substring.len();
 
@@ -161,23 +150,23 @@ impl<'a, 'b> FindSubstring<&'b [u8]> for PosStr<'a> {
         } else if substring_length == 1 {
             memchr::memchr(substring[0], self.slice)
         } else {
-            let max          = self.slice.len() - substring_length;
-            let mut offset   = 0;
+            let max = self.slice.len() - substring_length;
+            let mut offset = 0;
             let mut haystack = self.slice;
 
             while let Some(position) = memchr::memchr(substring[0], haystack) {
                 offset += position;
 
                 if offset > max {
-                    return None
+                    return None;
                 }
 
                 if &haystack[position..position + substring_length] == substring {
                     return Some(offset);
                 }
 
-                haystack  = &haystack[position + 1..];
-                offset   += 1;
+                haystack = &haystack[position + 1..];
+                offset += 1;
             }
 
             None
@@ -186,7 +175,6 @@ impl<'a, 'b> FindSubstring<&'b [u8]> for PosStr<'a> {
 }
 
 impl<'a, 'b> Compare<&'b [u8]> for PosStr<'a> {
-
     fn compare(&self, element: &'b [u8]) -> CompareResult {
         self.slice.compare(element)
     }
@@ -198,7 +186,6 @@ impl<'a, 'b> Compare<&'b [u8]> for PosStr<'a> {
 }
 
 impl<'a, 'b> Compare<&'b str> for PosStr<'a> {
-
     fn compare(&self, element: &'b str) -> CompareResult {
         self.slice.compare(element)
     }
@@ -210,7 +197,6 @@ impl<'a, 'b> Compare<&'b str> for PosStr<'a> {
 }
 
 impl<'a, 'b> Compare<PosStr<'b>> for PosStr<'a> {
-
     fn compare(&self, element: PosStr<'b>) -> CompareResult {
         self.slice.compare(element.slice)
     }
@@ -221,21 +207,21 @@ impl<'a, 'b> Compare<PosStr<'b>> for PosStr<'a> {
     }
 }
 
-impl <'a> AtEof for PosStr<'a> {
-  fn at_eof(&self) -> bool {
-    return self.slice.at_eof();
-  }
+impl<'a> AtEof for PosStr<'a> {
+    fn at_eof(&self) -> bool {
+        return self.slice.at_eof();
+    }
 }
 
-impl <'a> InputTake for PosStr<'a> {
+impl<'a> InputTake for PosStr<'a> {
     fn take(&self, count: usize) -> Self {
         let new_slice = self.slice.take(count);
         let new_pos_str = PosStr {
             offset: self.offset,
-            line: self.line, 
+            line: self.line,
             column: self.column,
-            slice: new_slice
-          };
+            slice: new_slice,
+        };
 
         return new_pos_str;
     }
@@ -244,9 +230,9 @@ impl <'a> InputTake for PosStr<'a> {
         let (second_slice, first_slice) = self.slice.take_split(count);
         let first_pos_str = PosStr {
             offset: self.offset,
-            line: self.line, 
+            line: self.line,
             column: self.column,
-            slice: first_slice
+            slice: first_slice,
         };
         let number_of_newlines = bytecount::count(first_slice, b'\n') as u32;
         let next_offset = self.slice.offset(second_slice);
@@ -254,10 +240,8 @@ impl <'a> InputTake for PosStr<'a> {
             self.column + next_offset as u32
         } else {
             match memchr::memrchr(b'\n', &first_slice) {
-                Some(last_newline_position) => {
-                    (next_offset - last_newline_position) as u32
-                },
-                None => 0 // unreachable
+                Some(last_newline_position) => (next_offset - last_newline_position) as u32,
+                None => 0, // unreachable
             }
         };
 
@@ -265,14 +249,14 @@ impl <'a> InputTake for PosStr<'a> {
             offset: next_offset,
             line: self.line + number_of_newlines,
             column: next_column,
-            slice: second_slice
+            slice: second_slice,
         };
 
         return (second_pos_str, first_pos_str);
     }
 }
 
-impl <'a> InputTakeAtPosition for PosStr<'a> {
+impl<'a> InputTakeAtPosition for PosStr<'a> {
     type Item = u8;
 
     fn split_at_position<P>(&self, predicate: P) -> IResult<Self, Self, u32>
@@ -297,16 +281,15 @@ impl <'a> InputTakeAtPosition for PosStr<'a> {
     }
 }
 
-impl <'a> Offset for PosStr<'a> {
+impl<'a> Offset for PosStr<'a> {
     fn offset(&self, second: &Self) -> usize {
         return self.slice.offset(second.slice);
     }
 }
 
 macro_rules! impl_slice_for_range {
-    ($range:ty) => (
+    ($range:ty) => {
         impl<'a> Slice<$range> for PosStr<'a> {
-
             fn slice(&self, range: $range) -> Self {
                 let next_slice = &self.slice[range];
 
@@ -319,36 +302,34 @@ macro_rules! impl_slice_for_range {
                 if next_offset == 0 {
                     return PosStr {
                         offset: self.offset,
-                        line  : self.line,
+                        line: self.line,
                         column: self.column,
-                        slice : next_slice
+                        slice: next_slice,
                     };
                 }
 
-                let consumed           = &self.slice[..next_offset];
+                let consumed = &self.slice[..next_offset];
                 let number_of_newlines = bytecount::count(consumed, b'\n') as u32;
 
                 let next_column = if number_of_newlines == 0 {
-                  self.column + next_offset as u32
+                    self.column + next_offset as u32
                 } else {
                     match memchr::memrchr(b'\n', consumed) {
-                      Some(last_newline_position) => {
-                        (next_offset - last_newline_position) as u32
-                      },
+                        Some(last_newline_position) => (next_offset - last_newline_position) as u32,
 
-                      None => 0 // unreachable
+                        None => 0, // unreachable
                     }
                 };
 
                 PosStr {
                     offset: self.offset + next_offset,
-                    line  : self.line + number_of_newlines,
+                    line: self.line + number_of_newlines,
                     column: next_column,
-                    slice : next_slice
+                    slice: next_slice,
                 }
             }
         }
-    )
+    };
 }
 
 impl_slice_for_range!(Range<usize>);
@@ -356,7 +337,5 @@ impl_slice_for_range!(RangeTo<usize>);
 impl_slice_for_range!(RangeFrom<usize>);
 impl_slice_for_range!(RangeFull);
 
-
 #[cfg(test)]
-mod test {
-}
+mod test {}

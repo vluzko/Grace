@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use expression::*;
 use general_utils;
 use type_checking::refinements::check_constraints;
-use type_checking::types::{Type, Trait};
-use type_checking::scope::{Scope, CanModifyScope};
+use type_checking::scope::{CanModifyScope, Scope};
+use type_checking::types::{Trait, Type};
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
     return Trait {
         name: trait_name,
-        functions: hashmap!{
+        functions: hashmap! {
             method_name => Type::Function(
                 vec!(
                     (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
@@ -18,18 +18,27 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
                 ),
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
-        }
+        },
     };
 }
 
 fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
-    return vec!(("Add", "add"), ("Sub", "sub"), ("Mult", "mult"), ("Div", "div")).into_iter()
-        .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
+    return vec![
+        ("Add", "add"),
+        ("Sub", "sub"),
+        ("Mult", "mult"),
+        ("Div", "div"),
+    ]
+    .into_iter()
+    .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+    .collect();
 }
 
 fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
-    return vec!(("And", "and"), ("Or", "or")).into_iter()
-    .map(|(a, b)| (Identifier::from(a), Identifier::from(b))).collect();
+    return vec![("And", "and"), ("Or", "or")]
+        .into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+        .collect();
 }
 
 /// Generate all the builtin binary traits.
@@ -51,28 +60,28 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
 fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identifier, Type>> {
     let mut impls = HashMap::new();
     for (tn, mn) in builtin_numeric().into_iter() {
-        for t in vec!(Type::i32, Type::i64, Type::f32, Type::f64) {
+        for t in vec![Type::i32, Type::i64, Type::f32, Type::f64] {
             let func_t = Type::Function(
-                vec!(
+                vec![
                     (Identifier::from("left"), t.clone()),
-                    (Identifier::from("right"), t.clone())
-                ),
-                Box::new(t.clone())
+                    (Identifier::from("right"), t.clone()),
+                ],
+                Box::new(t.clone()),
             );
-            let func_types = hashmap!{mn.clone() => func_t};
+            let func_types = hashmap! {mn.clone() => func_t};
             impls.insert((tn.clone(), t), func_types);
         }
     }
     for (tn, mn) in builtin_binary_bool().into_iter() {
-        for t in vec!(Type::boolean) {
+        for t in vec![Type::boolean] {
             let func_t = Type::Function(
-                vec!(
+                vec![
                     (Identifier::from("left"), t.clone()),
-                    (Identifier::from("right"), t.clone())
-                ),
-                Box::new(t.clone())
+                    (Identifier::from("right"), t.clone()),
+                ],
+                Box::new(t.clone()),
             );
-            let func_types = hashmap!{mn.clone() => func_t};
+            let func_types = hashmap! {mn.clone() => func_t};
             impls.insert((tn.clone(), t), func_types);
         }
     }
@@ -90,7 +99,7 @@ pub struct Context {
     // maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>,
     // A map from Node IDs to types.
-    pub type_map: HashMap<usize, Type>, 
+    pub type_map: HashMap<usize, Type>,
     // The user-defined types
     pub defined_types: HashMap<Identifier, Type>,
     // A vector containing all the gradual types in context.
@@ -105,7 +114,6 @@ pub struct Context {
 
 /// Constructors
 impl Context {
-
     /// Create a context containing all builtin types and functions.
     pub fn builtin() -> Context {
         let empty = Scope::empty();
@@ -121,7 +129,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: builtin_binary_traits(),
-            trait_implementations: builtin_trait_implementations()
+            trait_implementations: builtin_trait_implementations(),
         };
         return context;
     }
@@ -131,7 +139,7 @@ impl Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scopes = HashMap::new();
         scopes.insert(root_id, Scope::empty());
-        return Context{
+        return Context {
             root_id: root_id,
             scopes: scopes,
             containing_scopes: HashMap::new(),
@@ -139,7 +147,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashMap::new()
+            trait_implementations: HashMap::new(),
         };
     }
 
@@ -148,7 +156,7 @@ impl Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scope_map = HashMap::new();
         scope_map.insert(root_id, scope);
-        return Context{
+        return Context {
             root_id: root_id,
             scopes: scope_map,
             containing_scopes: HashMap::new(),
@@ -156,7 +164,7 @@ impl Context {
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
-            trait_implementations: HashMap::new()
+            trait_implementations: HashMap::new(),
         };
     }
 }
@@ -192,11 +200,9 @@ impl Context {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) => {
-                self.type_map.get(id).unwrap().clone()
-            },
+            CanModifyScope::Statement(_, ref id) => self.type_map.get(id).unwrap().clone(),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
+            CanModifyScope::ImportedModule(ref _id) => panic!(),
         };
         return t;
     }
@@ -205,12 +211,10 @@ impl Context {
     /// Use this one when checking whether to give an identifier a globally unique name.
     pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
         let maybe_scope_mod = self.get_declaration(scope_id, name);
-        return match maybe_scope_mod ? {
-            CanModifyScope::Statement(_, ref id) => {
-                Some(self.type_map.get(id).unwrap().clone())
-            },
+        return match maybe_scope_mod? {
+            CanModifyScope::Statement(_, ref id) => Some(self.type_map.get(id).unwrap().clone()),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => panic!()
+            CanModifyScope::ImportedModule(ref _id) => panic!(),
         };
     }
 
@@ -222,7 +226,6 @@ impl Context {
 
 /// Scoping
 impl Context {
-
     /// Create a new scope, returning the ID.
     pub fn new_scope(&mut self, scope: Scope) -> usize {
         let scope_id = general_utils::get_next_scope_id();
@@ -231,18 +234,25 @@ impl Context {
     }
 
     /// Add a statement to a scope.
-    pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Box<Node<Stmt>>) {
+    pub fn append_declaration(
+        &mut self,
+        scope_id: usize,
+        name: &Identifier,
+        stmt: &Box<Node<Stmt>>,
+    ) {
         let scope = self.scopes.get_mut(&scope_id).unwrap();
         scope.append_declaration(name, stmt);
     }
 
     /// Add an import to a scope.
     pub fn append_import(&mut self, import: &Import) {
-        let import_name =  import.path.get(0).unwrap().clone();
+        let import_name = import.path.get(0).unwrap().clone();
         let scope_mod = CanModifyScope::ImportedModule(import.id);
 
         let scope = self.scopes.get_mut(&self.root_id).unwrap();
-        scope.declaration_order.insert(import_name.clone(), scope.declaration_order.len() + 1);
+        scope
+            .declaration_order
+            .insert(import_name.clone(), scope.declaration_order.len() + 1);
         scope.declarations.insert(import_name.clone(), scope_mod);
     }
 
@@ -254,10 +264,8 @@ impl Context {
             return initial_scope.declarations.get(name);
         } else {
             return match initial_scope.parent_id {
-                Some(id) => {
-                    self.get_declaration(id, name)
-                },
-                None => None
+                Some(id) => self.get_declaration(id, name),
+                None => None,
             };
         }
     }
@@ -270,28 +278,32 @@ impl Context {
             return scope_id;
         } else {
             return match initial_scope.parent_id {
-                Some(id) => {
-                    self.get_declaring_scope(id, name)
-                },
-                None => panic!()
+                Some(id) => self.get_declaring_scope(id, name),
+                None => panic!(),
             };
         }
     }
 
-    pub fn get_struct_and_trait(&self, scope_id: usize) -> (Option<Identifier>, Option<Identifier>) {
+    pub fn get_struct_and_trait(
+        &self,
+        scope_id: usize,
+    ) -> (Option<Identifier>, Option<Identifier>) {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
         return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
-            (initial_scope.maybe_struct.clone(), initial_scope.maybe_trait.clone())
+            (
+                initial_scope.maybe_struct.clone(),
+                initial_scope.maybe_trait.clone(),
+            )
         } else {
             match initial_scope.parent_id {
                 Some(id) => self.get_struct_and_trait(id),
-                None => (None, None)
+                None => (None, None),
             }
         };
     }
 
     pub fn print_all_variables(&self) -> Vec<Identifier> {
-        let mut all_variables = vec!();
+        let mut all_variables = vec![];
         for scope in self.scopes.values() {
             for key in scope.declaration_order.keys() {
                 all_variables.push(key.clone());
@@ -303,15 +315,13 @@ impl Context {
 
 /// Typechecking
 impl Context {
-
     /// Resolve an attribute access within the current context.
     /// # Arguments:
     pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
-
         // Check if this is a direct attribute access
         let unwrapped_self = match base_type {
             Type::self_type(x) => *x.clone(),
-            x => x.clone()
+            x => x.clone(),
         };
         let attribute_type = match &unwrapped_self {
             Type::Record(_, ref attributes) => attributes.get(name),
@@ -319,24 +329,27 @@ impl Context {
                 let record_t = self.defined_types.get(t_name).unwrap();
                 match record_t {
                     Type::Record(_, ref attributes) => attributes.get(name),
-                    _ => None
+                    _ => None,
                 }
-            },
-            _ => None
+            }
+            _ => None,
         };
 
         return match attribute_type {
             Some(x) => x.clone(),
             None => {
                 // Check if this is a trait access
-                let mut possible_traits = vec!();
+                let mut possible_traits = vec![];
 
                 for (trait_name, trait_struct) in self.traits.iter() {
                     // Check if this trait has a function with the desired name.
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.
                         // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                        if self.trait_implementations.contains_key(&(trait_name.clone(), unwrapped_self.clone())) {
+                        if self
+                            .trait_implementations
+                            .contains_key(&(trait_name.clone(), unwrapped_self.clone()))
+                        {
                             possible_traits.push(trait_struct);
                         }
                     }
@@ -346,42 +359,52 @@ impl Context {
                 if possible_traits.len() == 1 {
                     // Get the type of the trait function and return it.
                     return possible_traits[0].functions.get(name).unwrap().clone();
-                }// TODO: Handle ambiguous traits.
+                }
+                // TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
                     panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    panic!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", base_type, name);
+                    panic!(
+                        "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
+                        base_type, name
+                    );
                 }
             }
-        }
+        };
     }
 
     /// Modify a Type::Self so it contains whatever Self actually is.
     pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
         return match base_type {
             Type::self_type(t) => {
-                assert!(matches!(**t, Type::Undetermined), "TYPE ERROR: Matching against a self type that is not undetermined: {:?}", base_type);
+                assert!(
+                    matches!(**t, Type::Undetermined),
+                    "TYPE ERROR: Matching against a self type that is not undetermined: {:?}",
+                    base_type
+                );
                 let (struct_name, _) = self.get_struct_and_trait(scope_id);
                 match struct_name {
                     Some(x) => Type::self_type(Box::new(Type::Named(x))),
-                    None => panic!("TYPE ERROR: Self used outside of a method implementation.")
+                    None => panic!("TYPE ERROR: Self used outside of a method implementation."),
                 }
-            },
-            t => t.clone()
+            }
+            t => t.clone(),
         };
     }
 
     /// Check if this is a trait method call or an attribute access.
     pub fn trait_information(&self, base_type: &Type, name: &Identifier) -> Option<Identifier> {
-
-        let mut possible_traits = vec!();
+        let mut possible_traits = vec![];
 
         for (trait_name, trait_struct) in self.traits.iter() {
             // Check if this trait has a function with the desired name.
             if trait_struct.functions.contains_key(name) {
                 // Check if base_type implements this trait.
                 // OPT: We shouldn't be cloning these things. Everything's staying a reference.
-                if self.trait_implementations.contains_key(&(trait_name.clone(), base_type.clone())) {
+                if self
+                    .trait_implementations
+                    .contains_key(&(trait_name.clone(), base_type.clone()))
+                {
                     possible_traits.push(trait_struct);
                 }
             }
@@ -390,21 +413,32 @@ impl Context {
         return match possible_traits.len() {
             0 => None,
             1 => Some(possible_traits[0].name.clone()),
-            _ => panic!("Ambiguous trait")
+            _ => panic!("Ambiguous trait"),
         };
     }
 
     /// Check that a trait method call is valid, and get the return type.
-    pub fn check_trait_method_call(&self, trait_name: &Identifier, method_name: &Identifier, implementing_type: &Type, arg_types: Vec<&Type>) -> Type {
-
+    pub fn check_trait_method_call(
+        &self,
+        trait_name: &Identifier,
+        method_name: &Identifier,
+        implementing_type: &Type,
+        arg_types: Vec<&Type>,
+    ) -> Type {
         // println!("Trait implementations: {:?}", self.trait_implementations);
-        let base_t =  match implementing_type {
+        let base_t = match implementing_type {
             Type::Refinement(t, _) => t,
-            x => x
+            x => x,
         };
-        let func_types =  match self.trait_implementations.get(&(trait_name.clone(), base_t.clone())) {
+        let func_types = match self
+            .trait_implementations
+            .get(&(trait_name.clone(), base_t.clone()))
+        {
             Some(x) => x,
-            None => panic!("TYPE ERROR: No trait implementation found for trait {} and type {:?}", trait_name, implementing_type)
+            None => panic!(
+                "TYPE ERROR: No trait implementation found for trait {} and type {:?}",
+                trait_name, implementing_type
+            ),
         };
         let method_type = func_types.get(method_name).unwrap();
         return match method_type {
@@ -417,27 +451,30 @@ impl Context {
                 *return_type.clone()
             },
             x => panic!("TYPE ERROR: Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)
-        }
+        };
     }
 
     /// Get the return type of a binary operator.
     pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
         return match op {
             // TODO: 540: Update left and right with an "addable" constraint.
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => match left {
+            BinaryOperator::Add
+            | BinaryOperator::Sub
+            | BinaryOperator::Mult
+            | BinaryOperator::Mod => match left {
                 Type::Gradual(_) => match right {
                     Type::Gradual(_) => Type::Gradual(general_utils::get_next_grad()),
                     Type::i32 | Type::i64 | Type::f32 | Type::f64 => right.clone(),
-                    _ => panic!("TYPE ERROR. Tried to add {:?} and {:?}", left, right)
-                }
+                    _ => panic!("TYPE ERROR. Tried to add {:?} and {:?}", left, right),
+                },
                 x => match right {
                     Type::Gradual(_) => left.clone(),
-                    y => x.merge(y)
-                }
+                    y => x.merge(y),
+                },
             },
             BinaryOperator::Div => Type::f64,
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
-            _ => panic!()
+            _ => panic!(),
         };
     }
 
@@ -445,10 +482,15 @@ impl Context {
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
         let maybe_constraints = self.gradual_constraints.get_mut(&gradual_id);
         match maybe_constraints {
-            Some(constraints) => {constraints.push(constraint.clone());},
-            None => {self.gradual_constraints.insert(gradual_id, vec!(constraint.clone()));}
+            Some(constraints) => {
+                constraints.push(constraint.clone());
+            }
+            None => {
+                self.gradual_constraints
+                    .insert(gradual_id, vec![constraint.clone()]);
+            }
         };
-        
+
         return true;
     }
 
@@ -462,51 +504,62 @@ impl Context {
         } else {
             let unwrapped_self = match expr_t {
                 Type::self_type(x) => (**x).clone(),
-                x => x.clone()
+                x => x.clone(),
             };
             return match desired_type {
                 Type::Undetermined => true,
                 Type::empty => false,
-                Type::i32 | Type::i64 | Type::f32  | Type::f64 | Type::boolean | Type::string => match unwrapped_self {
-                    Type::Refinement(ref base, ..) => self.check_subtype(expr, base, desired_type),
-                    Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
-                    x => x.has_simple_conversion(desired_type)
-                },
+                Type::i32 | Type::i64 | Type::f32 | Type::f64 | Type::boolean | Type::string => {
+                    match unwrapped_self {
+                        Type::Refinement(ref base, ..) => {
+                            self.check_subtype(expr, base, desired_type)
+                        }
+                        Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
+                        x => x.has_simple_conversion(desired_type),
+                    }
+                }
                 Type::Product(ref types) => match &unwrapped_self {
-                    Type::Product(ref expr_types) => expr_types.iter().enumerate().all(|(i, x)| self.check_subtype(expr, x, &types[i])),
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
+                    Type::Product(ref expr_types) => expr_types
+                        .iter()
+                        .enumerate()
+                        .all(|(i, x)| self.check_subtype(expr, x, &types[i])),
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
                 },
                 Type::Function(ref args, ref ret) => match &unwrapped_self {
                     Type::Function(ref e_args, ref e_ret) => {
-                        let args_match = args.iter().enumerate().all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
+                        let args_match = args
+                            .iter()
+                            .enumerate()
+                            .all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
                         args_match && self.check_subtype(expr, ret, e_ret)
-                    },
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
+                    }
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
                 },
                 Type::Vector(ref t) => match &unwrapped_self {
                     Type::Vector(ref e_t) => self.check_subtype(expr, e_t, t),
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x)
+                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
                 },
-                Type::Refinement(_, ref d_conds) => check_constraints(expr.scope, self, d_conds.clone()),
+                Type::Refinement(_, ref d_conds) => {
+                    check_constraints(expr.scope, self, d_conds.clone())
+                }
                 Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
                 Type::Named(..) => desired_type == &unwrapped_self,
                 Type::self_type(x) => self.check_subtype(expr, &unwrapped_self, x),
-                x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x)
+                x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x),
             };
         }
     }
-
 }
 
 #[cfg(test)]
-mod tests{
+mod tests {
     use super::*;
     #[test]
     fn literals_are_incompatible() {
         let mut context = Context::builtin();
         let bool_expr = Node::from(true);
-        let a:i32 = 2;
-        let i32_expr:Node<Expr> = Node::from(a);
+        let a: i32 = 2;
+        let i32_expr: Node<Expr> = Node::from(a);
         let string_expr = Node::from(Expr::String("foo".to_string()));
         assert!(context.check_subtype(&bool_expr, &Type::boolean, &Type::boolean));
         assert!(context.check_subtype(&string_expr, &Type::string, &Type::string));
@@ -518,8 +571,8 @@ mod tests{
     fn product_types() {
         let mut context = Context::builtin();
         let bool_expr = Node::from(true);
-        let product_i32 = Type::Product(vec!(Type::i32, Type::i32, Type::i32));
-        let product_bool = Type::Product(vec!(Type::boolean, Type::boolean, Type::boolean));
+        let product_i32 = Type::Product(vec![Type::i32, Type::i32, Type::i32]);
+        let product_bool = Type::Product(vec![Type::boolean, Type::boolean, Type::boolean]);
         assert!(!(context.check_subtype(&bool_expr, &product_i32, &product_bool)));
     }
 }

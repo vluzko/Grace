@@ -225,7 +225,7 @@ pub(crate) mod strategies {
         /// or at least won't be able to shrink test cases properly.
         pub fn inverse_parse(&self) -> String {
             let mut rng = rand::thread_rng();
-            let post_space: usize = rng.gen_range(0, 10);
+            let post_space: usize = rng.gen_range(0..10);
             return match self {
                 Expr::BinaryExpr{ref operator, ref left, ref right} => format!(
                     "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()

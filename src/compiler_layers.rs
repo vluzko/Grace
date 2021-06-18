@@ -477,8 +477,9 @@ mod tests {
     use std::fs::{read_dir, read_to_string};
 
     fn compile_folder(subfolder: &str) {
-        let folder_path = format!("./test_data/{}", subfolder);
-        let output_path = format!("./test_data/{}/outputs", subfolder);
+        panic!("TODO: Move to integration tests");
+        let folder_path = format!("./src/test_data/{}", subfolder);
+        let output_path = format!("./src/test_data/{}/outputs", subfolder);
         let file_path = format!("{}/file_1.gr", folder_path);
         let compiled = Compilation::compile(&file_path);
         let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
@@ -524,29 +525,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn simple_imports_test() {
-        compile_folder("simple_imports_test");
-    }
-
-    #[test]
-    fn import_calls_test() {
-        compile_folder("import_calls_test");
-    }
-
-    #[test]
-    fn refinement_types_test() {
-        compile_folder("refinement_types_test");
-    }
-
-    #[test]
-    fn gradual_add_test() {
-        compile_folder("gradual_add_test");
-    }
-
-    #[test]
-    #[should_panic]
-    fn refinement_failures_test() {
-        compile_folder("refinement_failures_test");
-    }
 }

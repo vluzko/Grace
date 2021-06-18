@@ -2341,7 +2341,7 @@ pub mod expr_parsers {
 
         #[test]
         fn parse_special_chars() {
-            let f_path = Path::new("./test_data/special_chars.txt");
+            let f_path = Path::new("./src/test_data/special_chars.txt");
             let mut f = File::open(f_path).expect("File not found");
             let mut file_contents = String::new();
             f.read_to_string(&mut file_contents).unwrap();

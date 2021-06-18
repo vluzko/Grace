@@ -795,7 +795,7 @@ mod tests {
 
     #[test]
     fn trait_impl_test() {
-        let mut f = File::open("test_data/trait_impl_test.gr").expect("File not found");
+        let mut f = File::open("src/test_data/trait_impl_test.gr").expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 

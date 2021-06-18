@@ -621,7 +621,8 @@ mod tests {
 
     #[test]
     fn test_basic_grace_function_dec() {
-        let file_name = "test_data/basic_grace.gr".to_string();
+        panic!("TODO: Move to integration tests");
+        let file_name = "src/test_data/basic_grace.gr".to_string();
         let compilation = compiler_layers::Compilation::compile(&file_name);
         let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
         let first_func_id = compiled_module.ast.data.functions.get(0).unwrap().id;

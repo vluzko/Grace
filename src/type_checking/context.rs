@@ -118,7 +118,7 @@ impl Context {
     pub fn builtin() -> Context {
         let empty = Scope::empty();
         let mut init_scopes = HashMap::new();
-        let id = general_utils::get_next_scope_id();
+        let id = 0;
         init_scopes.insert(id, empty);
 
         let context = Context {

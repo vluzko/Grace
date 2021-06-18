@@ -620,28 +620,9 @@ mod tests {
     }
 
     #[test]
-    fn test_basic_grace_function_dec() {
-        panic!("TODO: Move to integration tests");
-        let file_name = "src/test_data/basic_grace.gr".to_string();
-        let compilation = compiler_layers::Compilation::compile(&file_name);
-        let compiled_module = compilation.modules.get(&"basic_grace".to_string()).unwrap();
-        let first_func_id = compiled_module.ast.data.functions.get(0).unwrap().id;
-        let actual_type = compiled_module
-            .context
-            .type_map
-            .get(&first_func_id)
-            .unwrap();
-        let expected_type = Type::Function(
-            vec![(Identifier::from("arg"), Type::i32)],
-            Box::new(Type::i32),
-        );
-        assert_eq!(&expected_type, actual_type);
-    }
-
-    #[test]
     // One trait, one struct, one implmentation block that uses self, and a function that uses it
     fn traits_and_self() {
-        let mut f = File::open("test_data/trait_impl_self_test.gr").expect("File not found");
+        let mut f = File::open("tests/test_data/trait_impl_self_test.gr").expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
@@ -655,20 +636,16 @@ mod tests {
 
         /// Test scope modifications from literals.
         /// All should be empty.
+        // TODO: Should be a proptest.
         #[test]
         fn test_literal_scope() {
-            let mut literals: Vec<Node<Expr>> = vec![
-                Node::from(1),
-                Node::from(0.5),
-                Node::from(Expr::String("asdf".to_string())),
-                Node::from(true),
-            ];
-            for _ in literals.iter_mut() {
+            let original = Context::builtin();
+            let inputs = vec!(Node::<Expr>::from(5), Node::<Expr>::from(5.0), Node::<Expr>::from(true));
+            // let mut input = Node::<Expr>::from(5);
+            for mut input in inputs {
                 let context = Context::builtin();
-                let _id = context.root_id;
-                panic!("Unfinished test.")
-                // context = literal.scopes_and_types(id, context)?.0;
-                // assert_eq!(context.scopes.get(&context.root_id).unwrap(), &Scope::empty());
+                let (new_c, t) = input.scopes_and_types(0, context).unwrap();
+                assert_eq!(new_c.scopes, original.scopes);
             }
         }
     }

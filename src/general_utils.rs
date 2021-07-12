@@ -141,7 +141,7 @@ macro_rules! generate_counter {
             use std::cell::Cell;
 
             thread_local!(
-                static COUNTER: Cell<$type> = Cell::new(0);
+                static COUNTER: Cell<$type> = Cell::new(1);
             );
 
             pub fn next() -> $type {
@@ -159,7 +159,7 @@ macro_rules! generate_counter {
 
             #[allow(dead_code)]
             pub fn reset() {
-                COUNTER.with(|cell| cell.set(0));
+                COUNTER.with(|cell| cell.set(1));
             }
         }
     };

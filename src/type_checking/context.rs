@@ -120,7 +120,6 @@ impl Context {
         let mut init_scopes = HashMap::new();
         let id = 0;
         init_scopes.insert(id, empty);
-
         let context = Context {
             root_id: id,
             scopes: init_scopes,
@@ -258,9 +257,7 @@ impl Context {
 
     pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
         let initial_scope = self.scopes.get(&scope_id).unwrap();
-        if scope_id == 0 {
-            return None;
-        } else if initial_scope.declarations.contains_key(name) {
+        if initial_scope.declarations.contains_key(name) {
             return initial_scope.declarations.get(name);
         } else {
             return match initial_scope.parent_id {

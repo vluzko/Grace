@@ -712,11 +712,27 @@ mod type_tests {
             });
 
             check_expr(with_func, expr, Type::i32);
-            // println!("{:?}", with_func);
-            // let function_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
-            // context.add_type(function_type)
-            // Create function call expression
-            // Check call
         }
+
+        #[test]
+        fn function_call_wrong_args() {
+            panic!("To implement: Test that fails because args have wrong types")
+        }
+
+        #[test]
+        fn type_check_comparison_exprs() {
+            panic!("To implement: Tests of comparison operation type checking.")
+        }
+
+        #[test]
+        fn type_check_binary_exprs() {
+            panic!("To implement: Tests of binary operation type checking")
+        }
+
+        #[test]
+        fn type_check_complex_literals() {
+            panic!("To implement: Tests of data structure literal type checking")
+        }
+
     }
 }

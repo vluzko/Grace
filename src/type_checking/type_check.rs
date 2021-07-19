@@ -602,7 +602,7 @@ impl GetContext for Node<Expr> {
 }
 
 #[cfg(test)]
-mod tests {
+mod scope_tests {
     use super::*;
     use compiler_layers;
     use std::fs::File;
@@ -620,7 +620,7 @@ mod tests {
     }
 
     #[test]
-    // One trait, one struct, one implmentation block that uses self, and a function that uses it
+    // One trait, one struct, one implementation block that uses self, and a function that uses it
     fn traits_and_self() {
         let mut f = File::open("tests/test_data/trait_impl_self_test.gr").expect("File not found");
         let mut file_contents = String::new();
@@ -640,13 +640,41 @@ mod tests {
         #[test]
         fn test_literal_scope() {
             let original = Context::builtin();
-            let inputs = vec!(Node::<Expr>::from(5), Node::<Expr>::from(5.0), Node::<Expr>::from(true));
+            let inputs = vec![
+                Node::<Expr>::from(5),
+                Node::<Expr>::from(5.0),
+                Node::<Expr>::from(true),
+            ];
             // let mut input = Node::<Expr>::from(5);
             for mut input in inputs {
                 let context = Context::builtin();
                 let (new_c, _) = input.scopes_and_types(0, context).unwrap();
                 assert_eq!(new_c.scopes, original.scopes);
             }
+        }
+    }
+}
+
+#[cfg(test)]
+mod type_tests {
+    use super::*;
+    use compiler_layers;
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        fn check_expr(mut expr: Node<Expr>, expected_type: Type) {
+            let context = Context::builtin();
+            let (_, t) = expr.scopes_and_types(0, context).unwrap();
+            assert_eq!(t, expected_type);
+        }
+
+        #[test]
+        fn test_literals() {
+            check_expr(Node::<Expr>::from(5), Type::i32);
+            check_expr(Node::<Expr>::from(5.0), Type::f32);
+            check_expr(Node::<Expr>::from(true), Type::boolean);
         }
     }
 }

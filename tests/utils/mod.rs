@@ -1,9 +1,9 @@
-extern crate regex;
-extern crate grace_lib;
 extern crate difference;
+extern crate grace_lib;
 extern crate itertools;
+extern crate regex;
 use self::grace_lib::compiler_layers;
-use std::path::{Path};
+use std::path::Path;
 
 use self::difference::{Changeset, Difference};
 use self::regex::Regex;
@@ -24,8 +24,7 @@ pub fn compile_folder(subfolder: &str) {
         };
         if is_gr {
             let name = p.file_stem();
-            let output_file =
-                format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
+            let output_file = format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
             let expected_file = format!(
                 "{}/{}_expected.wat",
                 output_path,

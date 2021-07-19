@@ -775,7 +775,7 @@ pub mod rust_trait_impls {
                     WASMOperator::LeS => "le_s",
                     WASMOperator::And => "and",
                     WASMOperator::Or => "or",
-                    WASMOperator::Xor => "xor"
+                    WASMOperator::Xor => "xor",
                 }
             )
         }

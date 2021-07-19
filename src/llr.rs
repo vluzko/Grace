@@ -74,10 +74,10 @@ pub enum WASMOperator {
     Div,
     Eq,
     Ne,
-    Lt_s,
-    Gt_s,
-    Le_s,
-    Ge_s,
+    LtS,
+    GtS,
+    LeS,
+    GeS,
     And,
     Or,
     Xor,
@@ -733,10 +733,10 @@ pub mod rust_trait_impls {
         fn from(input: &ComparisonOperator) -> Self {
             return match input {
                 ComparisonOperator::Equal => WASMOperator::Eq,
-                ComparisonOperator::Less => WASMOperator::Lt_s,
-                ComparisonOperator::Greater => WASMOperator::Gt_s,
-                ComparisonOperator::LessEqual => WASMOperator::Le_s,
-                ComparisonOperator::GreaterEqual => WASMOperator::Ge_s,
+                ComparisonOperator::Less => WASMOperator::LtS,
+                ComparisonOperator::Greater => WASMOperator::GtS,
+                ComparisonOperator::LessEqual => WASMOperator::LeS,
+                ComparisonOperator::GreaterEqual => WASMOperator::GeS,
                 ComparisonOperator::Unequal => WASMOperator::Ne,
             };
         }
@@ -769,14 +769,13 @@ pub mod rust_trait_impls {
                     WASMOperator::Div => "div",
                     WASMOperator::Eq => "eq",
                     WASMOperator::Ne => "ne",
-                    WASMOperator::Gt_s => "gt_s",
-                    WASMOperator::Lt_s => "lt_s",
-                    WASMOperator::Ge_s => "ge_s",
-                    WASMOperator::Le_s => "le_s",
+                    WASMOperator::GtS => "gt_s",
+                    WASMOperator::LtS => "lt_s",
+                    WASMOperator::GeS => "ge_s",
+                    WASMOperator::LeS => "le_s",
                     WASMOperator::And => "and",
                     WASMOperator::Or => "or",
-                    WASMOperator::Xor => "xor",
-                    x => panic!("Display not implemented for WASMOperator: {:?}", x),
+                    WASMOperator::Xor => "xor"
                 }
             )
         }

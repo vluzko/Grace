@@ -644,7 +644,7 @@ mod tests {
             // let mut input = Node::<Expr>::from(5);
             for mut input in inputs {
                 let context = Context::builtin();
-                let (new_c, t) = input.scopes_and_types(0, context).unwrap();
+                let (new_c, _) = input.scopes_and_types(0, context).unwrap();
                 assert_eq!(new_c.scopes, original.scopes);
             }
         }

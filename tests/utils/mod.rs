@@ -3,13 +3,8 @@ extern crate grace_lib;
 extern crate difference;
 extern crate itertools;
 use self::grace_lib::compiler_layers;
-use std::collections::{BTreeMap, HashMap};
-use std::fmt::Debug;
-use std::fs::{canonicalize, create_dir_all, File};
-use std::io::prelude::*;
-use std::path::{Path, PathBuf};
+use std::path::{Path};
 
-use self::itertools::join;
 use self::difference::{Changeset, Difference};
 use self::regex::Regex;
 use std::fs::{read_dir, read_to_string};

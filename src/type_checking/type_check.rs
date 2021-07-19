@@ -664,17 +664,59 @@ mod type_tests {
     mod exprs {
         use super::*;
 
-        fn check_expr(mut expr: Node<Expr>, expected_type: Type) {
-            let context = Context::builtin();
+        fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
             let (_, t) = expr.scopes_and_types(0, context).unwrap();
             assert_eq!(t, expected_type);
         }
 
+        /// Check that an expression has the desired type.
+        fn simple_check_expr(expr: Node<Expr>, expected_type: Type) {
+            let context = Context::builtin();
+            check_expr(context, expr, expected_type);
+        }
+
+        /// Add a function of the specified type and name to the given context.
+        fn add_function_to_context(mut context: Context, func_name_str: &str, arg_types: Vec<Type>, ret_type: Type) -> (Context, usize) {
+            let func_name = Identifier::from(func_name_str);
+            let args: Vec<(Identifier, Type)> = arg_types.into_iter().enumerate().map(|(i, x)|
+                (Identifier::from(format!("arg{}", i)), x)).collect();
+            let function_type = Type::Function(args.clone(), Box::new(ret_type.clone()));
+            let null_function = wrap(Stmt::FunctionDecStmt {
+                name: func_name.clone(),
+                args: args,
+                kwargs: vec!(),
+                block: Node::from(Block{statements: vec!()}),
+                return_type: ret_type,
+            });
+            context.append_declaration(0, &func_name, &null_function);
+            context.add_type(null_function.id, function_type);
+            return (context, null_function.id);
+        }
+
         #[test]
         fn test_literals() {
-            check_expr(Node::<Expr>::from(5), Type::i32);
-            check_expr(Node::<Expr>::from(5.0), Type::f32);
-            check_expr(Node::<Expr>::from(true), Type::boolean);
+            simple_check_expr(Node::<Expr>::from(5), Type::i32);
+            simple_check_expr(Node::<Expr>::from(5.0), Type::f32);
+            simple_check_expr(Node::<Expr>::from(true), Type::boolean);
+        }
+
+        #[test]
+        fn test_function_call() {
+            // Create function type
+            let context = Context::builtin();
+            let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
+            let expr = Node::from(Expr::FunctionCall{
+                function: wrap(Expr::from("foo")),
+                args: vec!(Node::from(1)),
+                kwargs: vec!()
+            });
+
+            check_expr(with_func, expr, Type::i32);
+            // println!("{:?}", with_func);
+            // let function_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
+            // context.add_type(function_type)
+            // Create function call expression
+            // Check call
         }
     }
 }

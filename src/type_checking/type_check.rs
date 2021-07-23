@@ -715,13 +715,31 @@ mod type_tests {
         }
 
         #[test]
+        #[should_panic]
         fn function_call_wrong_args() {
-            panic!("To implement: Test that fails because args have wrong types")
+            let context = Context::builtin();
+            let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
+            let expr = Node::from(Expr::FunctionCall{
+                function: wrap(Expr::from("foo")),
+                args: vec!(Node::from(true)),
+                kwargs: vec!()
+            });
+            check_expr(with_func, expr, Type::i32);
         }
 
         #[test]
         fn type_check_comparison_exprs() {
-            panic!("To implement: Tests of comparison operation type checking.")
+            let operand = Node::from(0);
+            let comparisons = vec!(ComparisonOperator::Equal, ComparisonOperator::Unequal);
+
+            for comp in comparisons {
+                let expr = Node::from(Expr::ComparisonExpr{
+                    operator: comp,
+                    left: Box::new(operand.clone()),
+                    right: Box::new(operand.clone())
+                });
+                simple_check_expr(expr, Type::boolean);
+            }
         }
 
         #[test]

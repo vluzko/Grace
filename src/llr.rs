@@ -819,10 +819,15 @@ mod tests {
 
     #[cfg(test)]
     mod exprs {
+        use super::*;
 
         #[test]
-        fn test_constants() {
-            panic!()
+        fn llr_constants() {
+            let expr: Node<Expr> = Node::from(0);
+            let mut context = Context::builtin();
+            context.add_type(expr.id, Type::i32);
+            let res = expr.to_llr(&context);
+            assert_eq!(res, vec!(WASM::Const("0".to_string(), WASMType::i32)));
         }
     }
 

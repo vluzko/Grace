@@ -390,9 +390,18 @@ impl GetContext for Node<Expr> {
             } => {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
                 let (arg_types, ret) = match wrapped_func {
-                    Type::Function(a, b) => (a, *b.clone()),
-                    x => panic!("Expected function type. Got: {:?}", x),
-                };
+                    Type::Function(a, b) => Ok((a, *b.clone())),
+                    x => Err(GraceError::TypeError{msg: format!("Somehow got a non-function type {:?}", x)}),
+                }?;
+
+                // let map = |x| {
+                //     let ((context, arg_constraints), arg) = x?;
+                //     let (new_c, arg_t) = arg.scopes_and_types(parent_id, new_c)?;
+                //     // new_c = res.0;
+                //     // let arg_t = res.1;
+
+                //     let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
+                // };
                 for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
@@ -400,14 +409,40 @@ impl GetContext for Node<Expr> {
 
                     let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
 
-                    assert!(new_c.check_subtype(&arg, &arg_t, &expected_type));
-                    // assert_eq!(arg_types.get(i).unwrap().1, arg_t);
+                    // TODO: Type checking: Pass error
+                    match new_c.check_subtype(&arg, &arg_t, &expected_type) {
+                        true => {},
+                        false => {
+                            return Err(GraceError::TypeError{msg: format!("Argument type mismatch")})
+                        }
+                    }
                 }
 
-                for (_, value) in kwargs {
+                for (name, value) in kwargs {
                     let res = value.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
-                    let _kwarg_t = res.1;
+                    let kwarg_t = res.1;
+
+                    fn find_kwarg_index(types: &Vec<(Identifier, Type)>, n: &Identifier) -> Result<usize, GraceError>{
+                        for (i, (ident, _)) in types.iter().enumerate() {
+                            if ident == n {
+                                return Ok(i);
+                            }
+                        }
+                        return Err(GraceError::TypeError{msg: format!("Invalid kwarg name. Passed {:?}, must be in {:?}", types, n)});
+                    }
+
+                    let i = find_kwarg_index(&arg_types, &name)?;
+
+                    let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
+
+                    // // TODO: Type checking: Pass error
+                    match new_c.check_subtype(&value, &kwarg_t, &expected_type) {
+                        true => {},
+                        false => {
+                            return Err(GraceError::TypeError{msg: format!("Argument type mismatch")})
+                        }
+                    }
                 }
                 Ok((new_c, ret))
             }
@@ -540,28 +575,7 @@ impl GetContext for Node<Expr> {
                     Err(x) => Err(x),
                 }
             }
-            //     let mut set_t = Type::Undetermined;
-            //     let mut new_c = context;
-            //     let mut error = None;
-            //     for expr in exprs {
-            //         let res = expr.scopes_and_types(parent_id, new_c);
-            //         match res {
-            //             Ok(v) => {
-            //                 new_c = v.0;
-            //                 set_t = set_t.merge(&v.1);
-            //             },
-            //             Err(e) => {
-            //                 error = Some(e);
-            //                 break;
-            //             }
-            //         }
 
-            //     }
-            //     match error {
-            //         None => Ok((new_c, Type::Parameterized(Identifier::from("Set"), vec!(set_t)))),
-            //         Some(e) => Err(e)
-            //     }
-            // },
             Expr::TupleLiteral(ref mut exprs) => {
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
@@ -658,21 +672,32 @@ mod scope_tests {
 #[cfg(test)]
 mod type_tests {
     use super::*;
-    use compiler_layers;
 
     #[cfg(test)]
     mod exprs {
         use super::*;
 
+        /// Check that an expression has the desired type.
         fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
             let (_, t) = expr.scopes_and_types(0, context).unwrap();
             assert_eq!(t, expected_type);
         }
 
-        /// Check that an expression has the desired type.
+        /// Check that an expression has the desired type in a trivial context
         fn simple_check_expr(expr: Node<Expr>, expected_type: Type) {
             let context = Context::builtin();
             check_expr(context, expr, expected_type);
+        }
+
+        fn fail_check_expr(context: Context, mut expr: Node<Expr>) {
+            let res = expr.scopes_and_types(0, context);
+            match res {
+                Ok((_, t)) => panic!("Expected failed type check. Expr has type {:?}", t),
+                Err(e) => match e {
+                    GraceError::TypeError{..} => {},
+                    x => panic!("Got non-type error: {:?}", x)
+                }
+            }
         }
 
         /// Add a function of the specified type and name to the given context.
@@ -715,7 +740,6 @@ mod type_tests {
         }
 
         #[test]
-        #[should_panic]
         fn function_call_wrong_args() {
             let context = Context::builtin();
             let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
@@ -724,7 +748,7 @@ mod type_tests {
                 args: vec!(Node::from(true)),
                 kwargs: vec!()
             });
-            check_expr(with_func, expr, Type::i32);
+            fail_check_expr(with_func, expr);
         }
 
         #[test]

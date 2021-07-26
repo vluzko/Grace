@@ -5,6 +5,7 @@ use general_utils;
 use type_checking::refinements::check_constraints;
 use type_checking::scope::{CanModifyScope, Scope};
 use type_checking::types::{Trait, Type};
+use grace_error::GraceError;
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
@@ -314,7 +315,7 @@ impl Context {
 impl Context {
     /// Resolve an attribute access within the current context.
     /// # Arguments:
-    pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Type {
+    pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Result<Type, GraceError> {
         // Check if this is a direct attribute access
         let unwrapped_self = match base_type {
             Type::self_type(x) => *x.clone(),
@@ -333,7 +334,7 @@ impl Context {
         };
 
         return match attribute_type {
-            Some(x) => x.clone(),
+            Some(x) => Ok(x.clone()),
             None => {
                 // Check if this is a trait access
                 let mut possible_traits = vec![];
@@ -355,16 +356,18 @@ impl Context {
                 // Just resolve the trait.
                 if possible_traits.len() == 1 {
                     // Get the type of the trait function and return it.
-                    return possible_traits[0].functions.get(name).unwrap().clone();
+                    return Ok(possible_traits[0].functions.get(name).unwrap().clone());
                 }
                 // TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
                     panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    panic!(
-                        "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
-                        base_type, name
-                    );
+                    return Err(GraceError::TypeError{msg: format!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", 
+                    base_type, name)});
+                    // panic!(
+                    //     "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
+                    //     base_type, name
+                    // );
                 }
             }
         };

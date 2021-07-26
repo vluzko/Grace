@@ -376,12 +376,12 @@ impl GetContext for Node<Expr> {
                     false => Type::Gradual(general_utils::get_next_grad()),
                 };
 
-                // let return_type = right_c.bin_op_ret_type(operator, &left_t, &right_t);
                 Ok((right_c, return_type))
             }
             Expr::UnaryExpr {
                 ref mut operand, ..
             } => operand.scopes_and_types(parent_id, context),
+
             // TODO: Type checking
             Expr::FunctionCall {
                 ref mut function,
@@ -394,14 +394,6 @@ impl GetContext for Node<Expr> {
                     x => Err(GraceError::TypeError{msg: format!("Somehow got a non-function type {:?}", x)}),
                 }?;
 
-                // let map = |x| {
-                //     let ((context, arg_constraints), arg) = x?;
-                //     let (new_c, arg_t) = arg.scopes_and_types(parent_id, new_c)?;
-                //     // new_c = res.0;
-                //     // let arg_t = res.1;
-
-                //     let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
-                // };
                 for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
@@ -480,7 +472,7 @@ impl GetContext for Node<Expr> {
                 ref attribute,
             } => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
-                let attr_t = new_c.resolve_attribute(&base_t, attribute);
+                let attr_t = new_c.resolve_attribute(&base_t, attribute)?;
                 Ok((new_c, attr_t))
             }
             Expr::ModuleAccess(ref id, ref mut names) => {
@@ -767,14 +759,92 @@ mod type_tests {
         }
 
         #[test]
+        fn type_check_unary_exprs() {
+            let operand = Node::from(true);
+            let operators = vec!(UnaryOperator::Not, UnaryOperator::ToBool);
+            for op in operators {
+                let expr = Node::from(Expr::UnaryExpr{
+                    operator:op,
+                    operand: Box::new(operand.clone())
+                    
+                });
+                simple_check_expr(expr, Type::boolean);
+            }
+        }
+
+        #[test]
+        fn type_check_unary_exprs_expect_fail() {
+            let context = Context::builtin();
+            let operand = Node::from(7);
+            let operator = UnaryOperator::Not;
+            let expr = Node::from(Expr::UnaryExpr{
+                operator:operator,
+                operand: Box::new(operand.clone())
+                    
+                });
+            fail_check_expr(context, expr);
+        }
+
+        #[test]
         fn type_check_binary_exprs() {
-            panic!("To implement: Tests of binary operation type checking")
+            let operand = Node::from(0);
+            let comparisons = vec!(ComparisonOperator::Equal, ComparisonOperator::Unequal);
+
+            for comp in comparisons {
+                let expr = Node::from(Expr::ComparisonExpr{
+                    operator: comp,
+                    left: Box::new(operand.clone()),
+                    right: Box::new(operand.clone())
+                });
+                simple_check_expr(expr, Type::boolean);
+            }
         }
 
         #[test]
         fn type_check_complex_literals() {
-            panic!("To implement: Tests of data structure literal type checking")
+            panic!("To implement: Tests of complex literals type checking: vector, set, tuple")
         }
 
+        #[test]
+        fn type_check_struct_literals() {
+            panic!("To implement: Tests of struct literal type checking")
+        }
+
+        #[test]
+        fn type_check_attribute_access() {
+            panic!("To implement: Tests of attribute access type checking")
+        }
+
+        #[test]
+        fn type_check_nonexistent_attribute_access() {
+            let context = Context::builtin();
+            let base = Node::from(0);
+            let attribute = Identifier::from("string");
+            let expr = Node::from(Expr::AttributeAccess{
+                base: Box::new(base.clone()),
+                attribute: attribute
+            });
+            fail_check_expr(context, expr);
+        }
+
+        #[test]
+        fn type_check_trait_access() {
+            panic!("To implement: Tests of trait access type checking")
+        }
+
+        #[test]
+        fn type_check_module_access() {
+            panic!("To implement: Tests of module access type checking")
+        }
+
+        #[test]
+        fn type_check_index() {
+            panic!("To implement: Tests of index type checking")
+        }
+
+        #[test]
+        fn type_check_identifier() {
+            panic!("To implement: Tests of identifier expression type checking")
+        }
     }
 }

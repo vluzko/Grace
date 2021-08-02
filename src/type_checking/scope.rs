@@ -1,10 +1,9 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use expression::*;
 use general_utils;
-use type_checking::types::{Type};
 use type_checking::context::Context;
-
+use type_checking::types::Type;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -17,16 +16,15 @@ pub enum CanModifyScope {
     Statement(*const Node<Stmt>, usize),
     Argument(Type),
     Return(Type),
-    ImportedModule(usize)
+    ImportedModule(usize),
 }
 
 impl CanModifyScope {
-
     pub fn extract_stmt(&self) -> Stmt {
         return unsafe {
             match self {
                 CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
-                _ => panic!()
+                _ => panic!(),
             }
         };
     }
@@ -35,7 +33,7 @@ impl CanModifyScope {
         return match self {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
             CanModifyScope::ImportedModule(ref id) => *id,
-            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!()
+            CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!(),
         };
     }
 }
@@ -59,70 +57,84 @@ pub struct Scope {
 impl Scope {
     /// Create an empty scope.
     pub fn empty() -> Scope {
-        return Scope{
+        return Scope {
             parent_id: None,
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
-            maybe_struct: None
+            maybe_struct: None,
         };
     }
 
     /// Create a child of the given parent
     pub fn child(parent_id: usize) -> Scope {
-        return Scope{
+        return Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
-            maybe_struct: None
+            maybe_struct: None,
         };
     }
 
     /// Create a child of the given parent with a struct
     pub fn child_struct_impl(parent_id: usize, structname: &Identifier) -> Scope {
-        return Scope{
+        return Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
-            maybe_struct: Some(structname.clone())
+            maybe_struct: Some(structname.clone()),
         };
     }
 
     /// Create a child of the given parent with a trait and a struct
-    pub fn child_trait_impl(parent_id: usize, structname: &Identifier, traitname: &Identifier) -> Scope {
-        return Scope{
+    pub fn child_trait_impl(
+        parent_id: usize,
+        structname: &Identifier,
+        traitname: &Identifier,
+    ) -> Scope {
+        return Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: Some(traitname.clone()),
-            maybe_struct: Some(structname.clone())
+            maybe_struct: Some(structname.clone()),
         };
     }
 
     pub fn append_declaration(&mut self, name: &Identifier, stmt: &Box<Node<Stmt>>) {
-        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
+        self.declaration_order
+            .insert(name.clone(), self.declaration_order.len() + 1);
         let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
         self.declarations.insert(name.clone(), scope_mod);
     }
 
     pub fn append_modification(&mut self, name: &Identifier, modification: CanModifyScope) {
-        self.declaration_order.insert(name.clone(), self.declaration_order.len() + 1);
+        self.declaration_order
+            .insert(name.clone(), self.declaration_order.len() + 1);
         self.declarations.insert(name.clone(), modification);
     }
 }
 
-pub fn get_convert_expr(from: &Type, to: &Type, base: Node<Expr>, context: &mut Context) -> Node<Expr> {
+pub fn get_convert_expr(
+    from: &Type,
+    to: &Type,
+    base: Node<Expr>,
+    context: &mut Context,
+) -> Node<Expr> {
     return match from == to {
         false => {
             let operator = UnaryOperator::cast(&from, &to);
-            let raw_expr = Expr::UnaryExpr{operator: operator, operand: Box::new(base)};
+            let raw_expr = Expr::UnaryExpr {
+                operator: operator,
+                operand: Box::new(base),
+            };
             let new_node = Node::from(raw_expr);
             context.add_type(new_node.id, to.clone());
             new_node
-        },
-        true => base
+        }
+        true => base,
     };
 }
 
@@ -138,37 +150,40 @@ pub fn choose_return_type(possible: &Type) -> Type {
                 }
             }
             types[i].clone()
-        },
-        _ => possible.clone()
-    }
+        }
+        _ => possible.clone(),
+    };
 }
 
 impl BinaryOperator {
-
     pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
         //let mut intersection = HashSet::new();
         return match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => left.merge(right),
+            BinaryOperator::Add
+            | BinaryOperator::Sub
+            | BinaryOperator::Mult
+            | BinaryOperator::Mod => left.merge(right),
             BinaryOperator::Div => Type::f64,
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
-            _ => panic!()
-        }
+            _ => panic!(),
+        };
     }
 
     pub fn choose_return_type(&self, merged_type: &Type) -> Type {
-
         return match self {
-            BinaryOperator::Add | BinaryOperator::Sub | BinaryOperator::Mult | BinaryOperator::Mod => 
-            choose_return_type(merged_type),
+            BinaryOperator::Add
+            | BinaryOperator::Sub
+            | BinaryOperator::Mult
+            | BinaryOperator::Mod => choose_return_type(merged_type),
             BinaryOperator::Div => Type::f32,
-            _ => panic!()   
+            _ => panic!(),
         };
     }
 
     pub fn requires_sign(&self) -> bool {
         match self {
             BinaryOperator::Div => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -178,7 +193,7 @@ impl BinaryOperator {
             BinaryOperator::Add => 0,
             BinaryOperator::Sub => 1,
             BinaryOperator::Mult => 2,
-            _ => panic!()
+            _ => panic!(),
         };
     }
 
@@ -190,7 +205,7 @@ impl BinaryOperator {
             BinaryOperator::Div => ("Div", "div"),
             BinaryOperator::And => ("And", "and"),
             BinaryOperator::Or => ("Or", "or"),
-            x => panic!("get_builtin_trait not implemented for {:?}", x)
+            x => panic!("get_builtin_trait not implemented for {:?}", x),
         };
 
         return (Identifier::from(x), Identifier::from(y));
@@ -209,7 +224,7 @@ impl UnaryOperator {
     }
 }
 
-impl <'a> From<&'a Identifier> for Type {
+impl<'a> From<&'a Identifier> for Type {
     fn from(input: &'a Identifier) -> Self {
         return match input.name.as_ref() {
             "i32" => Type::i32,
@@ -221,7 +236,7 @@ impl <'a> From<&'a Identifier> for Type {
             "boolean" => Type::boolean,
             "string" => Type::string,
             "any" => Type::Gradual(general_utils::get_next_grad()),
-            _ => Type::Named(input.clone())
+            _ => Type::Named(input.clone()),
         };
     }
 }
@@ -245,15 +260,13 @@ mod test {
 
         fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
             return match ptr {
-                CanModifyScope::Statement(x, _) => {
-                    unsafe {
-                        let actual_stmt = &(**x).data;
-                        assert_eq!(actual_stmt, expected);
-                        true
-                    }
+                CanModifyScope::Statement(x, _) => unsafe {
+                    let actual_stmt = &(**x).data;
+                    assert_eq!(actual_stmt, expected);
+                    true
                 },
-                x => panic!("Expected a statement modification, found: {:?}", x)
-            }
+                x => panic!("Expected a statement modification, found: {:?}", x),
+            };
         }
 
         // impl Node<Stmt> {
@@ -273,16 +286,24 @@ mod test {
             fn mod_scope(&mut self, new_scope: usize) {
                 self.scope = new_scope;
                 match self.data {
-                    Expr::BinaryExpr{ref mut left, ref mut right, ..} => {
+                    Expr::BinaryExpr {
+                        ref mut left,
+                        ref mut right,
+                        ..
+                    } => {
                         left.mod_scope(new_scope);
                         right.mod_scope(new_scope);
-                    },
-                    Expr::FunctionCall{ref mut function, ref mut args, ..} => {
+                    }
+                    Expr::FunctionCall {
+                        ref mut function,
+                        ref mut args,
+                        ..
+                    } => {
                         function.mod_scope(new_scope);
                         for arg in args {
                             arg.mod_scope(new_scope);
                         }
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -292,11 +313,19 @@ mod test {
         fn test_block_scope() {
             let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
             e1.mod_scope(1);
-            let s1 = Stmt::LetStmt{name: Identifier::from("a"), type_annotation: None, expression: Node::from(e1)};
+            let s1 = Stmt::LetStmt {
+                name: Identifier::from("a"),
+                type_annotation: None,
+                expression: Node::from(e1),
+            };
 
             let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
             e2.mod_scope(1);
-            let s2 = Stmt::LetStmt{name: Identifier::from("b"), type_annotation: None, expression: Node::from(e2)};
+            let s2 = Stmt::LetStmt {
+                name: Identifier::from("b"),
+                type_annotation: None,
+                expression: Node::from(e2),
+            };
 
             let input = r#"
             let a = 5 + -1
@@ -306,13 +335,16 @@ mod test {
             let scope = context.get_scope(block.scope);
             assert_eq!(scope.declarations.len(), 2);
 
-            let stmt1_pointer = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
+            let stmt1_pointer = context
+                .get_declaration(block.scope, &Identifier::from("a"))
+                .unwrap();
             check_ptr_stmt(stmt1_pointer, &s1);
 
-            let stmt2_pointer = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
+            let stmt2_pointer = context
+                .get_declaration(block.scope, &Identifier::from("b"))
+                .unwrap();
             check_ptr_stmt(stmt2_pointer, &s2);
         }
-
 
         #[cfg(test)]
         mod stmts {
@@ -320,7 +352,8 @@ mod test {
 
             #[test]
             fn test_let_stmt() {
-                let (block, context) = compiler_layers::to_context::<Node<Block>>("let a = 1".as_bytes());
+                let (block, context) =
+                    compiler_layers::to_context::<Node<Block>>("let a = 1".as_bytes());
                 assert_eq!(context.scopes.len(), 2);
                 let scope = context.get_scope(block.scope);
                 assert_eq!(scope.declarations.len(), 1);
@@ -336,25 +369,28 @@ mod test {
                 fn b() -> i32:
                     return 1
                 "#;
-                let (block, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
-                let fn1 = context.get_declaration(block.scope, &Identifier::from("a")).unwrap();
-                let fn2 = context.get_declaration(block.scope, &Identifier::from("b")).unwrap();
+                let (block, context) =
+                    compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
+                let fn1 = context
+                    .get_declaration(block.scope, &Identifier::from("a"))
+                    .unwrap();
+                let fn2 = context
+                    .get_declaration(block.scope, &Identifier::from("b"))
+                    .unwrap();
                 match fn1.extract_stmt() {
-                    Stmt::FunctionDecStmt{name, ..} => {
+                    Stmt::FunctionDecStmt { name, .. } => {
                         assert_eq!(name, Identifier::from("a"))
-                    },
-                    _ => panic!()
+                    }
+                    _ => panic!(),
                 };
 
                 match fn2.extract_stmt() {
-                    Stmt::FunctionDecStmt{name, .. } => {
+                    Stmt::FunctionDecStmt { name, .. } => {
                         assert_eq!(name, Identifier::from("b"))
-                    },
-                    _ => panic!()
+                    }
+                    _ => panic!(),
                 };
             }
         }
-
-        
     }
 }

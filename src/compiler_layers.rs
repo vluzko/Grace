@@ -1,29 +1,24 @@
-use std::collections::{HashMap, BTreeMap};
-use std::path::{Path, PathBuf};
+//! Compilation.
+use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
+use std::fs::{canonicalize, create_dir_all, File};
 use std::io::prelude::*;
-use std::fs::{File, canonicalize, create_dir_all};
+use std::path::{Path, PathBuf};
 
 use itertools::join;
 
+use expression::{Identifier, Import, Module, Node};
 use parser::Parseable;
 use position_tracker::PosStr;
-use expression::{
-    Node,
-    Module,
-    Identifier,
-    Import
-};
-use type_checking::types::Type;
-use type_checking::type_check::GetContext;
 use type_checking::context::Context;
+use type_checking::type_check::GetContext;
+use type_checking::types::Type;
 
-use pre_cfg_rewrites::TypeRewritable;
-use cfg::{CfgMap, Cfg, module_to_cfg};
-use llr::{module_to_llr, WASMModule};
 use bytecode::ToBytecode;
+use cfg::{module_to_cfg, Cfg, CfgMap};
 use general_utils::{extend_map, get_next_id, join as join_vec};
-
+use llr::{module_to_llr, WASMModule};
+use pre_cfg_rewrites::TypeRewritable;
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
@@ -36,7 +31,7 @@ pub struct CompiledModule {
     // The dependencies of this module.
     pub dependencies: Vec<String>,
     // The MD5 hash of the *file* describing the module.
-    pub hash: u64
+    pub hash: u64,
 }
 
 impl PartialEq for CompiledModule {
@@ -50,7 +45,7 @@ impl Eq for CompiledModule {}
 impl CompiledModule {
     pub fn get_type(&self) -> Type {
         let mut attribute_map = BTreeMap::new();
-        let mut attribute_order = vec!();
+        let mut attribute_order = vec![];
         for func_dec in &self.ast.data.functions {
             let func_type = self.context.type_map.get(&func_dec.id).unwrap().clone();
             attribute_order.push(func_dec.data.get_name());
@@ -76,7 +71,7 @@ pub struct Compilation {
     pub main_path: Option<Box<Path>>,
     /// All parsed modules.
     pub modules: HashMap<String, CompiledModule>,
-    pub root_name: Option<String>
+    pub root_name: Option<String>,
 }
 
 impl Compilation {
@@ -87,10 +82,10 @@ impl Compilation {
         // Panics if the file_name ends in ".."
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
 
-        let mut compilation = Compilation{
+        let mut compilation = Compilation {
             main_path: Some(absolute_path.clone()),
             modules: HashMap::new(),
-            root_name: Some(path_to_module_reference(&boxed))
+            root_name: Some(path_to_module_reference(&boxed)),
         };
         let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
         compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
@@ -100,15 +95,24 @@ impl Compilation {
     /// Get the full record type of a submodule.
     /// a.b.c turns into Record(a => Record(b => Record(c => functions_in_c)))
     fn get_submodule_type(submodule: &CompiledModule, import: &Import) -> Type {
-
         // Add the types of all the imported functions to the record type.
         let mut record_type = BTreeMap::new();
         for func_dec in &submodule.ast.data.functions {
-            let func_type = submodule.context.type_map.get(&func_dec.id).unwrap().clone();
+            let func_type = submodule
+                .context
+                .type_map
+                .get(&func_dec.id)
+                .unwrap()
+                .clone();
             record_type.insert(func_dec.data.get_name(), func_type);
         }
         for struct_dec in &submodule.ast.data.structs {
-            let struct_type = submodule.context.type_map.get(&struct_dec.id).unwrap().clone();
+            let struct_type = submodule
+                .context
+                .type_map
+                .get(&struct_dec.id)
+                .unwrap()
+                .clone();
             record_type.insert(struct_dec.data.get_name(), struct_type);
         }
 
@@ -125,12 +129,13 @@ impl Compilation {
         f.read_to_string(&mut file_contents).unwrap();
 
         // Parse the module
-        let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
+        let mut parsed_module =
+            <Node<Module> as Parseable>::parse(PosStr::from(file_contents.as_bytes()));
         let module_name = path_to_module_reference(&file_name);
 
         // Set everything up for compiling the dependencies.
-        let mut new_imports = vec!();
-        let mut dependencies = vec!();
+        let mut new_imports = vec![];
+        let mut dependencies = vec![];
         // let mut init_scope = base_scope();
         // let mut init_type_map = HashMap::new();
 
@@ -169,16 +174,20 @@ impl Compilation {
                     llr: wasm,
                     path: file_name.clone(),
                     dependencies: dependencies,
-                    hash: 0
+                    hash: 0,
                 };
                 self.modules.insert(module_name, compiled);
-            },
-            Err(e) => panic!("Unimplemented error handling: {:?}", e)
+            }
+            Err(e) => panic!("Unimplemented error handling: {:?}", e),
         };
-
     }
 
-    fn add_import(&mut self, base_dir: &Box<Path>, import: &Import, context: &mut Context) -> Import {
+    fn add_import(
+        &mut self,
+        base_dir: &Box<Path>,
+        import: &Import,
+        context: &mut Context,
+    ) -> Import {
         let path = module_path_to_path(&import.path);
         let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
 
@@ -191,8 +200,20 @@ impl Compilation {
         };
 
         // A vector containing all the names of the imported functions.
-        let func_exports = submodule.ast.data.functions.iter().map(|x| x.data.get_name().clone()).collect();
-        let struct_exports = submodule.ast.data.structs.iter().map(|x| x.data.get_name().clone()).collect();
+        let func_exports = submodule
+            .ast
+            .data
+            .functions
+            .iter()
+            .map(|x| x.data.get_name().clone())
+            .collect();
+        let struct_exports = submodule
+            .ast
+            .data
+            .structs
+            .iter()
+            .map(|x| x.data.get_name().clone())
+            .collect();
         let exports = join_vec(func_exports, struct_exports);
 
         // Add the imported functions to scope.
@@ -211,7 +232,7 @@ impl Compilation {
             id: import.id,
             path: import.path.clone(),
             alias: import.alias.clone(),
-            values: exports
+            values: exports,
         };
         return new_import;
     }
@@ -226,8 +247,8 @@ impl Compilation {
             let mut output_path = output_dir.join(relative_path);
             output_path.set_extension("wat");
             match create_dir_all(output_path.parent().unwrap()) {
-                Ok(_) => {},
-                Err(x) => panic!("{:?}", x)
+                Ok(_) => {}
+                Err(x) => panic!("{:?}", x),
             };
             let outfile = File::create(output_path);
             outfile.unwrap().write_all(bytecode.as_bytes()).unwrap();
@@ -238,13 +259,13 @@ impl Compilation {
         return ret_str;
     }
 
-    pub fn compile_from_string(input: &String) -> Compilation{
+    pub fn compile_from_string(input: &String) -> Compilation {
         let mut compilation = Compilation::empty();
         // Parse the module
         let mut parsed_module = <Node<Module> as Parseable>::parse(PosStr::from(input));
 
         // Set everything up for compiling the dependencies.
-        let mut new_imports = vec!();
+        let mut new_imports = vec![];
 
         let mut init_context = Context::empty();
 
@@ -273,15 +294,14 @@ impl Compilation {
                     cfg_map: cfg_map,
                     llr: wasm,
                     path: Box::from(Path::new(".")),
-                    dependencies: vec!(),
-                    hash: 0
+                    dependencies: vec![],
+                    hash: 0,
                 };
                 compilation.modules.insert("$cli".to_string(), compiled);
                 compilation
-            },
-            Err(_) => panic!("Unimplemented error handling")
-        }
-
+            }
+            Err(_) => panic!("Unimplemented error handling"),
+        };
     }
 
     /// Merge two Compilations together.
@@ -304,23 +324,35 @@ impl Compilation {
 fn default_imports() -> Vec<(Import, Type)> {
     let mm_id = get_next_id();
 
-    let mem_management = Import{
+    let mem_management = Import {
         id: mm_id,
-        path: vec!(Identifier::from("memory_management")),
+        path: vec![Identifier::from("memory_management")],
         alias: Some(Identifier::from(".memory_management")),
-        values: vec!(Identifier::from("alloc_words"), Identifier::from("free_chunk"), Identifier::from("copy_many"), Identifier::from("tee_memory")),
+        values: vec![
+            Identifier::from("alloc_words"),
+            Identifier::from("free_chunk"),
+            Identifier::from("copy_many"),
+            Identifier::from("tee_memory"),
+        ],
     };
-    let alloc_and_free_type = Type::Function(vec!((Identifier::from("a"), Type::i32)), Box::new(Type::i32));
-    let copy_type = Type::Function(vec!(
-        (Identifier::from("a"), Type::i32), 
-        (Identifier::from("b"), Type::i32),
-        (Identifier::from("size"), Type::i32)), 
-        Box::new(Type::i32)
+    let alloc_and_free_type = Type::Function(
+        vec![(Identifier::from("a"), Type::i32)],
+        Box::new(Type::i32),
     );
-    let tee_type = Type::Function(vec!(
-        (Identifier::from("loc"), Type::i32),
-        (Identifier::from("value"), Type::i32)), 
-        Box::new(Type::i32)
+    let copy_type = Type::Function(
+        vec![
+            (Identifier::from("a"), Type::i32),
+            (Identifier::from("b"), Type::i32),
+            (Identifier::from("size"), Type::i32),
+        ],
+        Box::new(Type::i32),
+    );
+    let tee_type = Type::Function(
+        vec![
+            (Identifier::from("loc"), Type::i32),
+            (Identifier::from("value"), Type::i32),
+        ],
+        Box::new(Type::i32),
     );
     let mut mem_management_func_map = BTreeMap::new();
     mem_management_func_map.insert(Identifier::from("alloc_words"), alloc_and_free_type.clone());
@@ -328,28 +360,39 @@ fn default_imports() -> Vec<(Import, Type)> {
     mem_management_func_map.insert(Identifier::from("copy_many"), copy_type);
     mem_management_func_map.insert(Identifier::from("tee_memory"), tee_type);
 
-    let mem_type = Type::Module(vec!(Identifier::from("memory_management")), mem_management_func_map);
+    let mem_type = Type::Module(
+        vec![Identifier::from("memory_management")],
+        mem_management_func_map,
+    );
 
     let bin_ops_id = get_next_id();
 
-    let binary_operations = Import{
+    let binary_operations = Import {
         id: bin_ops_id,
-        path: vec!(Identifier::from("gradual_binary_ops")),
+        path: vec![Identifier::from("gradual_binary_ops")],
         alias: Some(Identifier::from(".gradual_binary_ops")),
-        values: vec!(Identifier::from("call_gradual"))
+        values: vec![Identifier::from("call_gradual")],
     };
-    let call_gradual_type = Type::Function(vec!(
-        (Identifier::from("i"), Type::i32),
-        (Identifier::from("a"), Type::i32),
-        (Identifier::from("b"), Type::i32)), 
-        Box::new(Type::i32)
+    let call_gradual_type = Type::Function(
+        vec![
+            (Identifier::from("i"), Type::i32),
+            (Identifier::from("a"), Type::i32),
+            (Identifier::from("b"), Type::i32),
+        ],
+        Box::new(Type::i32),
     );
     let mut bin_ops_func_map = BTreeMap::new();
     bin_ops_func_map.insert(Identifier::from("call_gradual"), call_gradual_type.clone());
 
-    let binary_operations_type = Type::Module(vec!(Identifier::from("gradual_binary_ops")), bin_ops_func_map);
+    let binary_operations_type = Type::Module(
+        vec![Identifier::from("gradual_binary_ops")],
+        bin_ops_func_map,
+    );
 
-    return vec!((mem_management, mem_type), (binary_operations, binary_operations_type));
+    return vec![
+        (mem_management, mem_type),
+        (binary_operations, binary_operations_type),
+    ];
 }
 
 fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
@@ -370,10 +413,15 @@ fn module_path_to_path(module_path: &Vec<Identifier>) -> Box<Path> {
 fn path_to_module_reference(path: &Box<Path>) -> String {
     // WOW it's hard to convert Paths to Strings.
     let without_extension = path.parent().unwrap().join(path.file_stem().unwrap());
-    return join(without_extension.components().map(|x| x.as_os_str().to_os_string().into_string().unwrap()), ".");
+    return join(
+        without_extension
+            .components()
+            .map(|x| x.as_os_str().to_os_string().into_string().unwrap()),
+        ".",
+    );
 }
 
-pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String){
+pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String) {
     let mut f = File::open(file_name).expect("File not found");
     let mut file_contents = String::new();
     f.read_to_string(&mut file_contents).unwrap();
@@ -382,7 +430,10 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String){
 }
 
 pub fn to_context<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: GetContext {
+where
+    T: Parseable,
+    T: GetContext,
+{
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
     let init = Context::builtin();
@@ -390,18 +441,23 @@ where T: Parseable, T: GetContext {
     let context_res = result.scopes_and_types(id, init);
     return match context_res {
         Ok((context, _)) => (result, context),
-        x => panic!("COMPILER ERROR: {:?}", x)
+        x => panic!("COMPILER ERROR: {:?}", x),
     };
 }
 
 pub fn to_type_rewrites<'a, T>(input: &'a [u8]) -> (T, Context)
-where T: Parseable, T: GetContext, T: TypeRewritable<T>, T: Debug {
+where
+    T: Parseable,
+    T: GetContext,
+    T: TypeRewritable<T>,
+    T: Debug,
+{
     let (result, mut context): (T, Context) = to_context(input);
     let rewritten = result.type_based_rewrite(&mut context);
     return (rewritten, context);
 }
 
-pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap){
+pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap) {
     let (module, context) = to_type_rewrites::<Node<Module>>(input);
     let cfg_map = module_to_cfg(&module, &context);
     return (module, context, cfg_map);
@@ -411,78 +467,4 @@ pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule
     let (module, context, cfg_map) = to_cfg_map(input);
     let llr = module_to_llr(&module, &context, &cfg_map);
     return (module, context, cfg_map, llr);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs::{
-        read_to_string, read_dir
-    };
-    use difference::{Difference, Changeset};
-    use regex::Regex;
-
-    fn compile_folder(subfolder: &str) {
-        let folder_path = format!("./test_data/{}", subfolder);
-        let output_path = format!("./test_data/{}/outputs", subfolder);
-        let file_path = format!("{}/file_1.gr", folder_path);
-        let compiled = Compilation::compile(&file_path);
-        let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
-        let paths = read_dir(folder_path).unwrap();
-        for path in paths {
-            let p = path.unwrap().path();
-            let is_gr = match p.extension() {
-                Some(s) => s == "gr",
-                None => false
-            };
-            if is_gr {
-                let name = p.file_stem();
-                let output_file = format!("{}/{}.wat", output_path, name.unwrap().to_str().unwrap());
-                let expected_file = format!("{}/{}_expected.wat", output_path, name.unwrap().to_str().unwrap());
-                let actual = read_to_string(output_file).unwrap();
-                let expected = read_to_string(expected_file).unwrap();
-                let changeset = Changeset::new(expected.as_str(), actual.as_str(), "");
-                let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
-                for diff in changeset.diffs {
-                    match diff {
-                        Difference::Same(_) => {},
-                        Difference::Rem(x) => panic!("Removed {:?} in {:?}", x, name),
-                        Difference::Add(added_string) => {
-                            // Check if the thing being added is a scope ID on the end
-                            // of a variable
-                            // Scope IDs aren't the same every time, so instead of comparing
-                            // the string, check that the diff is plausibly a scope_id
-                            assert!(scope_suffix_regex.is_match(added_string.as_str()), "Added {:?} in {:?}", added_string, name);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn simple_imports_test() {
-        compile_folder("simple_imports_test");
-    }
-
-    #[test]
-    fn import_calls_test() {
-        compile_folder("import_calls_test");
-    }
-
-    #[test]
-    fn refinement_types_test() {
-        compile_folder("refinement_types_test");
-    }
-
-    #[test]
-    fn gradual_add_test() {
-        compile_folder("gradual_add_test");
-    }
-
-    #[test]
-    #[should_panic]
-    fn refinement_failures_test() {
-        compile_folder("refinement_failures_test");
-    }
 }

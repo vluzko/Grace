@@ -6,23 +6,14 @@ use type_checking::types::Type;
 #[allow(unused)]
 pub(crate) mod strategies {
     use super::*;
-    use proptest::prelude::*;
     use proptest::collection;
+    use proptest::prelude::*;
     extern crate rand;
     use rand::Rng;
 
-    use proptest::string::{
-        string_regex,
-        RegexGeneratorStrategy
-    };
-    use proptest::strategy::{
-        Map,
-        Flatten,
-        ValueTree
-    };
-    use proptest::arbitrary::{
-        StrategyFor
-    };
+    use proptest::arbitrary::StrategyFor;
+    use proptest::strategy::{Flatten, Map, ValueTree};
+    use proptest::string::{string_regex, RegexGeneratorStrategy};
 
     /// Generate a random binary operator.
     fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
@@ -67,26 +58,38 @@ pub(crate) mod strategies {
     }
 
     fn valid_ident_expr_strat(in_scope: &'static Vec<String>) -> impl Strategy<Value = Expr> {
-        return (0..in_scope.len(), Just(in_scope)).prop_map(|(x, y)| {
-            Expr::IdentifierExpr(Identifier::from(y[x].clone()))
-        });
+        return (0..in_scope.len(), Just(in_scope))
+            .prop_map(|(x, y)| Expr::IdentifierExpr(Identifier::from(y[x].clone())));
     }
 
     /// Generate a recursive expression.
     fn complex_expression_strat() -> impl Strategy<Value = Expr> {
         let leaf = literal_strategy();
         // Minimum 1 level deep, aim for 6 levels deep, usually each level contains 2 branches.
-        leaf.prop_recursive(1, 3, 2, |inner| prop_oneof![
-            (inner.clone(), inner.clone(), binary_operator_strat()).prop_map(
-                |(left, right, operator)| Expr::BinaryExpr{operator, left: wrap(left), right: wrap(right)}
-            ),
-            (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
-                |(left, right, operator)| Expr::ComparisonExpr{operator, left: wrap(left), right: wrap(right)}
-            ),
-            (inner.clone(), unary_operator_strat()).prop_map(
-                |(operand, operator)| Expr::UnaryExpr{operator, operand: wrap(operand)}
-            )
-        ])
+        leaf.prop_recursive(1, 3, 2, |inner| {
+            prop_oneof![
+                (inner.clone(), inner.clone(), binary_operator_strat()).prop_map(
+                    |(left, right, operator)| Expr::BinaryExpr {
+                        operator,
+                        left: wrap(left),
+                        right: wrap(right)
+                    }
+                ),
+                (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
+                    |(left, right, operator)| Expr::ComparisonExpr {
+                        operator,
+                        left: wrap(left),
+                        right: wrap(right)
+                    }
+                ),
+                (inner.clone(), unary_operator_strat()).prop_map(|(operand, operator)| {
+                    Expr::UnaryExpr {
+                        operator,
+                        operand: wrap(operand),
+                    }
+                })
+            ]
+        })
     }
 
     /// Generate a random literal expression.
@@ -125,11 +128,17 @@ pub(crate) mod strategies {
     }
 
     fn string_strat() -> BoxedStrategy<Expr> {
-        return Strategy::boxed(string_regex(r#"[[ !#-\[\]-~]]*"#).unwrap().prop_map(|x| Expr::String(x)));
+        return Strategy::boxed(
+            string_regex(r#"[[ !#-\[\]-~]]*"#)
+                .unwrap()
+                .prop_map(|x| Expr::String(x)),
+        );
     }
 
     fn identifier_strategy() -> impl Strategy<Value = Identifier> {
-        return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*").unwrap().prop_map(|x| Identifier::from(x));
+        return string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*")
+            .unwrap()
+            .prop_map(|x| Identifier::from(x));
     }
 
     /// Generate a random expression.
@@ -148,53 +157,64 @@ pub(crate) mod strategies {
     //     panic!()
     // }
 
-    fn chain_ident(current: impl Strategy<Value = Vec<Identifier>>) -> impl Strategy<Value = Vec<Identifier>>{
-        return (current, identifier_strategy()).prop_filter_map("Non unique identifier", |(mut x, y)| match x.contains(&y) {
-            true => None,
-            false => {
-                x.push(y);
-                Some(x)
-            }
-        });
-    }
-
-    fn chain_stmt(current: impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)>) -> impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)> {
-        // Choose a new identifier
-        return (current, identifier_strategy()).prop_filter_map("Non unique identifier", |((mut stmts, mut idents), y)|
-            match idents.contains(&y) {
+    fn chain_ident(
+        current: impl Strategy<Value = Vec<Identifier>>,
+    ) -> impl Strategy<Value = Vec<Identifier>> {
+        return (current, identifier_strategy()).prop_filter_map(
+            "Non unique identifier",
+            |(mut x, y)| match x.contains(&y) {
                 true => None,
                 false => {
-                    idents.push(y);
-                    Some((stmts, idents))
+                    x.push(y);
+                    Some(x)
                 }
-            }
-        )
-        // Create a new statement.
-        .prop_flat_map(|(stmts, new_idents)| {
-            // let n = new_idents.last().unwrap();
-            let s = stmt_strategy(new_idents.clone());
-            s.prop_map(move |s| {
-                let mut new_stmts = stmts.clone();
-                new_stmts.push(s);
-                (new_stmts, new_idents.clone())
-            })
-        });
+            },
+        );
+    }
+
+    fn chain_stmt(
+        current: impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)>,
+    ) -> impl Strategy<Value = (Vec<Stmt>, Vec<Identifier>)> {
+        // Choose a new identifier
+        return (current, identifier_strategy())
+            .prop_filter_map(
+                "Non unique identifier",
+                |((mut stmts, mut idents), y)| match idents.contains(&y) {
+                    true => None,
+                    false => {
+                        idents.push(y);
+                        Some((stmts, idents))
+                    }
+                },
+            )
+            // Create a new statement.
+            .prop_flat_map(|(stmts, new_idents)| {
+                // let n = new_idents.last().unwrap();
+                let s = stmt_strategy(new_idents.clone());
+                s.prop_map(move |s| {
+                    let mut new_stmts = stmts.clone();
+                    new_stmts.push(s);
+                    (new_stmts, new_idents.clone())
+                })
+            });
     }
 
     fn let_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
         let n = used.last().unwrap().clone();
-        return expr_strategy().prop_map(move |v|
-            Stmt::LetStmt{name: n.clone(), expression: Node::from(v), type_annotation: None},
-        );
+        return expr_strategy().prop_map(move |v| Stmt::LetStmt {
+            name: n.clone(),
+            expression: Node::from(v),
+            type_annotation: None,
+        });
     }
 
     fn assignment_strategy(used: Vec<Identifier>, i: usize) -> impl Strategy<Value = Stmt> {
         let n = used[i].clone();
-        return expr_strategy().prop_map(move |v|
-            Stmt::AssignmentStmt{name: n.clone(), expression: Node::from(v)},
-        );
+        return expr_strategy().prop_map(move |v| Stmt::AssignmentStmt {
+            name: n.clone(),
+            expression: Node::from(v),
+        });
     }
-
 
     pub fn stmt_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
         let other = used.clone();
@@ -227,32 +247,46 @@ pub(crate) mod strategies {
             let mut rng = rand::thread_rng();
             let post_space: usize = rng.gen_range(0..10);
             return match self {
-                Expr::BinaryExpr{ref operator, ref left, ref right} => format!(
-                    "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
+                Expr::BinaryExpr {
+                    ref operator,
+                    ref left,
+                    ref right,
+                } => format!(
+                    "{}{}{}",
+                    left.data.inverse_parse(),
+                    operator.to_string(),
+                    right.data.inverse_parse()
                 ),
-                Expr::ComparisonExpr{ref operator, ref left, ref right} => format!(
-                    "{}{}{}", left.data.inverse_parse(), operator.to_string(), right.data.inverse_parse()
+                Expr::ComparisonExpr {
+                    ref operator,
+                    ref left,
+                    ref right,
+                } => format!(
+                    "{}{}{}",
+                    left.data.inverse_parse(),
+                    operator.to_string(),
+                    right.data.inverse_parse()
                 ),
-                Expr::UnaryExpr{ref operator, ref operand} => {
-                    match (operator, &operand.data) {
-                        (UnaryOperator::Negative, &Expr::Float(_)) | (UnaryOperator::Negative, &Expr::Int(_))=> format!("{} {}", 
-                            operator.to_string(), operand.data.inverse_parse()
-                        ),
-                        _ => format!("{}{}", operator.to_string(), operand.data.inverse_parse())
+                Expr::UnaryExpr {
+                    ref operator,
+                    ref operand,
+                } => match (operator, &operand.data) {
+                    (UnaryOperator::Negative, &Expr::Float(_))
+                    | (UnaryOperator::Negative, &Expr::Int(_)) => {
+                        format!("{} {}", operator.to_string(), operand.data.inverse_parse())
                     }
-                    
-                }
+                    _ => format!("{}{}", operator.to_string(), operand.data.inverse_parse()),
+                },
                 Expr::String(v) => format!("\"{}\"{}", v, " ".repeat(post_space)),
                 Expr::Int(v) | Expr::Float(v) => format!("{}{}", v, " ".repeat(post_space)),
                 // Yes the code is exactly the same, but the type of `v` is different.
                 Expr::Bool(v) => format!("{}{}", v, " ".repeat(post_space)),
                 Expr::IdentifierExpr(v) => v.name.clone(),
-                x => panic!("{:?}", x)
+                x => panic!("{:?}", x),
             };
         }
     }
 
-    
     pub(crate) mod fixed_types {
         use super::*;
         /// Generate an expression of a given type.
@@ -262,9 +296,8 @@ pub(crate) mod strategies {
                 Type::f64 => float_strat(),
                 Type::boolean => bool_strat(),
                 Type::string => string_strat(),
-                _ => panic!()
+                _ => panic!(),
             };
         }
     }
-
 }

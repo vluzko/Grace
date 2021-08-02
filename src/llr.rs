@@ -149,8 +149,8 @@ pub fn module_to_llr(
     for import in &module.data.imports {
         let typing_info = context.get_node_type(import.id);
         for value in &import.values {
-            //get params and return type
-            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value) {
+            // TODO: Error handling: This shouldn't unwrap
+            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value).unwrap() {
                 // convert everything to WASMTypes
                 Type::Function(ref args, ref return_type) => {
                     let wasm_args = args

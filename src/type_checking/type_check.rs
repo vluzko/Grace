@@ -354,7 +354,10 @@ impl GetContext for Node<Expr> {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
                 let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
                 assert_eq!(left_t, right_t);
-                Ok((right_c, Type::boolean))
+                match left_t == right_t {
+                    true => Ok((right_c, Type::boolean)),
+                    false => Err(GraceError::TypeError{msg: "Comparison expr has mismatched types".to_string()})
+                }
             }
             // TODO: Type checking
             Expr::BinaryExpr {
@@ -477,7 +480,7 @@ impl GetContext for Node<Expr> {
             }
             Expr::ModuleAccess(ref id, ref mut names) => {
                 let module_type = context.get_node_type(*id);
-                let t = module_type.resolve_nested_record(&names[1..].to_vec());
+                let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
                 context.add_type(self.id, t.clone());
                 Ok((context, t))
             }

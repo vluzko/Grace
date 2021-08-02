@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use expression::*;
+use grace_error::GraceError;
 use general_utils;
 
 /// A Grace type
@@ -262,7 +263,7 @@ impl Type {
         };
     }
 
-    pub fn resolve_attribute(&self, attribute: &Identifier) -> Type {
+    pub fn resolve_attribute(&self, attribute: &Identifier) -> Result<Type, GraceError> {
         return match self {
             Type::Record(_, attributes) | Type::Module(_, attributes) => {
                 let mut t = None;
@@ -273,11 +274,11 @@ impl Type {
                     }
                 }
                 match t {
-                    Some(attr_type) => attr_type,
+                    Some(attr_type) => Ok(attr_type),
                     None => panic!("Self: {:?}, attribute: {:?}", self, attribute),
                 }
             }
-            _ => panic!("The provided type doesn't have attributes."),
+            _ => Err(GraceError::TypeError{msg: "Tried to access nonexistent attribute".to_string()}),
         };
     }
 
@@ -314,12 +315,12 @@ impl Type {
         return rec;
     }
 
-    pub fn resolve_nested_record(&self, idents: &Vec<Identifier>) -> Type {
+    pub fn resolve_nested_record(&self, idents: &Vec<Identifier>) -> Result<Type, GraceError> {
         let mut t = self.clone();
         for ident in idents {
-            t = t.resolve_attribute(ident);
+            t = t.resolve_attribute(ident)?;
         }
-        return t.clone();
+        return Ok(t.clone());
     }
 
     pub fn resolve_slice(&self, slices: &Vec<(Option<Type>, Option<Type>, Option<Type>)>) -> Type {

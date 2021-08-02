@@ -486,35 +486,32 @@ impl GetContext for Node<Expr> {
             }
             Expr::Index { ref mut base, .. } => {
                 let (_new_c, _base_t) = base.scopes_and_types(parent_id, context)?;
-                panic!()
+                panic!("Not implemented")
             }
             Expr::IdentifierExpr(ref mut name) => {
-                let t = match context.safe_get_type(self.scope, name) {
-                    Some(t2) => t2,
-                    None => context.get_type(self.scope, name),
-                };
-                context.add_type(self.id, t.clone());
-                Ok((context, t))
+                match context.safe_get_type(self.scope, name) {
+                    Some(t) => {
+                        context.add_type(self.id, t.clone());
+                        Ok((context, t))
+                    },
+                    None => Err(GraceError::TypeError{msg: "Failed to locate identifier in scope".to_string()})
+                }
             }
             Expr::Int(_) => {
-                // let t = Numeric();
                 context.add_type(self.id, Type::i32);
                 Ok((context, Type::i32))
             }
             Expr::Float(_) => {
-                // let t = FloatingPoint();
                 context.add_type(self.id, Type::f32);
                 Ok((context, Type::f32))
             }
             Expr::String(_) => {
-                let t = Type::string;
-                context.add_type(self.id, t.clone());
-                Ok((context, t))
+                context.add_type(self.id, Type::string);
+                Ok((context, Type::string))
             }
             Expr::Bool(_) => {
-                let t = Type::boolean;
-                context.add_type(self.id, t.clone());
-                Ok((context, t))
+                context.add_type(self.id, Type::boolean);
+                Ok((context, Type::boolean))
             }
             Expr::VecLiteral(ref mut exprs) => {
                 let element_checker =

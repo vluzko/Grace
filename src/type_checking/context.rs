@@ -424,7 +424,7 @@ impl Context {
         method_name: &Identifier,
         implementing_type: &Type,
         arg_types: Vec<&Type>,
-    ) -> Type {
+    ) -> Result<Type, GraceError> {
         // println!("Trait implementations: {:?}", self.trait_implementations);
         let base_t = match implementing_type {
             Type::Refinement(t, _) => t,
@@ -434,12 +434,11 @@ impl Context {
             .trait_implementations
             .get(&(trait_name.clone(), base_t.clone()))
         {
-            Some(x) => x,
-            None => panic!(
-                "TYPE ERROR: No trait implementation found for trait {} and type {:?}",
-                trait_name, implementing_type
+            Some(x) => Ok(x),
+            None => Err(GraceError::TypeError{msg:format!("No trait implementation found for trait {} and type {:?}",
+                trait_name, implementing_type)}
             ),
-        };
+        }?;
         let method_type = func_types.get(method_name).unwrap();
         return match method_type {
             Type::Function(ref args, ref return_type) => {
@@ -448,9 +447,9 @@ impl Context {
                     assert_eq!(&expected_t, actual_t);
                 }
 
-                *return_type.clone()
+                Ok(*return_type.clone())
             },
-            x => panic!("TYPE ERROR: Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)
+            x => Err(GraceError::TypeError{msg:format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)})
         };
     }
 

@@ -222,6 +222,26 @@ impl UnaryOperator {
             panic!("Cannot cast from {:?} to {:?}", from, to);
         }
     }
+
+    pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
+        let (x,y) = match self {
+            UnaryOperator::BitNot => ("BitNot", "bitnot"),
+            UnaryOperator::Convert(type_1, type_2) => panic!("Convert requires generic traits to handle 'convert to what'"),
+            UnaryOperator::Negative => ("Negative", "negative"),
+            UnaryOperator::Not => ("Not", "not"),
+            UnaryOperator::Positive => ("Positive", "positive"),
+            UnaryOperator::ToBool => ("ToBool", "tobool"),
+            UnaryOperator::ToF32 => ("ToF32", "tof32"),
+            UnaryOperator::ToF64 => ("ToF64", "tof64"),
+            UnaryOperator::ToI32 => ("ToI32", "toi32"),
+            UnaryOperator::ToI64 => ("ToI64", "toi64"),
+            UnaryOperator::ToUi32 => ("ToUi32", "toui32"),
+            UnaryOperator::ToUi64 => ("ToUi64", "toui64"),
+            x => panic!("get_builtin_trait not implemented for {:?}", x),
+        };
+
+        return (Identifier::from(x), Identifier::from(y));
+    }
 }
 
 impl<'a> From<&'a Identifier> for Type {

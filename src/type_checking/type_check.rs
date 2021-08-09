@@ -376,14 +376,33 @@ impl GetContext for Node<Expr> {
                         &left_t,
                         vec![&left_t, &right_t],
                     ),
-                    false => Type::Gradual(general_utils::get_next_grad()),
-                };
+                    false => Ok(Type::Gradual(general_utils::get_next_grad())),
+                }?;
 
                 Ok((right_c, return_type))
             }
+            // get the type of the operand
+            // get the trait of the operator (by calling get_builtin_trait)
+            // check that the type of the operand implements the trait of the operator
             Expr::UnaryExpr {
-                ref mut operand, ..
-            } => operand.scopes_and_types(parent_id, context),
+                ref mut operand,
+                ref operator
+
+            } => {
+                let (operand_c, operand_t) = operand.scopes_and_types(parent_id, context)?;
+                let (trait_name, method_name) = operator.get_builtin_trait();
+                let return_type = match !operand_t.is_gradual(){
+                    true => operand_c.check_trait_method_call(
+                        &trait_name,
+                        &method_name,
+                        &operand_t,
+                        vec![&operand_t],
+                    ),
+                    false => Ok(Type::Gradual(general_utils::get_next_grad())),
+                }?;
+                Ok((operand_c, return_type))
+            }
+
 
             // TODO: Type checking
             Expr::FunctionCall {

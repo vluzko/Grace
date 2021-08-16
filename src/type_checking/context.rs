@@ -23,6 +23,21 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
     };
 }
 
+/// Generate a single unary trait.
+fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
+    return Trait {
+        name: trait_name,
+        functions: hashmap! {
+            method_name => Type::Function(
+                vec!(
+                    (Identifier::from("operand"), Type::self_type(Box::new(Type::Undetermined)))
+                ),
+                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+            )
+        }
+    }
+}
+
 fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
     return vec![
         ("Add", "add"),
@@ -42,6 +57,15 @@ fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
         .collect();
 }
 
+fn builtin_unary() -> Vec<(Identifier, Identifier)> {
+    return vec!(
+        ("Not", "not"),
+    )
+    .into_iter()
+    .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+    .collect();
+}
+
 /// Generate all the builtin binary traits.
 fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
     let mut traits = HashMap::new();
@@ -55,6 +79,15 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
         traits.insert(tn, trt);
     }
     return traits;
+}
+
+fn builtin_unary_traits() -> HashMap<Identifier, Trait> {
+    let mut map = HashMap::new();
+    for (tn, mn) in builtin_unary().into_iter() {
+        let tr = unary_trait(tn.clone(), mn);
+        map.insert(Identifier::from(tn), tr);
+    }
+    return map;
 }
 
 /// Generate all the builtin trait implementations
@@ -86,6 +119,20 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
             impls.insert((tn.clone(), t), func_types);
         }
     }
+
+    for (tn, mn) in builtin_unary().into_iter() {
+        for t in vec![Type::boolean] {
+            let func_t = Type::Function(
+                vec![
+                    (Identifier::from("operand"), t.clone()),
+                ],
+                Box::new(t.clone()),
+            );
+            let func_types = hashmap! {mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+
     return impls;
 }
 

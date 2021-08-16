@@ -780,7 +780,7 @@ mod type_tests {
         #[test]
         fn type_check_unary_exprs() {
             let operand = Node::from(true);
-            let operators = vec!(UnaryOperator::Not, UnaryOperator::ToBool);
+            let operators = vec!(UnaryOperator::Not);
             for op in operators {
                 let expr = Node::from(Expr::UnaryExpr{
                     operator:op,

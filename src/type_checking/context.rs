@@ -411,10 +411,6 @@ impl Context {
                 } else {
                     return Err(GraceError::TypeError{msg: format!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", 
                     base_type, name)});
-                    // panic!(
-                    //     "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
-                    //     base_type, name
-                    // );
                 }
             }
         };

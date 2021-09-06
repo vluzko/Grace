@@ -735,19 +735,19 @@ mod type_tests {
             let name = Identifier::from(struct_name);
             let fields = struct_t.0.iter().map(|x| (x.clone(), struct_t.1.get(x).unwrap().clone())).collect();
             // Create struct declaration
-            let struct_dec = Stmt::StructDec{
+            let struct_dec = Node::from(Stmt::StructDec{
                 name: name.clone(),
                 fields: fields
-            };
-
-            // Add it to the context
-            let top_scope = context.get_mut_scope(context.root_id);
-
-            top_scope.append_declaration(&name, &wrap(struct_dec));
+            });
 
             // Add type to context
             let record_type = Type::Record(struct_t.0, struct_t.1);
-            context.define_type(name, record_type);
+            context.define_type(name.clone(), record_type.clone());
+            context.add_type(struct_dec.id, record_type);
+
+            // Add it to the context
+            let top_scope = context.get_mut_scope(context.root_id);
+            top_scope.append_declaration(&name, &Box::new(struct_dec));
 
             return context;
         }
@@ -858,19 +858,17 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            // let attribute_type = Type::Record(vec!(Identifier::from("a")), attr_map);
-            // let named_type = Type::Named(Identifier::from("A"));
-
             let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map));
 
-            let base = Node::from(0);
+            let base = Node::from(Expr::StructLiteral{
+                base: Box::new(Node::from("A")),
+                fields: vec!(Node::from(4))
+            });
             let expr = Node::from(Expr::AttributeAccess {
                 base: Box::new(base.clone()),
                 attribute: Identifier::from("a")
             });
-            // println!("{:?}", new_context);
             check_expr(new_context, expr, Type::i32);
-            // panic!("To implement: Tests of attribute access type checking")
         }
 
         #[test]

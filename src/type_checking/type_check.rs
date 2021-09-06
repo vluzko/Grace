@@ -729,6 +729,29 @@ mod type_tests {
             return (context, null_function.id);
         }
 
+        fn add_struct_to_context(mut context: Context, struct_name: &str,
+            struct_t: (Vec<Identifier>, BTreeMap<Identifier, Type>)
+        ) -> Context {
+            let name = Identifier::from(struct_name);
+            let fields = struct_t.0.iter().map(|x| (x.clone(), struct_t.1.get(x).unwrap().clone())).collect();
+            // Create struct declaration
+            let struct_dec = Stmt::StructDec{
+                name: name.clone(),
+                fields: fields
+            };
+
+            // Add it to the context
+            let top_scope = context.get_mut_scope(context.root_id);
+
+            top_scope.append_declaration(&name, &wrap(struct_dec));
+
+            // Add type to context
+            let record_type = Type::Record(struct_t.0, struct_t.1);
+            context.define_type(name, record_type);
+
+            return context;
+        }
+
         #[test]
         fn test_literals() {
             simple_check_expr(Node::<Expr>::from(5), Type::i32);
@@ -831,7 +854,23 @@ mod type_tests {
 
         #[test]
         fn type_check_attribute_access() {
-            panic!("To implement: Tests of attribute access type checking")
+            let mut context = Context::builtin();
+            let mut attr_map = BTreeMap::new();
+            attr_map.insert(Identifier::from("a"), Type::i32);
+
+            // let attribute_type = Type::Record(vec!(Identifier::from("a")), attr_map);
+            // let named_type = Type::Named(Identifier::from("A"));
+
+            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map));
+
+            let base = Node::from(0);
+            let expr = Node::from(Expr::AttributeAccess {
+                base: Box::new(base.clone()),
+                attribute: Identifier::from("a")
+            });
+            // println!("{:?}", new_context);
+            check_expr(new_context, expr, Type::i32);
+            // panic!("To implement: Tests of attribute access type checking")
         }
 
         #[test]

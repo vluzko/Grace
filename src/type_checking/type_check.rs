@@ -467,26 +467,28 @@ impl GetContext for Node<Expr> {
             } => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
                 let element_checker =
-                    |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
-                        match aggregate {
-                            Ok((new_c, mut vec_t)) => {
-                                let res = expr.scopes_and_types(parent_id, new_c);
-                                match res {
-                                    Ok((new_c, t)) => {
-                                        vec_t.push(t);
-                                        Ok((new_c, vec_t))
-                                    }
-                                    Err(x) => Err(x),
-                                }
-                            }
-                            x => x,
+                    |aggregate: Result<(Context, Vec<Type>), GraceError>, (expr, expected_type): (&mut Node<Expr>, &Type)| {
+                        let (new_c, mut vec_t) = aggregate?;
+                        let (mut expr_c, t) = expr.scopes_and_types(parent_id, new_c)?;
+
+                        if expr_c.check_subtype(&expr, &t, expected_type) {
+                            vec_t.push(t);
+                            Ok((expr_c, vec_t))
+                        } else {
+                            // TODO: Error messages: More info
+                            Err(GraceError::TypeError{msg: format!("Wrong type for attribute.")})
                         }
                     };
                 let init = Ok((new_c, vec![]));
-                let res = fields.iter_mut().fold(init, element_checker);
-                match res {
-                    Ok((new_c, _)) => Ok((new_c, base_t.clone())),
-                    Err(x) => Err(x),
+
+                match base_t {
+                    Type::Record(_, ref field_types) => {
+                        let zipped = fields.iter_mut().zip(field_types.values());
+                        let (new_c, types) = zipped.fold(init, element_checker)?;
+                        // TODO: Type checking: Decide if we should return base_t or the true type
+                        Ok((new_c, base_t.clone()))
+                    },
+                    x => Err(GraceError::TypeError{msg: format!("Expected a record type, got {:?}", x)})
                 }
             }
             Expr::AttributeAccess {

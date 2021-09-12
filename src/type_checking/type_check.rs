@@ -849,7 +849,36 @@ mod type_tests {
 
         #[test]
         fn type_check_struct_literals() {
-            panic!("To implement: Tests of struct literal type checking")
+            let mut context = Context::builtin();
+            let mut attr_map = BTreeMap::new();
+            attr_map.insert(Identifier::from("a"), Type::i32);
+
+            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map.clone()));
+
+            let expr = Node::from(Expr::StructLiteral{
+                base: Box::new(Node::from("A")),
+                fields: vec!(Node::from(4))
+            });
+
+            let record_t = Type::Record(vec!(Identifier::from("a")), attr_map);
+
+            check_expr(new_context, expr, record_t);
+        }
+
+        #[test]
+        fn type_check_struct_literal_fail() {
+            let mut context = Context::builtin();
+            let mut attr_map = BTreeMap::new();
+            attr_map.insert(Identifier::from("a"), Type::i32);
+
+            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map));
+
+            let expr = Node::from(Expr::StructLiteral{
+                base: Box::new(Node::from("A")),
+                fields: vec!(Node::from(true))
+            });
+
+            fail_check_expr(new_context, expr);
         }
 
         #[test]

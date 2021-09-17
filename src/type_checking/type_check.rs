@@ -754,6 +754,18 @@ mod type_tests {
             return context;
         }
 
+        fn add_identifier_to_context(mut context: Context, ident_name: &str, ident_value: Expr) -> Context {
+            let mut stmt = Node::from(Stmt::LetStmt{
+                name: Identifier::from(ident_name),
+                type_annotation: None,
+                expression: Node::from(ident_value)
+            });
+            let (mut new_c, _) = stmt.scopes_and_types(0, context).unwrap();
+            new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
+
+            return new_c;
+        }
+
         #[test]
         fn test_literals() {
             simple_check_expr(Node::<Expr>::from(5), Type::i32);
@@ -931,7 +943,10 @@ mod type_tests {
 
         #[test]
         fn type_check_identifier() {
-            panic!("To implement: Tests of identifier expression type checking")
+            let init = Context::builtin();
+            let context = add_identifier_to_context(init, "a", Expr::from(0));
+            let expr = Node::from("a");
+            check_expr(context, expr, Type::i32);
         }
     }
 }

@@ -346,19 +346,19 @@ impl GetContext for Node<Expr> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         self.scope = parent_id;
         let final_res: TypeCheckRes = match self.data {
-            Expr::ComparisonExpr {
-                ref mut left,
-                ref mut right,
-                ..
-            } => {
-                let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
-                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
-                assert_eq!(left_t, right_t);
-                match left_t == right_t {
-                    true => Ok((right_c, Type::boolean)),
-                    false => Err(GraceError::TypeError{msg: "Comparison expr has mismatched types".to_string()})
-                }
-            }
+            // Expr::ComparisonExpr {
+            //     ref mut left,
+            //     ref mut right,
+            //     ..
+            // } => {
+            //     let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
+            //     let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
+            //     assert_eq!(left_t, right_t);
+            //     match left_t == right_t {
+            //         true => Ok((right_c, Type::boolean)),
+            //         false => Err(GraceError::TypeError{msg: "Comparison expr has mismatched types".to_string()})
+            //     }
+            // }
             // TODO: Type checking
             Expr::BinaryExpr {
                 ref operator,
@@ -802,10 +802,10 @@ mod type_tests {
         #[test]
         fn type_check_comparison_exprs() {
             let operand = Node::from(0);
-            let comparisons = vec!(ComparisonOperator::Equal, ComparisonOperator::Unequal);
+            let comparisons = vec!(BinaryOperator::Equal, BinaryOperator::Unequal);
 
             for comp in comparisons {
-                let expr = Node::from(Expr::ComparisonExpr{
+                let expr = Node::from(Expr::BinaryExpr{
                     operator: comp,
                     left: Box::new(operand.clone()),
                     right: Box::new(operand.clone())
@@ -844,10 +844,10 @@ mod type_tests {
         #[test]
         fn type_check_binary_exprs() {
             let operand = Node::from(0);
-            let comparisons = vec!(ComparisonOperator::Equal, ComparisonOperator::Unequal);
+            let comparisons = vec!(BinaryOperator::Equal, BinaryOperator::Unequal);
 
             for comp in comparisons {
-                let expr = Node::from(Expr::ComparisonExpr{
+                let expr = Node::from(Expr::BinaryExpr{
                     operator: comp,
                     left: Box::new(operand.clone()),
                     right: Box::new(operand.clone())

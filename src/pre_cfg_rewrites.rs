@@ -169,19 +169,19 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
 impl TypeRewritable<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self, context: &mut Context) -> Node<Expr> {
         let new_expr = match self.data {
-            Expr::ComparisonExpr {
-                left,
-                right,
-                operator,
-            } => {
-                let left = Box::new(left.type_based_rewrite(context));
-                let right = Box::new(right.type_based_rewrite(context));
-                Expr::ComparisonExpr {
-                    left,
-                    right,
-                    operator,
-                }
-            }
+            // Expr::ComparisonExpr {
+            //     left,
+            //     right,
+            //     operator,
+            // } => {
+            //     let left = Box::new(left.type_based_rewrite(context));
+            //     let right = Box::new(right.type_based_rewrite(context));
+            //     Expr::ComparisonExpr {
+            //         left,
+            //         right,
+            //         operator,
+            //     }
+            // }
             Expr::BinaryExpr {
                 operator,
                 left,

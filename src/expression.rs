@@ -120,11 +120,6 @@ pub enum Expr {
         value: Box<Node<Expr>>,
         cases: Vec<(Node<Expr>, Node<Expr>)>,
     },
-    ComparisonExpr {
-        operator: ComparisonOperator,
-        left: Box<Node<Expr>>,
-        right: Box<Node<Expr>>,
-    },
     BinaryExpr {
         operator: BinaryOperator,
         left: Box<Node<Expr>>,
@@ -229,6 +224,12 @@ pub enum BinaryOperator {
     BitShiftL,
     BitShiftR,
     Exponent,
+    Greater,
+    Less,
+    Equal,
+    Unequal,
+    GreaterEqual,
+    LessEqual,
 }
 
 /// Any unary operator.
@@ -426,28 +427,34 @@ pub mod rust_trait_impls {
                         BinaryOperator::BitShiftL => "<<",
                         BinaryOperator::BitShiftR => ">>",
                         BinaryOperator::Exponent => "**",
+                        BinaryOperator::Greater => ">",
+                        BinaryOperator::Less => "<",
+                        BinaryOperator::Equal => "==",
+                        BinaryOperator::Unequal => "!=",
+                        BinaryOperator::GreaterEqual => ">=",
+                        BinaryOperator::LessEqual => "<=",
                     }
                 )
             }
         }
 
-        /// Display *just* the operator, without accompanying metadata.
-        impl Display for ComparisonOperator {
-            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-                write!(
-                    f,
-                    "{}",
-                    match self {
-                        ComparisonOperator::Greater => ">",
-                        ComparisonOperator::Less => "<",
-                        ComparisonOperator::Equal => "==",
-                        ComparisonOperator::Unequal => "!=",
-                        ComparisonOperator::GreaterEqual => ">=",
-                        ComparisonOperator::LessEqual => "<=",
-                    }
-                )
+/// Display *just* the operator, without accompanying metadata.
+impl Display for ComparisonOperator {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ComparisonOperator::Greater => ">",
+                ComparisonOperator::Less => "<",
+                ComparisonOperator::Equal => "==",
+                ComparisonOperator::Unequal => "!=",
+                ComparisonOperator::GreaterEqual => ">=",
+                ComparisonOperator::LessEqual => "<=",
             }
-        }
+        )
+    }
+}
 
         /// Display *just* the operator, without accompanying metadata.
         impl Display for UnaryOperator {
@@ -664,6 +671,12 @@ pub mod rust_trait_impls {
                     "<<" => BinaryOperator::BitShiftL,
                     ">>" => BinaryOperator::BitShiftR,
                     "**" => BinaryOperator::Exponent,
+                    "==" => BinaryOperator::Equal,
+                    ">=" => BinaryOperator::GreaterEqual,
+                    "<=" => BinaryOperator::LessEqual,
+                    ">" => BinaryOperator::Greater,
+                    "<" => BinaryOperator::Less,
+                    "!=" => BinaryOperator::Unequal,
                     _ => {
                         // TODO: Log
                         println!("Bad input to BinaryOperator::from<&str>: {}", input);
@@ -689,6 +702,12 @@ pub mod rust_trait_impls {
                     b"<<" => BinaryOperator::BitShiftL,
                     b">>" => BinaryOperator::BitShiftR,
                     b"**" => BinaryOperator::Exponent,
+                    b"==" => BinaryOperator::Equal,
+                    b">=" => BinaryOperator::GreaterEqual,
+                    b"<=" => BinaryOperator::LessEqual,
+                    b">" => BinaryOperator::Greater,
+                    b"<" => BinaryOperator::Less,
+                    b"!=" => BinaryOperator::Unequal,
                     _ => {
                         panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
                     }

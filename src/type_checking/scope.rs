@@ -205,6 +205,8 @@ impl BinaryOperator {
             BinaryOperator::Div => ("Div", "div"),
             BinaryOperator::And => ("And", "and"),
             BinaryOperator::Or => ("Or", "or"),
+            BinaryOperator::Equal => ("Eq", "eq"),
+            BinaryOperator::Unequal => ("Neq", "neq"),
             x => panic!("get_builtin_trait not implemented for {:?}", x),
         };
 

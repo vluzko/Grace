@@ -10,7 +10,7 @@ use petgraph::{visit::EdgeRef, Outgoing};
 
 use cfg::{Cfg, CfgStmt, CfgVertex};
 use expression::{
-    BinaryOperator, Block, ComparisonOperator, Expr, Identifier, Module, Node, Stmt, UnaryOperator,
+    BinaryOperator, Block, Expr, Identifier, Module, Node, Stmt, UnaryOperator,
 };
 use general_utils;
 use type_checking::context::Context;
@@ -480,25 +480,6 @@ impl ToLLR for Node<Expr> {
                 ));
                 llr
             }
-            Expr::ComparisonExpr {
-                ref left,
-                ref right,
-                ref operator,
-            } => {
-                let mut llr = left.to_llr(context);
-                llr.append(&mut right.to_llr(context));
-                let left_id_type = context.get_node_type(left.id);
-                let left_wasm_type = WASMType::from(&left_id_type);
-                let right_id_type = context.get_node_type(right.id);
-                let right_wasm_type = WASMType::from(&right_id_type);
-                assert_eq!(left_wasm_type, right_wasm_type);
-                // Convert operator to a wasm operator
-                llr.push(WASM::Operation(
-                    WASMOperator::from(operator),
-                    left_wasm_type,
-                ));
-                llr
-            }
             Expr::FunctionCall {
                 ref function,
                 ref args,
@@ -724,23 +705,29 @@ pub mod rust_trait_impls {
                 BinaryOperator::And => WASMOperator::And,
                 BinaryOperator::Or => WASMOperator::Or,
                 BinaryOperator::Xor => WASMOperator::Xor,
+                BinaryOperator::Equal => WASMOperator::Eq,
+                BinaryOperator::Less => WASMOperator::LtS,
+                BinaryOperator::Greater => WASMOperator::GtS,
+                BinaryOperator::LessEqual => WASMOperator::LeS,
+                BinaryOperator::GreaterEqual => WASMOperator::GeS,
+                BinaryOperator::Unequal => WASMOperator::Ne,
                 x => panic!("WASMOperator not implemented for {:?}", x),
             };
         }
     }
 
-    impl From<&ComparisonOperator> for WASMOperator {
-        fn from(input: &ComparisonOperator) -> Self {
-            return match input {
-                ComparisonOperator::Equal => WASMOperator::Eq,
-                ComparisonOperator::Less => WASMOperator::LtS,
-                ComparisonOperator::Greater => WASMOperator::GtS,
-                ComparisonOperator::LessEqual => WASMOperator::LeS,
-                ComparisonOperator::GreaterEqual => WASMOperator::GeS,
-                ComparisonOperator::Unequal => WASMOperator::Ne,
-            };
-        }
-    }
+    // impl From<&ComparisonOperator> for WASMOperator {
+    //     fn from(input: &ComparisonOperator) -> Self {
+    //         return match input {
+    //             ComparisonOperator::Equal => WASMOperator::Eq,
+    //             ComparisonOperator::Less => WASMOperator::LtS,
+    //             ComparisonOperator::Greater => WASMOperator::GtS,
+    //             ComparisonOperator::LessEqual => WASMOperator::LeS,
+    //             ComparisonOperator::GreaterEqual => WASMOperator::GeS,
+    //             ComparisonOperator::Unequal => WASMOperator::Ne,
+    //         };
+    //     }
+    // }
 
     impl fmt::Display for WASMType {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

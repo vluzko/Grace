@@ -984,11 +984,11 @@ pub mod expr_parsers {
             let map = |x: (ExprU, Option<(PosStr<'a>, ExprU)>)| match x.1 {
                 None => x.0,
                 Some((o, (right, mut u))) => {
-                    let operator = ComparisonOperator::from(o.slice);
+                    let operator = BinaryOperator::from(o.slice);
                     let (left, mut update) = x.0;
                     update.append(&mut u);
                     (
-                        Node::from(Expr::ComparisonExpr {
+                        Node::from(Expr::BinaryExpr {
                             operator,
                             left: Box::new(left),
                             right: Box::new(right),
@@ -1831,8 +1831,8 @@ pub mod expr_parsers {
                 check_data(
                     input,
                     |x| e.expression(x),
-                    Expr::ComparisonExpr {
-                        operator: ComparisonOperator::Less,
+                    Expr::BinaryExpr {
+                        operator: BinaryOperator::Less,
                         left: wrap(Expr::from(0)),
                         right: wrap(Expr::Float("9.".to_string())),
                     },
@@ -2019,17 +2019,17 @@ pub mod expr_parsers {
             let e = ParserContext::empty();
             let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
             let comp_ops = vec![
-                ComparisonOperator::Greater,
-                ComparisonOperator::Less,
-                ComparisonOperator::GreaterEqual,
-                ComparisonOperator::LessEqual,
-                ComparisonOperator::Equal,
-                ComparisonOperator::Unequal,
+                BinaryOperator::Greater,
+                BinaryOperator::Less,
+                BinaryOperator::GreaterEqual,
+                BinaryOperator::LessEqual,
+                BinaryOperator::Equal,
+                BinaryOperator::Unequal,
             ];
             for (comp_str, comp_op) in comp_strs.iter().zip(comp_ops.iter()) {
                 let as_str = format!("true {} false", comp_str);
                 let expr = e.expression(PosStr::new(as_str.as_bytes()));
-                let expected = Node::from(Expr::ComparisonExpr {
+                let expected = Node::from(Expr::BinaryExpr {
                     left: Box::new(Node::from(true)),
                     right: Box::new(Node::from(false)),
                     operator: *comp_op,

@@ -57,6 +57,13 @@ fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
         .collect();
 }
 
+fn builtin_comparison() -> Vec<(Identifier, Identifier)> {
+    return vec![("Eq", "eq"), ("Neq", "neq")]
+        .into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+        .collect();
+}
+
 fn builtin_unary() -> Vec<(Identifier, Identifier)> {
     return vec!(
         ("Not", "not"),
@@ -75,6 +82,11 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
     }
 
     for (tn, mn) in builtin_binary_bool().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
+    }
+
+    for (tn, mn) in builtin_comparison().into_iter() {
         let trt = binary_trait(tn.clone(), mn);
         traits.insert(tn, trt);
     }
@@ -120,6 +132,20 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
         }
     }
 
+    for (tn, mn) in builtin_comparison().into_iter() {
+        for t in vec![Type::boolean, Type::i32, Type::i64, Type::f32, Type::f64] {
+            let func_t = Type::Function(
+                vec![
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone()),
+                ],
+                Box::new(Type::boolean),
+            );
+            let func_types = hashmap! {mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+
     for (tn, mn) in builtin_unary().into_iter() {
         for t in vec![Type::boolean] {
             let func_t = Type::Function(
@@ -132,6 +158,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
             impls.insert((tn.clone(), t), func_types);
         }
     }
+
 
     return impls;
 }

@@ -383,5 +383,21 @@ impl Type {
     }
 }
 
-#[cfg(test)]
-mod tests {}
+
+/// Constructors
+impl Type {
+
+    /// Construct a module type from a type map.
+    pub fn module_from_map(map: BTreeMap<Identifier, Type>) -> Type {
+        let keys = map.keys().cloned().collect();
+        let module_type = Type::Module(
+            keys, map
+        );
+        return module_type;
+    }
+
+    /// Construct an argumentless function type.
+    pub fn func_no_args(return_type: Type) -> Type {
+        return Type::Function(vec!(), Box::new(return_type));
+    }
+}

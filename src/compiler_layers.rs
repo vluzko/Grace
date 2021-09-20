@@ -223,6 +223,7 @@ impl Compilation {
         let module_type = Compilation::get_submodule_type(submodule, &import);
         context.add_type(import.id, module_type);
 
+        // Import struct types from the module
         for (def_name, def_type) in &submodule.context.defined_types {
             let new_type_name = Identifier::from(format!("{}.{}", import.string_ref(), def_name));
             context.define_type(new_type_name, def_type.clone());

@@ -346,20 +346,6 @@ impl GetContext for Node<Expr> {
     fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
         self.scope = parent_id;
         let final_res: TypeCheckRes = match self.data {
-            // Expr::ComparisonExpr {
-            //     ref mut left,
-            //     ref mut right,
-            //     ..
-            // } => {
-            //     let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
-            //     let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
-            //     assert_eq!(left_t, right_t);
-            //     match left_t == right_t {
-            //         true => Ok((right_c, Type::boolean)),
-            //         false => Err(GraceError::TypeError{msg: "Comparison expr has mismatched types".to_string()})
-            //     }
-            // }
-            // TODO: Type checking
             Expr::BinaryExpr {
                 ref operator,
                 ref mut left,
@@ -381,9 +367,6 @@ impl GetContext for Node<Expr> {
 
                 Ok((right_c, return_type))
             }
-            // get the type of the operand
-            // get the trait of the operator (by calling get_builtin_trait)
-            // check that the type of the operand implements the trait of the operator
             Expr::UnaryExpr {
                 ref mut operand,
                 ref operator
@@ -402,9 +385,6 @@ impl GetContext for Node<Expr> {
                 }?;
                 Ok((operand_c, return_type))
             }
-
-
-            // TODO: Type checking
             Expr::FunctionCall {
                 ref mut function,
                 ref mut args,
@@ -460,7 +440,6 @@ impl GetContext for Node<Expr> {
                 }
                 Ok((new_c, ret))
             }
-            // TODO: Type checking
             Expr::StructLiteral {
                 ref mut base,
                 ref mut fields,
@@ -774,7 +753,7 @@ mod type_tests {
         }
 
         #[test]
-        fn test_function_call() {
+        fn type_check_function_call() {
             // Create function type
             let context = Context::builtin();
             let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
@@ -933,7 +912,18 @@ mod type_tests {
 
         #[test]
         fn type_check_module_access() {
-            panic!("To implement: Tests of module access type checking")
+            let mut context = Context::builtin();
+            
+            // Add module type to context
+            let func_type = Type::func_no_args(Type::i32);
+            let type_map = btreemap!{Identifier::from("a") => func_type.clone()};
+            let module_type = Type::module_from_map(type_map);
+            let id = general_utils::get_next_id();
+            context.add_type(id, module_type);
+
+            let module_access = Node::from(Expr::ModuleAccess(id, vec!(Identifier::from("A"), Identifier::from("a"))));
+
+            check_expr(context, module_access, func_type);
         }
 
         #[test]

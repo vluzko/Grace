@@ -9,9 +9,7 @@ use std::fmt;
 use petgraph::{visit::EdgeRef, Outgoing};
 
 use cfg::{Cfg, CfgStmt, CfgVertex};
-use expression::{
-    BinaryOperator, Block, Expr, Identifier, Module, Node, Stmt, UnaryOperator,
-};
+use expression::{BinaryOperator, Block, Expr, Identifier, Module, Node, Stmt, UnaryOperator};
 use general_utils;
 use type_checking::context::Context;
 use type_checking::types::Type;

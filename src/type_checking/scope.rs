@@ -226,9 +226,11 @@ impl UnaryOperator {
     }
 
     pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
-        let (x,y) = match self {
+        let (x, y) = match self {
             UnaryOperator::BitNot => ("BitNot", "bitnot"),
-            UnaryOperator::Convert(type_1, type_2) => panic!("Convert requires generic traits to handle 'convert to what'"),
+            UnaryOperator::Convert(type_1, type_2) => {
+                panic!("Convert requires generic traits to handle 'convert to what'")
+            }
             UnaryOperator::Negative => ("Negative", "negative"),
             UnaryOperator::Not => ("Not", "not"),
             UnaryOperator::Positive => ("Positive", "positive"),

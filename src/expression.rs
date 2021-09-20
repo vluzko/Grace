@@ -438,23 +438,23 @@ pub mod rust_trait_impls {
             }
         }
 
-/// Display *just* the operator, without accompanying metadata.
-impl Display for ComparisonOperator {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ComparisonOperator::Greater => ">",
-                ComparisonOperator::Less => "<",
-                ComparisonOperator::Equal => "==",
-                ComparisonOperator::Unequal => "!=",
-                ComparisonOperator::GreaterEqual => ">=",
-                ComparisonOperator::LessEqual => "<=",
+        /// Display *just* the operator, without accompanying metadata.
+        impl Display for ComparisonOperator {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(
+                    f,
+                    "{}",
+                    match self {
+                        ComparisonOperator::Greater => ">",
+                        ComparisonOperator::Less => "<",
+                        ComparisonOperator::Equal => "==",
+                        ComparisonOperator::Unequal => "!=",
+                        ComparisonOperator::GreaterEqual => ">=",
+                        ComparisonOperator::LessEqual => "<=",
+                    }
+                )
             }
-        )
-    }
-}
+        }
 
         /// Display *just* the operator, without accompanying metadata.
         impl Display for UnaryOperator {

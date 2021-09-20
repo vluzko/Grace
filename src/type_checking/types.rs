@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use expression::*;
-use grace_error::GraceError;
 use general_utils;
+use grace_error::GraceError;
 
 /// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -275,10 +275,20 @@ impl Type {
                 }
                 match t {
                     Some(attr_type) => Ok(attr_type),
-                    None => Err(GraceError::TypeError{msg: format!("Tried to access nonexistent attribute {:?} on type {:?}", attribute, self)})
+                    None => Err(GraceError::TypeError {
+                        msg: format!(
+                            "Tried to access nonexistent attribute {:?} on type {:?}",
+                            attribute, self
+                        ),
+                    }),
                 }
             }
-            _ => Err(GraceError::TypeError{msg: format!("Tried to access attribute {:?} on non-record type {:?}", attribute, self)}),
+            _ => Err(GraceError::TypeError {
+                msg: format!(
+                    "Tried to access attribute {:?} on non-record type {:?}",
+                    attribute, self
+                ),
+            }),
         };
     }
 
@@ -383,21 +393,17 @@ impl Type {
     }
 }
 
-
 /// Constructors
 impl Type {
-
     /// Construct a module type from a type map.
     pub fn module_from_map(map: BTreeMap<Identifier, Type>) -> Type {
         let keys = map.keys().cloned().collect();
-        let module_type = Type::Module(
-            keys, map
-        );
+        let module_type = Type::Module(keys, map);
         return module_type;
     }
 
     /// Construct an argumentless function type.
     pub fn func_no_args(return_type: Type) -> Type {
-        return Type::Function(vec!(), Box::new(return_type));
+        return Type::Function(vec![], Box::new(return_type));
     }
 }

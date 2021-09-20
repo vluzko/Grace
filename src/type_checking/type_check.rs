@@ -369,12 +369,11 @@ impl GetContext for Node<Expr> {
             }
             Expr::UnaryExpr {
                 ref mut operand,
-                ref operator
-
+                ref operator,
             } => {
                 let (operand_c, operand_t) = operand.scopes_and_types(parent_id, context)?;
                 let (trait_name, method_name) = operator.get_builtin_trait();
-                let return_type = match !operand_t.is_gradual(){
+                let return_type = match !operand_t.is_gradual() {
                     true => operand_c.check_trait_method_call(
                         &trait_name,
                         &method_name,
@@ -393,7 +392,9 @@ impl GetContext for Node<Expr> {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
                 let (arg_types, ret) = match wrapped_func {
                     Type::Function(a, b) => Ok((a, *b.clone())),
-                    x => Err(GraceError::TypeError{msg: format!("Somehow got a non-function type {:?}", x)}),
+                    x => Err(GraceError::TypeError {
+                        msg: format!("Somehow got a non-function type {:?}", x),
+                    }),
                 }?;
 
                 for (i, arg) in args.into_iter().enumerate() {
@@ -405,9 +406,11 @@ impl GetContext for Node<Expr> {
 
                     // TODO: Type checking: Pass error
                     match new_c.check_subtype(&arg, &arg_t, &expected_type) {
-                        true => {},
+                        true => {}
                         false => {
-                            return Err(GraceError::TypeError{msg: format!("Argument type mismatch")})
+                            return Err(GraceError::TypeError {
+                                msg: format!("Argument type mismatch"),
+                            })
                         }
                     }
                 }
@@ -417,13 +420,21 @@ impl GetContext for Node<Expr> {
                     new_c = res.0;
                     let kwarg_t = res.1;
 
-                    fn find_kwarg_index(types: &Vec<(Identifier, Type)>, n: &Identifier) -> Result<usize, GraceError>{
+                    fn find_kwarg_index(
+                        types: &Vec<(Identifier, Type)>,
+                        n: &Identifier,
+                    ) -> Result<usize, GraceError> {
                         for (i, (ident, _)) in types.iter().enumerate() {
                             if ident == n {
                                 return Ok(i);
                             }
                         }
-                        return Err(GraceError::TypeError{msg: format!("Invalid kwarg name. Passed {:?}, must be in {:?}", types, n)});
+                        return Err(GraceError::TypeError {
+                            msg: format!(
+                                "Invalid kwarg name. Passed {:?}, must be in {:?}",
+                                types, n
+                            ),
+                        });
                     }
 
                     let i = find_kwarg_index(&arg_types, &name)?;
@@ -432,9 +443,11 @@ impl GetContext for Node<Expr> {
 
                     // // TODO: Type checking: Pass error
                     match new_c.check_subtype(&value, &kwarg_t, &expected_type) {
-                        true => {},
+                        true => {}
                         false => {
-                            return Err(GraceError::TypeError{msg: format!("Argument type mismatch")})
+                            return Err(GraceError::TypeError {
+                                msg: format!("Argument type mismatch"),
+                            })
                         }
                     }
                 }
@@ -446,7 +459,8 @@ impl GetContext for Node<Expr> {
             } => {
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
                 let element_checker =
-                    |aggregate: Result<(Context, Vec<Type>), GraceError>, (expr, expected_type): (&mut Node<Expr>, &Type)| {
+                    |aggregate: Result<(Context, Vec<Type>), GraceError>,
+                     (expr, expected_type): (&mut Node<Expr>, &Type)| {
                         let (new_c, mut vec_t) = aggregate?;
                         let (mut expr_c, t) = expr.scopes_and_types(parent_id, new_c)?;
 
@@ -455,7 +469,9 @@ impl GetContext for Node<Expr> {
                             Ok((expr_c, vec_t))
                         } else {
                             // TODO: Error messages: More info
-                            Err(GraceError::TypeError{msg: format!("Wrong type for attribute.")})
+                            Err(GraceError::TypeError {
+                                msg: format!("Wrong type for attribute."),
+                            })
                         }
                     };
                 let init = Ok((new_c, vec![]));
@@ -466,8 +482,10 @@ impl GetContext for Node<Expr> {
                         let (new_c, types) = zipped.fold(init, element_checker)?;
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
-                    },
-                    x => Err(GraceError::TypeError{msg: format!("Expected a record type, got {:?}", x)})
+                    }
+                    x => Err(GraceError::TypeError {
+                        msg: format!("Expected a record type, got {:?}", x),
+                    }),
                 }
             }
             Expr::AttributeAccess {
@@ -488,15 +506,15 @@ impl GetContext for Node<Expr> {
                 let (_new_c, _base_t) = base.scopes_and_types(parent_id, context)?;
                 panic!("Not implemented")
             }
-            Expr::IdentifierExpr(ref mut name) => {
-                match context.safe_get_type(self.scope, name) {
-                    Some(t) => {
-                        context.add_type(self.id, t.clone());
-                        Ok((context, t))
-                    },
-                    None => Err(GraceError::TypeError{msg: "Failed to locate identifier in scope".to_string()})
+            Expr::IdentifierExpr(ref mut name) => match context.safe_get_type(self.scope, name) {
+                Some(t) => {
+                    context.add_type(self.id, t.clone());
+                    Ok((context, t))
                 }
-            }
+                None => Err(GraceError::TypeError {
+                    msg: "Failed to locate identifier in scope".to_string(),
+                }),
+            },
             Expr::Int(_) => {
                 context.add_type(self.id, Type::i32);
                 Ok((context, Type::i32))
@@ -686,23 +704,31 @@ mod type_tests {
             match res {
                 Ok((_, t)) => panic!("Expected failed type check. Expr has type {:?}", t),
                 Err(e) => match e {
-                    GraceError::TypeError{..} => {},
-                    x => panic!("Got non-type error: {:?}", x)
-                }
+                    GraceError::TypeError { .. } => {}
+                    x => panic!("Got non-type error: {:?}", x),
+                },
             }
         }
 
         /// Add a function of the specified type and name to the given context.
-        fn add_function_to_context(mut context: Context, func_name_str: &str, arg_types: Vec<Type>, ret_type: Type) -> (Context, usize) {
+        fn add_function_to_context(
+            mut context: Context,
+            func_name_str: &str,
+            arg_types: Vec<Type>,
+            ret_type: Type,
+        ) -> (Context, usize) {
             let func_name = Identifier::from(func_name_str);
-            let args: Vec<(Identifier, Type)> = arg_types.into_iter().enumerate().map(|(i, x)|
-                (Identifier::from(format!("arg{}", i)), x)).collect();
+            let args: Vec<(Identifier, Type)> = arg_types
+                .into_iter()
+                .enumerate()
+                .map(|(i, x)| (Identifier::from(format!("arg{}", i)), x))
+                .collect();
             let function_type = Type::Function(args.clone(), Box::new(ret_type.clone()));
             let null_function = wrap(Stmt::FunctionDecStmt {
                 name: func_name.clone(),
                 args: args,
-                kwargs: vec!(),
-                block: Node::from(Block{statements: vec!()}),
+                kwargs: vec![],
+                block: Node::from(Block { statements: vec![] }),
                 return_type: ret_type,
             });
             context.append_declaration(0, &func_name, &null_function);
@@ -710,15 +736,21 @@ mod type_tests {
             return (context, null_function.id);
         }
 
-        fn add_struct_to_context(mut context: Context, struct_name: &str,
-            struct_t: (Vec<Identifier>, BTreeMap<Identifier, Type>)
+        fn add_struct_to_context(
+            mut context: Context,
+            struct_name: &str,
+            struct_t: (Vec<Identifier>, BTreeMap<Identifier, Type>),
         ) -> Context {
             let name = Identifier::from(struct_name);
-            let fields = struct_t.0.iter().map(|x| (x.clone(), struct_t.1.get(x).unwrap().clone())).collect();
+            let fields = struct_t
+                .0
+                .iter()
+                .map(|x| (x.clone(), struct_t.1.get(x).unwrap().clone()))
+                .collect();
             // Create struct declaration
-            let struct_dec = Node::from(Stmt::StructDec{
+            let struct_dec = Node::from(Stmt::StructDec {
                 name: name.clone(),
-                fields: fields
+                fields: fields,
             });
 
             // Add type to context
@@ -733,11 +765,15 @@ mod type_tests {
             return context;
         }
 
-        fn add_identifier_to_context(mut context: Context, ident_name: &str, ident_value: Expr) -> Context {
-            let mut stmt = Node::from(Stmt::LetStmt{
+        fn add_identifier_to_context(
+            mut context: Context,
+            ident_name: &str,
+            ident_value: Expr,
+        ) -> Context {
+            let mut stmt = Node::from(Stmt::LetStmt {
                 name: Identifier::from(ident_name),
                 type_annotation: None,
-                expression: Node::from(ident_value)
+                expression: Node::from(ident_value),
             });
             let (mut new_c, _) = stmt.scopes_and_types(0, context).unwrap();
             new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
@@ -756,11 +792,12 @@ mod type_tests {
         fn type_check_function_call() {
             // Create function type
             let context = Context::builtin();
-            let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
-            let expr = Node::from(Expr::FunctionCall{
+            let (with_func, _) =
+                add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+            let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
-                args: vec!(Node::from(1)),
-                kwargs: vec!()
+                args: vec![Node::from(1)],
+                kwargs: vec![],
             });
 
             check_expr(with_func, expr, Type::i32);
@@ -769,11 +806,12 @@ mod type_tests {
         #[test]
         fn function_call_wrong_args() {
             let context = Context::builtin();
-            let (with_func, _) = add_function_to_context(context, "foo", vec!(Type::i32), Type::i32);
-            let expr = Node::from(Expr::FunctionCall{
+            let (with_func, _) =
+                add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+            let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
-                args: vec!(Node::from(true)),
-                kwargs: vec!()
+                args: vec![Node::from(true)],
+                kwargs: vec![],
             });
             fail_check_expr(with_func, expr);
         }
@@ -781,13 +819,13 @@ mod type_tests {
         #[test]
         fn type_check_comparison_exprs() {
             let operand = Node::from(0);
-            let comparisons = vec!(BinaryOperator::Equal, BinaryOperator::Unequal);
+            let comparisons = vec![BinaryOperator::Equal, BinaryOperator::Unequal];
 
             for comp in comparisons {
-                let expr = Node::from(Expr::BinaryExpr{
+                let expr = Node::from(Expr::BinaryExpr {
                     operator: comp,
                     left: Box::new(operand.clone()),
-                    right: Box::new(operand.clone())
+                    right: Box::new(operand.clone()),
                 });
                 simple_check_expr(expr, Type::boolean);
             }
@@ -796,12 +834,11 @@ mod type_tests {
         #[test]
         fn type_check_unary_exprs() {
             let operand = Node::from(true);
-            let operators = vec!(UnaryOperator::Not);
+            let operators = vec![UnaryOperator::Not];
             for op in operators {
-                let expr = Node::from(Expr::UnaryExpr{
-                    operator:op,
-                    operand: Box::new(operand.clone())
-                    
+                let expr = Node::from(Expr::UnaryExpr {
+                    operator: op,
+                    operand: Box::new(operand.clone()),
                 });
                 simple_check_expr(expr, Type::boolean);
             }
@@ -812,24 +849,23 @@ mod type_tests {
             let context = Context::builtin();
             let operand = Node::from(7);
             let operator = UnaryOperator::Not;
-            let expr = Node::from(Expr::UnaryExpr{
-                operator:operator,
-                operand: Box::new(operand.clone())
-                    
-                });
+            let expr = Node::from(Expr::UnaryExpr {
+                operator: operator,
+                operand: Box::new(operand.clone()),
+            });
             fail_check_expr(context, expr);
         }
 
         #[test]
         fn type_check_binary_exprs() {
             let operand = Node::from(0);
-            let comparisons = vec!(BinaryOperator::Equal, BinaryOperator::Unequal);
+            let comparisons = vec![BinaryOperator::Equal, BinaryOperator::Unequal];
 
             for comp in comparisons {
-                let expr = Node::from(Expr::BinaryExpr{
+                let expr = Node::from(Expr::BinaryExpr {
                     operator: comp,
                     left: Box::new(operand.clone()),
-                    right: Box::new(operand.clone())
+                    right: Box::new(operand.clone()),
                 });
                 simple_check_expr(expr, Type::boolean);
             }
@@ -846,14 +882,18 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map.clone()));
+            let mut new_context = add_struct_to_context(
+                context,
+                "A",
+                (vec![Identifier::from("a")], attr_map.clone()),
+            );
 
-            let expr = Node::from(Expr::StructLiteral{
+            let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
-                fields: vec!(Node::from(4))
+                fields: vec![Node::from(4)],
             });
 
-            let record_t = Type::Record(vec!(Identifier::from("a")), attr_map);
+            let record_t = Type::Record(vec![Identifier::from("a")], attr_map);
 
             check_expr(new_context, expr, record_t);
         }
@@ -864,11 +904,12 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map));
+            let mut new_context =
+                add_struct_to_context(context, "A", (vec![Identifier::from("a")], attr_map));
 
-            let expr = Node::from(Expr::StructLiteral{
+            let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
-                fields: vec!(Node::from(true))
+                fields: vec![Node::from(true)],
             });
 
             fail_check_expr(new_context, expr);
@@ -880,15 +921,16 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context = add_struct_to_context(context, "A", (vec!(Identifier::from("a")), attr_map));
+            let mut new_context =
+                add_struct_to_context(context, "A", (vec![Identifier::from("a")], attr_map));
 
-            let base = Node::from(Expr::StructLiteral{
+            let base = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
-                fields: vec!(Node::from(4))
+                fields: vec![Node::from(4)],
             });
             let expr = Node::from(Expr::AttributeAccess {
                 base: Box::new(base.clone()),
-                attribute: Identifier::from("a")
+                attribute: Identifier::from("a"),
             });
             check_expr(new_context, expr, Type::i32);
         }
@@ -898,9 +940,9 @@ mod type_tests {
             let context = Context::builtin();
             let base = Node::from(0);
             let attribute = Identifier::from("string");
-            let expr = Node::from(Expr::AttributeAccess{
+            let expr = Node::from(Expr::AttributeAccess {
                 base: Box::new(base.clone()),
-                attribute: attribute
+                attribute: attribute,
             });
             fail_check_expr(context, expr);
         }
@@ -916,12 +958,15 @@ mod type_tests {
 
             // Add module type to context
             let func_type = Type::func_no_args(Type::i32);
-            let type_map = btreemap!{Identifier::from("a") => func_type.clone()};
+            let type_map = btreemap! {Identifier::from("a") => func_type.clone()};
             let module_type = Type::module_from_map(type_map);
             let id = general_utils::get_next_id();
             context.add_type(id, module_type);
 
-            let module_access = Node::from(Expr::ModuleAccess(id, vec!(Identifier::from("A"), Identifier::from("a"))));
+            let module_access = Node::from(Expr::ModuleAccess(
+                id,
+                vec![Identifier::from("A"), Identifier::from("a")],
+            ));
 
             check_expr(context, module_access, func_type);
         }
@@ -932,12 +977,15 @@ mod type_tests {
 
             // Add module type to context
             let func_type = Type::func_no_args(Type::i32);
-            let type_map = btreemap!{Identifier::from("a") => func_type.clone()};
+            let type_map = btreemap! {Identifier::from("a") => func_type.clone()};
             let module_type = Type::module_from_map(type_map);
             let id = general_utils::get_next_id();
             context.add_type(id, module_type);
 
-            let module_access = Node::from(Expr::ModuleAccess(id, vec!(Identifier::from("A"), Identifier::from("b"))));
+            let module_access = Node::from(Expr::ModuleAccess(
+                id,
+                vec![Identifier::from("A"), Identifier::from("b")],
+            ));
 
             fail_check_expr(context, module_access);
         }

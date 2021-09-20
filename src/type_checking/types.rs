@@ -275,10 +275,10 @@ impl Type {
                 }
                 match t {
                     Some(attr_type) => Ok(attr_type),
-                    None => panic!("Self: {:?}, attribute: {:?}", self, attribute),
+                    None => Err(GraceError::TypeError{msg: format!("Tried to access nonexistent attribute {:?} on type {:?}", attribute, self)})
                 }
             }
-            _ => Err(GraceError::TypeError{msg: "Tried to access nonexistent attribute".to_string()}),
+            _ => Err(GraceError::TypeError{msg: format!("Tried to access attribute {:?} on non-record type {:?}", attribute, self)}),
         };
     }
 

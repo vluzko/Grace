@@ -913,7 +913,7 @@ mod type_tests {
         #[test]
         fn type_check_module_access() {
             let mut context = Context::builtin();
-            
+
             // Add module type to context
             let func_type = Type::func_no_args(Type::i32);
             let type_map = btreemap!{Identifier::from("a") => func_type.clone()};
@@ -924,6 +924,22 @@ mod type_tests {
             let module_access = Node::from(Expr::ModuleAccess(id, vec!(Identifier::from("A"), Identifier::from("a"))));
 
             check_expr(context, module_access, func_type);
+        }
+
+        #[test]
+        fn type_check_module_access_fail() {
+            let mut context = Context::builtin();
+
+            // Add module type to context
+            let func_type = Type::func_no_args(Type::i32);
+            let type_map = btreemap!{Identifier::from("a") => func_type.clone()};
+            let module_type = Type::module_from_map(type_map);
+            let id = general_utils::get_next_id();
+            context.add_type(id, module_type);
+
+            let module_access = Node::from(Expr::ModuleAccess(id, vec!(Identifier::from("A"), Identifier::from("b"))));
+
+            fail_check_expr(context, module_access);
         }
 
         #[test]

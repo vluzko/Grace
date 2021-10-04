@@ -412,7 +412,11 @@ impl Context {
                 // Check if this is a trait access
                 let mut possible_traits = vec![];
 
+                //println!("traits are {:?}", self.traits.get(&Identifier::from("test_trait")));
+                println!("Unwrapped_self is {:?}\n\n", unwrapped_self);
+                println!("name should be test identifier at least once and is {:?}\n\n", name);
                 for (trait_name, trait_struct) in self.traits.iter() {
+                    println!("Trait name is {:?} and trait functions are {:?}\n\n", trait_name, trait_struct.functions);
                     // Check if this trait has a function with the desired name.
                     if trait_struct.functions.contains_key(name) {
                         // Check if base_type implements this trait.

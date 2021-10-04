@@ -686,6 +686,7 @@ mod type_tests {
     #[cfg(test)]
     mod exprs {
         use super::*;
+        use type_checking::types::Trait;
 
         /// Check that an expression has the desired type.
         fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
@@ -739,14 +740,10 @@ mod type_tests {
         fn add_struct_to_context(
             mut context: Context,
             struct_name: &str,
-            struct_t: (Vec<Identifier>, BTreeMap<Identifier, Type>),
+            struct_t: BTreeMap<Identifier, Type>,
         ) -> Context {
             let name = Identifier::from(struct_name);
-            let fields = struct_t
-                .0
-                .iter()
-                .map(|x| (x.clone(), struct_t.1.get(x).unwrap().clone()))
-                .collect();
+            let fields = struct_t.clone().into_iter().collect();
             // Create struct declaration
             let struct_dec = Node::from(Stmt::StructDec {
                 name: name.clone(),
@@ -754,7 +751,7 @@ mod type_tests {
             });
 
             // Add type to context
-            let record_type = Type::Record(struct_t.0, struct_t.1);
+            let record_type = Type::Record(struct_t.keys().cloned().collect(), struct_t);
             context.define_type(name.clone(), record_type.clone());
             context.add_type(struct_dec.id, record_type);
 
@@ -882,10 +879,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context = add_struct_to_context(
-                context,
-                "A",
-                (vec![Identifier::from("a")], attr_map.clone()),
+            let mut new_context = add_struct_to_context(context, "A", (attr_map.clone()),
             );
 
             let expr = Node::from(Expr::StructLiteral {
@@ -905,7 +899,7 @@ mod type_tests {
             attr_map.insert(Identifier::from("a"), Type::i32);
 
             let mut new_context =
-                add_struct_to_context(context, "A", (vec![Identifier::from("a")], attr_map));
+                add_struct_to_context(context, "A", attr_map);
 
             let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -922,7 +916,7 @@ mod type_tests {
             attr_map.insert(Identifier::from("a"), Type::i32);
 
             let mut new_context =
-                add_struct_to_context(context, "A", (vec![Identifier::from("a")], attr_map));
+                add_struct_to_context(context, "A", attr_map);
 
             let base = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -949,7 +943,30 @@ mod type_tests {
 
         #[test]
         fn type_check_trait_access() {
-            panic!("To implement: Tests of trait access type checking")
+            let mut context = Context::builtin();
+            // make a trait
+            let trait_functions = hashmap!{Identifier::from("test_funcname")=>Type::Function(vec!(), Box::new(Type::i32))};
+            let test_trait = Trait {
+                name: Identifier::from("test_trait"),
+                functions: trait_functions.clone()
+            };
+            context.traits.insert(Identifier::from("test_trait"), test_trait);
+            // make a struct
+            let test_struct_map = btreemap!{Identifier::from("test_identifier")=>Type::i32};
+            let mut test_context = add_struct_to_context(context, "test_struct", test_struct_map);
+            // implement that trait for that struct
+            let trait_impl_key = (Identifier::from("test_trait"), Type::Named(Identifier::from("test_struct")));
+            test_context.trait_implementations.insert(trait_impl_key,  trait_functions);
+            // call it, expect OK;
+            let base = Node::from(Expr::StructLiteral {
+                base: Box::new(Node::from("test_struct")),
+                fields: vec![Node::from(4)],
+            });
+            let expr = Node::from(Expr::AttributeAccess {
+                base: Box::new(base.clone()),
+                attribute: Identifier::from("test_funcname"),
+            });
+            check_expr(test_context, expr, Type::Function(vec!(), Box::new(Type::i32)));
         }
 
         #[test]
@@ -988,11 +1005,6 @@ mod type_tests {
             ));
 
             fail_check_expr(context, module_access);
-        }
-
-        #[test]
-        fn type_check_index() {
-            panic!("To implement: Tests of index type checking")
         }
 
         #[test]

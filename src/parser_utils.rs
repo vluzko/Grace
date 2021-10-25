@@ -594,7 +594,7 @@ pub mod iresult_helpers {
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Ok((i, o)) => Ok((i, Node::from((func(o), &i)))),
             Err(e) => Err(e),
         };
     }

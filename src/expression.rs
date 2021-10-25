@@ -483,6 +483,8 @@ pub mod rust_trait_impls {
     /// From implementations
     mod from_impl {
         use super::*;
+        use position_tracker::PosStr;
+
         /// From for Node
         impl<T> From<T> for Node<T> {
             fn from(input: T) -> Self {
@@ -491,6 +493,18 @@ pub mod rust_trait_impls {
                     line_no: 0,
                     column_no: 0,
                     data: input,
+                    scope: 0,
+                };
+            }
+        }
+
+        impl <'a, T> From<(T, &PosStr<'a>)> for Node<T> {
+            fn from(input: (T, &PosStr)) -> Self {
+                return Node {
+                    id: general_utils::get_next_id(),
+                    line_no: input.1.line as usize,
+                    column_no: input.1.column as usize,
+                    data: input.0,
                     scope: 0,
                 };
             }

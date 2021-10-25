@@ -66,39 +66,6 @@ macro_rules! many1c (
   );
 );
 
-// fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
-//   where
-//     T: InputLength + InputIter + InputTake + AtEof + Clone,
-//     P: Fn(<T as InputIter>::RawItem) -> bool,
-//   {
-//     match sequence.position(predicate) {
-//       Some(n) => Ok(sequence.take_split(n+1)),
-//       None => {
-//         if sequence.at_eof() {
-//           Ok(sequence.take_split(sequence.input_len()))
-//         } else {
-//           Err(Err::Incomplete(Needed::Size(1)))
-//         }
-//       }
-//     }
-//   }
-
-// macro_rules! take_till_inclusive (
-//     ($input:expr, $submac:ident!( $($args:tt)* )) => (
-//         {
-//             // use nom::InputTakeAtPosition;
-//             let input = $input;
-//             match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
-//                 Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
-//                 x => x
-//             }
-//         }
-//     );
-//     ($input:expr, $f:expr) => (
-//         take_till_inclusive!($input, call!($f));
-//     );
-// );
-
 /// Check that a macro is indented correctly.
 macro_rules! indented (
   ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
@@ -110,6 +77,7 @@ macro_rules! indented (
   );
 );
 
+/// A separated list with at least m elements.
 macro_rules! separated_at_least_m {
     ($i:expr, $m: expr, $sep:ident!( $($args:tt)* ), $submac:ident!( $($args2:tt)* )) => ({
         match separated_list_complete!($i, complete!($sep!($($args)*)), complete!($submac!($($args2)*))) {
@@ -135,6 +103,7 @@ macro_rules! separated_at_least_m {
     );
 }
 
+/// A line that matches the given macro, followed by a block.
 macro_rules! line_and_block (
     ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
         tuple!($i,
@@ -163,6 +132,7 @@ macro_rules! line_and_block (
     );
 );
 
+/// A keyword that matches the given macro, followed by a block.
 macro_rules! keyword_and_block (
     ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
         match line_and_block!($i, $self_, $keyword, $indent) {

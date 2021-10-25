@@ -1,5 +1,6 @@
 mod utils;
 
+
 #[test]
 fn simple_imports_test() {
     utils::compile_folder("simple_imports_test");

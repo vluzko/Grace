@@ -14,6 +14,7 @@ use type_checking::context::Context;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
+use grace_error::GraceError;
 use bytecode::ToBytecode;
 use cfg::{module_to_cfg, Cfg, CfgMap};
 use general_utils::{extend_map, get_next_id, join as join_vec};
@@ -88,8 +89,13 @@ impl Compilation {
             root_name: Some(path_to_module_reference(&boxed)),
         };
         let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
-        compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
-        return compilation;
+        let result = compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
+        return match result {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Compilation failed with error: {:?}", e)
+            }
+        }
     }
 
     /// Get the full record type of a submodule.
@@ -123,7 +129,7 @@ impl Compilation {
     }
 
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(&mut self, base_dir: &Box<Path>, file_name: &Box<Path>) {
+    pub fn compile_tree(mut self, base_dir: &Box<Path>, file_name: &Box<Path>) -> Result<Compilation, GraceError> {
         let mut f = File::open(base_dir.join(file_name)).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
@@ -136,9 +142,6 @@ impl Compilation {
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec![];
         let mut dependencies = vec![];
-        // let mut init_scope = base_scope();
-        // let mut init_type_map = HashMap::new();
-
         let mut init_context = Context::builtin();
 
         // Add builtin imports
@@ -151,7 +154,9 @@ impl Compilation {
         // Compile dependencies
         for import in &parsed_module.data.imports {
             let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
-            let new_import = self.add_import(base_dir, import, &mut init_context);
+            // TODO: Cleanup: Just overwrite parsed_module.data.imports directly instead of waiting.
+            let (res, new_import) = self.add_import(base_dir, import, &mut init_context);
+            self = res;
 
             new_imports.push(Box::new(new_import));
             dependencies.push(submodule_name);
@@ -159,9 +164,9 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
-        match context_res {
-            Ok((mut context, _)) => {
+        let (mut context, _) = parsed_module.scopes_and_types(init_context.root_id, init_context)?;
+        // match context_res {
+            // Ok((mut context, _)) => {
                 let rewritten = parsed_module.type_based_rewrite(&mut context);
                 let cfg_map = module_to_cfg(&rewritten, &context);
                 let wasm = module_to_llr(&rewritten, &context, &cfg_map);
@@ -177,24 +182,27 @@ impl Compilation {
                     hash: 0,
                 };
                 self.modules.insert(module_name, compiled);
-            }
-            Err(e) => panic!("Unimplemented error handling: {:?}", e),
-        };
+            // }
+            // Err(e) => panic!("Unimplemented error handling: {:?}", e),
+        // };
+
+        return Ok(self);
     }
 
+    /// Compile an import, add the module to the compilation object, and return the updated Import object.
     fn add_import(
-        &mut self,
+        mut self,
         base_dir: &Box<Path>,
         import: &Import,
         context: &mut Context,
-    ) -> Import {
+    ) -> (Compilation, Import) {
         let path = module_path_to_path(&import.path);
         let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
 
         let submodule = match self.modules.get(&submodule_name) {
             Some(x) => x,
             None => {
-                self.compile_tree(base_dir, &path);
+                self = self.compile_tree(base_dir, &path).unwrap();
                 self.modules.get(&submodule_name).unwrap()
             }
         };
@@ -235,7 +243,7 @@ impl Compilation {
             alias: import.alias.clone(),
             values: exports,
         };
-        return new_import;
+        return (self, new_import);
     }
 
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.

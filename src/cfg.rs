@@ -160,41 +160,25 @@ fn block_to_cfg(
                 ref expression,
                 ..
             } => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Let {
-                        name: name.clone(),
-                        expression: expression.clone(),
-                    },
-                });
+                statements.push(stmt.replace(CfgStmt::Let {
+                    name: name.clone(),
+                    expression: expression.clone(),
+                }));
             }
             Stmt::AssignmentStmt {
                 ref name,
                 ref expression,
             } => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Assignment {
-                        name: name.clone(),
-                        expression: expression.clone(),
-                    },
-                });
+                statements.push(stmt.replace(CfgStmt::Assignment {
+                    name: name.clone(),
+                    expression: expression.clone(),
+                }));
             }
             Stmt::ReturnStmt(ref val) => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Return(val.clone()),
-                });
+                statements.push(stmt.replace(CfgStmt::Return(val.clone())));
             }
             Stmt::YieldStmt(ref val) => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Yield(val.clone()),
-                });
+                statements.push(stmt.replace(CfgStmt::Yield(val.clone())));
             }
             Stmt::WhileStmt {
                 ref condition,

@@ -380,6 +380,8 @@ impl Type {
                     operator: ComparisonOperator::Equal,
                     left: Box::new(Node {
                         id: general_utils::get_next_id(),
+                        line_no: expr.line_no,
+                        column_no: expr.column_no,
                         scope: expr.scope,
                         data: Expr::from(name.clone()),
                     }),

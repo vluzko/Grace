@@ -37,15 +37,18 @@ impl TypeRewritable<Node<Module>> for Node<Module> {
             new_impls.push((trait_name, type_name, rewritten_functions));
         }
 
+        let new_data = Module {
+            functions: new_func_decs,
+            structs: new_struct_decs,
+            imports: self.data.imports,
+            traits: self.data.traits,
+            trait_implementations: new_impls,
+        };
         return Node {
             id: self.id,
-            data: Module {
-                functions: new_func_decs,
-                structs: new_struct_decs,
-                imports: self.data.imports,
-                traits: self.data.traits,
-                trait_implementations: new_impls,
-            },
+            line_no: self.line_no,
+            column_no: self.column_no,
+            data: new_data,
             scope: self.scope,
         };
     }
@@ -62,6 +65,8 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
         let new_block = Node {
             id: self.id,
+            line_no: self.line_no,
+            column_no: self.column_no,
             data: Block {
                 statements: new_stmts,
             },
@@ -84,7 +89,7 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
 impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut Context) -> Node<Stmt> {
-        let new_stmt = match self.data {
+        let new_data = match self.data {
             Stmt::LetStmt {
                 name,
                 type_annotation,
@@ -158,9 +163,12 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
             }
             _ => self.data,
         };
+        // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            data: new_stmt,
+            line_no: self.line_no,
+            column_no: self.column_no,
+            data: new_data,
             scope: self.scope,
         };
     }
@@ -168,20 +176,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
 
 impl TypeRewritable<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self, context: &mut Context) -> Node<Expr> {
-        let new_expr = match self.data {
-            // Expr::ComparisonExpr {
-            //     left,
-            //     right,
-            //     operator,
-            // } => {
-            //     let left = Box::new(left.type_based_rewrite(context));
-            //     let right = Box::new(right.type_based_rewrite(context));
-            //     Expr::ComparisonExpr {
-            //         left,
-            //         right,
-            //         operator,
-            //     }
-            // }
+        let new_data = match self.data {
             Expr::BinaryExpr {
                 operator,
                 left,
@@ -276,9 +271,12 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
             _ => self.data,
         };
 
+        return // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            data: new_expr,
+            line_no: self.line_no,
+            column_no: self.column_no,
+            data: new_data,
             scope: self.scope,
         };
     }

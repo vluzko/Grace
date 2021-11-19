@@ -8,7 +8,7 @@ use std::str::from_utf8;
 use itertools::join;
 
 use general_utils;
-use position_tracker::PosStr;
+use parser::position_tracker::PosStr;
 use type_checking::types::{Trait, Type};
 
 #[derive(Debug, Clone, Eq, Hash)]
@@ -483,7 +483,7 @@ pub mod rust_trait_impls {
     /// From implementations
     mod from_impl {
         use super::*;
-        use position_tracker::PosStr;
+        use parser::position_tracker::PosStr;
 
         /// From for Node
         impl<T> From<T> for Node<T> {
@@ -711,8 +711,7 @@ pub mod rust_trait_impls {
                     "!=" => BinaryOperator::Unequal,
                     _ => {
                         // TODO: Log
-                        println!("Bad input to BinaryOperator::from<&str>: {}", input);
-                        panic!()
+                        panic!("Bad input to BinaryOperator::from<&str>: {}", input)
                     }
                 };
             }

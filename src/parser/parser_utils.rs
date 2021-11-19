@@ -9,7 +9,7 @@ extern crate nom;
 // use self::nom;
 use self::nom::*;
 use expression::Node;
-use position_tracker::PosStr;
+use super::position_tracker::PosStr;
 
 use self::iresult_helpers::*;
 use self::tokens::*;
@@ -168,7 +168,6 @@ pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
     let val = alt!(input, eof!() | NEWLINE | EMPTY);
-    println!("output for {:?} is {:?}", input, val);
     return val;
 }
 
@@ -841,8 +840,7 @@ pub mod iresult_helpers {
                 _ => panic!(),
             },
             Ok(x) => {
-                println!("Should have failed, got: {:?}", x);
-                panic!()
+                panic!("Should have failed, got: {:?}", x)
             }
         }
     }

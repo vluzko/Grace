@@ -1,3 +1,32 @@
+extern crate nom;
+use self::nom::*;
+use std::collections::HashMap;
+use std::str::from_utf8;
+use parser::base::{
+    ParserContext,
+    StmtNode,
+    ExprNode,
+    IO,
+    Res,
+    StmtSeq,
+    ExprU,
+    StmtU,
+    StmtRes,
+    ExprRes,
+    TypeRes,
+    next_hidden
+};
+use expression::*;
+use parser::parser_utils::*;
+use expression::*;
+use parser::parser_utils::iresult_helpers::*;
+use parser::parser_utils::tokens::*;
+use parser::parser_utils::*;
+use parser::position_tracker::PosStr;
+
+use general_utils::{get_next_id, get_next_var, join};
+use type_checking::types::{Refinement, Trait, Type};
+
 /// Parse a module.
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
     let mut context = ParserContext::empty();
@@ -84,7 +113,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
 }
 
 /// Parse an import statement.
-fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
+pub (in parser) fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
     let parse_result = preceded!(
         input,
         IMPORT,
@@ -99,4 +128,27 @@ fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
         alias: y,
         values: vec![],
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    
+    #[test]
+    fn parse_imports() {
+        check_match(
+            "import foo.bar.baz",
+            import,
+            Import {
+                id: 0,
+                path: vec![
+                    Identifier::from("foo"),
+                    Identifier::from("bar"),
+                    Identifier::from("baz"),
+                ],
+                alias: None,
+                values: vec![],
+            },
+        );
+    }
 }

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use itertools::join;
 
 use expression::{Identifier, Import, Module, Node};
-use parser::Parseable;
-use position_tracker::PosStr;
+use parser::base::Parseable;
+use parser::position_tracker::PosStr;
 use type_checking::context::Context;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;

@@ -279,8 +279,8 @@ mod test {
     #[cfg(test)]
     mod scope_generation {
         use super::*;
-        use parser::Parseable;
-        use position_tracker::PosStr;
+        use parser::base::Parseable;
+        use parser::position_tracker::PosStr;
 
         fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
             return match ptr {

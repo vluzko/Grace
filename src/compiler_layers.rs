@@ -14,10 +14,10 @@ use type_checking::context::Context;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
-use grace_error::GraceError;
 use bytecode::ToBytecode;
 use cfg::{module_to_cfg, Cfg, CfgMap};
 use general_utils::{extend_map, get_next_id, join as join_vec};
+use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
 use pre_cfg_rewrites::TypeRewritable;
 
@@ -89,13 +89,14 @@ impl Compilation {
             root_name: Some(path_to_module_reference(&boxed)),
         };
         let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
-        let result = compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
+        let result =
+            compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
         return match result {
             Ok(c) => c,
             Err(e) => {
                 panic!("Compilation failed with error: {:?}", e)
             }
-        }
+        };
     }
 
     /// Get the full record type of a submodule.
@@ -129,7 +130,11 @@ impl Compilation {
     }
 
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(mut self, base_dir: &Box<Path>, file_name: &Box<Path>) -> Result<Compilation, GraceError> {
+    pub fn compile_tree(
+        mut self,
+        base_dir: &Box<Path>,
+        file_name: &Box<Path>,
+    ) -> Result<Compilation, GraceError> {
         let mut f = File::open(base_dir.join(file_name)).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
@@ -164,26 +169,27 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        let (mut context, _) = parsed_module.scopes_and_types(init_context.root_id, init_context)?;
+        let (mut context, _) =
+            parsed_module.scopes_and_types(init_context.root_id, init_context)?;
         // match context_res {
-            // Ok((mut context, _)) => {
-                let rewritten = parsed_module.type_based_rewrite(&mut context);
-                let cfg_map = module_to_cfg(&rewritten, &context);
-                let wasm = module_to_llr(&rewritten, &context, &cfg_map);
+        // Ok((mut context, _)) => {
+        let rewritten = parsed_module.type_based_rewrite(&mut context);
+        let cfg_map = module_to_cfg(&rewritten, &context);
+        let wasm = module_to_llr(&rewritten, &context, &cfg_map);
 
-                // Put the results in the tree.
-                let compiled = CompiledModule {
-                    ast: rewritten,
-                    context: context,
-                    cfg_map: cfg_map,
-                    llr: wasm,
-                    path: file_name.clone(),
-                    dependencies: dependencies,
-                    hash: 0,
-                };
-                self.modules.insert(module_name, compiled);
-            // }
-            // Err(e) => panic!("Unimplemented error handling: {:?}", e),
+        // Put the results in the tree.
+        let compiled = CompiledModule {
+            ast: rewritten,
+            context: context,
+            cfg_map: cfg_map,
+            llr: wasm,
+            path: file_name.clone(),
+            dependencies: dependencies,
+            hash: 0,
+        };
+        self.modules.insert(module_name, compiled);
+        // }
+        // Err(e) => panic!("Unimplemented error handling: {:?}", e),
         // };
 
         return Ok(self);

@@ -897,8 +897,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let new_context =
-                add_struct_to_context(context, "A", attr_map);
+            let new_context = add_struct_to_context(context, "A", attr_map);
 
             let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -914,8 +913,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let new_context =
-                add_struct_to_context(context, "A", attr_map);
+            let new_context = add_struct_to_context(context, "A", attr_map);
 
             let base = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -944,18 +942,25 @@ mod type_tests {
         fn type_check_trait_access() {
             let mut context = Context::builtin();
             // make a trait
-            let trait_functions = hashmap!{Identifier::from("test_funcname")=>Type::Function(vec!(), Box::new(Type::i32))};
+            let trait_functions = hashmap! {Identifier::from("test_funcname")=>Type::Function(vec!(), Box::new(Type::i32))};
             let test_trait = Trait {
                 name: Identifier::from("test_trait"),
-                functions: trait_functions.clone()
+                functions: trait_functions.clone(),
             };
-            context.traits.insert(Identifier::from("test_trait"), test_trait);
+            context
+                .traits
+                .insert(Identifier::from("test_trait"), test_trait);
             // make a struct
-            let test_struct_map = btreemap!{Identifier::from("test_identifier")=>Type::i32};
+            let test_struct_map = btreemap! {Identifier::from("test_identifier")=>Type::i32};
             let mut test_context = add_struct_to_context(context, "test_struct", test_struct_map);
             // implement that trait for that struct
-            let trait_impl_key = (Identifier::from("test_trait"), Type::Named(Identifier::from("test_struct")));
-            test_context.trait_implementations.insert(trait_impl_key,  trait_functions);
+            let trait_impl_key = (
+                Identifier::from("test_trait"),
+                Type::Named(Identifier::from("test_struct")),
+            );
+            test_context
+                .trait_implementations
+                .insert(trait_impl_key, trait_functions);
             // call it, expect OK;
             let base = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("test_struct")),
@@ -965,7 +970,11 @@ mod type_tests {
                 base: Box::new(base.clone()),
                 attribute: Identifier::from("test_funcname"),
             });
-            check_expr(test_context, expr, Type::Function(vec!(), Box::new(Type::i32)));
+            check_expr(
+                test_context,
+                expr,
+                Type::Function(vec![], Box::new(Type::i32)),
+            );
         }
 
         #[test]

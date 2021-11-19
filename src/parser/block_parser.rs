@@ -1,13 +1,10 @@
 extern crate nom;
 use self::nom::*;
-use parser::base::{
-    ParserContext,
-};
 use expression::*;
-use parser::parser_utils::*;
+use parser::base::ParserContext;
 use parser::parser_utils::iresult_helpers::*;
+use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
-
 
 /// Parser for blocks
 impl ParserContext {

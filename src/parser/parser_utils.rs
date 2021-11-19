@@ -8,8 +8,8 @@ use std::str;
 extern crate nom;
 // use self::nom;
 use self::nom::*;
-use expression::Node;
 use super::position_tracker::PosStr;
+use expression::Node;
 
 use self::iresult_helpers::*;
 use self::tokens::*;

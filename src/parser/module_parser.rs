@@ -1,18 +1,15 @@
 extern crate nom;
 use self::nom::*;
-use std::collections::HashMap;
-use parser::base::{
-    ParserContext,
-    Res
-};
 use expression::*;
-use parser::parser_utils::*;
+use parser::base::{ParserContext, Res};
 use parser::parser_utils::iresult_helpers::*;
 use parser::parser_utils::tokens::*;
+use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
+use std::collections::HashMap;
 
-use general_utils::{get_next_id};
-use type_checking::types::{Trait};
+use general_utils::get_next_id;
+use type_checking::types::Trait;
 
 /// Parse a module.
 pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
@@ -100,7 +97,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
 }
 
 /// Parse an import statement.
-pub (in parser) fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
+pub(in parser) fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
     let parse_result = preceded!(
         input,
         IMPORT,

@@ -2,22 +2,14 @@
 extern crate nom;
 use self::nom::*;
 use expression::*;
-use parser::base::{
-    ParserContext,
-    StmtNode,
-    IO,
-    Res,
-    ExprU,
-    StmtRes,
-    for_to_while
-};
-use parser::type_parser;
+use parser::base::{for_to_while, ExprU, ParserContext, Res, StmtNode, StmtRes, IO};
 use parser::parser_utils::iresult_helpers::*;
 use parser::parser_utils::tokens::*;
 use parser::position_tracker::PosStr;
+use parser::type_parser;
 
-use general_utils::{join};
-use type_checking::types::{Type};
+use general_utils::join;
+use type_checking::types::Type;
 
 impl ParserContext {
     /// Match any statement.

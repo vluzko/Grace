@@ -1,27 +1,15 @@
-
-
-
 /// All expression parsers.
 extern crate nom;
-use std::str::from_utf8;
 use self::nom::*;
-use parser::base::{
-    ParserContext,
-    ExprNode,
-    Res,
-    StmtSeq,
-    ExprU,
-    ExprRes,
-    next_hidden,
-    just_int,
-    for_to_while
-};
 use expression::*;
-use parser::parser_utils::*;
+use parser::base::{
+    for_to_while, just_int, next_hidden, ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq,
+};
 use parser::parser_utils::iresult_helpers::*;
 use parser::parser_utils::tokens::*;
+use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
-
+use std::str::from_utf8;
 
 /// Top-level expression and some extras.
 impl ParserContext {
@@ -319,9 +307,7 @@ impl ParserContext {
                         base: wrap(tree_base),
                         slices: slices,
                     },
-                    PostIdent::Access { attribute } => {
-                        self.rewrite_access(tree_base, attribute)
-                    }
+                    PostIdent::Access { attribute } => self.rewrite_access(tree_base, attribute),
                 };
             }
             return (tree_base, update);
@@ -620,8 +606,7 @@ fn rewrite_comprehension(
 
         outer_stmts.append(&mut iter_u);
 
-        let mut rewritten =
-            for_to_while(iter_vars.get(0).unwrap().clone(), &iterator, inner_stmts);
+        let mut rewritten = for_to_while(iter_vars.get(0).unwrap().clone(), &iterator, inner_stmts);
 
         outer_stmts.append(&mut rewritten.1);
         outer_stmts.push(wrap(rewritten.0));

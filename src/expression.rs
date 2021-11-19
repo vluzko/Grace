@@ -497,7 +497,7 @@ pub mod rust_trait_impls {
             }
         }
 
-        impl <'a, T> From<(T, &PosStr<'a>)> for Node<T> {
+        impl<'a, T> From<(T, &PosStr<'a>)> for Node<T> {
             fn from(input: (T, &PosStr)) -> Self {
                 return Node {
                     id: general_utils::get_next_id(),

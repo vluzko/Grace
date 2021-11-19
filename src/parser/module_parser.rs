@@ -3,6 +3,7 @@ use self::nom::*;
 use std::collections::HashMap;
 use parser::base::{
     ParserContext,
+    Res
 };
 use expression::*;
 use parser::parser_utils::*;

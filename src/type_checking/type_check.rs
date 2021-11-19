@@ -479,7 +479,7 @@ impl GetContext for Node<Expr> {
                 match base_t {
                     Type::Record(_, ref field_types) => {
                         let zipped = fields.iter_mut().zip(field_types.values());
-                        let (new_c, types) = zipped.fold(init, element_checker)?;
+                        let (new_c, _types) = zipped.fold(init, element_checker)?;
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
                     }
@@ -763,7 +763,7 @@ mod type_tests {
         }
 
         fn add_identifier_to_context(
-            mut context: Context,
+            context: Context,
             ident_name: &str,
             ident_value: Expr,
         ) -> Context {
@@ -875,12 +875,11 @@ mod type_tests {
 
         #[test]
         fn type_check_struct_literals() {
-            let mut context = Context::builtin();
+            let context = Context::builtin();
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context = add_struct_to_context(context, "A", (attr_map.clone()),
-            );
+            let new_context = add_struct_to_context(context, "A", attr_map.clone());
 
             let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -894,11 +893,11 @@ mod type_tests {
 
         #[test]
         fn type_check_struct_literal_fail() {
-            let mut context = Context::builtin();
+            let context = Context::builtin();
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context =
+            let new_context =
                 add_struct_to_context(context, "A", attr_map);
 
             let expr = Node::from(Expr::StructLiteral {
@@ -911,11 +910,11 @@ mod type_tests {
 
         #[test]
         fn type_check_attribute_access() {
-            let mut context = Context::builtin();
+            let context = Context::builtin();
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let mut new_context =
+            let new_context =
                 add_struct_to_context(context, "A", attr_map);
 
             let base = Node::from(Expr::StructLiteral {

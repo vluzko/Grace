@@ -3,14 +3,15 @@ use self::nom::*;
 use parser::base::{
     ParserContext,
     TypeRes,
+    ExprNode
 };
 use expression::*;
 use type_checking::types::{Refinement, Type};
 use parser::parser_utils::iresult_helpers::*;
 use parser::parser_utils::tokens::*;
+use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
 use parser::expression_parser::{bool_expr, float_expr, int_expr};
-// use super::*;
 
 type JustExpr<'a> = IResult<PosStr<'a>, ExprNode>;
 

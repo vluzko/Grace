@@ -271,7 +271,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
             _ => self.data,
         };
 
-        return // We can't use replace because self.data was already moved.
+        // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
             line_no: self.line_no,

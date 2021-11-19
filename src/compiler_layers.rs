@@ -83,7 +83,7 @@ impl Compilation {
         // Panics if the file_name ends in ".."
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
 
-        let mut compilation = Compilation {
+        let compilation = Compilation {
             main_path: Some(absolute_path.clone()),
             modules: HashMap::new(),
             root_name: Some(path_to_module_reference(&boxed)),

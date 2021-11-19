@@ -238,6 +238,7 @@ impl ParserContext {
         return parse_result;
     }
 
+    /// A struct literal
     fn struct_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         let result = tuple!(
             input,
@@ -750,7 +751,7 @@ pub(super) fn bool_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> 
         input,
         alt!(
             terminated!(tag!("true"), peek!(not!(IDENT_CHAR)))
-                | terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
+            | terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
         )
     );
     return fmap_node(parse_result, |x| {

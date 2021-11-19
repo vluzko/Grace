@@ -343,9 +343,9 @@ impl GetContext for Node<Stmt> {
 }
 
 impl GetContext for Node<Expr> {
-    fn scopes_and_types(&mut self, parent_id: usize, mut context: Context) -> TypeCheckRes {
+    fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> TypeCheckRes {
         self.scope = parent_id;
-        let final_res: TypeCheckRes = match self.data {
+        let (mut final_c, final_t) = match self.data {
             Expr::BinaryExpr {
                 ref operator,
                 ref mut left,
@@ -499,7 +499,6 @@ impl GetContext for Node<Expr> {
             Expr::ModuleAccess(ref id, ref mut names) => {
                 let module_type = context.get_node_type(*id);
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
-                context.add_type(self.id, t.clone());
                 Ok((context, t))
             }
             Expr::Index { ref mut base, .. } => {
@@ -507,121 +506,58 @@ impl GetContext for Node<Expr> {
                 panic!("Not implemented")
             }
             Expr::IdentifierExpr(ref mut name) => match context.safe_get_type(self.scope, name) {
-                Some(t) => {
-                    context.add_type(self.id, t.clone());
-                    Ok((context, t))
-                }
+                Some(t) => Ok((context, t)),
                 None => Err(GraceError::TypeError {
                     msg: "Failed to locate identifier in scope".to_string(),
                 }),
             },
-            Expr::Int(_) => {
-                context.add_type(self.id, Type::i32);
-                Ok((context, Type::i32))
-            }
-            Expr::Float(_) => {
-                context.add_type(self.id, Type::f32);
-                Ok((context, Type::f32))
-            }
-            Expr::String(_) => {
-                context.add_type(self.id, Type::string);
-                Ok((context, Type::string))
-            }
-            Expr::Bool(_) => {
-                context.add_type(self.id, Type::boolean);
-                Ok((context, Type::boolean))
-            }
+            Expr::Int(_) => Ok((context, Type::i32)),
+            Expr::Float(_) => Ok((context, Type::f32)),
+            Expr::String(_) => Ok((context, Type::string)),
+            Expr::Bool(_) => Ok((context, Type::boolean)),
             Expr::VecLiteral(ref mut exprs) => {
                 let element_checker =
                     |aggregate: Result<(Context, Type), GraceError>, expr: &mut Node<Expr>| {
-                        match aggregate {
-                            Ok((new_c, mut vec_t)) => {
-                                let res = expr.scopes_and_types(parent_id, new_c);
-                                match res {
-                                    Ok((new_c, t)) => {
-                                        vec_t = vec_t.merge(&t);
-                                        Ok((new_c, vec_t))
-                                    }
-                                    Err(x) => Err(x),
-                                }
-                            }
-                            x => x,
-                        }
+                        let (c, mut vec_t) = aggregate?;
+                        let (new_c, t) = expr.scopes_and_types(parent_id, c)?;
+                        // TODO: Type checking: Use context level merge.
+                        vec_t = vec_t.merge(&t);
+                        Ok((new_c, vec_t))
                     };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
-                let res = exprs.iter_mut().fold(init, element_checker);
-                match res {
-                    Ok((new_c, vec_t)) => {
-                        let t = Type::Vector(Box::new(vec_t));
-                        Ok((new_c, t))
-                    }
-                    Err(x) => Err(x),
-                }
+                let (new_c, vec_t) = exprs.iter_mut().fold(init, element_checker)?;
+                let t = Type::Vector(Box::new(vec_t));
+                Ok((new_c, t))
             }
             Expr::SetLiteral(ref mut exprs) => {
                 let element_checker =
                     |aggregate: Result<(Context, Type), GraceError>, expr: &mut Node<Expr>| {
-                        match aggregate {
-                            Ok((new_c, mut set_t)) => {
-                                let res = expr.scopes_and_types(parent_id, new_c);
-                                match res {
-                                    Ok((new_c, t)) => {
-                                        set_t = set_t.merge(&t);
-                                        Ok((new_c, set_t))
-                                    }
-                                    Err(x) => Err(x),
-                                }
-                            }
-                            x => x,
-                        }
+                        let (new_c, mut set_t) = aggregate?;
+                        let (new_c, t) = expr.scopes_and_types(parent_id, new_c)?;
+                        set_t = set_t.merge(&t);
+                        Ok((new_c, set_t))
                     };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
-                let res = exprs.iter_mut().fold(init, element_checker);
-                match res {
-                    Ok((new_c, set_t)) => {
-                        let t = Type::Parameterized(Identifier::from("Set"), vec![set_t]);
-                        Ok((new_c, t))
-                    }
-                    Err(x) => Err(x),
-                }
+                let (new_c, set_t) = exprs.iter_mut().fold(init, element_checker)?;
+                let t = Type::Parameterized(Identifier::from("Set"), vec![set_t]);
+                Ok((new_c, t))
             }
-
             Expr::TupleLiteral(ref mut exprs) => {
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>, expr: &mut Node<Expr>| {
-                        match aggregate {
-                            Ok((new_c, mut types)) => {
-                                let res = expr.scopes_and_types(parent_id, new_c);
-                                match res {
-                                    Ok((new_c, t)) => {
-                                        types.push(t);
-                                        Ok((new_c, types))
-                                    }
-                                    Err(x) => Err(x),
-                                }
-                            }
-                            x => x,
-                        }
+                        let (new_c, mut types) = aggregate?;
+                        let (new_c, t) = expr.scopes_and_types(parent_id, new_c)?;
+                        types.push(t);
+                        Ok((new_c, types))
                     };
                 let init: Result<(Context, Vec<Type>), GraceError> = Ok((context, vec![]));
-                let res = exprs.iter_mut().fold(init, element_checker);
-                match res {
-                    Ok((new_c, types)) => {
-                        let t = Type::Product(types);
-                        Ok((new_c, t))
-                    }
-                    Err(x) => Err(x),
-                }
+                let (new_c, types) = exprs.iter_mut().fold(init, element_checker)?;
+                Ok((new_c, Type::Product(types)))
             }
             _ => panic!(),
-        };
-        return match final_res {
-            Ok((mut final_c, final_t)) => {
-                final_c.add_type(self.id, final_t.clone());
-                Ok((final_c, final_t))
-            }
-            Err(e) => Err(e),
-        };
+        }?;
+        final_c.add_type(self.id, final_t.clone());
+        Ok((final_c, final_t))
     }
 }
 

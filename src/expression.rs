@@ -8,7 +8,6 @@ use std::str::from_utf8;
 use itertools::join;
 
 use general_utils;
-use parser::position_tracker::PosStr;
 use type_checking::types::{Trait, Type};
 
 #[derive(Debug, Clone, Eq, Hash)]

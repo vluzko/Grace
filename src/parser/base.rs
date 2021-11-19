@@ -1,6 +1,5 @@
 //! The parser.
 use std::collections::HashMap;
-use std::str::from_utf8;
 
 extern crate nom;
 use self::nom::*;
@@ -12,8 +11,8 @@ use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
 use parser::module_parser::module;
 
-use general_utils::{get_next_id, get_next_var, join};
-use type_checking::types::{Refinement, Trait, Type};
+use general_utils::{get_next_var};
+use type_checking::types::{Trait, Type};
 
 use super::type_parser::any_type;
 

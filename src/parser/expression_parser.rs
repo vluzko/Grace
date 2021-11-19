@@ -3,35 +3,25 @@
 
 /// All expression parsers.
 extern crate nom;
-use std::collections::HashMap;
 use std::str::from_utf8;
 use self::nom::*;
 use parser::base::{
     ParserContext,
-    StmtNode,
     ExprNode,
-    IO,
     Res,
     StmtSeq,
     ExprU,
-    StmtU,
-    StmtRes,
     ExprRes,
-    TypeRes,
     next_hidden,
     just_int,
     for_to_while
 };
 use expression::*;
 use parser::parser_utils::*;
-use expression::*;
 use parser::parser_utils::iresult_helpers::*;
 use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
 
-use general_utils::{get_next_id, get_next_var, join};
-use type_checking::types::{Refinement, Trait, Type};
 
 /// Top-level expression and some extras.
 impl ParserContext {

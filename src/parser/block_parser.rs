@@ -1,31 +1,13 @@
 extern crate nom;
 use self::nom::*;
-use std::collections::HashMap;
-use std::str::from_utf8;
 use parser::base::{
     ParserContext,
-    StmtNode,
-    ExprNode,
-    IO,
-    Res,
-    StmtSeq,
-    ExprU,
-    StmtU,
-    StmtRes,
-    ExprRes,
-    TypeRes,
-    next_hidden
 };
 use expression::*;
 use parser::parser_utils::*;
-use expression::*;
 use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
 use parser::position_tracker::PosStr;
 
-use general_utils::{get_next_id, get_next_var, join};
-use type_checking::types::{Refinement, Trait, Type};
 
 /// Parser for blocks
 impl ParserContext {

@@ -485,6 +485,31 @@ pub mod rust_trait_impls {
         use parser::position_tracker::PosStr;
 
         /// From for Node
+
+        impl<T> From<(T, usize, usize)> for Node<T> {
+            fn from(input: (T, usize, usize)) -> Self {
+                return Node {
+                    id: general_utils::get_next_id(),
+                    line_no: input.1,
+                    column_no: input.2,
+                    data: input.0,
+                    scope: 0,
+                };
+            }
+        }
+
+        impl<'a, Expr> From<(Expr, &PosStr<'a>)> for Node<Expr> {
+            fn from(input: (Expr, &PosStr<'a>)) -> Self {
+                return Node {
+                    id: general_utils::get_next_id(),
+                    line_no: input.1.line as usize,
+                    column_no: input.1.column as usize,
+                    data: input.0,
+                    scope: 0,
+                };
+            }
+        }
+
         impl<T> From<T> for Node<T> {
             fn from(input: T) -> Self {
                 return Node {
@@ -492,18 +517,6 @@ pub mod rust_trait_impls {
                     line_no: 0,
                     column_no: 0,
                     data: input,
-                    scope: 0,
-                };
-            }
-        }
-
-        impl<'a, T> From<(T, &PosStr<'a>)> for Node<T> {
-            fn from(input: (T, &PosStr)) -> Self {
-                return Node {
-                    id: general_utils::get_next_id(),
-                    line_no: input.1.line as usize,
-                    column_no: input.1.column as usize,
-                    data: input.0,
                     scope: 0,
                 };
             }

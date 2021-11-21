@@ -57,10 +57,10 @@ impl ParserContext {
 
         let node = fmap_iresult(parse_result, |(maybe_op, (expr, u))| match maybe_op {
             Some(op_str) => (
-                Node::from(Expr::UnaryExpr {
+                Node::from((Expr::UnaryExpr {
                     operator: UnaryOperator::from(op_str),
                     operand: Box::new(expr),
-                }),
+                }, &input)),
                 u,
             ),
             None => (expr, u),
@@ -82,24 +82,7 @@ impl ParserContext {
             ))
         );
 
-        let map = |x: (ExprU, Option<(PosStr<'a>, ExprU)>)| match x.1 {
-            None => x.0,
-            Some((o, (right, mut u))) => {
-                let operator = BinaryOperator::from(o.slice);
-                let (left, mut update) = x.0;
-                update.append(&mut u);
-                (
-                    Node::from(Expr::BinaryExpr {
-                        operator,
-                        left: Box::new(left),
-                        right: Box::new(right),
-                    }),
-                    update,
-                )
-            }
-        };
-
-        let node = fmap_iresult(parse_result, map);
+        let node = fmap_iresult(parse_result, flatten_binary);
         return node;
     }
 
@@ -250,7 +233,7 @@ impl ParserContext {
             let rewritten = if idents.len() > 1 {
                 for attribute in idents[1..idents.len() - 1].iter() {
                     tree_base = Expr::AttributeAccess {
-                        base: Box::new(Node::from(tree_base)),
+                        base: Box::new(Node::from((tree_base, &input))),
                         attribute: attribute.clone(),
                     };
                 }
@@ -267,7 +250,7 @@ impl ParserContext {
             }
             return (
                 Expr::StructLiteral {
-                    base: Box::new(Node::from(rewritten)),
+                    base: Box::new(Node::from((rewritten, &input))),
                     fields: args,
                 },
                 update,
@@ -812,13 +795,15 @@ fn flatten_binary<'a>(result: (ExprU, Option<(PosStr<'a>, ExprU)>)) -> ExprU {
         Some((o, (right, mut u))) => {
             let op = BinaryOperator::from(o.slice);
             let (left, mut update) = result.0;
+            let line = left.line_no;
+            let col = left.column_no;
             update.append(&mut u);
             (
-                Node::from(Expr::BinaryExpr {
+                Node::from((Expr::BinaryExpr {
                     operator: op,
                     left: Box::new(left),
                     right: Box::new(right),
-                }),
+                }, line, col)),
                 update,
             )
         }

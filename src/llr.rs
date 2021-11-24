@@ -529,7 +529,7 @@ impl ToLLR for Node<Expr> {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     }
-                    x => panic!("StructLiteral to_llr not implemented for :{:?}", x),
+                    x => panic!("StructLiteral to_llr not implemented for: {:?}", x),
                 }
                 llr
             }
@@ -552,7 +552,7 @@ impl ToLLR for Node<Expr> {
                         // Get the value at that address.
                         llr.push(WASM::Load(WASMType::from(attr_type)));
                     }
-                    x => panic!("Cannot access attribute of: {:?}", x),
+                    x => panic!("Compiler error: Cannot access attribute of: {:?}. Should be a type error", x),
                 }
 
                 llr
@@ -612,7 +612,7 @@ impl ToLLR for Node<Expr> {
                 let t = context.get_node_type(self.id);
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
-                    _ => panic!(),
+                    x => panic!("Compiler error: mistyped tuple not type checked. {:?}", x),
                 };
                 let vector_size = t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
@@ -714,19 +714,6 @@ pub mod rust_trait_impls {
         }
     }
 
-    // impl From<&ComparisonOperator> for WASMOperator {
-    //     fn from(input: &ComparisonOperator) -> Self {
-    //         return match input {
-    //             ComparisonOperator::Equal => WASMOperator::Eq,
-    //             ComparisonOperator::Less => WASMOperator::LtS,
-    //             ComparisonOperator::Greater => WASMOperator::GtS,
-    //             ComparisonOperator::LessEqual => WASMOperator::LeS,
-    //             ComparisonOperator::GreaterEqual => WASMOperator::GeS,
-    //             ComparisonOperator::Unequal => WASMOperator::Ne,
-    //         };
-    //     }
-    // }
-
     impl fmt::Display for WASMType {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(
@@ -805,6 +792,14 @@ mod tests {
     #[cfg(test)]
     mod exprs {
         use super::*;
+        use compiler_layers;
+
+        fn simple_check_expr(expr: Node<Expr>, expected_wasm: Vec<WASM>) {
+            let (result, context) = compiler_layers::ast_to_type_rewrites(expr, None);
+            let actual_wasm = result.to_llr(&context);
+
+            assert_eq!(actual_wasm, expected_wasm);
+        }
 
         #[test]
         fn llr_constants() {
@@ -813,6 +808,27 @@ mod tests {
             context.add_type(expr.id, Type::i32);
             let res = expr.to_llr(&context);
             assert_eq!(res, vec!(WASM::Const("0".to_string(), WASMType::i32)));
+        }
+
+        #[test]
+        fn binary_ops() {
+            let operand = Node::from(0);
+            let comparisons = vec![BinaryOperator::Equal, BinaryOperator::Unequal];
+
+            for comp in comparisons {
+                let expr = Node::from(Expr::BinaryExpr {
+                    operator: comp,
+                    left: Box::new(operand.clone()),
+                    right: Box::new(operand.clone()),
+                });
+
+                let wasm_op = WASMOperator::from(&comp);
+                simple_check_expr(expr, vec!(
+                    WASM::Const("0".to_string(), WASMType::i32),
+                    WASM::Const("0".to_string(), WASMType::i32),
+                    WASM::Operation(wasm_op, WASMType::i32),
+                ));
+            }
         }
     }
 

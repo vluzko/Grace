@@ -21,6 +21,8 @@ use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
 use pre_cfg_rewrites::TypeRewritable;
 
+use crate::llr::WASM;
+
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
@@ -483,3 +485,61 @@ pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule
     let llr = module_to_llr(&module, &context, &cfg_map);
     return (module, context, cfg_map, llr);
 }
+
+/// Run the compiler from an AST to a type context.
+pub (crate) fn ast_to_context<T>(mut input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+where
+    Node<T>: GetContext
+{
+    let init = match start_context {
+        Some(context) => context,
+        None => Context::builtin(),
+    };
+    let id = init.root_id;
+    let context_res = input.scopes_and_types(id, init);
+    return match context_res {
+        Ok((context, _)) => (input, context),
+        x => panic!("COMPILER ERROR: {:?}", x),
+    };
+}
+
+/// Run the compiler from an AST to a rewritten AST.
+pub (crate) fn ast_to_type_rewrites<T>(input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+where
+    Node<T>: GetContext,
+    Node<T>: TypeRewritable<Node<T>>,
+{
+    let (result, mut context): (Node<T>, Context) = ast_to_context(input, start_context);
+    let rewritten = result.type_based_rewrite(&mut context);
+    return (rewritten, context);
+}
+
+// pub (crate) fn ast_to_cfg_map<T>(input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context, CfgMap)
+// where
+//     Node<T>: GetContext,
+//     Node<T>: TypeRewritable<Node<T>>,
+// {
+//     let (module, context) = ast_to_type_rewrites(input, start_context);
+//     let cfg_map = module_to_cfg(&module, &context);
+//     return (module, context, cfg_map);
+// }
+
+
+
+// pub (crate) mod sub_layers {
+//     use super::*;
+//     use expression::Expr;
+
+//     trait CompileToLLR {
+//         fn compile_to_cfg(self, start_context: Option<Context>) -> CfgMap;
+//     }
+
+//     impl CompileToLLR for Node<Expr> {
+//         fn compile_to_cfg(self, start_context: Option<Context>) -> Vec<WASM> {
+//             let (result, context) = ast_to_type_rewrites(self, start_context);
+//             // return module_to_cfg(&result, &context);
+//             panic!()
+//         }
+//     }
+// }
+

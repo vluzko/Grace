@@ -164,7 +164,7 @@ impl BinaryOperator {
             | BinaryOperator::Mult
             | BinaryOperator::Mod => left.merge(right),
             BinaryOperator::Div => Type::f64,
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor | BinaryOperator::Equal | BinaryOperator::Unequal | BinaryOperator::Greater | BinaryOperator::Less | BinaryOperator::GreaterEqual | BinaryOperator::LessEqual => Type::boolean,
             _ => panic!(),
         };
     }

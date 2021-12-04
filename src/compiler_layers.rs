@@ -21,7 +21,6 @@ use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
 use pre_cfg_rewrites::TypeRewritable;
 
-use crate::llr::WASM;
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
@@ -184,7 +183,8 @@ impl Compilation {
             ast: rewritten,
             context: context,
             cfg_map: cfg_map,
-            llr: wasm,
+            // TODO: errors: Handle the error
+            llr: wasm.unwrap(),
             path: file_name.clone(),
             dependencies: dependencies,
             hash: 0,
@@ -309,7 +309,8 @@ impl Compilation {
                     ast: parsed_module,
                     context: context,
                     cfg_map: cfg_map,
-                    llr: wasm,
+                    // TODO: errors: Handle the error
+                    llr: wasm.unwrap(),
                     path: Box::from(Path::new(".")),
                     dependencies: vec![],
                     hash: 0,
@@ -483,7 +484,7 @@ pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap) {
 pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
     let (module, context, cfg_map) = to_cfg_map(input);
     let llr = module_to_llr(&module, &context, &cfg_map);
-    return (module, context, cfg_map, llr);
+    return (module, context, cfg_map, llr.unwrap());
 }
 
 /// Run the compiler from an AST to a type context.

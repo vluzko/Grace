@@ -794,11 +794,15 @@ mod tests {
         use super::*;
         use compiler_layers;
 
-        fn simple_check_expr(expr: Node<Expr>, expected_wasm: Vec<WASM>) {
-            let (result, context) = compiler_layers::ast_to_type_rewrites(expr, None);
+        fn check_expr(expr: Node<Expr>, expected_wasm: Vec<WASM>, context: Option<Context>) {
+            let (result, context) = compiler_layers::ast_to_type_rewrites(expr, context);
             let actual_wasm = result.to_llr(&context);
 
             assert_eq!(actual_wasm, expected_wasm);
+        }
+
+        fn simple_check_expr(expr: Node<Expr>, expected_wasm: Vec<WASM>) {
+            check_expr(expr, expected_wasm, None);
         }
 
         #[test]
@@ -830,6 +834,8 @@ mod tests {
                 ));
             }
         }
+
+        // fn
     }
 
     #[test]

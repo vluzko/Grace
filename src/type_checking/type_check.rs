@@ -623,6 +623,7 @@ mod type_tests {
     mod exprs {
         use super::*;
         use type_checking::types::Trait;
+        use test_utils;
 
         /// Check that an expression has the desired type.
         fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
@@ -647,73 +648,6 @@ mod type_tests {
             }
         }
 
-        /// Add a function of the specified type and name to the given context.
-        fn add_function_to_context(
-            mut context: Context,
-            func_name_str: &str,
-            arg_types: Vec<Type>,
-            ret_type: Type,
-        ) -> (Context, usize) {
-            let func_name = Identifier::from(func_name_str);
-            let args: Vec<(Identifier, Type)> = arg_types
-                .into_iter()
-                .enumerate()
-                .map(|(i, x)| (Identifier::from(format!("arg{}", i)), x))
-                .collect();
-            let function_type = Type::Function(args.clone(), Box::new(ret_type.clone()));
-            let null_function = wrap(Stmt::FunctionDecStmt {
-                name: func_name.clone(),
-                args: args,
-                kwargs: vec![],
-                block: Node::from(Block { statements: vec![] }),
-                return_type: ret_type,
-            });
-            context.append_declaration(0, &func_name, &null_function);
-            context.add_type(null_function.id, function_type);
-            return (context, null_function.id);
-        }
-
-        fn add_struct_to_context(
-            mut context: Context,
-            struct_name: &str,
-            struct_t: BTreeMap<Identifier, Type>,
-        ) -> Context {
-            let name = Identifier::from(struct_name);
-            let fields = struct_t.clone().into_iter().collect();
-            // Create struct declaration
-            let struct_dec = Node::from(Stmt::StructDec {
-                name: name.clone(),
-                fields: fields,
-            });
-
-            // Add type to context
-            let record_type = Type::Record(struct_t.keys().cloned().collect(), struct_t);
-            context.define_type(name.clone(), record_type.clone());
-            context.add_type(struct_dec.id, record_type);
-
-            // Add it to the context
-            let top_scope = context.get_mut_scope(context.root_id);
-            top_scope.append_declaration(&name, &Box::new(struct_dec));
-
-            return context;
-        }
-
-        fn add_identifier_to_context(
-            context: Context,
-            ident_name: &str,
-            ident_value: Expr,
-        ) -> Context {
-            let mut stmt = Node::from(Stmt::LetStmt {
-                name: Identifier::from(ident_name),
-                type_annotation: None,
-                expression: Node::from(ident_value),
-            });
-            let (mut new_c, _) = stmt.scopes_and_types(0, context).unwrap();
-            new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
-
-            return new_c;
-        }
-
         #[test]
         fn test_literals() {
             simple_check_expr(Node::<Expr>::from(5), Type::i32);
@@ -726,7 +660,7 @@ mod type_tests {
             // Create function type
             let context = Context::builtin();
             let (with_func, _) =
-                add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+            test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(1)],
@@ -740,7 +674,7 @@ mod type_tests {
         fn function_call_wrong_args() {
             let context = Context::builtin();
             let (with_func, _) =
-                add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+                test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(true)],
@@ -815,7 +749,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let new_context = add_struct_to_context(context, "A", attr_map.clone());
+            let new_context = test_utils::add_struct_to_context(context, "A", attr_map.clone());
 
             let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -833,7 +767,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let new_context = add_struct_to_context(context, "A", attr_map);
+            let new_context = test_utils::add_struct_to_context(context, "A", attr_map);
 
             let expr = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -849,7 +783,7 @@ mod type_tests {
             let mut attr_map = BTreeMap::new();
             attr_map.insert(Identifier::from("a"), Type::i32);
 
-            let new_context = add_struct_to_context(context, "A", attr_map);
+            let new_context = test_utils::add_struct_to_context(context, "A", attr_map);
 
             let base = Node::from(Expr::StructLiteral {
                 base: Box::new(Node::from("A")),
@@ -888,7 +822,7 @@ mod type_tests {
                 .insert(Identifier::from("test_trait"), test_trait);
             // make a struct
             let test_struct_map = btreemap! {Identifier::from("test_identifier")=>Type::i32};
-            let mut test_context = add_struct_to_context(context, "test_struct", test_struct_map);
+            let mut test_context = test_utils::add_struct_to_context(context, "test_struct", test_struct_map);
             // implement that trait for that struct
             let trait_impl_key = (
                 Identifier::from("test_trait"),
@@ -954,7 +888,7 @@ mod type_tests {
         #[test]
         fn type_check_identifier() {
             let init = Context::builtin();
-            let context = add_identifier_to_context(init, "a", Expr::from(0));
+            let context = test_utils::add_identifier_to_context(init, "a", Expr::from(0));
             let expr = Node::from("a");
             check_expr(context, expr, Type::i32);
         }

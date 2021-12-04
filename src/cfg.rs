@@ -136,10 +136,11 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
 /// Add the contents of a block to a CFG.
 ///
 /// # Arguments
-///
-/// * `context` -
-/// * `current` -
-/// * `loop_start` -
+/// * `block`       - The block of code being converted.
+/// * `context`     - The compilation context.
+/// * `current`     - The CFG the block is embedded in.
+/// * `loop_start`  - A pointer to the start of the loop, if any. Only required for handling continue statements, which need to behave
+///                   differently from all other block ends.
 fn block_to_cfg(
     block: &Node<Block>,
     context: &Context,

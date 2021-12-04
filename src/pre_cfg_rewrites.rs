@@ -6,6 +6,8 @@ use type_checking::context::Context;
 use type_checking::scope::{choose_return_type, get_convert_expr};
 use type_checking::types::Type;
 
+use crate::general_utils::get_next_id;
+
 pub trait TypeRewritable<T> {
     fn type_based_rewrite(self, context: &mut Context) -> T;
 }
@@ -189,20 +191,37 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
 
                 // If neither type is gradual, proceed as normal
                 if !left_type.is_gradual() && !right_type.is_gradual() {
+                    let (trait_name, method_name) = operator.get_builtin_trait();
+
                     // If the left type is not primitive, call trait method corresponding to this operator
                     if !left_type.is_primitive() {
-                        panic!("Operator -> trait method call not implemented yet.")
+                        let func_expr = Expr::TraitAccess {
+                            base: Box::new(new_left),
+                            trait_name: trait_name,
+                            attribute: method_name,
+                        };
+                        let new_node = Node {
+                            id: get_next_id(),
+                            line_no: self.line_no,
+                            column_no: self.column_no,
+                            data: func_expr,
+                            scope: self.scope,
+                        };
+                        Expr::FunctionCall {
+                            function: Box::new(new_node),
+                            args: vec![new_right],
+                            kwargs: vec!(),
+                        }
                     } else {
                         // If the left type is primitive, it stays an operator
-                        let merged_type = operator.get_return_types(&left_type, &right_type);
-                        let converted_left =
-                            get_convert_expr(&left_type, &merged_type, new_left, context);
-                        let converted_right =
-                            get_convert_expr(&right_type, &merged_type, new_right, context);
-                        Expr::BinaryExpr {
-                            operator,
-                            left: Box::new(converted_left),
-                            right: Box::new(converted_right),
+                        if left_type == right_type {
+                            Expr::BinaryExpr {
+                                operator,
+                                left: Box::new(new_left),
+                                right: Box::new(new_right),
+                            }
+                        } else {
+                            panic!("COMPILER ERROR: Not implemented: BinaryExpr with different primitive types.");
                         }
                     }
                 } else {

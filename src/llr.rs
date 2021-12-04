@@ -148,8 +148,7 @@ pub fn module_to_llr(
     for import in &module.data.imports {
         let typing_info = context.get_node_type(import.id);
         for value in &import.values {
-            // TODO: Error handling: This shouldn't unwrap
-            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value).unwrap() {
+            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value)? {
                 // convert everything to WASMTypes
                 Type::Function(ref args, ref return_type) => {
                     let wasm_args = args
@@ -170,7 +169,7 @@ pub fn module_to_llr(
                     let wasm_return = WASMType::from(&return_type);
                     (wasm_args, wasm_return)
                 }
-                x => panic!("Wrong import type: {:?}", x),
+                x => return Err(GraceError::CompilerError{msg: format!("Wrong import type: {:?}. Expected {:?}. Should be handled by type_check", x, typing_info)}),
             };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
             let internal_name = format!(".{}.{}", joined_path, value);
@@ -292,7 +291,7 @@ pub fn handle_declaration(
             };
             Ok(wasm_func)
         }
-        _ => panic!(),
+        ref x => Err(GraceError::CompilerError{msg: format!("Got an unexpected declaration in a module: {:?}. Should not be allowed by the parser.", x)}),
     };
 }
 
@@ -328,7 +327,7 @@ pub fn handle_trait_func_dec(
             };
             Ok(wasm_func)
         }
-        x => panic!("Found {:?} inside a trait implementation block. Only function declarations are allowed here.", x)
+        x => Err(GraceError::CompilerError{msg: format!("Got a non-function declaration in a trait: {:?}. Should not be allowed by the parser.", x)}),
     };
 }
 
@@ -372,16 +371,16 @@ impl ToLLR for Cfg {
 
                     match false_block {
                         Some(x) => unvisited.push(x),
-                        None => panic!(),
+                        None => return Err(GraceError::CompilerError{msg: format!("No false block found for if statement {:?}.", self)}),
                     };
 
                     match true_block {
                         Some(x) => unvisited.push(x),
-                        None => panic!(),
+                        None => return Err(GraceError::CompilerError{msg: format!("No true block found for if statement {:?}.", self)}),
                     }
                 }
                 CfgVertex::Break(_) | CfgVertex::Continue(_) => {
-                    panic!("Haven't handled break or continue yet")
+                    return Err(GraceError::CompilerError{msg: "Not implemented: break and continue".to_string()});
                 }
                 CfgVertex::Exit => {}
             };
@@ -510,7 +509,7 @@ impl ToLLR for Node<Expr> {
                         );
                         llr.push(WASM::Call(format!(".{}", full_func_name)));
                     }
-                    x => panic!("FunctionCall to_llr not implemented for :{:?}", x),
+                    x => return Err(GraceError::CompilerError{msg: format!("FunctionCall ToLLR not implemented for base expression: {:?}", x)}),
                 }
                 llr
             }
@@ -530,7 +529,7 @@ impl ToLLR for Node<Expr> {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     }
-                    x => panic!("StructLiteral to_llr not implemented for: {:?}", x),
+                    x => return Err(GraceError::CompilerError{msg: format!("StructLiteral ToLLR not implemented for base expression: {:?}", x)}),
                 }
                 llr
             }
@@ -553,7 +552,7 @@ impl ToLLR for Node<Expr> {
                         // Get the value at that address.
                         llr.push(WASM::Load(WASMType::from(attr_type)));
                     }
-                    x => panic!("Compiler error: Cannot access attribute of: {:?}. Should be a type error", x),
+                    x => return Err(GraceError::CompilerError{msg: format!("Cannot access attribute of: {:?}. Should be a type error.", x)}),
                 }
 
                 llr
@@ -613,7 +612,7 @@ impl ToLLR for Node<Expr> {
                 let t = context.get_node_type(self.id);
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
-                    x => panic!("Compiler error: mistyped tuple not type checked. {:?}", x),
+                    x => return Err(GraceError::CompilerError{msg: format!("Mistyped tuple: {:?}. Should have been caught by type checking.", x)}),
                 };
                 let vector_size = t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));

@@ -1266,15 +1266,6 @@ mod tests {
         );
     }
 
-    // #[test]
-    // fn parse_match_expr() {
-    //     let e = ParserContext::empty();
-    //     check_match_no_update("match x:\n5 => 5", |x| e.expression(x), Node::from(Expr::MatchExpr {
-    //         value: Box::new(Node::from("x")),
-    //         cases: vec![(Node::from(5), Node::from(5))]
-    //     }));
-    // }
-
     #[test]
     fn parse_identifier_expr() {
         let e = ParserContext::empty();

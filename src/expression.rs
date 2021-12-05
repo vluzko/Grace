@@ -119,10 +119,6 @@ impl Stmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    MatchExpr {
-        value: Box<Node<Expr>>,
-        cases: Vec<(Node<Expr>, Node<Expr>)>,
-    },
     BinaryExpr {
         operator: BinaryOperator,
         left: Box<Node<Expr>>,

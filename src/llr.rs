@@ -632,7 +632,7 @@ impl ToLLR for Node<Expr> {
                 llr
                 //TODO this block needs a test case
             }
-            x => panic!("to_llr not implemented for: {:?}", x),
+            // x => panic!("to_llr not implemented for: {:?}", x),
         });
     }
 }

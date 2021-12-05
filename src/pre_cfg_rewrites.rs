@@ -244,6 +244,48 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     func_call
                 }
             }
+            Expr::UnaryExpr {
+                operator,
+                operand
+            } => {
+                let operand_type = context.get_node_type(operand.id);
+                let new_operand = operand.type_based_rewrite(context);
+
+                // If neither type is gradual, proceed as normal
+                if !operand_type.is_gradual() {
+                    let (trait_name, method_name) = operator.get_builtin_trait();
+
+                    // If the left type is not primitive, call trait method corresponding to this operator
+                    if !operand_type.is_primitive() {
+                        let func_expr = Expr::TraitAccess {
+                            base: Box::new(new_operand),
+                            trait_name: trait_name,
+                            attribute: method_name,
+                        };
+                        let new_node = Node {
+                            id: get_next_id(),
+                            line_no: self.line_no,
+                            column_no: self.column_no,
+                            data: func_expr,
+                            scope: self.scope,
+                        };
+                        Expr::FunctionCall {
+                            function: Box::new(new_node),
+                            args: vec!(),
+                            kwargs: vec!(),
+                        }
+                    } else {
+                        // If the operand type is primitive, it stays an operator
+                        Expr::UnaryExpr {
+                            operator,
+                            operand: Box::new(new_operand),
+                        }
+                    }
+                } else {
+                    // See BinaryExpr for example implementation.
+                    panic!("Not implemented: gradual unary expression calls.")
+                }
+            }
             Expr::FunctionCall {
                 function,
                 args,

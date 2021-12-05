@@ -563,14 +563,12 @@ impl ToLLR for Node<Expr> {
             } => {
                 let llr = operand.to_llr(context)?;
                 match operator {
-                    UnaryOperator::Convert(to_type, from_type) => match to_type {
-                        Type::Gradual(_) => match from_type {
-                            Type::Gradual(_) => {}
-                            _ => panic!(),
-                        },
-                        _ => panic!(),
+                    UnaryOperator::Convert(to_type, from_type) => {
+                        panic!();
                     },
-                    x => panic!("Got an unexpected unary operator: {:?}", x),
+                    x => {
+                        return Err(GraceError::CompilerError{msg: format!("Got a non-conversion unary operator in LLR: {:?}. Should be removed in pre_cfg_rewrites.", x)})
+                    },
                 };
                 llr
             }
@@ -632,7 +630,24 @@ impl ToLLR for Node<Expr> {
                 llr
                 //TODO this block needs a test case
             }
-            // x => panic!("to_llr not implemented for: {:?}", x),
+            Expr::TraitAccess{..} => {
+                return Err(GraceError::CompilerError{msg: format!("TraitAccess not implemented")});
+            }
+            Expr::Index{..} => {
+                return Err(GraceError::CompilerError{msg: format!("Index not implemented")});
+            }
+            Expr::ModuleAccess{..} => {
+                return Err(GraceError::CompilerError{msg: format!("ModuleAccess not implemented")});
+            }
+            Expr::String{..} => {
+                return Err(GraceError::CompilerError{msg: format!("String not implemented")});
+            }
+            Expr::SetLiteral{..} => {
+                return Err(GraceError::CompilerError{msg: format!("SetLiteral not implemented")});
+            }
+            Expr::MapLiteral{..} => {
+                return Err(GraceError::CompilerError{msg: format!("MapLiteral not implemented")});
+            }
         });
     }
 }
@@ -751,6 +766,21 @@ pub mod rust_trait_impls {
                 }
             )
         }
+    }
+}
+
+impl UnaryOperator {
+    fn conversion_op(self, input_type: &Type, output_type: &Type) -> Result<WASMOperator, GraceError> {
+        if !(input_type.is_primitive() && output_type.is_primitive()) {
+            panic!("Cannot convert between non-primitive types");
+        }
+        panic!();
+        // match self {
+        //     UnaryOperator::Not => WASMOperator::Eq,
+        //     UnaryOperator::Neg => WASMOperator::Sub,
+        //     UnaryOperator::BoolNot => WASMOperator::Eq,
+        //     UnaryOperator::BoolNeg => WASMOperator::Eq,
+        // }
     }
 }
 

@@ -67,11 +67,25 @@ pub enum WASM {
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASMOperator {
+    /// Addition
     Add,
+    /// Subtraction
     Sub,
+    /// Multiplication
     Mult,
+    /// Division
     Div,
+    /// Remainder
+    Rem,
+    /// Shift right
+    ShR,
+    /// Shift left
+    ShL,
+    /// Equal
     Eq,
+    /// Equal to zero
+    EqZ,
+    /// Not equal
     Ne,
     LtS,
     GtS,
@@ -80,6 +94,9 @@ pub enum WASMOperator {
     And,
     Or,
     Xor,
+    Neg,
+    /// Absolute value
+    Abs
 }
 
 #[allow(non_camel_case_types)]
@@ -371,12 +388,12 @@ impl ToLLR for Cfg {
 
                     match false_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::CompilerError{msg: format!("No false block found for if statement {:?}.", self)}),
+                        None => return Err(GraceError::CompilerError{msg: format!("No false block found for if statement {:?}. Should be created by cfg.", self)}),
                     };
 
                     match true_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::CompilerError{msg: format!("No true block found for if statement {:?}.", self)}),
+                        None => return Err(GraceError::CompilerError{msg: format!("No true block found for if statement {:?}. Should be created by cfg.", self)}),
                     }
                 }
                 CfgVertex::Break(_) | CfgVertex::Continue(_) => {
@@ -561,14 +578,22 @@ impl ToLLR for Node<Expr> {
                 ref operator,
                 ref operand,
             } => {
-                let llr = operand.to_llr(context)?;
+                let mut llr = operand.to_llr(context)?;
                 match operator {
-                    UnaryOperator::Convert(to_type, from_type) => {
-                        panic!();
+                    &UnaryOperator::Negative => {
+                        llr.push(WASM::Operation(WASMOperator::Neg, WASMType::i32));
                     },
-                    x => {
-                        return Err(GraceError::CompilerError{msg: format!("Got a non-conversion unary operator in LLR: {:?}. Should be removed in pre_cfg_rewrites.", x)})
+                    &UnaryOperator::BitNot => {
+                        // Calculate bitnot by xor with full mask.
+                        llr.push(WASM::Const("2147483647".to_string(), WASMType::i32));
+                        llr.push(WASM::Operation(WASMOperator::Xor, WASMType::i32));
                     },
+                    &UnaryOperator::Not => {
+                        llr.push(WASM::Operation(WASMOperator::EqZ, WASMType::i32));
+                    },
+                    &UnaryOperator::Positive => {
+                        llr.push(WASM::Operation(WASMOperator::Abs, WASMType::i32));
+                    }
                 };
                 llr
             }
@@ -724,7 +749,13 @@ pub mod rust_trait_impls {
                 BinaryOperator::LessEqual => WASMOperator::LeS,
                 BinaryOperator::GreaterEqual => WASMOperator::GeS,
                 BinaryOperator::Unequal => WASMOperator::Ne,
-                x => panic!("WASMOperator not implemented for {:?}", x),
+                BinaryOperator::Mod => WASMOperator::Rem,
+                BinaryOperator::BitShiftL => WASMOperator::ShL,
+                BinaryOperator::BitShiftR => WASMOperator::ShR,
+                BinaryOperator::BitAnd => panic!("No WASM operator for bitwise and"),
+                BinaryOperator::BitOr => panic!("No WASM operator for bitwise or"),
+                BinaryOperator::BitXor => panic!("No WASM operator for bitwise xor"),
+                BinaryOperator::Exponent => panic!("No WASM operator for exponentiation"),
             };
         }
     }
@@ -754,6 +785,9 @@ pub mod rust_trait_impls {
                     WASMOperator::Sub => "sub",
                     WASMOperator::Mult => "mul",
                     WASMOperator::Div => "div",
+                    WASMOperator::Rem => "rem",
+                    WASMOperator::ShL => "shift_left",
+                    WASMOperator::ShR => "shift_right",
                     WASMOperator::Eq => "eq",
                     WASMOperator::Ne => "ne",
                     WASMOperator::GtS => "gt_s",
@@ -763,24 +797,12 @@ pub mod rust_trait_impls {
                     WASMOperator::And => "and",
                     WASMOperator::Or => "or",
                     WASMOperator::Xor => "xor",
+                    WASMOperator::EqZ => "eqz",
+                    WASMOperator::Neg => "neg",
+                    WASMOperator::Abs => "abs"
                 }
             )
         }
-    }
-}
-
-impl UnaryOperator {
-    fn conversion_op(self, input_type: &Type, output_type: &Type) -> Result<WASMOperator, GraceError> {
-        if !(input_type.is_primitive() && output_type.is_primitive()) {
-            panic!("Cannot convert between non-primitive types");
-        }
-        panic!();
-        // match self {
-        //     UnaryOperator::Not => WASMOperator::Eq,
-        //     UnaryOperator::Neg => WASMOperator::Sub,
-        //     UnaryOperator::BoolNot => WASMOperator::Eq,
-        //     UnaryOperator::BoolNeg => WASMOperator::Eq,
-        // }
     }
 }
 

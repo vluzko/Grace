@@ -9,6 +9,7 @@ use itertools::join;
 
 use general_utils;
 use type_checking::types::{Trait, Type};
+use llr::WASMType;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
@@ -238,14 +239,6 @@ pub enum UnaryOperator {
     Positive,
     Negative,
     BitNot,
-    ToI32,
-    ToUi32,
-    ToI64,
-    ToUi64,
-    ToF32,
-    ToF64,
-    ToBool,
-    Convert(Type, Type),
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
@@ -785,20 +778,6 @@ pub mod rust_trait_impls {
         impl<'a> From<PosStr<'a>> for UnaryOperator {
             fn from(input: PosStr<'a>) -> Self {
                 return UnaryOperator::from(input.slice);
-            }
-        }
-
-        impl<'a> From<&'a Type> for UnaryOperator {
-            fn from(input: &'a Type) -> Self {
-                match input {
-                    Type::i32 => UnaryOperator::ToI32,
-                    Type::ui32 => UnaryOperator::ToF32,
-                    Type::i64 => UnaryOperator::ToI64,
-                    Type::f32 => UnaryOperator::ToF32,
-                    Type::f64 => UnaryOperator::ToF64,
-                    Type::boolean => UnaryOperator::ToBool,
-                    _ => panic!(),
-                }
             }
         }
 

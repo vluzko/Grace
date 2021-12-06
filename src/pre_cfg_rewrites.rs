@@ -3,7 +3,7 @@ use std::convert::From;
 
 use expression::*;
 use type_checking::context::Context;
-use type_checking::scope::{choose_return_type, get_convert_expr};
+use type_checking::scope::{choose_return_type};
 use type_checking::types::Type;
 
 use crate::general_utils::get_next_id;
@@ -97,26 +97,18 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 type_annotation,
                 expression,
             } => {
-                let returned_type = context.get_node_type(expression.id);
                 let base = expression.type_based_rewrite(context);
-                let expr = match &type_annotation {
-                    Some(x) => get_convert_expr(&returned_type, &x, base, context),
-                    None => base,
-                };
                 Stmt::LetStmt {
                     name,
                     type_annotation,
-                    expression: expr,
+                    expression: base,
                 }
             }
             Stmt::AssignmentStmt { expression, name } => {
-                let expected_type = context.get_node_type(self.id);
-                let actual_type = context.get_node_type(expression.id);
                 let base = expression.type_based_rewrite(context);
-                let expr = get_convert_expr(&actual_type, &expected_type, base, context);
                 Stmt::AssignmentStmt {
                     name,
-                    expression: expr,
+                    expression: base,
                 }
             }
             Stmt::FunctionDecStmt {
@@ -157,11 +149,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 let base = value.type_based_rewrite(context);
                 assert!(ret_type.is_compatible(&exp_type));
 
-                let expr = match ret_type == exp_type {
-                    true => base,
-                    false => get_convert_expr(&ret_type, &exp_type, base, context),
-                };
-                Stmt::ReturnStmt(expr)
+                Stmt::ReturnStmt(base)
             }
             _ => self.data,
         };

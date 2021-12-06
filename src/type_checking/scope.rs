@@ -117,27 +117,6 @@ impl Scope {
     }
 }
 
-pub fn get_convert_expr(
-    from: &Type,
-    to: &Type,
-    base: Node<Expr>,
-    context: &mut Context,
-) -> Node<Expr> {
-    return match from == to {
-        false => {
-            let operator = UnaryOperator::cast(&from, &to);
-            let raw_expr = Expr::UnaryExpr {
-                operator: operator,
-                operand: Box::new(base),
-            };
-            let new_node = Node::from(raw_expr);
-            context.add_type(new_node.id, to.clone());
-            new_node
-        }
-        true => base,
-    };
-}
-
 pub fn choose_return_type(possible: &Type) -> Type {
     return match possible {
         Type::Sum(ref types) => {
@@ -156,18 +135,6 @@ pub fn choose_return_type(possible: &Type) -> Type {
 }
 
 impl BinaryOperator {
-    pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
-        //let mut intersection = HashSet::new();
-        return match self {
-            BinaryOperator::Add
-            | BinaryOperator::Sub
-            | BinaryOperator::Mult
-            | BinaryOperator::Mod => left.merge(right),
-            BinaryOperator::Div => Type::f64,
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor | BinaryOperator::Equal | BinaryOperator::Unequal | BinaryOperator::Greater | BinaryOperator::Less | BinaryOperator::GreaterEqual | BinaryOperator::LessEqual => Type::boolean,
-            _ => panic!(),
-        };
-    }
 
     pub fn choose_return_type(&self, merged_type: &Type) -> Type {
         return match self {
@@ -215,32 +182,14 @@ impl BinaryOperator {
 }
 
 impl UnaryOperator {
-    fn cast(from: &Type, to: &Type) -> UnaryOperator {
-        let possible = from.is_compatible(to);
-
-        if possible {
-            return UnaryOperator::Convert(from.clone(), to.clone());
-        } else {
-            panic!("Cannot cast from {:?} to {:?}", from, to);
-        }
-    }
 
     pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
         let (x, y) = match self {
             UnaryOperator::BitNot => ("BitNot", "bitnot"),
-            UnaryOperator::Convert(_type_1, _type_2) => {
-                panic!("Convert requires generic traits to handle 'convert to what'")
-            }
             UnaryOperator::Negative => ("Negative", "negative"),
             UnaryOperator::Not => ("Not", "not"),
             UnaryOperator::Positive => ("Positive", "positive"),
-            UnaryOperator::ToBool => ("ToBool", "tobool"),
-            UnaryOperator::ToF32 => ("ToF32", "tof32"),
-            UnaryOperator::ToF64 => ("ToF64", "tof64"),
-            UnaryOperator::ToI32 => ("ToI32", "toi32"),
-            UnaryOperator::ToI64 => ("ToI64", "toi64"),
-            UnaryOperator::ToUi32 => ("ToUi32", "toui32"),
-            UnaryOperator::ToUi64 => ("ToUi64", "toui64"),
+            _ => panic!()
         };
 
         return (Identifier::from(x), Identifier::from(y));

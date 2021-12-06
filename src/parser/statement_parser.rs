@@ -84,11 +84,11 @@ impl ParserContext {
                         b"=" => expr,
                         _ => {
                             let subop = &assn.slice[0..assn.slice.len() - 1];
-                            Node::from(Expr::BinaryExpr {
+                            Node::from((Expr::BinaryExpr {
                                 operator: BinaryOperator::from(subop),
-                                left: Box::new(Node::from(Expr::IdentifierExpr(name))),
+                                left: Box::new(Node::from((Expr::IdentifierExpr(name), &input))),
                                 right: Box::new(expr),
-                            })
+                            }, &input))
                         }
                     },
                 },
@@ -165,16 +165,17 @@ impl ParserContext {
                     cond_u.append(&mut c_u);
                     just_elifs.push((c, b));
                 }
-
                 for (elif_cond, elif_block) in just_elifs.into_iter().rev() {
+                    let line_no = elif_cond.line_no;
+                    let column_no = elif_cond.column_no;
                     let sub_if = wrap(Stmt::IfStmt {
                         condition: elif_cond,
                         block: elif_block,
                         else_block: else_block,
                     });
-                    else_block = Some(Node::from(Block {
+                    else_block = Some(Node::from((Block {
                         statements: vec![sub_if],
-                    }));
+                    }, line_no, column_no)));
                 }
 
                 let stmt = Stmt::IfStmt {

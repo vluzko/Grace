@@ -2,6 +2,7 @@
 extern crate nom;
 use self::nom::*;
 use expression::*;
+use general_utils;
 use parser::base::{
     for_to_while, just_int, next_hidden, ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq,
 };
@@ -17,33 +18,6 @@ impl ParserContext {
         return alt_complete!(input, m!(self.comparison_expr));
     }
 
-    /// Match a match expression.
-    // fn match_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-
-    //     let parse_result = tuple!(input,
-    //         delimited!(
-    //             MATCH,
-    //             m!(self.expression),
-    //             tuple!(
-    //                 COLON,
-    //                 between_statement
-    //             )
-    //         ),
-    //         separated_nonempty_list_complete!(
-    //             between_statement,
-    //             separated_pair!(
-    //                 alt!(float_expr | int_expr | string_expr),
-    //                 ARROW,
-    //                 m!(self.expression)
-    //             )
-    //         )
-    //     );
-
-    //     // return fmap_node(parse_result, |x| Expr::MatchExpr {value: Box::new(x.0), cases: x.1});
-    //     // panic!("{:?}", parse_result)
-    //     panic!()
-    // }
-
     /// Match any unary expression.
     /// Implemented as a single parser because all unary expressions have the same precedence.
     fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
@@ -56,7 +30,8 @@ impl ParserContext {
         );
 
         let node = fmap_iresult(parse_result, |(maybe_op, (expr, u))| match maybe_op {
-            Some(op_str) => (
+            Some(op_str) =>
+                (
                 Node::from((Expr::UnaryExpr {
                     operator: UnaryOperator::from(op_str),
                     operand: Box::new(expr),
@@ -560,6 +535,7 @@ impl ParserContext {
 /// * `coll_create` - The statement to create the collection.
 /// * `add_value` - The statement to add a value to the collection.
 fn rewrite_comprehension(
+    input: &PosStr,
     iterators: Vec<(Vec<Identifier>, ExprU, Option<ExprU>)>,
     coll_create: Stmt,
     add_value: Stmt,
@@ -599,7 +575,7 @@ fn rewrite_comprehension(
     outer_stmts.insert(0, wrap(coll_create));
     let new_expr = Expr::IdentifierExpr(coll_name.clone());
 
-    return (Node::from(new_expr), outer_stmts);
+    return (Node::from((new_expr, input)), outer_stmts);
 }
 
 /// Comprehensions
@@ -635,7 +611,7 @@ impl ParserContext {
 
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
+            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -657,7 +633,7 @@ impl ParserContext {
             let coll_create = coll_name.simple_let(Expr::from("gen").call());
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, coll_create, push);
+            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -697,7 +673,7 @@ impl ParserContext {
                     }
                 };
 
-                let (ref_expr, mut rewritten) = rewrite_comprehension(iterators, create, add);
+                let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, create, add);
                 kv_update.append(&mut rewritten);
 
                 return (ref_expr, kv_update);

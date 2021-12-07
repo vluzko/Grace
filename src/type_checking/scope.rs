@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use expression::*;
 use general_utils;
-use type_checking::context::Context;
 use type_checking::types::Type;
 
 /// A sum type for things that can modify scope.
@@ -174,7 +173,18 @@ impl BinaryOperator {
             BinaryOperator::Or => ("Or", "or"),
             BinaryOperator::Equal => ("Eq", "eq"),
             BinaryOperator::Unequal => ("Neq", "neq"),
-            x => panic!("get_builtin_trait not implemented for {:?}", x),
+            BinaryOperator::Xor => ("Xor", "xor"),
+            BinaryOperator::Mod => ("Mod", "mod"),
+            BinaryOperator::BitAnd => ("BitAnd", "band"),
+            BinaryOperator::BitOr => ("BitOr", "bor"),
+            BinaryOperator::BitXor => ("BitXor", "bxor"),
+            BinaryOperator::BitShiftL => ("BitShiftL", "shl"),
+            BinaryOperator::BitShiftR => ("BitShiftR", "shr"),
+            BinaryOperator::Exponent => ("Exponent", "exp"),
+            BinaryOperator::Greater => ("Greater", "gt"),
+            BinaryOperator::Less => ("Less", "lt"),
+            BinaryOperator::GreaterEqual => ("GreaterEqual", "ge"),
+            BinaryOperator::LessEqual => ("LessEqual", "le"),
         };
 
         return (Identifier::from(x), Identifier::from(y));

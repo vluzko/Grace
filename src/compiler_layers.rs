@@ -172,8 +172,6 @@ impl Compilation {
 
         let (mut context, _) =
             parsed_module.scopes_and_types(init_context.root_id, init_context)?;
-        // match context_res {
-        // Ok((mut context, _)) => {
         let rewritten = parsed_module.type_based_rewrite(&mut context);
         let cfg_map = module_to_cfg(&rewritten, &context);
         let wasm = module_to_llr(&rewritten, &context, &cfg_map);
@@ -190,9 +188,6 @@ impl Compilation {
             hash: 0,
         };
         self.modules.insert(module_name, compiled);
-        // }
-        // Err(e) => panic!("Unimplemented error handling: {:?}", e),
-        // };
 
         return Ok(self);
     }

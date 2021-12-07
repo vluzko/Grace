@@ -344,6 +344,15 @@ impl GetContext for Node<Stmt> {
 
 impl GetContext for Node<Expr> {
     fn scopes_and_types(&mut self, parent_id: usize, context: Context) -> TypeCheckRes {
+        return match self._scopes_and_types(parent_id, context) {
+            Ok(v) => Ok(v),
+            Err(e) => Err(self.annotate_error(e)),
+        };
+    }
+}
+
+impl Node<Expr> {
+    fn _scopes_and_types(&mut self, parent_id: usize, context: Context) -> TypeCheckRes {
         self.scope = parent_id;
         let (mut final_c, final_t) = match self.data {
             Expr::BinaryExpr {
@@ -392,9 +401,7 @@ impl GetContext for Node<Expr> {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
                 let (arg_types, ret) = match wrapped_func {
                     Type::Function(a, b) => Ok((a, *b.clone())),
-                    x => Err(GraceError::TypeError {
-                        msg: format!("Somehow got a non-function type {:?}", x),
-                    }),
+                    x => Err(GraceError::type_error(format!("Somehow got a non-function type {:?}", x)))
                 }?;
 
                 for (i, arg) in args.into_iter().enumerate() {
@@ -408,9 +415,7 @@ impl GetContext for Node<Expr> {
                     match new_c.check_subtype(&arg, &arg_t, &expected_type) {
                         true => {}
                         false => {
-                            return Err(GraceError::TypeError {
-                                msg: format!("Argument type mismatch"),
-                            })
+                            return Err(GraceError::type_error(format!("Argument type mismatch")))
                         }
                     }
                 }
@@ -429,12 +434,10 @@ impl GetContext for Node<Expr> {
                                 return Ok(i);
                             }
                         }
-                        return Err(GraceError::TypeError {
-                            msg: format!(
-                                "Invalid kwarg name. Passed {:?}, must be in {:?}",
-                                types, n
-                            ),
-                        });
+                        return Err(GraceError::type_error(format!(
+                            "Invalid kwarg name. Passed {:?}, must be in {:?}",
+                            types, n
+                        )));
                     }
 
                     let i = find_kwarg_index(&arg_types, &name)?;
@@ -445,9 +448,7 @@ impl GetContext for Node<Expr> {
                     match new_c.check_subtype(&value, &kwarg_t, &expected_type) {
                         true => {}
                         false => {
-                            return Err(GraceError::TypeError {
-                                msg: format!("Argument type mismatch"),
-                            })
+                            return Err(GraceError::type_error(format!("Argument type mismatch")))
                         }
                     }
                 }
@@ -469,9 +470,7 @@ impl GetContext for Node<Expr> {
                             Ok((expr_c, vec_t))
                         } else {
                             // TODO: Error messages: More info
-                            Err(GraceError::TypeError {
-                                msg: format!("Wrong type for attribute."),
-                            })
+                            Err(GraceError::type_error(format!("Wrong type for attribute.")))
                         }
                     };
                 let init = Ok((new_c, vec![]));
@@ -483,9 +482,7 @@ impl GetContext for Node<Expr> {
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
                     }
-                    x => Err(GraceError::TypeError {
-                        msg: format!("Expected a record type, got {:?}", x),
-                    }),
+                    x => Err(GraceError::type_error(format!("Expected a record type, got {:?}", x)))
                 }
             }
             Expr::AttributeAccess {
@@ -507,9 +504,7 @@ impl GetContext for Node<Expr> {
             }
             Expr::IdentifierExpr(ref mut name) => match context.safe_get_type(self.scope, name) {
                 Some(t) => Ok((context, t)),
-                None => Err(GraceError::TypeError {
-                    msg: "Failed to locate identifier in scope".to_string(),
-                }),
+                None => Err(GraceError::type_error("Failed to locate identifier in scope".to_string()))
             },
             Expr::Int(_) => Ok((context, Type::i32)),
             Expr::Float(_) => Ok((context, Type::f32)),
@@ -623,6 +618,7 @@ mod type_tests {
     mod exprs {
         use super::*;
         use type_checking::types::Trait;
+        use grace_error::ErrorDetails;
         use test_utils;
 
         /// Check that an expression has the desired type.
@@ -641,8 +637,8 @@ mod type_tests {
             let res = expr.scopes_and_types(0, context);
             match res {
                 Ok((_, t)) => panic!("Expected failed type check. Expr has type {:?}", t),
-                Err(e) => match e {
-                    GraceError::TypeError { .. } => {}
+                Err(e) => match e.underlying {
+                    ErrorDetails::TypeError { .. } => {}
                     x => panic!("Got non-type error: {:?}", x),
                 },
             }

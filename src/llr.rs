@@ -186,7 +186,7 @@ pub fn module_to_llr(
                     let wasm_return = WASMType::from(&return_type);
                     (wasm_args, wasm_return)
                 }
-                x => return Err(GraceError::CompilerError{msg: format!("Wrong import type: {:?}. Expected {:?}. Should be handled by type_check", x, typing_info)}),
+                x => return Err(GraceError::compiler_error( format!("Wrong import type: {:?}. Expected {:?}. Should be handled by type_check", x, typing_info))),
             };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
             let internal_name = format!(".{}.{}", joined_path, value);
@@ -308,7 +308,7 @@ pub fn handle_declaration(
             };
             Ok(wasm_func)
         }
-        ref x => Err(GraceError::CompilerError{msg: format!("Got an unexpected declaration in a module: {:?}. Should not be allowed by the parser.", x)}),
+        ref x => Err(GraceError::compiler_error( format!("Got an unexpected declaration in a module: {:?}. Should not be allowed by the parser.", x))),
     };
 }
 
@@ -344,7 +344,7 @@ pub fn handle_trait_func_dec(
             };
             Ok(wasm_func)
         }
-        x => Err(GraceError::CompilerError{msg: format!("Got a non-function declaration in a trait: {:?}. Should not be allowed by the parser.", x)}),
+        x => Err(GraceError::compiler_error( format!("Got a non-function declaration in a trait: {:?}. Should not be allowed by the parser.", x))),
     };
 }
 
@@ -388,16 +388,16 @@ impl ToLLR for Cfg {
 
                     match false_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::CompilerError{msg: format!("No false block found for if statement {:?}. Should be created by cfg.", self)}),
+                        None => return Err(GraceError::compiler_error( format!("No false block found for if statement {:?}. Should be created by cfg.", self))),
                     };
 
                     match true_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::CompilerError{msg: format!("No true block found for if statement {:?}. Should be created by cfg.", self)}),
+                        None => return Err(GraceError::compiler_error( format!("No true block found for if statement {:?}. Should be created by cfg.", self))),
                     }
                 }
                 CfgVertex::Break(_) | CfgVertex::Continue(_) => {
-                    return Err(GraceError::CompilerError{msg: "Not implemented: break and continue".to_string()});
+                    return Err(GraceError::compiler_error( "Not implemented: break and continue".to_string()));
                 }
                 CfgVertex::Exit => {}
             };
@@ -526,7 +526,7 @@ impl ToLLR for Node<Expr> {
                         );
                         llr.push(WASM::Call(format!(".{}", full_func_name)));
                     }
-                    x => return Err(GraceError::CompilerError{msg: format!("FunctionCall ToLLR not implemented for base expression: {:?}", x)}),
+                    x => return Err(GraceError::compiler_error( format!("FunctionCall ToLLR not implemented for base expression: {:?}", x))),
                 }
                 llr
             }
@@ -546,7 +546,7 @@ impl ToLLR for Node<Expr> {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name.clone())));
                     }
-                    x => return Err(GraceError::CompilerError{msg: format!("StructLiteral ToLLR not implemented for base expression: {:?}", x)}),
+                    x => return Err(GraceError::compiler_error( format!("StructLiteral ToLLR not implemented for base expression: {:?}", x))),
                 }
                 llr
             }
@@ -569,7 +569,7 @@ impl ToLLR for Node<Expr> {
                         // Get the value at that address.
                         llr.push(WASM::Load(WASMType::from(attr_type)));
                     }
-                    x => return Err(GraceError::CompilerError{msg: format!("Cannot access attribute of: {:?}. Should be a type error.", x)}),
+                    x => return Err(GraceError::compiler_error( format!("Cannot access attribute of: {:?}. Should be a type error.", x))),
                 }
 
                 llr
@@ -635,7 +635,7 @@ impl ToLLR for Node<Expr> {
                 let t = context.get_node_type(self.id);
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
-                    x => return Err(GraceError::CompilerError{msg: format!("Mistyped tuple: {:?}. Should have been caught by type checking.", x)}),
+                    x => return Err(GraceError::compiler_error( format!("Mistyped tuple: {:?}. Should have been caught by type checking.", x))),
                 };
                 let vector_size = t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
@@ -656,22 +656,22 @@ impl ToLLR for Node<Expr> {
                 //TODO this block needs a test case
             }
             Expr::TraitAccess{..} => {
-                return Err(GraceError::CompilerError{msg: format!("TraitAccess not implemented")});
+                return Err(GraceError::compiler_error( format!("TraitAccess not implemented")));
             }
             Expr::Index{..} => {
-                return Err(GraceError::CompilerError{msg: format!("Index not implemented")});
+                return Err(GraceError::compiler_error( format!("Index not implemented")));
             }
             Expr::ModuleAccess{..} => {
-                return Err(GraceError::CompilerError{msg: format!("ModuleAccess not implemented")});
+                return Err(GraceError::compiler_error( format!("ModuleAccess not implemented")));
             }
             Expr::String{..} => {
-                return Err(GraceError::CompilerError{msg: format!("String not implemented")});
+                return Err(GraceError::compiler_error( format!("String not implemented")));
             }
             Expr::SetLiteral{..} => {
-                return Err(GraceError::CompilerError{msg: format!("SetLiteral not implemented")});
+                return Err(GraceError::compiler_error( format!("SetLiteral not implemented")));
             }
             Expr::MapLiteral{..} => {
-                return Err(GraceError::CompilerError{msg: format!("MapLiteral not implemented")});
+                return Err(GraceError::compiler_error( format!("MapLiteral not implemented")));
             }
         });
     }

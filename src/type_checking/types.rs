@@ -275,20 +275,18 @@ impl Type {
                 }
                 match t {
                     Some(attr_type) => Ok(attr_type),
-                    None => Err(GraceError::TypeError {
-                        msg: format!(
+                    None => Err(GraceError::type_error(format!(
                             "Tried to access nonexistent attribute {:?} on type {:?}",
                             attribute, self
                         ),
-                    }),
+                    )),
                 }
             }
-            _ => Err(GraceError::TypeError {
-                msg: format!(
+            _ => Err(GraceError::type_error(format!(
                     "Tried to access attribute {:?} on non-record type {:?}",
                     attribute, self
                 ),
-            }),
+            )),
         };
     }
 

@@ -435,12 +435,11 @@ impl Context {
                 else if possible_traits.len() > 1 {
                     panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    return Err(GraceError::TypeError {
-                        msg: format!(
+                    return Err(GraceError::type_error(format!(
                             "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
                             base_type, name
                         ),
-                    });
+                    ));
                 }
             }
         };
@@ -507,12 +506,11 @@ impl Context {
             .get(&(trait_name.clone(), base_t.clone()))
         {
             Some(x) => Ok(x),
-            None => Err(GraceError::TypeError {
-                msg: format!(
+            None => Err(GraceError::type_error(format!(
                     "No trait implementation found for trait {} and type {:?}",
                     trait_name, implementing_type
                 ),
-            }),
+            )),
         }?;
         let method_type = func_types.get(method_name).unwrap();
         return match method_type {
@@ -524,7 +522,7 @@ impl Context {
 
                 Ok(*return_type.clone())
             },
-            x => Err(GraceError::TypeError{msg:format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)})
+            x => Err(GraceError::type_error(format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)))
         };
     }
 

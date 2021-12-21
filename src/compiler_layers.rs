@@ -79,6 +79,7 @@ pub struct Compilation {
 impl Compilation {
     pub fn compile(file_name: &String) -> Compilation {
         let path = Path::new(file_name);
+        println!("Path is {:?}", path);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
 
         // Panics if the file_name ends in ".."

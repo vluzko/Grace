@@ -58,10 +58,9 @@ fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
 }
 
 fn builtin_comparison() -> Vec<(Identifier, Identifier)> {
-    return vec![("Eq", "eq"), ("Neq", "neq")]
-        .into_iter()
-        .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
-        .collect();
+    return vec![BinaryOperator::Equal.get_builtin_trait(), BinaryOperator::Unequal.get_builtin_trait(),
+    BinaryOperator::Greater.get_builtin_trait(), BinaryOperator::Less.get_builtin_trait(),
+    BinaryOperator::GreaterEqual.get_builtin_trait(), BinaryOperator::LessEqual.get_builtin_trait()];
 }
 
 fn builtin_unary() -> Vec<(Identifier, Identifier)> {
@@ -512,18 +511,24 @@ impl Context {
                 ),
             )),
         }?;
-        let method_type = func_types.get(method_name).unwrap();
-        return match method_type {
-            Type::Function(ref args, ref return_type) => {
+        let method_type_result = func_types.get(method_name);
+        return match method_type_result {
+            Some(method_type) => {
+                match method_type {
+                    Type::Function(ref args, ref return_type) => {
 
-                for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
-                    assert_eq!(&expected_t, actual_t);
+                        for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                            assert_eq!(&expected_t, actual_t);
+                        }
+
+                        Ok(*return_type.clone())
+                    },
+                    x => Err(GraceError::type_error(format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)))
                 }
-
-                Ok(*return_type.clone())
-            },
-            x => Err(GraceError::type_error(format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)))
-        };
+            }
+            None => Err(GraceError::type_error(format!("Could not find implementation of trait method: {:?}.", method_name)))
+        }
+        
     }
 
     /// Get the return type of a binary operator.

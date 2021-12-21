@@ -25,3 +25,8 @@ fn gradual_add_test() {
 fn refinement_failures_test() {
     utils::compile_folder("refinement_failures_test");
 }
+
+#[test]
+fn binary_operations_test() {
+    utils::compile_folder("builtin_tests");
+}

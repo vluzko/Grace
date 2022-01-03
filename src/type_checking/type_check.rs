@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 
+use itertools::join;
+
 use expression::*;
 use general_utils;
 use grace_error::GraceError;
@@ -458,6 +460,7 @@ impl Node<Expr> {
                 ref mut base,
                 ref mut fields,
             } => {
+                println!("Base is: {:?}", base);
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>,
@@ -473,15 +476,29 @@ impl Node<Expr> {
                             Err(GraceError::type_error(format!("Wrong type for attribute.")))
                         }
                     };
-                let init = Ok((new_c, vec![]));
 
+                // TODO: cleanup: move this into a recursive function
                 match base_t {
                     Type::Record(_, ref field_types) => {
+                        let init = Ok((new_c, vec![]));
                         let zipped = fields.iter_mut().zip(field_types.values());
                         let (new_c, _types) = zipped.fold(init, element_checker)?;
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
-                    }
+                    },
+                    Type::Named(ref name) => {
+                        let underlying_type = new_c.get_defined_type(name);
+                        match underlying_type {
+                            Type::Record(_, ref field_types) => {
+                                let init = Ok((new_c, vec![]));
+                                let zipped = fields.iter_mut().zip(field_types.values());
+                                let (new_c, _types) = zipped.fold(init, element_checker)?;
+                                // TODO: Type checking: Decide if we should return base_t or the true type
+                                Ok((new_c, base_t.clone()))
+                            },
+                            x => Err(GraceError::type_error(format!("Expected a record type, got {:?}", x)))
+                        }
+                    },
                     x => Err(GraceError::type_error(format!("Expected a record type, got {:?}", x)))
                 }
             }
@@ -493,10 +510,20 @@ impl Node<Expr> {
                 let attr_t = new_c.resolve_attribute(&base_t, attribute)?;
                 Ok((new_c, attr_t))
             }
+            // TODO: cleanup: maybe move the renaming into resolve_nested_record?
             Expr::ModuleAccess(ref id, ref mut names) => {
                 let module_type = context.get_node_type(*id);
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
-                Ok((context, t))
+                // Named types have to be remapped to include the module access
+                let renamed_t = match t {
+                    Type::Named(_) => Type::Named(
+                        Identifier::from(
+                            join(names.iter().map(|x| x.name.clone()), ".")
+                        )
+                    ),
+                    x => x
+                };
+                Ok((context, renamed_t))
             }
             Expr::Index { ref mut base, .. } => {
                 let (_new_c, _base_t) = base.scopes_and_types(parent_id, context)?;

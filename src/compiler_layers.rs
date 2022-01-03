@@ -122,6 +122,7 @@ impl Compilation {
                 .get(&struct_dec.id)
                 .unwrap()
                 .clone();
+            // let full_name = format!("{}.{}", import.string_ref, struct_dec.data.get_name());
             record_type.insert(struct_dec.data.get_name(), struct_type);
         }
 

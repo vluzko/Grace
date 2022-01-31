@@ -462,6 +462,7 @@ impl Node<Expr> {
             } => {
                 println!("Base is: {:?}", base);
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
+                println!("Base_t is: {:?}", base_t);
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>,
                      (expr, expected_type): (&mut Node<Expr>, &Type)| {
@@ -477,11 +478,7 @@ impl Node<Expr> {
                         }
                     };
 
-<<<<<<< Updated upstream
-                // TODO: cleanup: move this into a recursive function
-=======
                 // TODO: cleanup: The record type checker should be separated out.
->>>>>>> Stashed changes
                 match base_t {
                     Type::Record(_, ref field_types) => {
                         let init = Ok((new_c, vec![]));

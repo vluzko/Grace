@@ -121,14 +121,7 @@ impl Compilation {
                 .get(&struct_dec.id)
                 .unwrap()
                 .clone();
-            // let full_name = format!("{}.{}", import.string_ref, struct_dec.data.get_name());
-            record_type.insert(struct_dec.data.get_name(), struct_type);
-
-            // let internal_name = struct_dec.data.get_name();
-            let new_name = format!("{}.{}", import.string_ref(), struct_dec.data.get_name());
-            println!("struct name: {:?}", new_name);
-            // panic!("TODO: This needs to rewrite named types to match the name in the imported context");
-            record_type.insert(Identifier::from(new_name), struct_type);
+            record_type.insert(Identifier::from(struct_dec.data.get_name()), struct_type);
         }
 
         // The type of the full module (including all the parent modules).

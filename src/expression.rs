@@ -9,7 +9,6 @@ use itertools::join;
 
 use general_utils;
 use type_checking::types::{Trait, Type};
-use llr::WASMType;
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
@@ -52,6 +51,8 @@ pub struct Import {
 }
 
 impl Import {
+
+    /// Get a string referring to the imported value.
     pub fn string_ref(&self) -> String {
         return match &self.alias {
             Some(x) => x.name.clone(),

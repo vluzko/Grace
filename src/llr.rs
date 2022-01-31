@@ -177,7 +177,7 @@ pub fn module_to_llr(
                 }
                 Type::Named(name) => {
                     let full_name = format!("{}.{}", import.string_ref(), name);
-                    let actual_type = context.get_defined_type(&Identifier::from(full_name));
+                    let actual_type = context.get_defined_type(&Identifier::from(full_name))?;
                     let (args, return_type) = actual_type.get_constructor_type();
                     let wasm_args = args
                         .iter()

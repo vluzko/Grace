@@ -79,7 +79,6 @@ pub struct Compilation {
 impl Compilation {
     pub fn compile(file_name: &String) -> Compilation {
         let path = Path::new(file_name);
-        println!("Path is {:?}", path);
         let absolute_path = canonicalize(path).unwrap().into_boxed_path();
 
         // Panics if the file_name ends in ".."
@@ -124,6 +123,12 @@ impl Compilation {
                 .clone();
             // let full_name = format!("{}.{}", import.string_ref, struct_dec.data.get_name());
             record_type.insert(struct_dec.data.get_name(), struct_type);
+
+            // let internal_name = struct_dec.data.get_name();
+            let new_name = format!("{}.{}", import.string_ref(), struct_dec.data.get_name());
+            println!("struct name: {:?}", new_name);
+            // panic!("TODO: This needs to rewrite named types to match the name in the imported context");
+            record_type.insert(Identifier::from(new_name), struct_type);
         }
 
         // The type of the full module (including all the parent modules).

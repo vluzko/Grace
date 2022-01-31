@@ -6,9 +6,8 @@ use std::ops::Add;
 
 extern crate nom;
 use self::nom::ErrorKind;
-use general_utils;
 
-use expression::{Node, Expr};
+use expression::{Node};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraceError {

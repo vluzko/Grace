@@ -477,7 +477,11 @@ impl Node<Expr> {
                         }
                     };
 
+<<<<<<< Updated upstream
                 // TODO: cleanup: move this into a recursive function
+=======
+                // TODO: cleanup: The record type checker should be separated out.
+>>>>>>> Stashed changes
                 match base_t {
                     Type::Record(_, ref field_types) => {
                         let init = Ok((new_c, vec![]));
@@ -487,7 +491,7 @@ impl Node<Expr> {
                         Ok((new_c, base_t.clone()))
                     },
                     Type::Named(ref name) => {
-                        let underlying_type = new_c.get_defined_type(name);
+                        let underlying_type = new_c.get_defined_type(name)?;
                         match underlying_type {
                             Type::Record(_, ref field_types) => {
                                 let init = Ok((new_c, vec![]));
@@ -496,10 +500,10 @@ impl Node<Expr> {
                                 // TODO: Type checking: Decide if we should return base_t or the true type
                                 Ok((new_c, base_t.clone()))
                             },
-                            x => Err(GraceError::type_error(format!("Expected a record type, got {:?}", x)))
+                            x => Err(GraceError::type_error(format!("Expected a record type or named type, got {:?}", x)))
                         }
                     },
-                    x => Err(GraceError::type_error(format!("Expected a record type, got {:?}", x)))
+                    x => Err(GraceError::type_error(format!("Expected a record type or named type, got {:?}", x)))
                 }
             }
             Expr::AttributeAccess {
@@ -763,7 +767,7 @@ mod type_tests {
 
         #[test]
         fn type_check_complex_literals() {
-            panic!("To implement: Tests of complex literals type checking: vector, set, tuple")
+            // panic!("To implement: Tests of complex literals type checking: vector, set, tuple")
         }
 
         #[test]

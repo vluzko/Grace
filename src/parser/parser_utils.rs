@@ -40,7 +40,7 @@ macro_rules! optc (
   );
 
   ($i:expr, $f:expr) => (
-    optc!($i, call!($f));
+    optc!($i, call!($f))
   );
 );
 
@@ -51,7 +51,7 @@ macro_rules! many0c (
   );
 
   ($i:expr, $f:expr) => (
-    many0c!($i, call!($f));
+    many0c!($i, call!($f))
   );
 );
 
@@ -62,7 +62,7 @@ macro_rules! many1c (
   );
 
   ($i:expr, $f:expr) => (
-    many1c!($i, call!($f));
+    many1c!($i, call!($f))
   );
 );
 
@@ -73,7 +73,7 @@ macro_rules! indented (
   );
 
   ($i:expr, $f:expr, $ind: expr) => (
-    indented!($i, call!($f), $ind);
+    indented!($i, call!($f), $ind)
   );
 );
 

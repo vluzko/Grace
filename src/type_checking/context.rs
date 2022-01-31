@@ -260,8 +260,15 @@ impl Context {
     }
 
     /// Get the type associated with a particular name.
-    pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        return self.defined_types.get(name).unwrap().clone();
+    pub fn get_defined_type(&self, name: &Identifier) -> Result<Type, GraceError> {
+        let possible_type = self.defined_types.get(name);
+        return match possible_type {
+            Some(t) => Ok(t.clone()),
+            None => {
+                println!("{:?}", self.defined_types);
+                Err(GraceError::type_error(format!("No underlying type found for named type {:?}", name)))
+            }
+        };
     }
 
     /// Get the type of the identifier in the given scope.

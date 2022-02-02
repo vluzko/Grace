@@ -8,24 +8,10 @@ The main design principle of Grace is "gradualness": providing tools that allow 
 Grace mostly draws inspiration from Python and Haskell.
 
 ## Building
+`cargo build`
 
 ### Testing
 * Rust unit tests are run with `cargo test`
 * Rust integration tests are run with ???
 * Tests for compiled WebAssembly are run with `jest` from the `js_test` folder.
 
-## Core Planned Features
-* Garbage collection (this isn't a given for WebAssembly, but obviously any viable Javascript replacement needs it)
-    * For now this means implementing our own garbage collector. It's possible that WebAssembly will support some form of gc in the future.
-* A rich typesystem based mostly on Haskell, with some modifications:
-    * Subtyping (possibly) and/or inheritance (probably)
-    * Gradual typing
-    * Dependent types
-    * Substructural types (possibly)
-* The types of high-level niceties that Python has and Javascript decidedly lacks:
-    * Operator overloading
-    * Keyword arguments
-    * Comprehensions
-    * Arbitrary size integers by default
-    * Decorators
-    * An equality operator that makes any sense at all.

@@ -1,0 +1,7 @@
+
+fn foo(a: i64) -> i64:
+    return a
+
+fn bar():
+    let b = 6.0
+    foo(b)

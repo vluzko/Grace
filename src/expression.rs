@@ -13,8 +13,14 @@ use type_checking::types::{Trait, Type};
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
     pub id: usize,
-    pub line_no: usize,
-    pub column_no: usize,
+    /// The line the node starts on
+    pub start_line: u32,
+    /// The column the node starts on
+    pub start_col: u32,
+    /// The line the node ends on
+    pub end_line: u32,
+    /// The column the node ends on
+    pub end_col: u32,
     pub data: T,
     pub scope: usize,
 }
@@ -476,24 +482,14 @@ pub mod rust_trait_impls {
 
         /// From for Node
 
-        impl<T> From<(T, usize, usize)> for Node<T> {
-            fn from(input: (T, usize, usize)) -> Self {
+        impl<T> From<(T, u32, u32, u32, u32)> for Node<T> {
+            fn from(input: (T, u32, u32, u32, u32)) -> Self {
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: input.1,
-                    column_no: input.2,
-                    data: input.0,
-                    scope: 0,
-                };
-            }
-        }
-
-        impl<'a, Expr> From<(Expr, &PosStr<'a>)> for Node<Expr> {
-            fn from(input: (Expr, &PosStr<'a>)) -> Self {
-                return Node {
-                    id: general_utils::get_next_id(),
-                    line_no: input.1.line as usize,
-                    column_no: input.1.column as usize,
+                    start_line: input.1,
+                    start_col: input.2,
+                    end_line: input.3,
+                    end_col: input.4,
                     data: input.0,
                     scope: 0,
                 };
@@ -504,8 +500,10 @@ pub mod rust_trait_impls {
             fn from(input: T) -> Self {
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: input,
                     scope: 0,
                 };
@@ -517,8 +515,10 @@ pub mod rust_trait_impls {
                 let expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -530,8 +530,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -543,8 +545,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -555,8 +559,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -567,8 +573,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };

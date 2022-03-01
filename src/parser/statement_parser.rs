@@ -143,6 +143,7 @@ impl ParserContext {
 
     /// Match an if statement.
     fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
+        // TODO: Split this out into subparsers so we can get line and columns accurately.
         let parse_result = tuple!(
             input,
             line_and_block!(self, preceded!(IF, m!(self.expression)), indent),

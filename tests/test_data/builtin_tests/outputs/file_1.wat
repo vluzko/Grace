@@ -6,21 +6,6 @@
 (import "gradual_binary_ops" "call_gradual" (func $.gradual_binary_ops.call_gradual (param $i i32) (param $a i32) (param $b i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $conditional (param $a i32) (param $b i32) (result i32) (local $x i32)
-get_local $a
-get_local $b
-i32.add
-set_local $x
-(if (result i32) (
-i32.const 1
-)(then(
-get_local $a
-))(else(
-get_local $b
-)))
-)
-(export "conditional" (func $conditional))
-
 (func $add (param $a i32) (param $b i32) (result i32) (local $x i32)
 get_local $a
 get_local $b
@@ -57,22 +42,6 @@ get_local $x
 )
 (export "div" (func $div))
 
-(func $loop (param $x i32) (param $y i32) (result i32) 
-(block $void
-(loop $void
-get_local $x
-get_local $y
-i32.gt_s
-br_if 0
-get_local $x
-i32.const 1
-i32.sub
-set_local $x
-))
-get_local $x
-)
-(export "loop" (func $loop))
-
 (func $equality (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
@@ -94,12 +63,12 @@ i32.lt_s
 )
 (export "less" (func $less))
 
-(func $lesse (param $a i32) (param $b i32) (result i32) 
+(func $lesseq (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.le_s
 )
-(export "lesse" (func $lesse))
+(export "lesseq" (func $lesseq))
 
 (func $great (param $a i32) (param $b i32) (result i32) 
 get_local $a
@@ -108,19 +77,12 @@ i32.gt_s
 )
 (export "great" (func $great))
 
-(func $greate (param $a i32) (param $b i32) (result i32) 
+(func $greateq (param $a i32) (param $b i32) (result i32) 
 get_local $a
 get_local $b
 i32.ge_s
 )
-(export "greate" (func $greate))
-
-(func $call_func (param $a i32) (param $b i32) (result i32) 
-get_local $a
-get_local $b
-call $add
-)
-(export "call_func" (func $call_func))
+(export "greateq" (func $greateq))
 
 (func $and_test (param $a i32) (param $b i32) (result i32) 
 get_local $a

@@ -2,7 +2,6 @@ use std::collections::BTreeMap;
 
 use expression::*;
 use general_utils;
-use type_checking::context::Context;
 use type_checking::types::Type;
 
 /// A sum type for things that can modify scope.
@@ -117,27 +116,6 @@ impl Scope {
     }
 }
 
-pub fn get_convert_expr(
-    from: &Type,
-    to: &Type,
-    base: Node<Expr>,
-    context: &mut Context,
-) -> Node<Expr> {
-    return match from == to {
-        false => {
-            let operator = UnaryOperator::cast(&from, &to);
-            let raw_expr = Expr::UnaryExpr {
-                operator: operator,
-                operand: Box::new(base),
-            };
-            let new_node = Node::from(raw_expr);
-            context.add_type(new_node.id, to.clone());
-            new_node
-        }
-        true => base,
-    };
-}
-
 pub fn choose_return_type(possible: &Type) -> Type {
     return match possible {
         Type::Sum(ref types) => {
@@ -156,18 +134,6 @@ pub fn choose_return_type(possible: &Type) -> Type {
 }
 
 impl BinaryOperator {
-    pub fn get_return_types(&self, left: &Type, right: &Type) -> Type {
-        //let mut intersection = HashSet::new();
-        return match self {
-            BinaryOperator::Add
-            | BinaryOperator::Sub
-            | BinaryOperator::Mult
-            | BinaryOperator::Mod => left.merge(right),
-            BinaryOperator::Div => Type::f64,
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
-            _ => panic!(),
-        };
-    }
 
     pub fn choose_return_type(&self, merged_type: &Type) -> Type {
         return match self {
@@ -205,7 +171,20 @@ impl BinaryOperator {
             BinaryOperator::Div => ("Div", "div"),
             BinaryOperator::And => ("And", "and"),
             BinaryOperator::Or => ("Or", "or"),
-            x => panic!("get_builtin_trait not implemented for {:?}", x),
+            BinaryOperator::Equal => ("Eq", "eq"),
+            BinaryOperator::Unequal => ("Neq", "neq"),
+            BinaryOperator::Xor => ("Xor", "xor"),
+            BinaryOperator::Mod => ("Mod", "mod"),
+            BinaryOperator::BitAnd => ("BitAnd", "band"),
+            BinaryOperator::BitOr => ("BitOr", "bor"),
+            BinaryOperator::BitXor => ("BitXor", "bxor"),
+            BinaryOperator::BitShiftL => ("BitShiftL", "shl"),
+            BinaryOperator::BitShiftR => ("BitShiftR", "shr"),
+            BinaryOperator::Exponent => ("Exponent", "exp"),
+            BinaryOperator::Greater => ("Greater", "gt"),
+            BinaryOperator::Less => ("Less", "lt"),
+            BinaryOperator::GreaterEqual => ("GreaterEqual", "ge"),
+            BinaryOperator::LessEqual => ("LessEqual", "le"),
         };
 
         return (Identifier::from(x), Identifier::from(y));
@@ -213,14 +192,17 @@ impl BinaryOperator {
 }
 
 impl UnaryOperator {
-    fn cast(from: &Type, to: &Type) -> UnaryOperator {
-        let possible = from.is_compatible(to);
 
-        if possible {
-            return UnaryOperator::Convert(from.clone(), to.clone());
-        } else {
-            panic!("Cannot cast from {:?} to {:?}", from, to);
-        }
+    pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
+        let (x, y) = match self {
+            UnaryOperator::BitNot => ("BitNot", "bitnot"),
+            UnaryOperator::Negative => ("Negative", "negative"),
+            UnaryOperator::Not => ("Not", "not"),
+            UnaryOperator::Positive => ("Positive", "positive"),
+            _ => panic!()
+        };
+
+        return (Identifier::from(x), Identifier::from(y));
     }
 }
 
@@ -255,8 +237,8 @@ mod test {
     #[cfg(test)]
     mod scope_generation {
         use super::*;
-        use parser::Parseable;
-        use position_tracker::PosStr;
+        use parser::base::Parseable;
+        use parser::position_tracker::PosStr;
 
         fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
             return match ptr {

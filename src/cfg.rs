@@ -136,10 +136,11 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
 /// Add the contents of a block to a CFG.
 ///
 /// # Arguments
-///
-/// * `context` -
-/// * `current` -
-/// * `loop_start` -
+/// * `block`       - The block of code being converted.
+/// * `context`     - The compilation context.
+/// * `current`     - The CFG the block is embedded in.
+/// * `loop_start`  - A pointer to the start of the loop, if any. Only required for handling continue statements, which need to behave
+///                   differently from all other block ends.
 fn block_to_cfg(
     block: &Node<Block>,
     context: &Context,
@@ -160,41 +161,25 @@ fn block_to_cfg(
                 ref expression,
                 ..
             } => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Let {
-                        name: name.clone(),
-                        expression: expression.clone(),
-                    },
-                });
+                statements.push(stmt.replace(CfgStmt::Let {
+                    name: name.clone(),
+                    expression: expression.clone(),
+                }));
             }
             Stmt::AssignmentStmt {
                 ref name,
                 ref expression,
             } => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Assignment {
-                        name: name.clone(),
-                        expression: expression.clone(),
-                    },
-                });
+                statements.push(stmt.replace(CfgStmt::Assignment {
+                    name: name.clone(),
+                    expression: expression.clone(),
+                }));
             }
             Stmt::ReturnStmt(ref val) => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Return(val.clone()),
-                });
+                statements.push(stmt.replace(CfgStmt::Return(val.clone())));
             }
             Stmt::YieldStmt(ref val) => {
-                statements.push(Node {
-                    id: stmt.id,
-                    scope: stmt.scope,
-                    data: CfgStmt::Yield(val.clone()),
-                });
+                statements.push(stmt.replace(CfgStmt::Yield(val.clone())));
             }
             Stmt::WhileStmt {
                 ref condition,

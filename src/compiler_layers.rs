@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use itertools::join;
 
 use expression::{Identifier, Import, Module, Node};
-use parser::Parseable;
-use position_tracker::PosStr;
+use parser::base::Parseable;
+use parser::position_tracker::PosStr;
 use type_checking::context::Context;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
@@ -17,8 +17,10 @@ use type_checking::types::Type;
 use bytecode::ToBytecode;
 use cfg::{module_to_cfg, Cfg, CfgMap};
 use general_utils::{extend_map, get_next_id, join as join_vec};
+use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
 use pre_cfg_rewrites::TypeRewritable;
+
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
@@ -82,14 +84,20 @@ impl Compilation {
         // Panics if the file_name ends in ".."
         let boxed = Box::from(Path::new(path.file_name().unwrap()));
 
-        let mut compilation = Compilation {
+        let compilation = Compilation {
             main_path: Some(absolute_path.clone()),
             modules: HashMap::new(),
             root_name: Some(path_to_module_reference(&boxed)),
         };
         let just_file = PathBuf::from(absolute_path.file_name().unwrap()).into_boxed_path();
-        compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
-        return compilation;
+        let result =
+            compilation.compile_tree(&Box::from(absolute_path.parent().unwrap()), &just_file);
+        return match result {
+            Ok(c) => c,
+            Err(e) => {
+                panic!("Compilation failed with error: {:?}", e)
+            }
+        };
     }
 
     /// Get the full record type of a submodule.
@@ -113,7 +121,7 @@ impl Compilation {
                 .get(&struct_dec.id)
                 .unwrap()
                 .clone();
-            record_type.insert(struct_dec.data.get_name(), struct_type);
+            record_type.insert(Identifier::from(struct_dec.data.get_name()), struct_type);
         }
 
         // The type of the full module (including all the parent modules).
@@ -123,7 +131,11 @@ impl Compilation {
     }
 
     /// Compile the module tree rooted at the given file name.
-    pub fn compile_tree(&mut self, base_dir: &Box<Path>, file_name: &Box<Path>) {
+    pub fn compile_tree(
+        mut self,
+        base_dir: &Box<Path>,
+        file_name: &Box<Path>,
+    ) -> Result<Compilation, GraceError> {
         let mut f = File::open(base_dir.join(file_name)).expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
@@ -136,9 +148,6 @@ impl Compilation {
         // Set everything up for compiling the dependencies.
         let mut new_imports = vec![];
         let mut dependencies = vec![];
-        // let mut init_scope = base_scope();
-        // let mut init_type_map = HashMap::new();
-
         let mut init_context = Context::builtin();
 
         // Add builtin imports
@@ -151,7 +160,9 @@ impl Compilation {
         // Compile dependencies
         for import in &parsed_module.data.imports {
             let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
-            let new_import = self.add_import(base_dir, import, &mut init_context);
+            // TODO: Cleanup: Just overwrite parsed_module.data.imports directly instead of waiting.
+            let (res, new_import) = self.add_import(base_dir, import, &mut init_context);
+            self = res;
 
             new_imports.push(Box::new(new_import));
             dependencies.push(submodule_name);
@@ -159,42 +170,42 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
-        match context_res {
-            Ok((mut context, _)) => {
-                let rewritten = parsed_module.type_based_rewrite(&mut context);
-                let cfg_map = module_to_cfg(&rewritten, &context);
-                let wasm = module_to_llr(&rewritten, &context, &cfg_map);
+        let (mut context, _) =
+            parsed_module.scopes_and_types(init_context.root_id, init_context)?;
+        let rewritten = parsed_module.type_based_rewrite(&mut context);
+        let cfg_map = module_to_cfg(&rewritten, &context);
+        let wasm = module_to_llr(&rewritten, &context, &cfg_map);
 
-                // Put the results in the tree.
-                let compiled = CompiledModule {
-                    ast: rewritten,
-                    context: context,
-                    cfg_map: cfg_map,
-                    llr: wasm,
-                    path: file_name.clone(),
-                    dependencies: dependencies,
-                    hash: 0,
-                };
-                self.modules.insert(module_name, compiled);
-            }
-            Err(e) => panic!("Unimplemented error handling: {:?}", e),
+        // Put the results in the tree.
+        let compiled = CompiledModule {
+            ast: rewritten,
+            context: context,
+            cfg_map: cfg_map,
+            // TODO: errors: Handle the error
+            llr: wasm.unwrap(),
+            path: file_name.clone(),
+            dependencies: dependencies,
+            hash: 0,
         };
+        self.modules.insert(module_name, compiled);
+
+        return Ok(self);
     }
 
+    /// Compile an import, add the module to the compilation object, and return the updated Import object.
     fn add_import(
-        &mut self,
+        mut self,
         base_dir: &Box<Path>,
         import: &Import,
         context: &mut Context,
-    ) -> Import {
+    ) -> (Compilation, Import) {
         let path = module_path_to_path(&import.path);
         let submodule_name = join(import.path.iter().map(|x| x.name.clone()), ".");
 
         let submodule = match self.modules.get(&submodule_name) {
             Some(x) => x,
             None => {
-                self.compile_tree(base_dir, &path);
+                self = self.compile_tree(base_dir, &path).unwrap();
                 self.modules.get(&submodule_name).unwrap()
             }
         };
@@ -223,6 +234,7 @@ impl Compilation {
         let module_type = Compilation::get_submodule_type(submodule, &import);
         context.add_type(import.id, module_type);
 
+        // Import struct types from the module
         for (def_name, def_type) in &submodule.context.defined_types {
             let new_type_name = Identifier::from(format!("{}.{}", import.string_ref(), def_name));
             context.define_type(new_type_name, def_type.clone());
@@ -234,7 +246,7 @@ impl Compilation {
             alias: import.alias.clone(),
             values: exports,
         };
-        return new_import;
+        return (self, new_import);
     }
 
     // Generate bytecode for all compiled modules, and output the result to files. Return the output of the main file, if it exists.
@@ -292,7 +304,8 @@ impl Compilation {
                     ast: parsed_module,
                     context: context,
                     cfg_map: cfg_map,
-                    llr: wasm,
+                    // TODO: errors: Handle the error
+                    llr: wasm.unwrap(),
                     path: Box::from(Path::new(".")),
                     dependencies: vec![],
                     hash: 0,
@@ -466,5 +479,63 @@ pub fn to_cfg_map<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap) {
 pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule) {
     let (module, context, cfg_map) = to_cfg_map(input);
     let llr = module_to_llr(&module, &context, &cfg_map);
-    return (module, context, cfg_map, llr);
+    return (module, context, cfg_map, llr.unwrap());
 }
+
+/// Run the compiler from an AST to a type context.
+pub (crate) fn ast_to_context<T>(mut input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+where
+    Node<T>: GetContext
+{
+    let init = match start_context {
+        Some(context) => context,
+        None => Context::builtin(),
+    };
+    let id = init.root_id;
+    let context_res = input.scopes_and_types(id, init);
+    return match context_res {
+        Ok((context, _)) => (input, context),
+        x => panic!("COMPILER ERROR: {:?}", x),
+    };
+}
+
+/// Run the compiler from an AST to a rewritten AST.
+pub (crate) fn ast_to_type_rewrites<T>(input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+where
+    Node<T>: GetContext,
+    Node<T>: TypeRewritable<Node<T>>,
+{
+    let (result, mut context): (Node<T>, Context) = ast_to_context(input, start_context);
+    let rewritten = result.type_based_rewrite(&mut context);
+    return (rewritten, context);
+}
+
+// pub (crate) fn ast_to_cfg_map<T>(input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context, CfgMap)
+// where
+//     Node<T>: GetContext,
+//     Node<T>: TypeRewritable<Node<T>>,
+// {
+//     let (module, context) = ast_to_type_rewrites(input, start_context);
+//     let cfg_map = module_to_cfg(&module, &context);
+//     return (module, context, cfg_map);
+// }
+
+
+
+// pub (crate) mod sub_layers {
+//     use super::*;
+//     use expression::Expr;
+
+//     trait CompileToLLR {
+//         fn compile_to_cfg(self, start_context: Option<Context>) -> CfgMap;
+//     }
+
+//     impl CompileToLLR for Node<Expr> {
+//         fn compile_to_cfg(self, start_context: Option<Context>) -> Vec<WASM> {
+//             let (result, context) = ast_to_type_rewrites(self, start_context);
+//             // return module_to_cfg(&result, &context);
+//             panic!()
+//         }
+//     }
+// }
+

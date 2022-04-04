@@ -31,21 +31,27 @@ pub(crate) mod strategies {
             Just(BinaryOperator::BitXor),
             Just(BinaryOperator::BitShiftL),
             Just(BinaryOperator::BitShiftR),
-            Just(BinaryOperator::Exponent)
+            Just(BinaryOperator::Exponent),
+            Just(BinaryOperator::Greater),
+            Just(BinaryOperator::Less),
+            Just(BinaryOperator::Equal),
+            Just(BinaryOperator::Unequal),
+            Just(BinaryOperator::GreaterEqual),
+            Just(BinaryOperator::LessEqual)
         ]
     }
 
     /// Generate a random comparison operator.
-    fn comparison_operator_strat() -> impl Strategy<Value = ComparisonOperator> {
-        prop_oneof![
-            Just(ComparisonOperator::Greater),
-            Just(ComparisonOperator::Less),
-            Just(ComparisonOperator::Equal),
-            Just(ComparisonOperator::Unequal),
-            Just(ComparisonOperator::GreaterEqual),
-            Just(ComparisonOperator::LessEqual)
-        ]
-    }
+    // fn comparison_operator_strat() -> impl Strategy<Value = ComparisonOperator> {
+    //     prop_oneof![
+    //         Just(ComparisonOperator::Greater),
+    //         Just(ComparisonOperator::Less),
+    //         Just(ComparisonOperator::Equal),
+    //         Just(ComparisonOperator::Unequal),
+    //         Just(ComparisonOperator::GreaterEqual),
+    //         Just(ComparisonOperator::LessEqual)
+    //     ]
+    // }
 
     /// Generate a random unary operator.
     fn unary_operator_strat() -> impl Strategy<Value = UnaryOperator> {
@@ -75,13 +81,13 @@ pub(crate) mod strategies {
                         right: wrap(right)
                     }
                 ),
-                (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
-                    |(left, right, operator)| Expr::ComparisonExpr {
-                        operator,
-                        left: wrap(left),
-                        right: wrap(right)
-                    }
-                ),
+                // (inner.clone(), inner.clone(), comparison_operator_strat()).prop_map(
+                //     |(left, right, operator)| Expr::ComparisonExpr {
+                //         operator,
+                //         left: wrap(left),
+                //         right: wrap(right)
+                //     }
+                // ),
                 (inner.clone(), unary_operator_strat()).prop_map(|(operand, operator)| {
                     Expr::UnaryExpr {
                         operator,
@@ -257,16 +263,16 @@ pub(crate) mod strategies {
                     operator.to_string(),
                     right.data.inverse_parse()
                 ),
-                Expr::ComparisonExpr {
-                    ref operator,
-                    ref left,
-                    ref right,
-                } => format!(
-                    "{}{}{}",
-                    left.data.inverse_parse(),
-                    operator.to_string(),
-                    right.data.inverse_parse()
-                ),
+                // Expr::ComparisonExpr {
+                //     ref operator,
+                //     ref left,
+                //     ref right,
+                // } => format!(
+                //     "{}{}{}",
+                //     left.data.inverse_parse(),
+                //     operator.to_string(),
+                //     right.data.inverse_parse()
+                // ),
                 Expr::UnaryExpr {
                     ref operator,
                     ref operand,

@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use expression::*;
-use grace_error::GraceError;
 use general_utils;
+use grace_error::GraceError;
 
 /// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -275,10 +275,18 @@ impl Type {
                 }
                 match t {
                     Some(attr_type) => Ok(attr_type),
-                    None => panic!("Self: {:?}, attribute: {:?}", self, attribute),
+                    None => Err(GraceError::type_error(format!(
+                            "Tried to access nonexistent attribute {:?} on type {:?}",
+                            attribute, self
+                        ),
+                    )),
                 }
             }
-            _ => Err(GraceError::TypeError{msg: "Tried to access nonexistent attribute".to_string()}),
+            _ => Err(GraceError::type_error(format!(
+                    "Tried to access attribute {:?} on non-record type {:?}",
+                    attribute, self
+                ),
+            )),
         };
     }
 
@@ -370,6 +378,10 @@ impl Type {
                     operator: ComparisonOperator::Equal,
                     left: Box::new(Node {
                         id: general_utils::get_next_id(),
+                        start_line: expr.start_line,
+                        start_col: expr.start_col,
+                        end_line: expr.end_line,
+                        end_col: expr.end_col,
                         scope: expr.scope,
                         data: Expr::from(name.clone()),
                     }),
@@ -383,5 +395,17 @@ impl Type {
     }
 }
 
-#[cfg(test)]
-mod tests {}
+/// Constructors
+impl Type {
+    /// Construct a module type from a type map.
+    pub fn module_from_map(map: BTreeMap<Identifier, Type>) -> Type {
+        let keys = map.keys().cloned().collect();
+        let module_type = Type::Module(keys, map);
+        return module_type;
+    }
+
+    /// Construct an argumentless function type.
+    pub fn func_no_args(return_type: Type) -> Type {
+        return Type::Function(vec![], Box::new(return_type));
+    }
+}

@@ -8,8 +8,8 @@ use std::str;
 extern crate nom;
 // use self::nom;
 use self::nom::*;
+use super::position_tracker::PosStr;
 use expression::Node;
-use position_tracker::PosStr;
 
 use self::iresult_helpers::*;
 use self::tokens::*;
@@ -40,7 +40,7 @@ macro_rules! optc (
   );
 
   ($i:expr, $f:expr) => (
-    optc!($i, call!($f));
+    optc!($i, call!($f))
   );
 );
 
@@ -51,7 +51,7 @@ macro_rules! many0c (
   );
 
   ($i:expr, $f:expr) => (
-    many0c!($i, call!($f));
+    many0c!($i, call!($f))
   );
 );
 
@@ -62,42 +62,9 @@ macro_rules! many1c (
   );
 
   ($i:expr, $f:expr) => (
-    many1c!($i, call!($f));
+    many1c!($i, call!($f))
   );
 );
-
-// fn split_at_position_inclusive<P, T>(sequence: &T, predicate: P) -> IResult<T, T, u32>
-//   where
-//     T: InputLength + InputIter + InputTake + AtEof + Clone,
-//     P: Fn(<T as InputIter>::RawItem) -> bool,
-//   {
-//     match sequence.position(predicate) {
-//       Some(n) => Ok(sequence.take_split(n+1)),
-//       None => {
-//         if sequence.at_eof() {
-//           Ok(sequence.take_split(sequence.input_len()))
-//         } else {
-//           Err(Err::Incomplete(Needed::Size(1)))
-//         }
-//       }
-//     }
-//   }
-
-// macro_rules! take_till_inclusive (
-//     ($input:expr, $submac:ident!( $($args:tt)* )) => (
-//         {
-//             // use nom::InputTakeAtPosition;
-//             let input = $input;
-//             match split_at_position_inclusive(&input, |c| $submac!(c, $($args)*)) {
-//                 Err(nom::Err::Incomplete(_)) => Ok(input.take_split(input.input_len())),
-//                 x => x
-//             }
-//         }
-//     );
-//     ($input:expr, $f:expr) => (
-//         take_till_inclusive!($input, call!($f));
-//     );
-// );
 
 /// Check that a macro is indented correctly.
 macro_rules! indented (
@@ -106,10 +73,11 @@ macro_rules! indented (
   );
 
   ($i:expr, $f:expr, $ind: expr) => (
-    indented!($i, call!($f), $ind);
+    indented!($i, call!($f), $ind)
   );
 );
 
+/// A separated list with at least m elements.
 macro_rules! separated_at_least_m {
     ($i:expr, $m: expr, $sep:ident!( $($args:tt)* ), $submac:ident!( $($args2:tt)* )) => ({
         match separated_list_complete!($i, complete!($sep!($($args)*)), complete!($submac!($($args2)*))) {
@@ -125,16 +93,17 @@ macro_rules! separated_at_least_m {
     });
 
     ($i:expr, $m: expr, $submac:ident!( $($args:tt)* ), $g:expr) => (
-        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g));
+        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g))
     );
     ($i:expr, $m: expr, $f:expr, $submac:ident!( $($args:tt)* )) => (
-        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*));
+        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*))
     );
     ($i:expr, $m: expr, $f:expr, $g:expr) => (
         separated_at_least_m!($i, $m, call!($f), call!($g));
     );
 }
 
+/// A line that matches the given macro, followed by a block.
 macro_rules! line_and_block (
     ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
         tuple!($i,
@@ -163,6 +132,7 @@ macro_rules! line_and_block (
     );
 );
 
+/// A keyword that matches the given macro, followed by a block.
 macro_rules! keyword_and_block (
     ($i:expr, $self_:ident, $keyword: expr, $indent: expr) => (
         match line_and_block!($i, $self_, $keyword, $indent) {
@@ -198,7 +168,6 @@ pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
 
 pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
     let val = alt!(input, eof!() | NEWLINE | EMPTY);
-    println!("output for {:?} is {:?}", input, val);
     return val;
 }
 
@@ -618,87 +587,49 @@ pub mod iresult_helpers {
         };
     }
 
-    /// Map the contents and wrap a Node around it.
-    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
+    /// Map data and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F, start: &(u32, u32)) -> Res<'a, Node<T>>
     where
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, Node::from(func(o)))),
+            Ok((i, o)) => Ok((i, Node::from((func(o), start.0, start.1, i.line, i.column)))),
             Err(e) => Err(e),
         };
     }
 
-    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
+    /// Map data and update with a function that does not produce an additional update, and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, (Node::from(func(o.0)), o.1))),
+            Ok((i, o)) => Ok((i, (Node::from((func(o.0), start.0, start.1, i.line, i.column)), o.1))),
             Err(e) => Err(e),
         };
     }
 
-    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F) -> Res<'a, (Node<T>, U)>
+    /// Map data and update with a function that may produce an additional update, and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> (T, U),
     {
         return match res {
             Ok((i, o)) => {
                 let (v, u) = func(o);
-                Ok((i, (Node::from(v), u)))
+                Ok((i, (Node::from((v, start.0, start.1, i.line, i.column)), u)))
             }
             Err(e) => Err(e),
         };
-    }
-
-    pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
-        return match res {
-            Ok((i, o)) => Ok((i, Node::from(o))),
-            Err(e) => Err(e),
-        };
-    }
-
-    pub fn fmap_and_full_log<'a, X, T>(
-        res: Res<'a, X>,
-        func: fn(X) -> T,
-        name: &str,
-        input: PosStr<'a>,
-    ) -> Res<'a, T> {
-        return match res {
-            Ok((i, o)) => {
-                println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
-                Ok((i, func(o)))
-            }
-            Err(e) => {
-                println!("{} error: {:?}. Input was: {:?}", name, e, input);
-                Err(e)
-            }
-        };
-    }
-
-    /// Map an IResult and log errors and incomplete values.
-    pub fn fmap_and_log<'a, X, T>(
-        res: Res<'a, X>,
-        func: fn(X) -> T,
-        name: &str,
-        input: PosStr<'a>,
-    ) -> Res<'a, T> {
-        return match res {
-            Ok((i, o)) => Ok((i, func(o))),
-            Err(e) => {
-                println!("{} error: {:?}. Input was: {:?}", name, e, input);
-                Err(e)
-            }
-        };
-    }
-
-    pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-        return fmap_and_full_log(res, |x| x, name, input);
-    }
-
-    pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-        return fmap_and_log(res, |x| x, name, input);
     }
 
     pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
@@ -871,8 +802,7 @@ pub mod iresult_helpers {
                 _ => panic!(),
             },
             Ok(x) => {
-                println!("Should have failed, got: {:?}", x);
-                panic!()
+                panic!("Should have failed, got: {:?}", x)
             }
         }
     }

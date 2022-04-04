@@ -3,8 +3,10 @@ use std::convert::From;
 
 use expression::*;
 use type_checking::context::Context;
-use type_checking::scope::{choose_return_type, get_convert_expr};
+use type_checking::scope::{choose_return_type};
 use type_checking::types::Type;
+
+use crate::general_utils::get_next_id;
 
 pub trait TypeRewritable<T> {
     fn type_based_rewrite(self, context: &mut Context) -> T;
@@ -37,15 +39,20 @@ impl TypeRewritable<Node<Module>> for Node<Module> {
             new_impls.push((trait_name, type_name, rewritten_functions));
         }
 
+        let new_data = Module {
+            functions: new_func_decs,
+            structs: new_struct_decs,
+            imports: self.data.imports,
+            traits: self.data.traits,
+            trait_implementations: new_impls,
+        };
         return Node {
             id: self.id,
-            data: Module {
-                functions: new_func_decs,
-                structs: new_struct_decs,
-                imports: self.data.imports,
-                traits: self.data.traits,
-                trait_implementations: new_impls,
-            },
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
+            data: new_data,
             scope: self.scope,
         };
     }
@@ -62,6 +69,10 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
         let new_block = Node {
             id: self.id,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: Block {
                 statements: new_stmts,
             },
@@ -84,32 +95,24 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
 impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
     fn type_based_rewrite(self, context: &mut Context) -> Node<Stmt> {
-        let new_stmt = match self.data {
+        let new_data = match self.data {
             Stmt::LetStmt {
                 name,
                 type_annotation,
                 expression,
             } => {
-                let returned_type = context.get_node_type(expression.id);
                 let base = expression.type_based_rewrite(context);
-                let expr = match &type_annotation {
-                    Some(x) => get_convert_expr(&returned_type, &x, base, context),
-                    None => base,
-                };
                 Stmt::LetStmt {
                     name,
                     type_annotation,
-                    expression: expr,
+                    expression: base,
                 }
             }
             Stmt::AssignmentStmt { expression, name } => {
-                let expected_type = context.get_node_type(self.id);
-                let actual_type = context.get_node_type(expression.id);
                 let base = expression.type_based_rewrite(context);
-                let expr = get_convert_expr(&actual_type, &expected_type, base, context);
                 Stmt::AssignmentStmt {
                     name,
-                    expression: expr,
+                    expression: base,
                 }
             }
             Stmt::FunctionDecStmt {
@@ -150,17 +153,18 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 let base = value.type_based_rewrite(context);
                 assert!(ret_type.is_compatible(&exp_type));
 
-                let expr = match ret_type == exp_type {
-                    true => base,
-                    false => get_convert_expr(&ret_type, &exp_type, base, context),
-                };
-                Stmt::ReturnStmt(expr)
+                Stmt::ReturnStmt(base)
             }
             _ => self.data,
         };
+        // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            data: new_stmt,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
+            data: new_data,
             scope: self.scope,
         };
     }
@@ -168,20 +172,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
 
 impl TypeRewritable<Node<Expr>> for Node<Expr> {
     fn type_based_rewrite(self, context: &mut Context) -> Node<Expr> {
-        let new_expr = match self.data {
-            Expr::ComparisonExpr {
-                left,
-                right,
-                operator,
-            } => {
-                let left = Box::new(left.type_based_rewrite(context));
-                let right = Box::new(right.type_based_rewrite(context));
-                Expr::ComparisonExpr {
-                    left,
-                    right,
-                    operator,
-                }
-            }
+        let new_data = match self.data {
             Expr::BinaryExpr {
                 operator,
                 left,
@@ -194,20 +185,39 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
 
                 // If neither type is gradual, proceed as normal
                 if !left_type.is_gradual() && !right_type.is_gradual() {
+                    let (trait_name, method_name) = operator.get_builtin_trait();
+
                     // If the left type is not primitive, call trait method corresponding to this operator
                     if !left_type.is_primitive() {
-                        panic!("Operator -> trait method call not implemented yet.")
+                        let func_expr = Expr::TraitAccess {
+                            base: Box::new(new_left),
+                            trait_name: trait_name,
+                            attribute: method_name,
+                        };
+                        let new_node = Node {
+                            id: get_next_id(),
+                            start_line: self.start_line,
+                            start_col: self.start_col,
+                            end_line: self.end_line,
+                            end_col: self.end_col,
+                            data: func_expr,
+                            scope: self.scope,
+                        };
+                        Expr::FunctionCall {
+                            function: Box::new(new_node),
+                            args: vec![new_right],
+                            kwargs: vec!(),
+                        }
                     } else {
                         // If the left type is primitive, it stays an operator
-                        let merged_type = operator.get_return_types(&left_type, &right_type);
-                        let converted_left =
-                            get_convert_expr(&left_type, &merged_type, new_left, context);
-                        let converted_right =
-                            get_convert_expr(&right_type, &merged_type, new_right, context);
-                        Expr::BinaryExpr {
-                            operator,
-                            left: Box::new(converted_left),
-                            right: Box::new(converted_right),
+                        if left_type == right_type {
+                            Expr::BinaryExpr {
+                                operator,
+                                left: Box::new(new_left),
+                                right: Box::new(new_right),
+                            }
+                        } else {
+                            panic!("COMPILER ERROR: Not implemented: BinaryExpr with different primitive types.");
                         }
                     }
                 } else {
@@ -228,6 +238,50 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         kwargs,
                     };
                     func_call
+                }
+            }
+            Expr::UnaryExpr {
+                operator,
+                operand
+            } => {
+                let operand_type = context.get_node_type(operand.id);
+                let new_operand = operand.type_based_rewrite(context);
+
+                // If neither type is gradual, proceed as normal
+                if !operand_type.is_gradual() {
+                    let (trait_name, method_name) = operator.get_builtin_trait();
+
+                    // If the left type is not primitive, call trait method corresponding to this operator
+                    if !operand_type.is_primitive() {
+                        let func_expr = Expr::TraitAccess {
+                            base: Box::new(new_operand),
+                            trait_name: trait_name,
+                            attribute: method_name,
+                        };
+                        let new_node = Node {
+                            id: get_next_id(),
+                            start_line: self.start_line,
+                            start_col: self.start_col,
+                            end_line: self.end_line,
+                            end_col: self.end_col,
+                            data: func_expr,
+                            scope: self.scope,
+                        };
+                        Expr::FunctionCall {
+                            function: Box::new(new_node),
+                            args: vec!(),
+                            kwargs: vec!(),
+                        }
+                    } else {
+                        // If the operand type is primitive, it stays an operator
+                        Expr::UnaryExpr {
+                            operator,
+                            operand: Box::new(new_operand),
+                        }
+                    }
+                } else {
+                    // See BinaryExpr for example implementation.
+                    panic!("Not implemented: gradual unary expression calls.")
                 }
             }
             Expr::FunctionCall {
@@ -276,9 +330,14 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
             _ => self.data,
         };
 
+        // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            data: new_expr,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
+            data: new_data,
             scope: self.scope,
         };
     }

@@ -8,20 +8,31 @@ use std::str::from_utf8;
 use itertools::join;
 
 use general_utils;
-use position_tracker::PosStr;
 use type_checking::types::{Trait, Type};
 
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
     pub id: usize,
+    /// The line the node starts on
+    pub start_line: u32,
+    /// The column the node starts on
+    pub start_col: u32,
+    /// The line the node ends on
+    pub end_line: u32,
+    /// The column the node ends on
+    pub end_col: u32,
     pub data: T,
     pub scope: usize,
 }
 
 impl<T> Node<T> {
-    pub fn replace(&self, new_data: T) -> Node<T> {
+    pub fn replace<S>(&self, new_data: S) -> Node<S> {
         return Node {
             id: self.id,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: new_data,
             scope: self.scope.clone(),
         };
@@ -48,6 +59,8 @@ pub struct Import {
 }
 
 impl Import {
+
+    /// Get a string referring to the imported value.
     pub fn string_ref(&self) -> String {
         return match &self.alias {
             Some(x) => x.name.clone(),
@@ -116,15 +129,6 @@ impl Stmt {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Expr {
-    MatchExpr {
-        value: Box<Node<Expr>>,
-        cases: Vec<(Node<Expr>, Node<Expr>)>,
-    },
-    ComparisonExpr {
-        operator: ComparisonOperator,
-        left: Box<Node<Expr>>,
-        right: Box<Node<Expr>>,
-    },
     BinaryExpr {
         operator: BinaryOperator,
         left: Box<Node<Expr>>,
@@ -229,6 +233,12 @@ pub enum BinaryOperator {
     BitShiftL,
     BitShiftR,
     Exponent,
+    Greater,
+    Less,
+    Equal,
+    Unequal,
+    GreaterEqual,
+    LessEqual,
 }
 
 /// Any unary operator.
@@ -238,14 +248,6 @@ pub enum UnaryOperator {
     Positive,
     Negative,
     BitNot,
-    ToI32,
-    ToUi32,
-    ToI64,
-    ToUi64,
-    ToF32,
-    ToF64,
-    ToBool,
-    Convert(Type, Type),
 }
 
 /// An identifier. Alphanumeric characters and underscores. Cannot start with a digit.
@@ -270,8 +272,12 @@ pub mod constructors {
         {
             return Stmt::IfStmt {
                 condition: Node::from(condition),
-                block: Node {
+                block: Node{
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: block,
                     scope: 0,
                 },
@@ -426,6 +432,12 @@ pub mod rust_trait_impls {
                         BinaryOperator::BitShiftL => "<<",
                         BinaryOperator::BitShiftR => ">>",
                         BinaryOperator::Exponent => "**",
+                        BinaryOperator::Greater => ">",
+                        BinaryOperator::Less => "<",
+                        BinaryOperator::Equal => "==",
+                        BinaryOperator::Unequal => "!=",
+                        BinaryOperator::GreaterEqual => ">=",
+                        BinaryOperator::LessEqual => "<=",
                     }
                 )
             }
@@ -470,11 +482,32 @@ pub mod rust_trait_impls {
     /// From implementations
     mod from_impl {
         use super::*;
+        use parser::position_tracker::PosStr;
+
         /// From for Node
+
+        impl<T> From<(T, u32, u32, u32, u32)> for Node<T> {
+            fn from(input: (T, u32, u32, u32, u32)) -> Self {
+                return Node {
+                    id: general_utils::get_next_id(),
+                    start_line: input.1,
+                    start_col: input.2,
+                    end_line: input.3,
+                    end_col: input.4,
+                    data: input.0,
+                    scope: 0,
+                };
+            }
+        }
+
         impl<T> From<T> for Node<T> {
             fn from(input: T) -> Self {
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: input,
                     scope: 0,
                 };
@@ -486,6 +519,10 @@ pub mod rust_trait_impls {
                 let expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -497,6 +534,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -508,6 +549,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -518,6 +563,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -528,6 +577,10 @@ pub mod rust_trait_impls {
                 let expr: Expr = Expr::from(input);
                 return Node {
                     id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: expr,
                     scope: 0,
                 };
@@ -664,10 +717,15 @@ pub mod rust_trait_impls {
                     "<<" => BinaryOperator::BitShiftL,
                     ">>" => BinaryOperator::BitShiftR,
                     "**" => BinaryOperator::Exponent,
+                    "==" => BinaryOperator::Equal,
+                    ">=" => BinaryOperator::GreaterEqual,
+                    "<=" => BinaryOperator::LessEqual,
+                    ">" => BinaryOperator::Greater,
+                    "<" => BinaryOperator::Less,
+                    "!=" => BinaryOperator::Unequal,
                     _ => {
                         // TODO: Log
-                        println!("Bad input to BinaryOperator::from<&str>: {}", input);
-                        panic!()
+                        panic!("Bad input to BinaryOperator::from<&str>: {}", input)
                     }
                 };
             }
@@ -689,6 +747,12 @@ pub mod rust_trait_impls {
                     b"<<" => BinaryOperator::BitShiftL,
                     b">>" => BinaryOperator::BitShiftR,
                     b"**" => BinaryOperator::Exponent,
+                    b"==" => BinaryOperator::Equal,
+                    b">=" => BinaryOperator::GreaterEqual,
+                    b"<=" => BinaryOperator::LessEqual,
+                    b">" => BinaryOperator::Greater,
+                    b"<" => BinaryOperator::Less,
+                    b"!=" => BinaryOperator::Unequal,
                     _ => {
                         panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
                     }
@@ -727,20 +791,6 @@ pub mod rust_trait_impls {
         impl<'a> From<PosStr<'a>> for UnaryOperator {
             fn from(input: PosStr<'a>) -> Self {
                 return UnaryOperator::from(input.slice);
-            }
-        }
-
-        impl<'a> From<&'a Type> for UnaryOperator {
-            fn from(input: &'a Type) -> Self {
-                match input {
-                    Type::i32 => UnaryOperator::ToI32,
-                    Type::ui32 => UnaryOperator::ToF32,
-                    Type::i64 => UnaryOperator::ToI64,
-                    Type::f32 => UnaryOperator::ToF32,
-                    Type::f64 => UnaryOperator::ToF64,
-                    Type::boolean => UnaryOperator::ToBool,
-                    _ => panic!(),
-                }
             }
         }
 

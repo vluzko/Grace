@@ -1,0 +1,42 @@
+fn add(a: i32, b: i32) -> i32:
+    let x = a + b
+    return x
+
+fn sub(a: i32, b: i32) -> i32:
+    let x = a - b
+    return x
+
+fn mult(a: i32, b: i32) -> i32:
+    let x = a * b
+    return x
+
+fn div(a: f64, b: f64) -> f64:
+    let x = a / b
+    return x
+
+fn equality(a: i32, b: i32) -> boolean:
+    return a == b
+
+fn neq(a: i32, b: i32) -> boolean:
+    return a != b
+
+fn less(a: i32, b: i32) -> boolean:
+    return a < b
+
+fn lesseq(a: i32, b: i32) -> boolean:
+    return a <= b
+
+fn great(a: i32, b: i32) -> boolean:
+    return a > b
+
+fn greateq(a: i32, b: i32) -> boolean:
+    return a >= b
+
+fn and_test(a: boolean, b: boolean) -> boolean:
+    return a and b
+
+fn or_test(a: boolean, b: boolean) -> boolean:
+    return a or b
+
+//fn xor_test(a: boolean, b: boolean) -> boolean:
+//    return a xor b

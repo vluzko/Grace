@@ -2,10 +2,10 @@ use std::collections::HashMap;
 
 use expression::*;
 use general_utils;
+use grace_error::GraceError;
 use type_checking::refinements::check_constraints;
 use type_checking::scope::{CanModifyScope, Scope};
 use type_checking::types::{Trait, Type};
-use grace_error::GraceError;
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
@@ -16,6 +16,21 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
                 vec!(
                     (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
                     (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
+                ),
+                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+            )
+        },
+    };
+}
+
+/// Generate a single unary trait.
+fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
+    return Trait {
+        name: trait_name,
+        functions: hashmap! {
+            method_name => Type::Function(
+                vec!(
+                    (Identifier::from("operand"), Type::self_type(Box::new(Type::Undetermined)))
                 ),
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
@@ -42,6 +57,19 @@ fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
         .collect();
 }
 
+fn builtin_comparison() -> Vec<(Identifier, Identifier)> {
+    return vec![BinaryOperator::Equal.get_builtin_trait(), BinaryOperator::Unequal.get_builtin_trait(),
+    BinaryOperator::Greater.get_builtin_trait(), BinaryOperator::Less.get_builtin_trait(),
+    BinaryOperator::GreaterEqual.get_builtin_trait(), BinaryOperator::LessEqual.get_builtin_trait()];
+}
+
+fn builtin_unary() -> Vec<(Identifier, Identifier)> {
+    return vec![("Not", "not")]
+        .into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+        .collect();
+}
+
 /// Generate all the builtin binary traits.
 fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
     let mut traits = HashMap::new();
@@ -54,7 +82,21 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
         let trt = binary_trait(tn.clone(), mn);
         traits.insert(tn, trt);
     }
+
+    for (tn, mn) in builtin_comparison().into_iter() {
+        let trt = binary_trait(tn.clone(), mn);
+        traits.insert(tn, trt);
+    }
     return traits;
+}
+
+fn builtin_unary_traits() -> HashMap<Identifier, Trait> {
+    let mut map = HashMap::new();
+    for (tn, mn) in builtin_unary().into_iter() {
+        let tr = unary_trait(tn.clone(), mn);
+        map.insert(Identifier::from(tn), tr);
+    }
+    return map;
 }
 
 /// Generate all the builtin trait implementations
@@ -86,6 +128,32 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
             impls.insert((tn.clone(), t), func_types);
         }
     }
+
+    for (tn, mn) in builtin_comparison().into_iter() {
+        for t in vec![Type::boolean, Type::i32, Type::i64, Type::f32, Type::f64] {
+            let func_t = Type::Function(
+                vec![
+                    (Identifier::from("left"), t.clone()),
+                    (Identifier::from("right"), t.clone()),
+                ],
+                Box::new(Type::boolean),
+            );
+            let func_types = hashmap! {mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+
+    for (tn, mn) in builtin_unary().into_iter() {
+        for t in vec![Type::boolean] {
+            let func_t = Type::Function(
+                vec![(Identifier::from("operand"), t.clone())],
+                Box::new(t.clone()),
+            );
+            let func_types = hashmap! {mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+
     return impls;
 }
 
@@ -192,8 +260,14 @@ impl Context {
     }
 
     /// Get the type associated with a particular name.
-    pub fn get_defined_type(&self, name: &Identifier) -> Type {
-        return self.defined_types.get(name).unwrap().clone();
+    pub fn get_defined_type(&self, name: &Identifier) -> Result<Type, GraceError> {
+        let possible_type = self.defined_types.get(name);
+        return match possible_type {
+            Some(t) => Ok(t.clone()),
+            None => {
+                Err(GraceError::type_error(format!("No underlying type found for named type {:?}", name)))
+            }
+        };
     }
 
     /// Get the type of the identifier in the given scope.
@@ -315,7 +389,11 @@ impl Context {
 impl Context {
     /// Resolve an attribute access within the current context.
     /// # Arguments:
-    pub fn resolve_attribute(&self, base_type: &Type, name: &Identifier) -> Result<Type, GraceError> {
+    pub fn resolve_attribute(
+        &self,
+        base_type: &Type,
+        name: &Identifier,
+    ) -> Result<Type, GraceError> {
         // Check if this is a direct attribute access
         let unwrapped_self = match base_type {
             Type::self_type(x) => *x.clone(),
@@ -362,12 +440,11 @@ impl Context {
                 else if possible_traits.len() > 1 {
                     panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
                 } else {
-                    return Err(GraceError::TypeError{msg: format!("ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}", 
-                    base_type, name)});
-                    // panic!(
-                    //     "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
-                    //     base_type, name
-                    // );
+                    return Err(GraceError::type_error(format!(
+                            "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
+                            base_type, name
+                        ),
+                    ));
                 }
             }
         };
@@ -424,8 +501,7 @@ impl Context {
         method_name: &Identifier,
         implementing_type: &Type,
         arg_types: Vec<&Type>,
-    ) -> Type {
-        // println!("Trait implementations: {:?}", self.trait_implementations);
+    ) -> Result<Type, GraceError> {
         let base_t = match implementing_type {
             Type::Refinement(t, _) => t,
             x => x,
@@ -434,24 +510,31 @@ impl Context {
             .trait_implementations
             .get(&(trait_name.clone(), base_t.clone()))
         {
-            Some(x) => x,
-            None => panic!(
-                "TYPE ERROR: No trait implementation found for trait {} and type {:?}",
-                trait_name, implementing_type
-            ),
-        };
-        let method_type = func_types.get(method_name).unwrap();
-        return match method_type {
-            Type::Function(ref args, ref return_type) => {
+            Some(x) => Ok(x),
+            None => Err(GraceError::type_error(format!(
+                    "No trait implementation found for trait {} and type {:?}",
+                    trait_name, implementing_type
+                ),
+            )),
+        }?;
+        let method_type_result = func_types.get(method_name);
+        return match method_type_result {
+            Some(method_type) => {
+                match method_type {
+                    Type::Function(ref args, ref return_type) => {
 
-                for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
-                    assert_eq!(&expected_t, actual_t);
+                        for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                            assert_eq!(&expected_t, actual_t);
+                        }
+
+                        Ok(*return_type.clone())
+                    },
+                    x => Err(GraceError::type_error(format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)))
                 }
-
-                *return_type.clone()
-            },
-            x => panic!("TYPE ERROR: Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)
-        };
+            }
+            None => Err(GraceError::type_error(format!("Could not find implementation of trait method: {:?}.", method_name)))
+        }
+        
     }
 
     /// Get the return type of a binary operator.

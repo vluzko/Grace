@@ -93,7 +93,7 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
             traits: traits,
             trait_implementations: trait_impls,
         };
-    });
+    }, &(input.line, input.column));
 }
 
 /// Parse an import statement.

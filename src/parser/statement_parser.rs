@@ -50,10 +50,11 @@ impl ParserContext {
                 },
                 u,
             )
-        });
+        }, &(input.line, input.column));
     }
 
     /// Match an assignment statement.
+    // TODO: Cleanup: rewrite the inner function
     fn assignment_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         /// Match an assignment operator.
         fn assignments<'a>(input: PosStr<'a>) -> IO<'a> {
@@ -84,17 +85,21 @@ impl ParserContext {
                         b"=" => expr,
                         _ => {
                             let subop = &assn.slice[0..assn.slice.len() - 1];
+                            let (line, col) = (expr.end_line, expr.end_col);
                             Node::from((Expr::BinaryExpr {
                                 operator: BinaryOperator::from(subop),
-                                left: Box::new(Node::from((Expr::IdentifierExpr(name), &input))),
+                                // TODO: Cleanup: Track where exactly the operator is?
+                                left: Box::new(Node::from((Expr::IdentifierExpr(name),
+                                    input.line, input.column, expr.end_line, expr.end_col))
+                                ),
                                 right: Box::new(expr),
-                            }, &input))
+                            }, input.line, input.column, line, col))
                         }
                     },
                 },
                 u,
             )
-        });
+        }, &(input.line, input.column));
     }
 
     /// Parse a function declaration.
@@ -137,11 +142,12 @@ impl ParserContext {
                 };
 
                 return stmt;
-            },
+            }, &(input.line, input.column)
         );
     }
 
     /// Match an if statement.
+    // TODO: Cleanup: Rewrite to separate out some of the logic
     fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
         // TODO: Split this out into subparsers so we can get line and columns accurately.
         let parse_result = tuple!(
@@ -167,16 +173,21 @@ impl ParserContext {
                     just_elifs.push((c, b));
                 }
                 for (elif_cond, elif_block) in just_elifs.into_iter().rev() {
-                    let line_no = elif_cond.line_no;
-                    let column_no = elif_cond.column_no;
-                    let sub_if = wrap(Stmt::IfStmt {
+                    let (elif_line, elif_col) = (elif_cond.start_line, elif_cond.end_line);
+                    let (block_line, block_col) = (elif_block.end_line, elif_block.end_col);
+                    let (end_line, end_col) = match &else_block {
+                        Some(x) => (x.end_line, x.end_col),
+                        None => (elif_block.end_line, elif_block.end_col)
+                    };
+                    let if_stmt = Stmt::IfStmt {
                         condition: elif_cond,
                         block: elif_block,
                         else_block: else_block,
-                    });
+                    };
+                    let sub_if = Node::from((if_stmt, elif_line, elif_col, block_line, block_col));
                     else_block = Some(Node::from((Block {
-                        statements: vec![sub_if],
-                    }, line_no, column_no)));
+                        statements: vec![Box::new(sub_if)],
+                    }, elif_line, elif_col, end_line, end_col)));
                 }
 
                 let stmt = Stmt::IfStmt {
@@ -185,11 +196,12 @@ impl ParserContext {
                     else_block,
                 };
                 return (stmt, cond_u);
-            },
+            }, &(input.line, input.column)
         );
     }
 
     /// Parse a while loop.
+    // TODO: Testing: check how parsing errors can printed out
     fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
         let parse_result =
             line_and_block!(input, self, preceded!(WHILE, m!(self.expression)), indent);
@@ -201,7 +213,7 @@ impl ParserContext {
                 },
                 cu,
             )
-        });
+        }, &(input.line, input.column));
     }
 
     /// Parse a for in loop.
@@ -219,19 +231,19 @@ impl ParserContext {
         return fmap_nodeu(parse_result, |((iter_var, (iterator, iu)), block)| {
             let (stmt, update) = for_to_while(iter_var, &iterator, block.data.statements);
             (stmt, join(iu, update))
-        });
+        }, &(input.line, input.column));
     }
 
     /// Match a return statement.
     fn return_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded!(input, RETURN, m!(self.expression));
-        return fmap_pass(parse_result, |x| Stmt::ReturnStmt(x));
+        return fmap_pass(parse_result, |x| Stmt::ReturnStmt(x), &(input.line, input.column));
     }
 
     /// Match a yield statement.
     fn yield_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded!(input, YIELD, m!(self.expression));
-        return fmap_pass(parse_result, |x| Stmt::YieldStmt(x));
+        return fmap_pass(parse_result, |x| Stmt::YieldStmt(x), &(input.line, input.column));
     }
 
     /// Match all keyword arguments in a function declaration.
@@ -278,21 +290,21 @@ impl ParserContext {
 pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
     let parse_result = BREAK(input);
 
-    return fmap_nodeu(parse_result, |_| (Stmt::BreakStmt, vec![]));
+    return fmap_nodeu(parse_result, |_| (Stmt::BreakStmt, vec![]), &(input.line, input.column));
 }
 
 /// Match a pass statement.
 pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
     let parse_result = PASS(input);
 
-    return fmap_nodeu(parse_result, |_| (Stmt::PassStmt, vec![]));
+    return fmap_nodeu(parse_result, |_| (Stmt::PassStmt, vec![]), &(input.line, input.column));
 }
 
 /// Match a continue statement.
 pub fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
     let parse_result = CONTINUE(input);
 
-    return fmap_nodeu(parse_result, |_| (Stmt::ContinueStmt, vec![]));
+    return fmap_nodeu(parse_result, |_| (Stmt::ContinueStmt, vec![]), &(input.line, input.column));
 }
 
 #[cfg(test)]

@@ -12,8 +12,8 @@ use expression::{Node};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraceError {
     pub file: String,
-    pub line: usize,
-    pub column: usize,
+    pub line: u32,
+    pub column: u32,
     pub underlying: ErrorDetails,
 }
 
@@ -69,7 +69,7 @@ impl GraceError{
         };
     }
 
-    pub fn update_line_col(&self, line: usize, column: usize) -> GraceError {
+    pub fn update_line_col(&self, line: u32, column: u32) -> GraceError {
         return GraceError {
             file: self.file.clone(),
             line: line,
@@ -122,6 +122,6 @@ impl Error for GraceError {
 
 impl <T> Node<T> {
     pub fn annotate_error(&self, error: GraceError) -> GraceError {
-        return error.update_line_col(self.line_no, self.column_no);
+        return error.update_line_col(self.start_line, self.start_col);
     }
 }

@@ -191,7 +191,7 @@ impl ParserContext {
                 name: name,
                 fields: fields,
             };
-        });
+        }, &(input.line, input.column));
 
         return struct_dec;
     }

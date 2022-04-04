@@ -29,8 +29,10 @@ impl<T> Node<T> {
     pub fn replace<S>(&self, new_data: S) -> Node<S> {
         return Node {
             id: self.id,
-            line_no: self.line_no,
-            column_no: self.column_no,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: new_data,
             scope: self.scope.clone(),
         };
@@ -270,10 +272,12 @@ pub mod constructors {
         {
             return Stmt::IfStmt {
                 condition: Node::from(condition),
-                block: Node {
+                block: Node{
                     id: general_utils::get_next_id(),
-                    line_no: 0,
-                    column_no: 0,
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
                     data: block,
                     scope: 0,
                 },

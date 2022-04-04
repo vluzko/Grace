@@ -760,13 +760,15 @@ fn flatten_binary<'a>(result: (ExprU, Option<(PosStr<'a>, ExprU)>)) -> ExprU {
         Some((o, (right, mut u))) => {
             let op = BinaryOperator::from(o.slice);
             let (left, mut update) = result.0;
+            let (left_line, left_col) = (left.start_line, left.start_col);
+            let (right_line, right_col) = (right.start_line, right.start_col);
             update.append(&mut u);
             (
                 Node::from((Expr::BinaryExpr {
                     operator: op,
                     left: Box::new(left),
                     right: Box::new(right),
-                }, left.start_line, left.start_col, right.end_line, right.end_col)),
+                }, left_line, left_col, right_line, right_col)),
                 update,
             )
         }

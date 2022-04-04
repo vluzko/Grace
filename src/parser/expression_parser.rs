@@ -2,7 +2,6 @@
 extern crate nom;
 use self::nom::*;
 use expression::*;
-use general_utils;
 use parser::base::{
     for_to_while, just_int, next_hidden, ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq,
 };

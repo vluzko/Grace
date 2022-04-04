@@ -460,9 +460,7 @@ impl Node<Expr> {
                 ref mut base,
                 ref mut fields,
             } => {
-                println!("Base is: {:?}", base);
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
-                println!("Base_t is: {:?}", base_t);
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>,
                      (expr, expected_type): (&mut Node<Expr>, &Type)| {

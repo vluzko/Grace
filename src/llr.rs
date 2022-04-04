@@ -813,7 +813,6 @@ mod tests {
     use std::io::Read;
 
     use compiler_layers;
-    use test_utils;
     use difference::{Changeset, Difference};
     use regex::Regex;
 
@@ -839,7 +838,6 @@ mod tests {
             trait_impl_names,
             vec!("testtrait.teststruct.baz".to_string())
         );
-        println!("{:?}", llr);
     }
 
     #[cfg(test)]

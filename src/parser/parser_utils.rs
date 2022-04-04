@@ -93,10 +93,10 @@ macro_rules! separated_at_least_m {
     });
 
     ($i:expr, $m: expr, $submac:ident!( $($args:tt)* ), $g:expr) => (
-        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g));
+        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g))
     );
     ($i:expr, $m: expr, $f:expr, $submac:ident!( $($args:tt)* )) => (
-        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*));
+        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*))
     );
     ($i:expr, $m: expr, $f:expr, $g:expr) => (
         separated_at_least_m!($i, $m, call!($f), call!($g));

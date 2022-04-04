@@ -14,6 +14,8 @@ pub struct GraceError {
     pub file: String,
     pub line: u32,
     pub column: u32,
+    pub end_line: u32,
+    pub end_column: u32,
     pub underlying: ErrorDetails,
 }
 
@@ -38,6 +40,8 @@ impl GraceError{
             file: String::new(),
             line: 0,
             column: 0,
+            end_line: 0,
+            end_column: 0,
             underlying: ErrorDetails::TypeError { msg: msg },
         }
     }
@@ -47,6 +51,8 @@ impl GraceError{
             file: String::new(),
             line: 0,
             column: 0,
+            end_line: 0,
+            end_column: 0,
             underlying: ErrorDetails::ParserError { msg: msg, nom_error: nom_error },
         };
     }
@@ -56,6 +62,8 @@ impl GraceError{
             file: String::new(),
             line: 0,
             column: 0,
+            end_line: 0,
+            end_column: 0,
             underlying: ErrorDetails::CompilerError { msg: msg },
         };
     }
@@ -65,15 +73,19 @@ impl GraceError{
             file: String::new(),
             line: 0,
             column: 0,
+            end_line: 0,
+            end_column: 0,
             underlying: ErrorDetails::MultiError { errors: errors },
         };
     }
 
-    pub fn update_line_col(&self, line: u32, column: u32) -> GraceError {
+    pub fn update_line_col(&self, line: u32, column: u32, end_line: u32, end_column: u32) -> GraceError {
         return GraceError {
             file: self.file.clone(),
             line: line,
             column: column,
+            end_line: end_line,
+            end_column: end_column,
             underlying: self.underlying.clone(),
         };
     }
@@ -83,6 +95,8 @@ impl GraceError{
             file: file,
             line: self.line,
             column: self.column,
+            end_line: self.end_line,
+            end_column: self.end_column,
             underlying: self.underlying.clone(),
         };
     }
@@ -122,6 +136,6 @@ impl Error for GraceError {
 
 impl <T> Node<T> {
     pub fn annotate_error(&self, error: GraceError) -> GraceError {
-        return error.update_line_col(self.start_line, self.start_col);
+        return error.update_line_col(self.start_line, self.start_col, self.end_line, self.end_col);
     }
 }

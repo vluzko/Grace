@@ -2,7 +2,6 @@
 extern crate nom;
 use self::nom::*;
 use expression::*;
-use general_utils;
 use parser::base::{
     for_to_while, just_int, next_hidden, ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq,
 };
@@ -21,26 +20,26 @@ impl ParserContext {
     /// Match any unary expression.
     /// Implemented as a single parser because all unary expressions have the same precedence.
     fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = alt!(
+        let (i, (maybe_op, (expr, u))) = alt!(
             input,
             tuple!(
                 map!(alt_complete!(PLUS | NEG | TILDE | NOT), Some),
                 m!(self.unary_expr)
             ) | tuple!(value!(None, tag!("")), m!(self.power_expr))
-        );
+        )?;
 
-        let node = fmap_iresult(parse_result, |(maybe_op, (expr, u))| match maybe_op {
+        let node_update = match maybe_op {
             Some(op_str) =>
-                (
-                Node::from((Expr::UnaryExpr {
+                (Node::from((Expr::UnaryExpr {
                     operator: UnaryOperator::from(op_str),
                     operand: Box::new(expr),
-                }, &input)),
+                }, input.line, input.column, i.line, i.column)),
                 u,
             ),
             None => (expr, u),
-        });
-        return node;
+        };
+
+        return Ok((i, node_update));
     }
 }
 
@@ -198,17 +197,18 @@ impl ParserContext {
 
     /// A struct literal
     fn struct_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let result = tuple!(
+        let (i, o) = tuple!(
             input,
             separated_nonempty_list_complete!(DOT, IDENTIFIER),
             delimited!(OPEN_BRACE, m!(self.args_list), CLOSE_BRACE)
-        );
+        )?;
+
         let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
             let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
             let rewritten = if idents.len() > 1 {
                 for attribute in idents[1..idents.len() - 1].iter() {
                     tree_base = Expr::AttributeAccess {
-                        base: Box::new(Node::from((tree_base, &input))),
+                        base: Box::new(Node::from((tree_base, input.line, input.column, i.line, i.column))),
                         attribute: attribute.clone(),
                     };
                 }
@@ -225,13 +225,13 @@ impl ParserContext {
             }
             return (
                 Expr::StructLiteral {
-                    base: Box::new(Node::from((rewritten, &input))),
+                    base: Box::new(Node::from((rewritten, input.line, input.column, i.line, i.column))),
                     fields: args,
                 },
                 update,
             );
         };
-        return fmap_nodeu(result, map);
+        return fmap_nodeu(Ok((i, o)), map, &(input.line, input.column));
     }
 
     /// An expression that can be followed by an arbitrary number of function calls, attribute accesses, or indices.
@@ -239,7 +239,7 @@ impl ParserContext {
         let ident_as_expr = |x| {
             fmap_nodeu(IDENTIFIER(x), |y: Identifier| {
                 (Expr::IdentifierExpr(y), vec![])
-            })
+            }, &(input.line, input.column))
         };
 
         let parse_result = alt_complete!(
@@ -272,7 +272,7 @@ impl ParserContext {
             return (tree_base, update);
         };
 
-        let node = fmap_nodeu(parse_result, map);
+        let node = fmap_nodeu(parse_result, map, &(input.line, input.column));
         return node;
     }
 
@@ -433,7 +433,7 @@ impl ParserContext {
                 updates.append(&mut update);
             }
             return (Expr::VecLiteral(exprs), updates);
-        });
+        }, &(input.line, input.column));
     }
 
     /// Match a set literal.
@@ -449,7 +449,7 @@ impl ParserContext {
                 updates.append(&mut update);
             }
             return (Expr::SetLiteral(exprs), updates);
-        });
+        }, &(input.line, input.column));
     }
 
     /// Match a map literal.
@@ -475,7 +475,7 @@ impl ParserContext {
             }
 
             return (Expr::MapLiteral(mappings), updates);
-        });
+        }, &(input.line, input.column));
     }
 
     /// Match a tuple literal
@@ -509,33 +509,21 @@ impl ParserContext {
                 updates.append(&mut update);
             }
             return (Expr::TupleLiteral(exprs), updates);
-        });
+        }, &(input.line, input.column));
     }
 }
-
-/// Rewrite a match statement into an expression and a set of conditionals.
-// fn rewrite_match(main_expr: Node<Expr>, matches: Vec<(Expr, Expr)>) -> ExprU {
-//     // The name of the variable we'll match on
-//     let expr_to_match = next_hidden();
-//     // The name of the variable to store the match result in.
-//     let match_name = next_hidden();
-
-//     let mut outer_conditional = Stmt::IfStmt()
-//     for (value, result) in matches {
-
-//     }
-
-//     panic!();
-// }
 
 /// Rewrite a comprehension into an expression and a for loop.
 ///
 /// # Arguments
-/// * `iterators` - The iterators in each for clause of the comprehension (in order)
+/// * `inputs`      - The input that created the comprehension.
+/// * `leftover`    - The leftover input after the comprehension match.
+/// * `iterators`   - The iterators in each for clause of the comprehension (in order)
 /// * `coll_create` - The statement to create the collection.
-/// * `add_value` - The statement to add a value to the collection.
+/// * `add_value`   - The statement to add a value to the collection.
 fn rewrite_comprehension(
     input: &PosStr,
+    leftover: &PosStr,
     iterators: Vec<(Vec<Identifier>, ExprU, Option<ExprU>)>,
     coll_create: Stmt,
     add_value: Stmt,
@@ -575,7 +563,7 @@ fn rewrite_comprehension(
     outer_stmts.insert(0, wrap(coll_create));
     let new_expr = Expr::IdentifierExpr(coll_name.clone());
 
-    return (Node::from((new_expr, input)), outer_stmts);
+    return (Node::from((new_expr, input.line, input.column, leftover.line, leftover.column)), outer_stmts);
 }
 
 /// Comprehensions
@@ -597,13 +585,13 @@ impl ParserContext {
 
     /// Match a vector comprehension.
     fn vector_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = tuple!(
+        let (i, o) = tuple!(
             input,
             m!(self.logical_binary_expr),
             many1!(m!(self.comprehension_for))
-        );
+        )?;
 
-        return fmap_iresult(parse_result, |((value, mut v_update), iterators)| {
+        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
@@ -611,7 +599,7 @@ impl ParserContext {
 
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, coll_create, push);
+            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -620,20 +608,20 @@ impl ParserContext {
 
     /// Match a generator comprehension.
     fn generator_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = tuple!(
+        let (i, o) = tuple!(
             input,
             m!(self.logical_binary_expr),
             many1!(m!(self.comprehension_for))
-        );
+        )?;
 
-        return fmap_iresult(parse_result, |((value, mut v_update), iterators)| {
+        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
             let coll_create = coll_name.simple_let(Expr::from("gen").call());
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, coll_create, push);
+            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -642,15 +630,15 @@ impl ParserContext {
 
     /// Match a map or a set.
     fn map_or_set_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = tuple!(
+        let (i, o) = tuple!(
             input,
             m!(self.logical_binary_expr),
             opt!(complete!(preceded!(COLON, m!(self.logical_binary_expr)))),
             many1!(m!(self.comprehension_for))
-        );
+        )?;
 
         return fmap_iresult(
-            parse_result,
+            Ok((i, o)),
             |((key_or_value, mut kv_update), opt_value, iterators)| {
                 let coll_name = next_hidden();
                 let (create, add) = match opt_value {
@@ -673,7 +661,7 @@ impl ParserContext {
                     }
                 };
 
-                let (ref_expr, mut rewritten) = rewrite_comprehension(&input, iterators, create, add);
+                let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, create, add);
                 kv_update.append(&mut rewritten);
 
                 return (ref_expr, kv_update);
@@ -719,7 +707,7 @@ pub(super) fn bool_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> 
             "false" => false,
             _ => panic!(),
         })
-    });
+    }, &(input.line, input.column));
 }
 
 /// Match an integer literal expression.
@@ -727,7 +715,7 @@ pub(super) fn int_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
     let parse_result = just_int(input);
     return fmap_node(parse_result, |x| {
         Expr::Int(from_utf8(x.slice).unwrap().to_string())
-    });
+    }, &(input.line, input.column));
 }
 
 /// Match a floating point literal expression.
@@ -749,7 +737,7 @@ pub(super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode>
 
     return fmap_node(parse_result, |x| {
         Expr::Float(from_utf8(x.slice).unwrap().to_string())
-    });
+    }, &(input.line, input.column));
 }
 
 /// Match a string literal expression.
@@ -760,7 +748,7 @@ fn string_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
     );
     return fmap_node(result, |x| {
         Expr::String(from_utf8(x.slice).unwrap().to_string())
-    });
+    }, &(input.line, input.column));
 }
 
 // END SIMPLE LITERALS
@@ -771,15 +759,15 @@ fn flatten_binary<'a>(result: (ExprU, Option<(PosStr<'a>, ExprU)>)) -> ExprU {
         Some((o, (right, mut u))) => {
             let op = BinaryOperator::from(o.slice);
             let (left, mut update) = result.0;
-            let line = left.line_no;
-            let col = left.column_no;
+            let (left_line, left_col) = (left.start_line, left.start_col);
+            let (right_line, right_col) = (right.start_line, right.start_col);
             update.append(&mut u);
             (
                 Node::from((Expr::BinaryExpr {
                     operator: op,
                     left: Box::new(left),
                     right: Box::new(right),
-                }, line, col)),
+                }, left_line, left_col, right_line, right_col)),
                 update,
             )
         }

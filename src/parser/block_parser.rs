@@ -43,6 +43,6 @@ impl ParserContext {
                 statements.push(Box::new(stmt));
             }
             Block { statements }
-        });
+        }, &(input.line, input.column));
     }
 }

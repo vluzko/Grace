@@ -265,7 +265,6 @@ impl Context {
         return match possible_type {
             Some(t) => Ok(t.clone()),
             None => {
-                println!("{:?}", self.defined_types);
                 Err(GraceError::type_error(format!("No underlying type found for named type {:?}", name)))
             }
         };

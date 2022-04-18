@@ -93,10 +93,10 @@ macro_rules! separated_at_least_m {
     });
 
     ($i:expr, $m: expr, $submac:ident!( $($args:tt)* ), $g:expr) => (
-        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g));
+        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g))
     );
     ($i:expr, $m: expr, $f:expr, $submac:ident!( $($args:tt)* )) => (
-        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*));
+        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*))
     );
     ($i:expr, $m: expr, $f:expr, $g:expr) => (
         separated_at_least_m!($i, $m, call!($f), call!($g));
@@ -587,87 +587,49 @@ pub mod iresult_helpers {
         };
     }
 
-    /// Map the contents and wrap a Node around it.
-    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, Node<T>>
+    /// Map data and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_node<'a, X, T, F>(res: Res<'a, X>, func: F, start: &(u32, u32)) -> Res<'a, Node<T>>
     where
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, Node::from((func(o), &i)))),
+            Ok((i, o)) => Ok((i, Node::from((func(o), start.0, start.1, i.line, i.column)))),
             Err(e) => Err(e),
         };
     }
 
-    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (Node<T>, U)>
+    /// Map data and update with a function that does not produce an additional update, and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, (Node::from((func(o.0), &i)), o.1))),
+            Ok((i, o)) => Ok((i, (Node::from((func(o.0), start.0, start.1, i.line, i.column)), o.1))),
             Err(e) => Err(e),
         };
     }
 
-    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F) -> Res<'a, (Node<T>, U)>
+    /// Map data and update with a function that may produce an additional update, and wrap the result in a Node.
+    /// * `res`     - The parser result to map.
+    /// * `func`    - The mapping function.
+    /// * `start`   - The line and column of the start of the match that produced the data.
+    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> (T, U),
     {
         return match res {
             Ok((i, o)) => {
                 let (v, u) = func(o);
-                Ok((i, (Node::from((v, &i)), u)))
+                Ok((i, (Node::from((v, start.0, start.1, i.line, i.column)), u)))
             }
             Err(e) => Err(e),
         };
-    }
-
-    pub fn fmap_convert<'a, X>(res: Res<'a, X>) -> Res<'a, Node<X>> {
-        return match res {
-            Ok((i, o)) => Ok((i, Node::from(o))),
-            Err(e) => Err(e),
-        };
-    }
-
-    pub fn fmap_and_full_log<'a, X, T>(
-        res: Res<'a, X>,
-        func: fn(X) -> T,
-        name: &str,
-        input: PosStr<'a>,
-    ) -> Res<'a, T> {
-        return match res {
-            Ok((i, o)) => {
-                println!("{} leftover input is {:?}. Input was: {:?}", name, i, input);
-                Ok((i, func(o)))
-            }
-            Err(e) => {
-                println!("{} error: {:?}. Input was: {:?}", name, e, input);
-                Err(e)
-            }
-        };
-    }
-
-    /// Map an IResult and log errors and incomplete values.
-    pub fn fmap_and_log<'a, X, T>(
-        res: Res<'a, X>,
-        func: fn(X) -> T,
-        name: &str,
-        input: PosStr<'a>,
-    ) -> Res<'a, T> {
-        return match res {
-            Ok((i, o)) => Ok((i, func(o))),
-            Err(e) => {
-                println!("{} error: {:?}. Input was: {:?}", name, e, input);
-                Err(e)
-            }
-        };
-    }
-
-    pub fn full_log<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-        return fmap_and_full_log(res, |x| x, name, input);
-    }
-
-    pub fn log_err<'a, X>(res: Res<'a, X>, name: &str, input: PosStr<'a>) -> Res<'a, X> {
-        return fmap_and_log(res, |x| x, name, input);
     }
 
     pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {

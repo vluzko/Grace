@@ -358,7 +358,7 @@ mod test {
         fn test_flatten() {
             let idents = vec![Identifier::from("a"), Identifier::from("b")];
             let bottom_map = btreemap! {
-                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), Box::new(Type::i64)),
+                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), vec!(), Box::new(Type::i64)),
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap! {

@@ -24,8 +24,8 @@ pub enum Type {
     Product(Vec<Type>),
     // A vector type.
     Vector(Box<Type>),
-    // A vector of argument names and types, and the return type
-    Function(Vec<(Identifier, Type)>, Box<Type>),
+    // A vector of argument and kwargument names and types, and the return type
+    Function(Vec<(Identifier, Type)>, Vec<(Identifier, Type)>, Box<Type>),
     // A referenced to a named type.
     Named(Identifier),
     // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
@@ -65,7 +65,7 @@ impl Type {
             &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
             &Type::empty => "".to_string(),
-            &Type::Function(ref _args, ref ret) => {
+            &Type::Function(ref _args, ref _kwargs, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
             &Type::Record(..) => "i32".to_string(),
@@ -406,6 +406,6 @@ impl Type {
 
     /// Construct an argumentless function type.
     pub fn func_no_args(return_type: Type) -> Type {
-        return Type::Function(vec![], Box::new(return_type));
+        return Type::Function(vec![], vec![], Box::new(return_type));
     }
 }

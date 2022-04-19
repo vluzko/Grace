@@ -16,7 +16,7 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
                 vec!(
                     (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
                     (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
-                ),
+                ), vec!(),
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
         },
@@ -31,7 +31,7 @@ fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
             method_name => Type::Function(
                 vec!(
                     (Identifier::from("operand"), Type::self_type(Box::new(Type::Undetermined)))
-                ),
+                ), vec!(),
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
         },
@@ -108,7 +108,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
                 vec![
                     (Identifier::from("left"), t.clone()),
                     (Identifier::from("right"), t.clone()),
-                ],
+                ], vec![],
                 Box::new(t.clone()),
             );
             let func_types = hashmap! {mn.clone() => func_t};
@@ -121,7 +121,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
                 vec![
                     (Identifier::from("left"), t.clone()),
                     (Identifier::from("right"), t.clone()),
-                ],
+                ], vec![],
                 Box::new(t.clone()),
             );
             let func_types = hashmap! {mn.clone() => func_t};
@@ -135,7 +135,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
                 vec![
                     (Identifier::from("left"), t.clone()),
                     (Identifier::from("right"), t.clone()),
-                ],
+                ], vec![],
                 Box::new(Type::boolean),
             );
             let func_types = hashmap! {mn.clone() => func_t};
@@ -146,7 +146,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
     for (tn, mn) in builtin_unary().into_iter() {
         for t in vec![Type::boolean] {
             let func_t = Type::Function(
-                vec![(Identifier::from("operand"), t.clone())],
+                vec![(Identifier::from("operand"), t.clone())], vec![],
                 Box::new(t.clone()),
             );
             let func_types = hashmap! {mn.clone() => func_t};
@@ -295,6 +295,13 @@ impl Context {
     /// Get the type of the given node.
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
+    }
+
+    /// Pretty print
+    pub fn pretty_print(&self) -> () {
+        for val in self.type_map.values() {
+            println!("{:?}", val);
+        }
     }
 }
 
@@ -521,9 +528,13 @@ impl Context {
         return match method_type_result {
             Some(method_type) => {
                 match method_type {
-                    Type::Function(ref args, ref return_type) => {
+                    Type::Function(ref args, ref kwargs, ref return_type) => {
 
                         for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                            assert_eq!(&expected_t, actual_t);
+                        }
+
+                        for ((_, expected_t), actual_t) in kwargs.iter().zip(kwarg_types.iter()) {
                             assert_eq!(&expected_t, actual_t);
                         }
 
@@ -608,13 +619,17 @@ impl Context {
                         .all(|(i, x)| self.check_subtype(expr, x, &types[i])),
                     x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
                 },
-                Type::Function(ref args, ref ret) => match &unwrapped_self {
-                    Type::Function(ref e_args, ref e_ret) => {
+                Type::Function(ref args, ref kwargs, ref ret) => match &unwrapped_self {
+                    Type::Function(ref e_args, ref e_kwargs, ref e_ret) => {
                         let args_match = args
                             .iter()
                             .enumerate()
                             .all(|(i, x)| self.check_subtype(expr, &e_args[i].1, &x.1));
-                        args_match && self.check_subtype(expr, ret, e_ret)
+                        let kwargs_match = kwargs
+                            .iter()
+                            .enumerate()
+                            .all(|(i, x)| self.check_subtype(expr, &e_kwargs[i].1, &x.1));
+                        args_match && kwargs_match && self.check_subtype(expr, ret, e_ret)
                     }
                     x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
                 },

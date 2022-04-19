@@ -11,6 +11,7 @@ pub(crate) fn add_function_to_context(
     mut context: Context,
     func_name_str: &str,
     arg_types: Vec<Type>,
+    kwarg_types: Vec<Type>,
     ret_type: Type,
 ) -> (Context, usize) {
     let func_name = Identifier::from(func_name_str);
@@ -19,7 +20,12 @@ pub(crate) fn add_function_to_context(
         .enumerate()
         .map(|(i, x)| (Identifier::from(format!("arg{}", i)), x))
         .collect();
-    let function_type = Type::Function(args.clone(), Box::new(ret_type.clone()));
+    let kwargs: Vec<(Identifier, Type)> = kwarg_types
+        .into_iter()
+        .enumerate()
+        .map(|(i, x)| (Identifier::from(format!("kwarg{}", i)), x))
+        .collect();
+    let function_type = Type::Function(args.clone(), kwargs.clone(), Box::new(ret_type.clone()));
     let null_function = wrap(Stmt::FunctionDecStmt {
         name: func_name.clone(),
         args: args,

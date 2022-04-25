@@ -350,6 +350,7 @@ fn default_imports() -> Vec<(Import, Type)> {
     };
     let alloc_and_free_type = Type::Function(
         vec![(Identifier::from("a"), Type::i32)],
+        vec!(),
         Box::new(Type::i32),
     );
     let copy_type = Type::Function(
@@ -358,6 +359,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("b"), Type::i32),
             (Identifier::from("size"), Type::i32),
         ],
+        vec!(),
         Box::new(Type::i32),
     );
     let tee_type = Type::Function(
@@ -365,6 +367,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("loc"), Type::i32),
             (Identifier::from("value"), Type::i32),
         ],
+        vec!(),
         Box::new(Type::i32),
     );
     let mut mem_management_func_map = BTreeMap::new();
@@ -392,6 +395,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("a"), Type::i32),
             (Identifier::from("b"), Type::i32),
         ],
+        vec!(),
         Box::new(Type::i32),
     );
     let mut bin_ops_func_map = BTreeMap::new();

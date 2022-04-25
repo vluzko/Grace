@@ -410,21 +410,47 @@ impl Node<Expr> {
                 ref mut kwargs,
             } => {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
-                println!("wrapped_func is: {:?}", wrapped_func);
-                let (arg_types, kwarg_types, ret) = match wrapped_func {
+                let (arg_types, _kwarg_types, ret) = match wrapped_func {
                     Type::Function(a, b, c) => Ok((a, b, *c.clone())),
                     x => Err(GraceError::type_error(format!("Somehow got a non-function type {:?}", x)))
                 }?;
+
+                // Check argument length
+                // If there's a self type argument, we don't check it.
+                // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
+                let arg_types_to_match = match args.len() > 1 && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined)) {
+                    true => {
+                        if args.len() != arg_types.len() - 1 {
+                            return Err(GraceError::type_error(format!(
+                                "Function call to {:?} has {} arguments, but expected {}",
+                                function,
+                                args.len(),
+                                arg_types.len() - 1
+                            )));
+                        }
+                        &arg_types[1..]
+
+                    },
+                    false => {
+                        if args.len() != arg_types.len() {
+                            return Err(GraceError::type_error(format!(
+                                "Function call to {:?} has {} arguments, but expected {}",
+                                function,
+                                args.len(),
+                                arg_types.len()
+                            )));
+                        }
+                        &arg_types
+                    }
+                };
 
                 for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
                     let arg_t = res.1;
-                    println!("arg_t is: {:?}", arg_t);
 
-                    let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
+                    let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
 
-                    println!("expected type is: {:?}", expected_type);
                     // TODO: Type checking: Pass error
                     match new_c.check_subtype(&arg, &arg_t, &expected_type) {
                         true => {}
@@ -613,7 +639,7 @@ mod scope_tests {
     }
 
     #[test] 
-    #[should_panic]
+    #[should_panic(expected = "Argument type mismatch")]
     // One trait, one struct, one implementation block that uses self, and a function that uses it
     fn traits_and_self() {
         let mut f = File::open("tests/test_data/trait_impl_self_test.gr").expect("File not found");
@@ -695,7 +721,7 @@ mod type_tests {
             // Create function type
             let context = Context::builtin();
             let (with_func, _) =
-            test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+            test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(1)],
@@ -709,7 +735,7 @@ mod type_tests {
         fn function_call_wrong_args() {
             let context = Context::builtin();
             let (with_func, _) =
-                test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+                test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(true)],

@@ -125,7 +125,7 @@ impl ParserContext {
         );
 
         return fmap_iresult(parse_result, |(name, args, ret)| {
-            (name, Type::Function(args, Box::new(ret)))
+            (name, Type::Function(args, vec!(), Box::new(ret)))
         });
     }
 

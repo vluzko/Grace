@@ -534,8 +534,11 @@ impl Context {
                             assert_eq!(&expected_t, actual_t);
                         }
 
-                        for ((_, expected_t), actual_t) in kwargs.iter().zip(kwarg_types.iter()) {
-                            assert_eq!(&expected_t, actual_t);
+                        if kwargs.len() > 0 {
+                            return Err(GraceError::compiler_error(format!(
+                                "Trait method call to {}::{} has keyword arguments, which are not supported.",
+                                trait_name, method_name
+                            )));
                         }
 
                         Ok(*return_type.clone())

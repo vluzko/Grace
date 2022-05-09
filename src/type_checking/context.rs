@@ -438,6 +438,7 @@ impl Context {
                     }
                 }
 
+
                 // Just resolve the trait.
                 if possible_traits.len() == 1 {
                     // Get the type of the trait function and return it.

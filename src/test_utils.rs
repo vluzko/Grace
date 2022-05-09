@@ -56,7 +56,7 @@ pub(crate) fn add_struct_to_context(
     // Add type to context
     let record_type = Type::Record(struct_t.keys().cloned().collect(), struct_t);
     context.define_type(name.clone(), record_type.clone());
-    context.add_type(struct_dec.id, record_type);
+    context.add_type(struct_dec.id, Type::Named(name.clone()));
 
     // Add it to the context
     let top_scope = context.get_mut_scope(context.root_id);

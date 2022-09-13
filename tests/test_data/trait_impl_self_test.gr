@@ -11,8 +11,4 @@ impl testtrait for teststruct:
 
 fn call_trait_func():
     let foo = teststruct{0,1}
-<<<<<<< HEAD
-    let qux = foo.baz("a",8)
-=======
     let qux = foo.baz("abc",8)
->>>>>>> b7174fe6ecb03b0891741db26375c66fea86e6c2

@@ -648,7 +648,6 @@ mod scope_tests {
         
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
-<<<<<<< HEAD
         // println!("{:?}", compilation);
         context.print_all_variables();
         for (k, t) in context.print_all_types() {
@@ -656,8 +655,6 @@ mod scope_tests {
         }
         // println!("{:?}", context.print_all_types());
         // panic!("Unfinished test")
-=======
->>>>>>> b7174fe6ecb03b0891741db26375c66fea86e6c2
     }
 
     #[cfg(test)]

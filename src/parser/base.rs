@@ -125,7 +125,7 @@ impl ParserContext {
         );
 
         return fmap_iresult(parse_result, |(name, args, ret)| {
-            (name, Type::Function(args, Box::new(ret)))
+            (name, Type::Function(args, vec!(), Box::new(ret)))
         });
     }
 
@@ -191,7 +191,7 @@ impl ParserContext {
                 name: name,
                 fields: fields,
             };
-        });
+        }, &(input.line, input.column));
 
         return struct_dec;
     }
@@ -477,14 +477,14 @@ mod tests {
         m.insert(
             Identifier::from("ident1"),
             Type::Function(
-                vec![(Identifier::from("a"), Type::i32)],
+                vec![(Identifier::from("a"), Type::i32)], vec!(),
                 Box::new(Type::i32),
             ),
         );
         m.insert(
             Identifier::from("ident2"),
             Type::Function(
-                vec![(Identifier::from("b"), Type::i64)],
+                vec![(Identifier::from("b"), Type::i64)], vec!(),
                 Box::new(Type::i64),
             ),
         );

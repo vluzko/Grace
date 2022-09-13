@@ -79,7 +79,7 @@ fn call_from_refinement_type(
 
 /// Construct a call to Z3 using the Python API
 trait ToPython {
-    fn construct_condition(&self, &Context) -> (HashSet<Identifier>, String);
+    fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String);
 }
 
 impl ToPython for CanModifyScope {

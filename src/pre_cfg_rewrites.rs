@@ -48,8 +48,10 @@ impl TypeRewritable<Node<Module>> for Node<Module> {
         };
         return Node {
             id: self.id,
-            line_no: self.line_no,
-            column_no: self.column_no,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: new_data,
             scope: self.scope,
         };
@@ -67,8 +69,10 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
         let new_block = Node {
             id: self.id,
-            line_no: self.line_no,
-            column_no: self.column_no,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: Block {
                 statements: new_stmts,
             },
@@ -156,8 +160,10 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
         // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            line_no: self.line_no,
-            column_no: self.column_no,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: new_data,
             scope: self.scope,
         };
@@ -190,8 +196,10 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         };
                         let new_node = Node {
                             id: get_next_id(),
-                            line_no: self.line_no,
-                            column_no: self.column_no,
+                            start_line: self.start_line,
+                            start_col: self.start_col,
+                            end_line: self.end_line,
+                            end_col: self.end_col,
                             data: func_expr,
                             scope: self.scope,
                         };
@@ -252,8 +260,10 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         };
                         let new_node = Node {
                             id: get_next_id(),
-                            line_no: self.line_no,
-                            column_no: self.column_no,
+                            start_line: self.start_line,
+                            start_col: self.start_col,
+                            end_line: self.end_line,
+                            end_col: self.end_col,
                             data: func_expr,
                             scope: self.scope,
                         };
@@ -323,8 +333,10 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
         // We can't use replace because self.data was already moved.
         return Node {
             id: self.id,
-            line_no: self.line_no,
-            column_no: self.column_no,
+            start_line: self.start_line,
+            start_col: self.start_col,
+            end_line: self.end_line,
+            end_col: self.end_col,
             data: new_data,
             scope: self.scope,
         };
@@ -346,7 +358,7 @@ mod test {
         fn test_flatten() {
             let idents = vec![Identifier::from("a"), Identifier::from("b")];
             let bottom_map = btreemap! {
-                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), Box::new(Type::i64)),
+                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), vec!(), Box::new(Type::i64)),
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap! {

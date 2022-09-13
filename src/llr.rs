@@ -167,11 +167,16 @@ pub fn module_to_llr(
         for value in &import.values {
             let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value)? {
                 // convert everything to WASMTypes
-                Type::Function(ref args, ref return_type) => {
-                    let wasm_args = args
+                Type::Function(ref args,ref kwargs, ref return_type) => {
+                    let mut wasm_args: Vec<(String, WASMType)> = args
                         .iter()
                         .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
                         .collect();
+                    wasm_args.extend(kwargs
+                        .iter()
+                        .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                    );
+                    // wasm_args.extend(wasm_kwargs.into_iter());
                     let wasm_return = WASMType::from(&**return_type);
                     (wasm_args, wasm_return)
                 }
@@ -813,7 +818,6 @@ mod tests {
     use std::io::Read;
 
     use compiler_layers;
-    use test_utils;
     use difference::{Changeset, Difference};
     use regex::Regex;
 
@@ -839,7 +843,6 @@ mod tests {
             trait_impl_names,
             vec!("testtrait.teststruct.baz".to_string())
         );
-        println!("{:?}", llr);
     }
 
     #[cfg(test)]

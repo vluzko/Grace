@@ -9,12 +9,21 @@ use self::difference::{Changeset, Difference};
 use self::regex::Regex;
 use std::fs::{read_dir, read_to_string};
 
-pub fn compile_folder(subfolder: &str) {
+
+pub fn compile_folder(subfolder: &str) -> (String, String) {
     let folder_path = format!("./tests/test_data/{}", subfolder);
     let output_path = format!("./tests/test_data/{}/outputs", subfolder);
     let file_path = format!("{}/file_1.gr", folder_path);
     let compiled = compiler_layers::Compilation::compile(&file_path);
     let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
+    return (folder_path, output_path);
+}
+
+
+/// Compile a folder and check against expected output
+/// The expected output must be in the "output" subfolder
+pub fn check_against_expected(subfolder: &str) {
+    let (folder_path, output_path) = compile_folder(subfolder);
     let paths = read_dir(folder_path).unwrap();
     for path in paths {
         let p = path.unwrap().path();

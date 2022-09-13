@@ -72,13 +72,21 @@ impl GetContext for Node<Module> {
 
                 match (expected_type, &func_type) {
                     (
-                        Type::Function(ref args_1, ref ret_1),
-                        Type::Function(ref args_2, ref ret_2),
+                        Type::Function(ref args_1, ref kwargs_1, ref ret_1),
+                        Type::Function(ref args_2, ref kwargs_2, ref ret_2),
                     ) => {
                         for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
                             match (t1, t2) {
                                 (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
                                     "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
+                                (x, y) => assert!(x == y,
+                                    "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
+                            };
+                        }
+                        for ((_, t1), (_, t2)) in kwargs_1.iter().zip(kwargs_2.iter()) {
+                            match (t1, t2) {
+                                (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
+                                    "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", kwargs_1),
                                 (x, y) => assert!(x == y,
                                     "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
                             };
@@ -208,8 +216,9 @@ impl GetContext for Node<Stmt> {
                 // TODO: Type checking
                 let mut new_scope = Scope::child(parent_id);
 
-                // Copy the types for non-keyword arguments
+                // Copy the types for arguments
                 let mut arg_types = vec![];
+                let mut kwarg_types = vec![];
 
                 for (key, t) in args.iter() {
                     let resolved = context.resolve_self_type(t, self.scope);
@@ -233,7 +242,7 @@ impl GetContext for Node<Stmt> {
 
                     // Add the type to the function type.
                     let resolved = context.resolve_self_type(t, self.scope);
-                    arg_types.push((key.clone(), resolved.clone()));
+                    kwarg_types.push((key.clone(), resolved.clone()));
 
                     // Add kwargs to
                     let modification = CanModifyScope::Argument(resolved);
@@ -242,7 +251,7 @@ impl GetContext for Node<Stmt> {
 
                 let resolved_return_t = context.resolve_self_type(return_type, self.scope);
 
-                let function_type = Type::Function(arg_types, Box::new(resolved_return_t));
+                let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
 
                 context.add_type(self.id, function_type.clone());
 
@@ -401,17 +410,46 @@ impl Node<Expr> {
                 ref mut kwargs,
             } => {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
-                let (arg_types, ret) = match wrapped_func {
-                    Type::Function(a, b) => Ok((a, *b.clone())),
+                let (arg_types, _kwarg_types, ret) = match wrapped_func {
+                    Type::Function(a, b, c) => Ok((a, b, *c.clone())),
                     x => Err(GraceError::type_error(format!("Somehow got a non-function type {:?}", x)))
                 }?;
+
+                // Check argument length
+                // If there's a self type argument, we don't check it.
+                // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
+                let arg_types_to_match = match args.len() > 1 && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined)) {
+                    true => {
+                        if args.len() != arg_types.len() - 1 {
+                            return Err(GraceError::type_error(format!(
+                                "Function call to {:?} has {} arguments, but expected {}",
+                                function,
+                                args.len(),
+                                arg_types.len() - 1
+                            )));
+                        }
+                        &arg_types[1..]
+
+                    },
+                    false => {
+                        if args.len() != arg_types.len() {
+                            return Err(GraceError::type_error(format!(
+                                "Function call to {:?} has {} arguments, but expected {}",
+                                function,
+                                args.len(),
+                                arg_types.len()
+                            )));
+                        }
+                        &arg_types
+                    }
+                };
 
                 for (i, arg) in args.into_iter().enumerate() {
                     let res = arg.scopes_and_types(parent_id, new_c)?;
                     new_c = res.0;
                     let arg_t = res.1;
 
-                    let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, arg);
+                    let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
 
                     // TODO: Type checking: Pass error
                     match new_c.check_subtype(&arg, &arg_t, &expected_type) {
@@ -460,9 +498,7 @@ impl Node<Expr> {
                 ref mut base,
                 ref mut fields,
             } => {
-                println!("Base is: {:?}", base);
                 let (new_c, base_t) = base.scopes_and_types(parent_id, context)?;
-                println!("Base_t is: {:?}", base_t);
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>,
                      (expr, expected_type): (&mut Node<Expr>, &Type)| {
@@ -602,14 +638,17 @@ mod scope_tests {
         }
     }
 
-    #[test]
+    #[test] 
+    #[should_panic(expected = "Argument type mismatch")]
     // One trait, one struct, one implementation block that uses self, and a function that uses it
     fn traits_and_self() {
         let mut f = File::open("tests/test_data/trait_impl_self_test.gr").expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
+        
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+<<<<<<< HEAD
         // println!("{:?}", compilation);
         context.print_all_variables();
         for (k, t) in context.print_all_types() {
@@ -617,6 +656,8 @@ mod scope_tests {
         }
         // println!("{:?}", context.print_all_types());
         // panic!("Unfinished test")
+=======
+>>>>>>> b7174fe6ecb03b0891741db26375c66fea86e6c2
     }
 
     #[cfg(test)]
@@ -690,7 +731,7 @@ mod type_tests {
             // Create function type
             let context = Context::builtin();
             let (with_func, _) =
-            test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+            test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(1)],
@@ -704,7 +745,7 @@ mod type_tests {
         fn function_call_wrong_args() {
             let context = Context::builtin();
             let (with_func, _) =
-                test_utils::add_function_to_context(context, "foo", vec![Type::i32], Type::i32);
+                test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(true)],
@@ -842,7 +883,7 @@ mod type_tests {
         fn type_check_trait_access() {
             let mut context = Context::builtin();
             // make a trait
-            let trait_functions = hashmap! {Identifier::from("test_funcname")=>Type::Function(vec!(), Box::new(Type::i32))};
+            let trait_functions = hashmap! {Identifier::from("test_funcname")=>Type::Function(vec!(), vec!(), Box::new(Type::i32))};
             let test_trait = Trait {
                 name: Identifier::from("test_trait"),
                 functions: trait_functions.clone(),
@@ -873,7 +914,7 @@ mod type_tests {
             check_expr(
                 test_context,
                 expr,
-                Type::Function(vec![], Box::new(Type::i32)),
+                Type::Function(vec![], vec![], Box::new(Type::i32)),
             );
         }
 

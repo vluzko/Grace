@@ -375,15 +375,6 @@ impl Context {
         };
     }
 
-    pub fn print_all_variables(&self) -> Vec<Identifier> {
-        let mut all_variables = vec![];
-        for scope in self.scopes.values() {
-            for key in scope.declaration_order.keys() {
-                all_variables.push(key.clone());
-            }
-        }
-        return all_variables;
-    }
 }
 
 /// Typechecking
@@ -632,6 +623,30 @@ impl Context {
                 x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x),
             };
         }
+    }
+}
+
+/// Helpers
+impl Context {
+    pub fn print_all_variables(&self) -> Vec<Identifier> {
+        let mut all_variables = vec![];
+        for scope in self.scopes.values() {
+            for key in scope.declaration_order.keys() {
+                all_variables.push(key.clone());
+            }
+        }
+        return all_variables;
+    }
+
+    pub fn print_all_types(&self) -> Vec<(Identifier, Type)> {
+        let mut all_variables = vec![];
+        for (scope_id, scope) in self.scopes.iter() {
+            for key in scope.declaration_order.keys() {
+                let t = self.get_type(*scope_id, key);
+                all_variables.push((key.clone(), t.clone()));
+            }
+        }
+        return all_variables;
     }
 }
 

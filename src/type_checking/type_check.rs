@@ -609,8 +609,14 @@ mod scope_tests {
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
-        let _compilation = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
-        panic!("Unfinished test")
+        let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+        // println!("{:?}", compilation);
+        context.print_all_variables();
+        for (k, t) in context.print_all_types() {
+            println!("{:?}: {:?}", k, t);
+        }
+        // println!("{:?}", context.print_all_types());
+        // panic!("Unfinished test")
     }
 
     #[cfg(test)]

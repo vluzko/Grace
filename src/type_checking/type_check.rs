@@ -824,9 +824,7 @@ mod type_tests {
                 fields: vec![Node::from(4)],
             });
 
-            let record_t = Type::Record(vec![Identifier::from("a")], attr_map);
-
-            check_expr(new_context, expr, record_t);
+            check_expr(new_context, expr, Type::Named(Identifier::from("A")));
         }
 
         #[test]

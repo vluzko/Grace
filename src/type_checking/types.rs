@@ -5,7 +5,7 @@ use general_utils;
 use grace_error::GraceError;
 
 /// A Grace type
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 #[allow(non_camel_case_types)]
 pub enum Type {
     i32,
@@ -44,6 +44,18 @@ pub struct Refinement {
     pub operator: ComparisonOperator,
     pub left: Box<Node<Expr>>,
     pub right: Box<Node<Expr>>,
+}
+
+impl PartialOrd for Refinement {
+    fn partial_cmp(&self, other: &Refinement) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Refinement {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.operator.cmp(&other.operator)
+    }
 }
 
 /// A Grace trait / typeclass

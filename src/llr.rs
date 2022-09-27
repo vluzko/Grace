@@ -1,8 +1,6 @@
 //! Low-level representation of WebAssembly.
 use itertools::join;
-use std::collections::BTreeMap;
-use std::collections::HashMap;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::convert::From;
 use std::fmt;
 
@@ -118,11 +116,11 @@ impl WASMType {
 }
 
 trait GetTrueDeclarations {
-    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)>;
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)>;
 }
 
 impl GetTrueDeclarations for Node<Block> {
-    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         let top_level: HashSet<Identifier> = context
             .get_scope(self.scope)
             .declarations
@@ -137,17 +135,17 @@ impl GetTrueDeclarations for Node<Block> {
             })
             .collect();
         for stmt in &self.data.statements {
-            with_types = general_utils::m_union(with_types, stmt.get_true_declarations(context));
+            with_types = general_utils::m_bt_union(with_types, stmt.get_true_declarations(context));
         }
         return with_types;
     }
 }
 
 impl GetTrueDeclarations for Node<Stmt> {
-    fn get_true_declarations(&self, context: &Context) -> HashSet<(Identifier, Type)> {
+    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         return match self.data {
             Stmt::FunctionDecStmt { ref block, .. } => block.get_true_declarations(context),
-            _ => HashSet::new(),
+            _ => BTreeSet::new(),
         };
     }
 }

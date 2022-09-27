@@ -7,7 +7,7 @@ use std::ops::Add;
 extern crate nom;
 use self::nom::ErrorKind;
 
-use expression::{Node};
+use expression::Node;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraceError {
@@ -33,7 +33,7 @@ pub enum ErrorDetails {
     CompilerError { msg: String },
 }
 
-impl GraceError{
+impl GraceError {
     /// Create a type error from a message
     pub fn type_error(msg: String) -> GraceError {
         GraceError {
@@ -53,7 +53,10 @@ impl GraceError{
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::ParserError { msg: msg, nom_error: nom_error },
+            underlying: ErrorDetails::ParserError {
+                msg: msg,
+                nom_error: nom_error,
+            },
         };
     }
 
@@ -79,7 +82,13 @@ impl GraceError{
         };
     }
 
-    pub fn update_line_col(&self, line: u32, column: u32, end_line: u32, end_column: u32) -> GraceError {
+    pub fn update_line_col(
+        &self,
+        line: u32,
+        column: u32,
+        end_line: u32,
+        end_column: u32,
+    ) -> GraceError {
         return GraceError {
             file: self.file.clone(),
             line: line,
@@ -134,7 +143,7 @@ impl Error for GraceError {
     }
 }
 
-impl <T> Node<T> {
+impl<T> Node<T> {
     pub fn annotate_error(&self, error: GraceError) -> GraceError {
         return error.update_line_col(self.start_line, self.start_col, self.end_line, self.end_col);
     }

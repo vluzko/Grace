@@ -63,37 +63,41 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
         alt_complete!(eof!() | EMPTY)
     );
 
-    return fmap_node(declarations, |just_decs| {
-        let mut traits = HashMap::new();
-        let mut funcs = vec![];
-        let mut structs = vec![];
-        let mut trait_impls = vec![];
+    return fmap_node(
+        declarations,
+        |just_decs| {
+            let mut traits = HashMap::new();
+            let mut funcs = vec![];
+            let mut structs = vec![];
+            let mut trait_impls = vec![];
 
-        for d in just_decs {
-            match d {
-                ModuleDec::Func(x) => {
-                    funcs.push(Box::new(x));
-                }
-                ModuleDec::Struct(x) => {
-                    structs.push(Box::new(x));
-                }
-                ModuleDec::TraitDec(x) => {
-                    traits.insert(x.name.clone(), x);
-                }
-                ModuleDec::TraitImpl(x) => {
-                    trait_impls.push(x);
-                }
+            for d in just_decs {
+                match d {
+                    ModuleDec::Func(x) => {
+                        funcs.push(Box::new(x));
+                    }
+                    ModuleDec::Struct(x) => {
+                        structs.push(Box::new(x));
+                    }
+                    ModuleDec::TraitDec(x) => {
+                        traits.insert(x.name.clone(), x);
+                    }
+                    ModuleDec::TraitImpl(x) => {
+                        trait_impls.push(x);
+                    }
+                };
+            }
+
+            return Module {
+                imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
+                functions: funcs,
+                structs: structs,
+                traits: traits,
+                trait_implementations: trait_impls,
             };
-        }
-
-        return Module {
-            imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
-            functions: funcs,
-            structs: structs,
-            traits: traits,
-            trait_implementations: trait_impls,
-        };
-    }, &(input.line, input.column));
+        },
+        &(input.line, input.column),
+    );
 }
 
 /// Parse an import statement.

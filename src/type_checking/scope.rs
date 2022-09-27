@@ -134,7 +134,6 @@ pub fn choose_return_type(possible: &Type) -> Type {
 }
 
 impl BinaryOperator {
-
     pub fn choose_return_type(&self, merged_type: &Type) -> Type {
         return match self {
             BinaryOperator::Add
@@ -192,14 +191,13 @@ impl BinaryOperator {
 }
 
 impl UnaryOperator {
-
     pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
         let (x, y) = match self {
             UnaryOperator::BitNot => ("BitNot", "bitnot"),
             UnaryOperator::Negative => ("Negative", "negative"),
             UnaryOperator::Not => ("Not", "not"),
             UnaryOperator::Positive => ("Positive", "positive"),
-            _ => panic!()
+            _ => panic!(),
         };
 
         return (Identifier::from(x), Identifier::from(y));

@@ -3,7 +3,7 @@ use std::convert::From;
 
 use expression::*;
 use type_checking::context::Context;
-use type_checking::scope::{choose_return_type};
+use type_checking::scope::choose_return_type;
 use type_checking::types::Type;
 
 use crate::general_utils::get_next_id;
@@ -206,7 +206,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         Expr::FunctionCall {
                             function: Box::new(new_node),
                             args: vec![new_right],
-                            kwargs: vec!(),
+                            kwargs: vec![],
                         }
                     } else {
                         // If the left type is primitive, it stays an operator
@@ -240,10 +240,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     func_call
                 }
             }
-            Expr::UnaryExpr {
-                operator,
-                operand
-            } => {
+            Expr::UnaryExpr { operator, operand } => {
                 let operand_type = context.get_node_type(operand.id);
                 let new_operand = operand.type_based_rewrite(context);
 
@@ -269,8 +266,8 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         };
                         Expr::FunctionCall {
                             function: Box::new(new_node),
-                            args: vec!(),
-                            kwargs: vec!(),
+                            args: vec![],
+                            kwargs: vec![],
                         }
                     } else {
                         // If the operand type is primitive, it stays an operator

@@ -605,12 +605,22 @@ pub mod iresult_helpers {
     /// * `res`     - The parser result to map.
     /// * `func`    - The mapping function.
     /// * `start`   - The line and column of the start of the match that produced the data.
-    pub fn fmap_pass<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
+    pub fn fmap_pass<'a, X, U, T, F>(
+        res: Res<'a, (X, U)>,
+        func: F,
+        start: &(u32, u32),
+    ) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> T,
     {
         return match res {
-            Ok((i, o)) => Ok((i, (Node::from((func(o.0), start.0, start.1, i.line, i.column)), o.1))),
+            Ok((i, o)) => Ok((
+                i,
+                (
+                    Node::from((func(o.0), start.0, start.1, i.line, i.column)),
+                    o.1,
+                ),
+            )),
             Err(e) => Err(e),
         };
     }
@@ -619,7 +629,11 @@ pub mod iresult_helpers {
     /// * `res`     - The parser result to map.
     /// * `func`    - The mapping function.
     /// * `start`   - The line and column of the start of the match that produced the data.
-    pub fn fmap_nodeu<'a, X, U, T, F>(res: Res<'a, X>, func: F, start: &(u32, u32)) -> Res<'a, (Node<T>, U)>
+    pub fn fmap_nodeu<'a, X, U, T, F>(
+        res: Res<'a, X>,
+        func: F,
+        start: &(u32, u32),
+    ) -> Res<'a, (Node<T>, U)>
     where
         F: Fn(X) -> (T, U),
     {

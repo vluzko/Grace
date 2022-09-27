@@ -90,6 +90,7 @@ impl Type {
             &Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
             &Type::Vector(..) => panic!("TODO: handle trait_impl_name for Vector."),
             &Type::Named(ref name) => name.name.clone(),
+            &Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
             _ => panic!(),
         }
     }
@@ -121,6 +122,7 @@ impl Type {
             | Type::ui32
             | Type::ui64
             | Type::boolean => true,
+            | Type::Refinement(base_t, ..) => base_t.is_primitive(),
             _ => false,
         };
     }
@@ -276,17 +278,15 @@ impl Type {
                 match t {
                     Some(attr_type) => Ok(attr_type),
                     None => Err(GraceError::type_error(format!(
-                            "Tried to access nonexistent attribute {:?} on type {:?}",
-                            attribute, self
-                        ),
-                    )),
+                        "Tried to access nonexistent attribute {:?} on type {:?}",
+                        attribute, self
+                    ))),
                 }
             }
             _ => Err(GraceError::type_error(format!(
-                    "Tried to access attribute {:?} on non-record type {:?}",
-                    attribute, self
-                ),
-            )),
+                "Tried to access attribute {:?} on non-record type {:?}",
+                attribute, self
+            ))),
         };
     }
 

@@ -35,14 +35,18 @@ impl ParserContext {
             statements
         };
 
-        return fmap_node(parse_result, |x| {
-            let mut statements = vec![];
-            // Add all the updates to the block. Updates always go before the statement that created them.
-            for (stmt, mut update) in x {
-                statements.append(&mut update);
-                statements.push(Box::new(stmt));
-            }
-            Block { statements }
-        }, &(input.line, input.column));
+        return fmap_node(
+            parse_result,
+            |x| {
+                let mut statements = vec![];
+                // Add all the updates to the block. Updates always go before the statement that created them.
+                for (stmt, mut update) in x {
+                    statements.append(&mut update);
+                    statements.push(Box::new(stmt));
+                }
+                Block { statements }
+            },
+            &(input.line, input.column),
+        );
     }
 }

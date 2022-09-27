@@ -190,7 +190,7 @@ impl GetContext for Node<Stmt> {
                 match &type_annotation {
                     Some(ref x) => {
                         let actual_type = c.resolve_self_type(x, self.scope);
-                        assert!(c.check_subtype(&expression, &t, &actual_type));
+                        assert!(c.check_subtype(expression.scope, &t, &actual_type));
                     }
                     None => {}
                 };
@@ -203,7 +203,7 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (mut c, t) = expression.scopes_and_types(parent_id, context)?;
                 let expected_type = c.get_type(self.scope, name);
-                assert!(c.check_subtype(&expression, &t, &expected_type));
+                assert!(c.check_subtype(expression.scope, &t, &expected_type));
                 Ok((c, t))
             }
             Stmt::FunctionDecStmt {
@@ -251,7 +251,8 @@ impl GetContext for Node<Stmt> {
 
                 let resolved_return_t = context.resolve_self_type(return_type, self.scope);
 
-                let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
+                let function_type =
+                    Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
 
                 context.add_type(self.id, function_type.clone());
 
@@ -336,7 +337,7 @@ impl GetContext for Node<Stmt> {
                 let ret_name = Identifier::from("$ret");
                 let exp_type = context.get_type(self.scope, &ret_name);
                 let (mut new_c, new_t) = expression.scopes_and_types(parent_id, context)?;
-                assert!(new_c.check_subtype(expression, &new_t, &exp_type));
+                assert!(new_c.check_subtype(expression.scope, &new_t, &exp_type));
 
                 Ok((new_c, new_t))
             }
@@ -372,11 +373,12 @@ impl Node<Expr> {
                 ref mut right,
             } => {
                 let (left_c, left_t) = left.scopes_and_types(parent_id, context)?;
-                let (right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
+                let (mut right_c, right_t) = right.scopes_and_types(parent_id, left_c)?;
 
                 let (trait_name, method_name) = operator.get_builtin_trait();
                 let return_type = match !left_t.is_gradual() || !right_t.is_gradual() {
                     true => right_c.check_trait_method_call(
+                        self.scope,
                         &trait_name,
                         &method_name,
                         &left_t,
@@ -391,10 +393,11 @@ impl Node<Expr> {
                 ref mut operand,
                 ref operator,
             } => {
-                let (operand_c, operand_t) = operand.scopes_and_types(parent_id, context)?;
+                let (mut operand_c, operand_t) = operand.scopes_and_types(parent_id, context)?;
                 let (trait_name, method_name) = operator.get_builtin_trait();
                 let return_type = match !operand_t.is_gradual() {
                     true => operand_c.check_trait_method_call(
+                        self.scope,
                         &trait_name,
                         &method_name,
                         &operand_t,
@@ -412,13 +415,18 @@ impl Node<Expr> {
                 let (mut new_c, wrapped_func) = function.scopes_and_types(parent_id, context)?;
                 let (arg_types, _kwarg_types, ret) = match wrapped_func {
                     Type::Function(a, b, c) => Ok((a, b, *c.clone())),
-                    x => Err(GraceError::type_error(format!("Somehow got a non-function type {:?}", x)))
+                    x => Err(GraceError::type_error(format!(
+                        "Somehow got a non-function type {:?}",
+                        x
+                    ))),
                 }?;
 
                 // Check argument length
                 // If there's a self type argument, we don't check it.
                 // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
-                let arg_types_to_match = match args.len() > 1 && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined)) {
+                let arg_types_to_match = match args.len() > 1
+                    && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined))
+                {
                     true => {
                         if args.len() != arg_types.len() - 1 {
                             return Err(GraceError::type_error(format!(
@@ -429,8 +437,7 @@ impl Node<Expr> {
                             )));
                         }
                         &arg_types[1..]
-
-                    },
+                    }
                     false => {
                         if args.len() != arg_types.len() {
                             return Err(GraceError::type_error(format!(
@@ -449,10 +456,11 @@ impl Node<Expr> {
                     new_c = res.0;
                     let arg_t = res.1;
 
-                    let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
+                    let expected_type =
+                        arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
 
                     // TODO: Type checking: Pass error
-                    match new_c.check_subtype(&arg, &arg_t, &expected_type) {
+                    match new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
                         true => {}
                         false => {
                             return Err(GraceError::type_error(format!("Argument type mismatch")))
@@ -485,7 +493,7 @@ impl Node<Expr> {
                     let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
 
                     // // TODO: Type checking: Pass error
-                    match new_c.check_subtype(&value, &kwarg_t, &expected_type) {
+                    match new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
                         true => {}
                         false => {
                             return Err(GraceError::type_error(format!("Argument type mismatch")))
@@ -505,7 +513,7 @@ impl Node<Expr> {
                         let (new_c, mut vec_t) = aggregate?;
                         let (mut expr_c, t) = expr.scopes_and_types(parent_id, new_c)?;
 
-                        if expr_c.check_subtype(&expr, &t, expected_type) {
+                        if expr_c.check_subtype(expr.scope, &t, expected_type) {
                             vec_t.push(t);
                             Ok((expr_c, vec_t))
                         } else {
@@ -522,7 +530,7 @@ impl Node<Expr> {
                         let (new_c, _types) = zipped.fold(init, element_checker)?;
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
-                    },
+                    }
                     Type::Named(ref name) => {
                         let underlying_type = new_c.get_defined_type(name)?;
                         match underlying_type {
@@ -532,11 +540,17 @@ impl Node<Expr> {
                                 let (new_c, _types) = zipped.fold(init, element_checker)?;
                                 // TODO: Type checking: Decide if we should return base_t or the true type
                                 Ok((new_c, base_t.clone()))
-                            },
-                            x => Err(GraceError::type_error(format!("Expected a record type or named type, got {:?}", x)))
+                            }
+                            x => Err(GraceError::type_error(format!(
+                                "Expected a record type or named type, got {:?}",
+                                x
+                            ))),
                         }
-                    },
-                    x => Err(GraceError::type_error(format!("Expected a record type or named type, got {:?}", x)))
+                    }
+                    x => Err(GraceError::type_error(format!(
+                        "Expected a record type or named type, got {:?}",
+                        x
+                    ))),
                 }
             }
             Expr::AttributeAccess {
@@ -553,12 +567,11 @@ impl Node<Expr> {
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
                 // Named types have to be remapped to include the module access
                 let renamed_t = match t {
-                    Type::Named(_) => Type::Named(
-                        Identifier::from(
-                            join(names.iter().map(|x| x.name.clone()), ".")
-                        )
-                    ),
-                    x => x
+                    Type::Named(_) => Type::Named(Identifier::from(join(
+                        names.iter().map(|x| x.name.clone()),
+                        ".",
+                    ))),
+                    x => x,
                 };
                 Ok((context, renamed_t))
             }
@@ -568,7 +581,9 @@ impl Node<Expr> {
             }
             Expr::IdentifierExpr(ref mut name) => match context.safe_get_type(self.scope, name) {
                 Some(t) => Ok((context, t)),
-                None => Err(GraceError::type_error("Failed to locate identifier in scope".to_string()))
+                None => Err(GraceError::type_error(
+                    "Failed to locate identifier in scope".to_string(),
+                )),
             },
             Expr::Int(_) => Ok((context, Type::i32)),
             Expr::Float(_) => Ok((context, Type::f32)),
@@ -638,14 +653,13 @@ mod scope_tests {
         }
     }
 
-    #[test] 
+    #[test]
     #[should_panic(expected = "Argument type mismatch")]
     // One trait, one struct, one implementation block that uses self, and a function that uses it
     fn traits_and_self() {
         let mut f = File::open("tests/test_data/trait_impl_self_test.gr").expect("File not found");
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
-        
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
         // println!("{:?}", compilation);
@@ -689,9 +703,9 @@ mod type_tests {
     #[cfg(test)]
     mod exprs {
         use super::*;
-        use type_checking::types::Trait;
         use grace_error::ErrorDetails;
         use test_utils;
+        use type_checking::types::Trait;
 
         /// Check that an expression has the desired type.
         fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
@@ -727,8 +741,13 @@ mod type_tests {
         fn type_check_function_call() {
             // Create function type
             let context = Context::builtin();
-            let (with_func, _) =
-            test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
+            let (with_func, _) = test_utils::add_function_to_context(
+                context,
+                "foo",
+                vec![Type::i32],
+                vec![],
+                Type::i32,
+            );
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(1)],
@@ -741,8 +760,13 @@ mod type_tests {
         #[test]
         fn function_call_wrong_args() {
             let context = Context::builtin();
-            let (with_func, _) =
-                test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec!(), Type::i32);
+            let (with_func, _) = test_utils::add_function_to_context(
+                context,
+                "foo",
+                vec![Type::i32],
+                vec![],
+                Type::i32,
+            );
             let expr = Node::from(Expr::FunctionCall {
                 function: wrap(Expr::from("foo")),
                 args: vec![Node::from(true)],
@@ -888,7 +912,8 @@ mod type_tests {
                 .insert(Identifier::from("test_trait"), test_trait);
             // make a struct
             let test_struct_map = btreemap! {Identifier::from("test_identifier")=>Type::i32};
-            let mut test_context = test_utils::add_struct_to_context(context, "test_struct", test_struct_map);
+            let mut test_context =
+                test_utils::add_struct_to_context(context, "test_struct", test_struct_map);
             // implement that trait for that struct
             let trait_impl_key = (
                 Identifier::from("test_trait"),

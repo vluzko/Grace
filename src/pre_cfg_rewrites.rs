@@ -404,4 +404,37 @@ mod test {
                 return b"#;
         return if_stmt.as_bytes();
     }
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        // Helper method to extract a particular statement from a function body.
+        fn extract_stmt_from_body(function: &Node<Stmt>, index: usize) -> Node<Stmt> {
+            return match &function.data {
+                Stmt::FunctionDecStmt {block, ..} => {
+                    (*block.data.statements[index]).clone()
+                },
+                _ => panic!()
+            };
+        }
+
+        #[test]
+        // Test that binary exprs with refined types still generate binary expressions.
+        fn test_refined_binary_expr() {
+            let code = "fn require_ref(x: i32 [x > 0], y: i32) -> i32:\n    return x + y";
+
+            let (stmt, _) = compiler_layers::to_type_rewrites::<Node<Stmt>>(code.as_bytes());
+            let return_stmt = extract_stmt_from_body(&stmt, 0);
+            match return_stmt.data {
+                Stmt::ReturnStmt (value) => {
+                    match value.data {
+                        Expr::BinaryExpr {..} => {},
+                        _ => panic!("Expected binary expression"),
+                    }
+                }
+                _ => panic!(),
+            }
+        }
+    }
 }

@@ -24,8 +24,8 @@ pub enum Type {
     Product(Vec<Type>),
     // A vector type.
     Vector(Box<Type>),
-    // A vector of argument names and types, and the return type
-    Function(Vec<(Identifier, Type)>, Box<Type>),
+    // A vector of argument and kwargument names and types, and the return type
+    Function(Vec<(Identifier, Type)>, Vec<(Identifier, Type)>, Box<Type>),
     // A referenced to a named type.
     Named(Identifier),
     // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
@@ -65,7 +65,7 @@ impl Type {
             &Type::ui64 => "i64".to_string(),
             &Type::boolean => "i32".to_string(),
             &Type::empty => "".to_string(),
-            &Type::Function(ref _args, ref ret) => {
+            &Type::Function(ref _args, ref _kwargs, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
             &Type::Record(..) => "i32".to_string(),
@@ -90,6 +90,7 @@ impl Type {
             &Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
             &Type::Vector(..) => panic!("TODO: handle trait_impl_name for Vector."),
             &Type::Named(ref name) => name.name.clone(),
+            &Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
             _ => panic!(),
         }
     }
@@ -121,6 +122,7 @@ impl Type {
             | Type::ui32
             | Type::ui64
             | Type::boolean => true,
+            | Type::Refinement(base_t, ..) => base_t.is_primitive(),
             _ => false,
         };
     }
@@ -132,6 +134,18 @@ impl Type {
             Type::Gradual(..) => true,
             Type::Refinement(ref inner_t, _) => inner_t.is_gradual(),
             _ => false,
+        };
+    }
+
+    pub fn refined_equal(&self, other: &Type) -> bool {
+        return match self {
+            Type::Refinement(ref inner_t, ..) => {
+                match other {
+                    Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
+                    x => inner_t.refined_equal(x)
+                }
+            }
+            _ => self == other,
         };
     }
 
@@ -276,17 +290,15 @@ impl Type {
                 match t {
                     Some(attr_type) => Ok(attr_type),
                     None => Err(GraceError::type_error(format!(
-                            "Tried to access nonexistent attribute {:?} on type {:?}",
-                            attribute, self
-                        ),
-                    )),
+                        "Tried to access nonexistent attribute {:?} on type {:?}",
+                        attribute, self
+                    ))),
                 }
             }
             _ => Err(GraceError::type_error(format!(
-                    "Tried to access attribute {:?} on non-record type {:?}",
-                    attribute, self
-                ),
-            )),
+                "Tried to access attribute {:?} on non-record type {:?}",
+                attribute, self
+            ))),
         };
     }
 
@@ -406,6 +418,6 @@ impl Type {
 
     /// Construct an argumentless function type.
     pub fn func_no_args(return_type: Type) -> Type {
-        return Type::Function(vec![], Box::new(return_type));
+        return Type::Function(vec![], vec![], Box::new(return_type));
     }
 }

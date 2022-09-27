@@ -21,7 +21,6 @@ use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
 use pre_cfg_rewrites::TypeRewritable;
 
-
 #[derive(Debug, Clone)]
 pub struct CompiledModule {
     pub ast: Node<Module>,
@@ -350,6 +349,7 @@ fn default_imports() -> Vec<(Import, Type)> {
     };
     let alloc_and_free_type = Type::Function(
         vec![(Identifier::from("a"), Type::i32)],
+        vec![],
         Box::new(Type::i32),
     );
     let copy_type = Type::Function(
@@ -358,6 +358,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("b"), Type::i32),
             (Identifier::from("size"), Type::i32),
         ],
+        vec![],
         Box::new(Type::i32),
     );
     let tee_type = Type::Function(
@@ -365,6 +366,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("loc"), Type::i32),
             (Identifier::from("value"), Type::i32),
         ],
+        vec![],
         Box::new(Type::i32),
     );
     let mut mem_management_func_map = BTreeMap::new();
@@ -392,6 +394,7 @@ fn default_imports() -> Vec<(Import, Type)> {
             (Identifier::from("a"), Type::i32),
             (Identifier::from("b"), Type::i32),
         ],
+        vec![],
         Box::new(Type::i32),
     );
     let mut bin_ops_func_map = BTreeMap::new();
@@ -483,9 +486,12 @@ pub fn to_llr<'a>(input: &'a [u8]) -> (Node<Module>, Context, CfgMap, WASMModule
 }
 
 /// Run the compiler from an AST to a type context.
-pub (crate) fn ast_to_context<T>(mut input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+pub(crate) fn ast_to_context<T>(
+    mut input: Node<T>,
+    start_context: Option<Context>,
+) -> (Node<T>, Context)
 where
-    Node<T>: GetContext
+    Node<T>: GetContext,
 {
     let init = match start_context {
         Some(context) => context,
@@ -500,7 +506,10 @@ where
 }
 
 /// Run the compiler from an AST to a rewritten AST.
-pub (crate) fn ast_to_type_rewrites<T>(input: Node<T>, start_context: Option<Context>) -> (Node<T>, Context)
+pub(crate) fn ast_to_type_rewrites<T>(
+    input: Node<T>,
+    start_context: Option<Context>,
+) -> (Node<T>, Context)
 where
     Node<T>: GetContext,
     Node<T>: TypeRewritable<Node<T>>,
@@ -520,8 +529,6 @@ where
 //     return (module, context, cfg_map);
 // }
 
-
-
 // pub (crate) mod sub_layers {
 //     use super::*;
 //     use expression::Expr;
@@ -538,4 +545,3 @@ where
 //         }
 //     }
 // }
-

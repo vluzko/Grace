@@ -1,16 +1,16 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use expression::*;
 use type_checking::context::Context;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
-
 /// Add a function of the specified type and name to the given context.
 pub(crate) fn add_function_to_context(
     mut context: Context,
     func_name_str: &str,
     arg_types: Vec<Type>,
+    kwarg_types: Vec<Type>,
     ret_type: Type,
 ) -> (Context, usize) {
     let func_name = Identifier::from(func_name_str);
@@ -19,7 +19,12 @@ pub(crate) fn add_function_to_context(
         .enumerate()
         .map(|(i, x)| (Identifier::from(format!("arg{}", i)), x))
         .collect();
-    let function_type = Type::Function(args.clone(), Box::new(ret_type.clone()));
+    let kwargs: Vec<(Identifier, Type)> = kwarg_types
+        .into_iter()
+        .enumerate()
+        .map(|(i, x)| (Identifier::from(format!("kwarg{}", i)), x))
+        .collect();
+    let function_type = Type::Function(args.clone(), kwargs.clone(), Box::new(ret_type.clone()));
     let null_function = wrap(Stmt::FunctionDecStmt {
         name: func_name.clone(),
         args: args,
@@ -50,7 +55,7 @@ pub(crate) fn add_struct_to_context(
     // Add type to context
     let record_type = Type::Record(struct_t.keys().cloned().collect(), struct_t);
     context.define_type(name.clone(), record_type.clone());
-    context.add_type(struct_dec.id, record_type);
+    context.add_type(struct_dec.id, Type::Named(name.clone()));
 
     // Add it to the context
     let top_scope = context.get_mut_scope(context.root_id);

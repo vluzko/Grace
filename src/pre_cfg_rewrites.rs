@@ -3,7 +3,7 @@ use std::convert::From;
 
 use expression::*;
 use type_checking::context::Context;
-use type_checking::scope::{choose_return_type};
+use type_checking::scope::choose_return_type;
 use type_checking::types::Type;
 
 use crate::general_utils::get_next_id;
@@ -206,11 +206,11 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         Expr::FunctionCall {
                             function: Box::new(new_node),
                             args: vec![new_right],
-                            kwargs: vec!(),
+                            kwargs: vec![],
                         }
                     } else {
                         // If the left type is primitive, it stays an operator
-                        if left_type == right_type {
+                        if left_type.refined_equal(&right_type) {
                             Expr::BinaryExpr {
                                 operator,
                                 left: Box::new(new_left),
@@ -240,10 +240,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     func_call
                 }
             }
-            Expr::UnaryExpr {
-                operator,
-                operand
-            } => {
+            Expr::UnaryExpr { operator, operand } => {
                 let operand_type = context.get_node_type(operand.id);
                 let new_operand = operand.type_based_rewrite(context);
 
@@ -269,8 +266,8 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         };
                         Expr::FunctionCall {
                             function: Box::new(new_node),
-                            args: vec!(),
-                            kwargs: vec!(),
+                            args: vec![],
+                            kwargs: vec![],
                         }
                     } else {
                         // If the operand type is primitive, it stays an operator
@@ -358,7 +355,7 @@ mod test {
         fn test_flatten() {
             let idents = vec![Identifier::from("a"), Identifier::from("b")];
             let bottom_map = btreemap! {
-                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), Box::new(Type::i64)),
+                Identifier::from("c") => Type::Function(vec!((Identifier::from("x"), Type::i32)), vec!(), Box::new(Type::i64)),
             };
             let record_type = Type::flatten_to_record(&idents, bottom_map.clone());
             let second_map = btreemap! {
@@ -406,5 +403,38 @@ mod test {
             else::
                 return b"#;
         return if_stmt.as_bytes();
+    }
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        // Helper method to extract a particular statement from a function body.
+        fn extract_stmt_from_body(function: &Node<Stmt>, index: usize) -> Node<Stmt> {
+            return match &function.data {
+                Stmt::FunctionDecStmt {block, ..} => {
+                    (*block.data.statements[index]).clone()
+                },
+                _ => panic!()
+            };
+        }
+
+        #[test]
+        // Test that binary exprs with refined types still generate binary expressions.
+        fn test_refined_binary_expr() {
+            let code = "fn require_ref(x: i32 [x > 0], y: i32) -> i32:\n    return x + y";
+
+            let (stmt, _) = compiler_layers::to_type_rewrites::<Node<Stmt>>(code.as_bytes());
+            let return_stmt = extract_stmt_from_body(&stmt, 0);
+            match return_stmt.data {
+                Stmt::ReturnStmt (value) => {
+                    match value.data {
+                        Expr::BinaryExpr {..} => {},
+                        _ => panic!("Expected binary expression"),
+                    }
+                }
+                _ => panic!(),
+            }
+        }
     }
 }

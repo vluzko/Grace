@@ -59,7 +59,6 @@ pub struct Import {
 }
 
 impl Import {
-
     /// Get a string referring to the imported value.
     pub fn string_ref(&self) -> String {
         return match &self.alias {
@@ -272,7 +271,7 @@ pub mod constructors {
         {
             return Stmt::IfStmt {
                 condition: Node::from(condition),
-                block: Node{
+                block: Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,

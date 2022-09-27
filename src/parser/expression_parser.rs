@@ -29,11 +29,17 @@ impl ParserContext {
         )?;
 
         let node_update = match maybe_op {
-            Some(op_str) =>
-                (Node::from((Expr::UnaryExpr {
-                    operator: UnaryOperator::from(op_str),
-                    operand: Box::new(expr),
-                }, input.line, input.column, i.line, i.column)),
+            Some(op_str) => (
+                Node::from((
+                    Expr::UnaryExpr {
+                        operator: UnaryOperator::from(op_str),
+                        operand: Box::new(expr),
+                    },
+                    input.line,
+                    input.column,
+                    i.line,
+                    i.column,
+                )),
                 u,
             ),
             None => (expr, u),
@@ -208,7 +214,13 @@ impl ParserContext {
             let rewritten = if idents.len() > 1 {
                 for attribute in idents[1..idents.len() - 1].iter() {
                     tree_base = Expr::AttributeAccess {
-                        base: Box::new(Node::from((tree_base, input.line, input.column, i.line, i.column))),
+                        base: Box::new(Node::from((
+                            tree_base,
+                            input.line,
+                            input.column,
+                            i.line,
+                            i.column,
+                        ))),
                         attribute: attribute.clone(),
                     };
                 }
@@ -225,7 +237,13 @@ impl ParserContext {
             }
             return (
                 Expr::StructLiteral {
-                    base: Box::new(Node::from((rewritten, input.line, input.column, i.line, i.column))),
+                    base: Box::new(Node::from((
+                        rewritten,
+                        input.line,
+                        input.column,
+                        i.line,
+                        i.column,
+                    ))),
                     fields: args,
                 },
                 update,
@@ -237,9 +255,11 @@ impl ParserContext {
     /// An expression that can be followed by an arbitrary number of function calls, attribute accesses, or indices.
     fn expr_with_trailer<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         let ident_as_expr = |x| {
-            fmap_nodeu(IDENTIFIER(x), |y: Identifier| {
-                (Expr::IdentifierExpr(y), vec![])
-            }, &(input.line, input.column))
+            fmap_nodeu(
+                IDENTIFIER(x),
+                |y: Identifier| (Expr::IdentifierExpr(y), vec![]),
+                &(input.line, input.column),
+            )
         };
 
         let parse_result = alt_complete!(
@@ -425,15 +445,19 @@ impl ParserContext {
             peek!(CLOSE_BRACKET)
         );
 
-        return fmap_nodeu(parse_result, |x| {
-            let mut exprs = vec![];
-            let mut updates = vec![];
-            for (expr, mut update) in x {
-                exprs.push(expr);
-                updates.append(&mut update);
-            }
-            return (Expr::VecLiteral(exprs), updates);
-        }, &(input.line, input.column));
+        return fmap_nodeu(
+            parse_result,
+            |x| {
+                let mut exprs = vec![];
+                let mut updates = vec![];
+                for (expr, mut update) in x {
+                    exprs.push(expr);
+                    updates.append(&mut update);
+                }
+                return (Expr::VecLiteral(exprs), updates);
+            },
+            &(input.line, input.column),
+        );
     }
 
     /// Match a set literal.
@@ -441,15 +465,19 @@ impl ParserContext {
         let parse_result =
             separated_nonempty_list_complete!(input, COMMA, m!(self.logical_binary_expr));
 
-        return fmap_nodeu(parse_result, |x| {
-            let mut exprs = vec![];
-            let mut updates = vec![];
-            for (expr, mut update) in x {
-                exprs.push(expr);
-                updates.append(&mut update);
-            }
-            return (Expr::SetLiteral(exprs), updates);
-        }, &(input.line, input.column));
+        return fmap_nodeu(
+            parse_result,
+            |x| {
+                let mut exprs = vec![];
+                let mut updates = vec![];
+                for (expr, mut update) in x {
+                    exprs.push(expr);
+                    updates.append(&mut update);
+                }
+                return (Expr::SetLiteral(exprs), updates);
+            },
+            &(input.line, input.column),
+        );
     }
 
     /// Match a map literal.
@@ -464,18 +492,22 @@ impl ParserContext {
             )
         );
 
-        return fmap_nodeu(parse_result, |x| {
-            let mut mappings = vec![];
-            let mut updates = vec![];
+        return fmap_nodeu(
+            parse_result,
+            |x| {
+                let mut mappings = vec![];
+                let mut updates = vec![];
 
-            for ((key, mut ku), (value, mut vu)) in x {
-                mappings.push((key, value));
-                updates.append(&mut ku);
-                updates.append(&mut vu);
-            }
+                for ((key, mut ku), (value, mut vu)) in x {
+                    mappings.push((key, value));
+                    updates.append(&mut ku);
+                    updates.append(&mut vu);
+                }
 
-            return (Expr::MapLiteral(mappings), updates);
-        }, &(input.line, input.column));
+                return (Expr::MapLiteral(mappings), updates);
+            },
+            &(input.line, input.column),
+        );
     }
 
     /// Match a tuple literal
@@ -501,15 +533,19 @@ impl ParserContext {
             )
         );
 
-        return fmap_nodeu(parse_result, |x| {
-            let mut exprs = vec![];
-            let mut updates = vec![];
-            for (expr, mut update) in x {
-                exprs.push(expr);
-                updates.append(&mut update);
-            }
-            return (Expr::TupleLiteral(exprs), updates);
-        }, &(input.line, input.column));
+        return fmap_nodeu(
+            parse_result,
+            |x| {
+                let mut exprs = vec![];
+                let mut updates = vec![];
+                for (expr, mut update) in x {
+                    exprs.push(expr);
+                    updates.append(&mut update);
+                }
+                return (Expr::TupleLiteral(exprs), updates);
+            },
+            &(input.line, input.column),
+        );
     }
 }
 
@@ -563,7 +599,16 @@ fn rewrite_comprehension(
     outer_stmts.insert(0, wrap(coll_create));
     let new_expr = Expr::IdentifierExpr(coll_name.clone());
 
-    return (Node::from((new_expr, input.line, input.column, leftover.line, leftover.column)), outer_stmts);
+    return (
+        Node::from((
+            new_expr,
+            input.line,
+            input.column,
+            leftover.line,
+            leftover.column,
+        )),
+        outer_stmts,
+    );
 }
 
 /// Comprehensions
@@ -599,7 +644,8 @@ impl ParserContext {
 
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, coll_create, push);
+            let (ref_expr, mut rewritten) =
+                rewrite_comprehension(&input, &i, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -621,7 +667,8 @@ impl ParserContext {
             let coll_create = coll_name.simple_let(Expr::from("gen").call());
             // The statement to push the next element onto the vector.
             let push = coll_name.assn(coll_name.as_expr().access(&"push").callw(vec![value]));
-            let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, coll_create, push);
+            let (ref_expr, mut rewritten) =
+                rewrite_comprehension(&input, &i, iterators, coll_create, push);
             v_update.append(&mut rewritten);
 
             return (ref_expr, v_update);
@@ -661,7 +708,8 @@ impl ParserContext {
                     }
                 };
 
-                let (ref_expr, mut rewritten) = rewrite_comprehension(&input, &i, iterators, create, add);
+                let (ref_expr, mut rewritten) =
+                    rewrite_comprehension(&input, &i, iterators, create, add);
                 kv_update.append(&mut rewritten);
 
                 return (ref_expr, kv_update);
@@ -698,24 +746,30 @@ pub(super) fn bool_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> 
         input,
         alt!(
             terminated!(tag!("true"), peek!(not!(IDENT_CHAR)))
-            | terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
+                | terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
         )
     );
-    return fmap_node(parse_result, |x| {
-        Expr::Bool(match from_utf8(x.slice).unwrap() {
-            "true" => true,
-            "false" => false,
-            _ => panic!(),
-        })
-    }, &(input.line, input.column));
+    return fmap_node(
+        parse_result,
+        |x| {
+            Expr::Bool(match from_utf8(x.slice).unwrap() {
+                "true" => true,
+                "false" => false,
+                _ => panic!(),
+            })
+        },
+        &(input.line, input.column),
+    );
 }
 
 /// Match an integer literal expression.
 pub(super) fn int_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
     let parse_result = just_int(input);
-    return fmap_node(parse_result, |x| {
-        Expr::Int(from_utf8(x.slice).unwrap().to_string())
-    }, &(input.line, input.column));
+    return fmap_node(
+        parse_result,
+        |x| Expr::Int(from_utf8(x.slice).unwrap().to_string()),
+        &(input.line, input.column),
+    );
 }
 
 /// Match a floating point literal expression.
@@ -735,9 +789,11 @@ pub(super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode>
         ))
     );
 
-    return fmap_node(parse_result, |x| {
-        Expr::Float(from_utf8(x.slice).unwrap().to_string())
-    }, &(input.line, input.column));
+    return fmap_node(
+        parse_result,
+        |x| Expr::Float(from_utf8(x.slice).unwrap().to_string()),
+        &(input.line, input.column),
+    );
 }
 
 /// Match a string literal expression.
@@ -746,9 +802,11 @@ fn string_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
         input,
         delimited!(tag!("\""), recognize!(many0c!(STRING_CHAR)), tag!("\""))
     );
-    return fmap_node(result, |x| {
-        Expr::String(from_utf8(x.slice).unwrap().to_string())
-    }, &(input.line, input.column));
+    return fmap_node(
+        result,
+        |x| Expr::String(from_utf8(x.slice).unwrap().to_string()),
+        &(input.line, input.column),
+    );
 }
 
 // END SIMPLE LITERALS
@@ -763,11 +821,17 @@ fn flatten_binary<'a>(result: (ExprU, Option<(PosStr<'a>, ExprU)>)) -> ExprU {
             let (right_line, right_col) = (right.start_line, right.start_col);
             update.append(&mut u);
             (
-                Node::from((Expr::BinaryExpr {
-                    operator: op,
-                    left: Box::new(left),
-                    right: Box::new(right),
-                }, left_line, left_col, right_line, right_col)),
+                Node::from((
+                    Expr::BinaryExpr {
+                        operator: op,
+                        left: Box::new(left),
+                        right: Box::new(right),
+                    },
+                    left_line,
+                    left_col,
+                    right_line,
+                    right_col,
+                )),
                 update,
             )
         }

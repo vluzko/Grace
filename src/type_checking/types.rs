@@ -137,6 +137,18 @@ impl Type {
         };
     }
 
+    pub fn refined_equal(&self, other: &Type) -> bool {
+        return match self {
+            Type::Refinement(ref inner_t, ..) => {
+                match other {
+                    Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
+                    x => inner_t.refined_equal(x)
+                }
+            }
+            _ => self == other,
+        };
+    }
+
     /// Merge two types if they're compatible.
     pub fn merge(&self, other: &Type) -> Type {
         if self == other {

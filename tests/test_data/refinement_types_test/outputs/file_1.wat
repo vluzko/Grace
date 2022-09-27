@@ -7,8 +7,9 @@
 (import "memory_management" "mem" (memory (;0;) 1))
 
 (func $require_ref (param $x i32) (param $y i32) (result i32) 
+get_local $x
 get_local $y
-call $.Add.i32.add
+i32.add
 )
 (export "require_ref" (func $require_ref))
 

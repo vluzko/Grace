@@ -210,7 +210,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                         }
                     } else {
                         // If the left type is primitive, it stays an operator
-                        if left_type == right_type {
+                        if left_type.refined_equal(&right_type) {
                             Expr::BinaryExpr {
                                 operator,
                                 left: Box::new(new_left),

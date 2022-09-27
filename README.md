@@ -1,5 +1,4 @@
 # Grace
-[![Build Status](https://travis-ci.com/vluzko/Grace.svg?branch=master)](https://travis-ci.com/vluzko/Grace)
 
 Grace is an attempt to provide a viable WebAssembly alternative to Javascript.
 
@@ -12,6 +11,5 @@ Grace mostly draws inspiration from Python and Haskell.
 
 ### Testing
 * Rust unit tests are run with `cargo test`
-* Rust integration tests are run with ???
 * Tests for compiled WebAssembly are run with `jest` from the `js_test` folder.
 

@@ -41,6 +41,18 @@ where
     return a;
 }
 
+/// Take the union of two btreesets, moving elements out of the second. Both original sets are consumed.
+pub fn m_bt_union<T>(mut a: BTreeSet<T>, b: BTreeSet<T>) -> BTreeSet<T>
+where
+    T: Eq,
+    T: Ord,
+{
+    for element in b.into_iter() {
+        a.insert(element);
+    }
+    return a;
+}
+
 /// Take the union of two BTreeSets, consuming both.
 pub fn mb_union<T>(mut a: BTreeSet<T>, b: BTreeSet<T>) -> BTreeSet<T>
 where

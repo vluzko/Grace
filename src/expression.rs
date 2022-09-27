@@ -205,7 +205,7 @@ pub enum Assignment {
 }
 
 /// Any comparator
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ComparisonOperator {
     Greater,
     Less,

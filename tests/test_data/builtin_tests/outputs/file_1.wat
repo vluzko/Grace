@@ -42,56 +42,56 @@ get_local $x
 )
 (export "div" (func $div))
 
-(func $equality (param $a i32) (param $b i32) (result i32) 
+(func $equality (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.eq
 )
 (export "equality" (func $equality))
 
-(func $neq (param $a i32) (param $b i32) (result i32) 
+(func $neq (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.ne
 )
 (export "neq" (func $neq))
 
-(func $less (param $a i32) (param $b i32) (result i32) 
+(func $less (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.lt_s
 )
 (export "less" (func $less))
 
-(func $lesseq (param $a i32) (param $b i32) (result i32) 
+(func $lesseq (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.le_s
 )
 (export "lesseq" (func $lesseq))
 
-(func $great (param $a i32) (param $b i32) (result i32) 
+(func $great (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.gt_s
 )
 (export "great" (func $great))
 
-(func $greateq (param $a i32) (param $b i32) (result i32) 
+(func $greateq (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.ge_s
 )
 (export "greateq" (func $greateq))
 
-(func $and_test (param $a i32) (param $b i32) (result i32) 
+(func $and_test (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.and
 )
 (export "and_test" (func $and_test))
 
-(func $or_test (param $a i32) (param $b i32) (result i32) 
+(func $or_test (param $a i32) (param $b i32) (result i32)
 get_local $a
 get_local $b
 i32.or

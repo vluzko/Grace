@@ -6,7 +6,7 @@ Other wise it is type variant.
 
 ## Type invariant, in parser
 * Complex assignments -> assignment with a modified rhs
-* 
+*
 
 ## Type variant, in parser
 * For loops -> while loops
@@ -25,9 +25,3 @@ Other wise it is type variant.
 ## Type variant, low level
 * First class function call -> indirect call
 * Method declaration -> function declaration
-
-
-
-
-
-

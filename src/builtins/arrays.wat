@@ -51,7 +51,7 @@
 ;;      array_index (i32): Pointer to the array (not the metadata of the chunk containing the array)
 (func $delete (param $array_index i32)(result i32)
     get_local $array_index
-    call $.memory_management.free_chunk 
+    call $.memory_management.free_chunk
 )(export "delete" (func $delete))
 
 ;; Resize an array.

@@ -6,12 +6,12 @@
 (import "gradual_binary_ops" "call_gradual" (func $.gradual_binary_ops.call_gradual (param $i i32) (param $a i32) (param $b i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $greater_than_zero (param $x i32) (result i32) 
+(func $greater_than_zero (param $x i32) (result i32)
 get_local $x
 )
 (export "greater_than_zero" (func $greater_than_zero))
 
-(func $call_require  (result i32) (local $a i32)
+(func $call_require (result i32) (local $a i32)
 i32.const -1
 set_local $a
 get_local $a

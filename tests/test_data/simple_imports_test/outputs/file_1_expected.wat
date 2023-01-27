@@ -8,7 +8,7 @@
 (import "file_3" "func_3" (func $.file_3.func_3  (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $func_1  (result i32)
+(func $func_1 (result i32)
 i32.const 1
 )
 (export "func_1" (func $func_1))

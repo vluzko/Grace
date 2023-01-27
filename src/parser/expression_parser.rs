@@ -1449,7 +1449,7 @@ mod tests {
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
         check_data_no_update(
-            file_contents.as_str(),
+            file_contents.as_str().trim(),
             string_expr,
             Expr::String("\\\"\\n\'\\\\\\\'".to_string()),
         );

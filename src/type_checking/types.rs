@@ -134,7 +134,7 @@ impl Type {
             | Type::ui32
             | Type::ui64
             | Type::boolean => true,
-            | Type::Refinement(base_t, ..) => base_t.is_primitive(),
+            Type::Refinement(base_t, ..) => base_t.is_primitive(),
             _ => false,
         };
     }
@@ -151,12 +151,10 @@ impl Type {
 
     pub fn refined_equal(&self, other: &Type) -> bool {
         return match self {
-            Type::Refinement(ref inner_t, ..) => {
-                match other {
-                    Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
-                    x => inner_t.refined_equal(x)
-                }
-            }
+            Type::Refinement(ref inner_t, ..) => match other {
+                Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
+                x => inner_t.refined_equal(x),
+            },
             _ => self == other,
         };
     }

@@ -1,7 +1,7 @@
 //! Generate WAST bytecode from the LLR.
 use itertools::join;
 
-use llr::{WASMFunc, WASMModule, WASM, WASMType};
+use llr::{WASMFunc, WASMModule, WASMType, WASM};
 use type_checking::context::Context;
 
 pub trait ToBytecode {
@@ -53,17 +53,17 @@ impl ToBytecode for WASMModule {
 
 impl ToBytecode for WASMFunc {
     fn to_bytecode(&self, context: &Context) -> String {
-
         fn empty_or_prepend(fill: &str, x: &Vec<(String, WASMType)>) -> String {
             return match x.len() {
                 0 => "".to_string(),
-                _ => format!(" {}", join(
-                        x
-                        .iter()
-                        .map(|(n, t)| format!("({} ${} {})", fill, n, t)),
-                    " ",
-                    ))
-            }
+                _ => format!(
+                    " {}",
+                    join(
+                        x.iter().map(|(n, t)| format!("({} ${} {})", fill, n, t)),
+                        " ",
+                    )
+                ),
+            };
         }
 
         let param_string = empty_or_prepend("param", &self.args);

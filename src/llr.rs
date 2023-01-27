@@ -163,39 +163,40 @@ pub fn module_to_llr(
     for import in &module.data.imports {
         let typing_info = context.get_node_type(import.id);
         for value in &import.values {
-            let (wasm_args, wasm_return) =
-                match typing_info.resolve_attribute(value)? {
-                    // convert everything to WASMTypes
-                    Type::Function(ref args, ref kwargs, ref return_type) => {
-                        let mut wasm_args: Vec<(String, WASMType)> = args
+            let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value)? {
+                // convert everything to WASMTypes
+                Type::Function(ref args, ref kwargs, ref return_type) => {
+                    let mut wasm_args: Vec<(String, WASMType)> = args
+                        .iter()
+                        .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                        .collect();
+                    wasm_args.extend(
+                        kwargs
                             .iter()
-                            .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
-                            .collect();
-                        wasm_args.extend(
-                            kwargs
-                                .iter()
-                                .map(|(n, t)| (n.name.clone(), WASMType::from(t))),
-                        );
-                        // wasm_args.extend(wasm_kwargs.into_iter());
-                        let wasm_return = WASMType::from(&**return_type);
-                        (wasm_args, wasm_return)
-                    }
-                    Type::Named(name) => {
-                        let full_name = format!("{}.{}", import.string_ref(), name);
-                        let actual_type = context.get_defined_type(&Identifier::from(full_name))?;
-                        let (args, return_type) = actual_type.get_constructor_type();
-                        let wasm_args = args
-                            .iter()
-                            .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
-                            .collect();
-                        let wasm_return = WASMType::from(&return_type);
-                        (wasm_args, wasm_return)
-                    }
-                    x => return Err(GraceError::compiler_error(format!(
+                            .map(|(n, t)| (n.name.clone(), WASMType::from(t))),
+                    );
+                    // wasm_args.extend(wasm_kwargs.into_iter());
+                    let wasm_return = WASMType::from(&**return_type);
+                    (wasm_args, wasm_return)
+                }
+                Type::Named(name) => {
+                    let full_name = format!("{}.{}", import.string_ref(), name);
+                    let actual_type = context.get_defined_type(&Identifier::from(full_name))?;
+                    let (args, return_type) = actual_type.get_constructor_type();
+                    let wasm_args = args
+                        .iter()
+                        .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
+                        .collect();
+                    let wasm_return = WASMType::from(&return_type);
+                    (wasm_args, wasm_return)
+                }
+                x => {
+                    return Err(GraceError::compiler_error(format!(
                         "Wrong import type: {:?}. Expected {:?}. Should be handled by type_check",
                         x, typing_info
-                    ))),
-                };
+                    )))
+                }
+            };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
             let internal_name = format!(".{}.{}", joined_path, value);
             let wasm_import = WASMImport {
@@ -418,18 +419,22 @@ impl ToLLR for Cfg {
 
                     match false_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::compiler_error(format!(
+                        None => {
+                            return Err(GraceError::compiler_error(format!(
                             "No false block found for if statement {:?}. Should be created by cfg.",
                             self
-                        ))),
+                        )))
+                        }
                     };
 
                     match true_block {
                         Some(x) => unvisited.push(x),
-                        None => return Err(GraceError::compiler_error(format!(
+                        None => {
+                            return Err(GraceError::compiler_error(format!(
                             "No true block found for if statement {:?}. Should be created by cfg.",
                             self
-                        ))),
+                        )))
+                        }
                     }
                 }
                 CfgVertex::Break(_) | CfgVertex::Continue(_) => {

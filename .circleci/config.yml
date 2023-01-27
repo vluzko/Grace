@@ -15,7 +15,7 @@ commands:
 jobs:
   build:
     docker:
-      - image: circleci/rust@1.6.0
+      - image: cimg/rust:1.65.0
     steps:
       - checkout
       - run:
@@ -23,7 +23,7 @@ jobs:
           command: cargo build
   test:
     docker:
-      - image: circleci/rust@1.6.0
+      - image: cimg/rust:1.65.0
     steps:
       - checkout
       - run:

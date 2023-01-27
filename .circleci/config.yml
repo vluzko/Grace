@@ -1,318 +1,37 @@
-# This code is licensed from CircleCI to the user under the MIT license.
-# See here for details: https://circleci.com/developer/orbs/licensing
 version: 2.1
-description: |
-    Easily test, build and run your Rust applications on CircleCI!
-display:
-    home_url: https://www.rust-lang.org
-    source_url: https://github.com/CircleCI-Public/rust-orb
+orbs:
+  rust: circleci/rust@1.65.0
 commands:
-    build:
-        description: |
-            Build a Rust crate.
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            crate:
-                default: ""
-                description: Directory of the create to build.
-                type: string
-            release:
-                default: false
-                description: Whether to build the binary for release or debug.
-                type: boolean
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - run:
-                command: cargo build <<parameters.crate>> <<#parameters.release>>--release<</parameters.release>>
-                name: Cargo Build <<parameters.crate>>
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-    cargo-run:
-        description: |
-            Run a cargo package.
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            package:
-                default: ""
-                description: Package to run.
-                type: string
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - run:
-                command: cargo run <<parameters.package>>
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-    clippy:
-        description: |
-            Run Clippy against your codebase. Learn more: https://github.com/rust-lang/rust-clippy.
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            flags:
-                default: --all --all-targets
-                description: Additional flags to pass along to Clippy.
-                type: string
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - run:
-                command: rustup component add clippy
-                name: Install Clippy
-            - run:
-                command: cargo clippy <<parameters.flags>>
-                name: Run Clippy
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-    format:
-        description: |
-            Validate formatting of Rust project.
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            nightly-toolchain:
-                default: false
-                description: Whether or not to use the nightly toolchain version.
-                type: boolean
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - run:
-                command: rustup component add rustfmt <<#parameters.nightly-toolchain>>--toolchain nightly<</parameters.nightly-toolchain>>
-                name: Install fmt
-            - run:
-                command: cargo <<#parameters.nightly-toolchain>>+nightly<</parameters.nightly-toolchain>> fmt -- --check
-                name: Run fmt
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-    install:
-        description: |
-            Install Rustup, Cargo and Rust. Note: it is best practice to leverage a Docker image with Rust preinstalled for reproducibility and speed.
-        parameters:
-            version:
-                default: stable
-                description: Version of Rust to install and default to.
-                type: string
-        steps:
-            - run:
-                command: |
-                    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs -o rustup.sh
-                    chmod +x rustup.sh
-                    ./rustup.sh -y
+  run_tests:
+    steps:
+        - checkout
+        - run:
+            name: Install
+            command: pip install .[dev]
+        - run:
+            name: Run tests
+            command: pytest tests/
 
-                    source "$HOME"/.cargo/env
-
-                    if [ "$RUST_VERSION" != "stable" ]; then
-                    	rustup toolchain install "$RUST_VERSION"
-                    	rustup default "$RUST_VERSION"
-                    fi
-                environment:
-                    RUST_VERSION: <<parameters.version>>
-                name: Install Rustup
-            - run:
-                command: echo 'source $HOME/.cargo/env' >> $BASH_ENV
-                name: Setting up Cargo environment in $BASH_ENV
-    test:
-        description: |
-            Test a cargo crate or package.
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            package:
-                default: ""
-                description: Package to test.
-                type: string
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - run:
-                command: cargo test <<parameters.package>>
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-executors:
-    default:
-        description: |
-            Default Rust executor.
-        docker:
-            - image: cimg/rust:<<parameters.tag>>
-        parameters:
-            tag:
-                default: 1.49.0
-                description: Tag of the Rust image to use.
-                type: string
 jobs:
-    lint-test-build:
-        description: |
-            Check linting with Clippy, run any present tests then build the crate.
-        executor:
-            name: default
-            tag: << parameters.version >>
-        parameters:
-            cache_version:
-                default: v1
-                description: Cache version to use - increment this to build a fresh cache.
-                type: string
-            clippy_arguments:
-                default: ""
-                description: Arguments to pass to cargo run clippy.
-                type: string
-            release:
-                default: false
-                description: Whether to build the binary for release or debug.
-                type: boolean
-            version:
-                default: 1.49.0
-                description: Version of Rust executor to utilize.
-                type: string
-            with_cache:
-                default: true
-                description: Whether to restore and save the cache or not - set to no if running multiple commands in one job.
-                type: boolean
-            working_directory:
-                default: ~/project
-                description: Path to the directory containing your Cargo.lock file. Not needed if Cargo.lock lives in the root.
-                type: string
-        steps:
-            - checkout:
-                path: /home/circleci/project
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - restore_cache:
-                        keys:
-                            - cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-            - clippy:
-                flags: <<parameters.clippy_arguments>>
-                with_cache: false
-                working_directory: <<parameters.working_directory>>
-            - test:
-                with_cache: false
-                working_directory: <<parameters.working_directory>>
-            - build:
-                release: <<parameters.release>>
-                with_cache: false
-                working_directory: <<parameters.working_directory>>
-            - when:
-                condition: <<parameters.with_cache>>
-                steps:
-                    - save_cache:
-                        key: cargo-<<parameters.cache_version>>-{{ checksum "Cargo.lock" }}
-                        paths:
-                            - ~/.cargo
-        working_directory: <<parameters.working_directory>>
-examples:
-    lint_test_build_for_release:
-        description: Check linting with Clippy, run any present tests then build the crate.
-        usage:
-            version: "2.1"
-            orbs:
-                rust: circleci/rust@x.y.z
-            workflows:
-                production:
-                    jobs:
-                        - rust/lint-test-build:
-                            release: true
+  build:
+    docker:
+      - image: cimg/rust:1.65.0
+    steps:
+      - checkout
+      - run:
+          name: Build
+          command: cargo build
+  test:
+    docker:
+      - image: cimg/rust:1.65.0
+    steps:
+      - checkout
+      - run:
+          name: Test
+          command: cargo test
 
+workflows:
+  build_and_test_workflow:
+    jobs:
+      - build
+      - test

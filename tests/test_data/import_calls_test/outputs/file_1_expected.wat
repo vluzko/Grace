@@ -8,7 +8,7 @@
 (import "file_2" "A" (func $.file_2.A (param $a i32) (param $b i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $func_1  (result i32) (local $x i32)
+(func $func_1 (result i32) (local $x i32)
 i32.const 1
 i32.const 2
 call $.file_2.A

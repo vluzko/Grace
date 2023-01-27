@@ -11,7 +11,7 @@ get_local $x
 )
 (export "greater_than_zero" (func $greater_than_zero))
 
-(func $call_require  (result i32) (local $a i32)
+(func $call_require (result i32) (local $a i32)
 i32.const -1
 set_local $a
 get_local $a

@@ -1,7 +1,7 @@
 //! Generate WAST bytecode from the LLR.
 use itertools::join;
 
-use llr::{WASMFunc, WASMModule, WASM};
+use llr::{WASMFunc, WASMModule, WASM, WASMType};
 use type_checking::context::Context;
 
 pub trait ToBytecode {
@@ -53,24 +53,27 @@ impl ToBytecode for WASMModule {
 
 impl ToBytecode for WASMFunc {
     fn to_bytecode(&self, context: &Context) -> String {
-        let param_string = join(
-            self.args
-                .iter()
-                .map(|(n, t)| format!("(param ${} {})", n, t)),
-            " ",
-        );
+
+        fn empty_or_prepend(fill: &str, x: &Vec<(String, WASMType)>) -> String {
+            return match x.len() {
+                0 => "".to_string(),
+                _ => format!(" {}", join(
+                        x
+                        .iter()
+                        .map(|(n, t)| format!("({} ${} {})", fill, n, t)),
+                    " ",
+                    ))
+            }
+        }
+
+        let param_string = empty_or_prepend("param", &self.args);
         let result_string = match &self.result {
-            Some(x) => format!("(result {})", x),
+            Some(x) => format!(" (result {})", x),
             None => "".to_string(),
         };
-        let local_string = join(
-            self.locals
-                .iter()
-                .map(|(n, t)| format!("(local ${} {})", n, t)),
-            " ",
-        );
+        let local_string = empty_or_prepend("local", &self.locals);
         let header = format!(
-            "func ${} {} {} {}",
+            "func ${}{}{}{}",
             self.name, param_string, result_string, local_string
         );
 

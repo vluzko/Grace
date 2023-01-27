@@ -8,3 +8,7 @@ repos:
     -   id: check-toml
     -   id: check-added-large-files
         args: ['--maxkb=3000']
+-   repo: https://github.com/doublify/pre-commit-rust
+    rev: master
+    hooks:
+    -   id: fmt

@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  rust: cimg/rust@1.6.0
+  rust: circleci/rust@1.6.0
 commands:
   run_tests:
     steps:

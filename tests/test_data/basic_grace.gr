@@ -38,4 +38,3 @@ fn while_loop_break() -> i32:
         if counter == 7:
             break
     return 1
-

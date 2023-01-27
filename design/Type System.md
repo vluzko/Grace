@@ -74,7 +74,7 @@ We have the code `foo(a, b)`. How do we call this?
 
 * Case: All the types are known statically
     * Just do it normally
-* Case: 
+* Case:
 
 ## Dynamically Finding The Right Function
 
@@ -115,6 +115,3 @@ If both are `f32`, we do essentially the same thing.
 If the types are mismatched, we throw an error.
 
 Finally we call `make_gradual` on the result of that function call. That gets stored as `z`.
-
-
-

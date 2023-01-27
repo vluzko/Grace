@@ -6,7 +6,7 @@
 (import "gradual_binary_ops" "call_gradual" (func $.gradual_binary_ops.call_gradual (param $i i32) (param $a i32) (param $b i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $require_ref (param $x i32) (param $y i32) (result i32) 
+(func $require_ref (param $x i32) (param $y i32) (result i32)
 get_local $x
 get_local $y
 i32.add

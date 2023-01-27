@@ -12,4 +12,3 @@ Grace mostly draws inspiration from Python and Haskell.
 ### Testing
 * Rust unit tests are run with `cargo test`
 * Tests for compiled WebAssembly are run with `jest` from the `js_test` folder.
-

@@ -6,7 +6,7 @@
 (import "gradual_binary_ops" "call_gradual" (func $.gradual_binary_ops.call_gradual (param $i i32) (param $a i32) (param $b i32) (result i32)))
 (import "memory_management" "mem" (memory (;0;) 1))
 
-(func $func_3  (result i32) 
+(func $func_3  (result i32)
 i32.const 3
 )
 (export "func_3" (func $func_3))

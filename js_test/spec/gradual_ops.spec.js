@@ -19,7 +19,7 @@ describe("gradual tests.", () => {
         expect(type_val).toBe(0);
         expect(data_val).toBe(5);
     })
-    
+
     test('add_i32.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);
@@ -33,7 +33,7 @@ describe("gradual tests.", () => {
         expect(type_res).toBe(0);
         expect(data_res).toBe(9);
     })
-    
+
     test('add_gradual.', async () => {
         const a_ptr = mem_module.alloc_words(2);
         const b_ptr = mem_module.alloc_words(2);

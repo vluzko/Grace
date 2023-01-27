@@ -86,7 +86,7 @@
         f64.promote_f32
         drop
 
-        i32.const 0 
+        i32.const 0
     )
     (export "convert_test_fail_5" (func $convert_test_fail_5))
 

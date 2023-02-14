@@ -1009,4 +1009,39 @@ mod type_tests {
             panic!()
         }
     }
+
+    #[cfg(test)]
+    mod stmts {
+        use super::*;
+
+        #[test]
+        fn type_check_function_def() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_assignment() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_struct_dec() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_let_stmt() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_if_stmt() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_while() {
+            panic!()
+        }
+    }
 }

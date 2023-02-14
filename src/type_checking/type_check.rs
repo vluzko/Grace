@@ -983,5 +983,30 @@ mod type_tests {
             let expr = Node::from("a");
             check_expr(context, expr, Type::i32);
         }
+
+        #[test]
+        fn type_check_index() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_vec_literal() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_set_literal() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_tuple_literal() {
+            panic!()
+        }
+
+        #[test]
+        fn type_check_map_literal() {
+            panic!()
+        }
     }
 }

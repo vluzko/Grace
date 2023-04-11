@@ -306,7 +306,7 @@ pub(in parser) fn for_to_while(
 mod property_based_tests {
     use super::*;
     use proptest::prelude::*;
-    use proptest_utils::strategies;
+    use testing::proptest_utils::strategies;
 
     // Check that literal expressions can parse at all.
     proptest! {

@@ -74,7 +74,7 @@ pub(crate) fn add_identifier_to_context(
         type_annotation: None,
         expression: Node::from(ident_value),
     });
-    let (mut new_c, _) = stmt.scopes_and_types(0, context).unwrap();
+    let (mut new_c, _) = stmt.add_to_context(0, context).unwrap();
     new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
 
     return new_c;

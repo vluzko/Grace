@@ -169,8 +169,7 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        let (mut context, _) =
-            parsed_module.scopes_and_types(init_context.root_id, init_context)?;
+        let (mut context, _) = parsed_module.add_to_context(init_context.root_id, init_context)?;
         let rewritten = parsed_module.type_based_rewrite(&mut context);
         let cfg_map = module_to_cfg(&rewritten, &context);
         let wasm = module_to_llr(&rewritten, &context, &cfg_map);
@@ -292,7 +291,7 @@ impl Compilation {
             panic!()
         }
 
-        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
+        let context_res = parsed_module.add_to_context(init_context.root_id, init_context);
         return match context_res {
             Ok((context, _)) => {
                 let cfg_map = module_to_cfg(&parsed_module, &context);
@@ -454,7 +453,7 @@ where
     let mut result = T::parse(new_input);
     let init = Context::builtin();
     let id = init.root_id;
-    let context_res = result.scopes_and_types(id, init);
+    let context_res = result.add_to_context(id, init);
     return match context_res {
         Ok((context, _)) => (result, context),
         x => panic!("COMPILER ERROR: {:?}", x),
@@ -498,7 +497,7 @@ where
         None => Context::builtin(),
     };
     let id = init.root_id;
-    let context_res = input.scopes_and_types(id, init);
+    let context_res = input.add_to_context(id, init);
     return match context_res {
         Ok((context, _)) => (input, context),
         x => panic!("COMPILER ERROR: {:?}", x),

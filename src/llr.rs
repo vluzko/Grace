@@ -244,7 +244,7 @@ pub fn module_to_llr(
     });
 }
 
-// Helper for module_to_llr
+/// Shared code to convert function and struct declarations to LLR
 pub fn handle_declaration(
     declaration: &Node<Stmt>,
     context: &Context,
@@ -958,6 +958,66 @@ mod tests {
         }
 
         // fn
+    }
+
+    #[cfg(test)]
+    mod vertex {
+        #[test]
+        fn test_block() {
+            panic!()
+        }
+        #[test]
+        fn test_if_start() {
+            panic!()
+        }
+
+        #[test]
+        fn test_loop_start() {
+            panic!()
+        }
+
+        #[test]
+        fn test_break() {
+            panic!()
+        }
+
+        #[test]
+        fn test_continue() {
+            panic!()
+        }
+
+        #[test]
+        fn test_else() {
+            panic!()
+        }
+
+        #[test]
+        fn test_end() {
+            panic!()
+        }
+
+        #[test]
+        fn test_entry() {
+            panic!()
+        }
+    }
+
+    #[cfg(test)]
+    mod stmts {
+        #[test]
+        fn test_assignment() {
+            panic!()
+        }
+
+        #[test]
+        fn test_let() {
+            panic!()
+        }
+
+        #[test]
+        fn test_return() {
+            panic!()
+        }
     }
 
     #[test]

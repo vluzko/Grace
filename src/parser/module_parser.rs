@@ -1,3 +1,5 @@
+//! Module level parser.
+//! Parses imports and function declarations.
 extern crate nom;
 use self::nom::*;
 use expression::*;

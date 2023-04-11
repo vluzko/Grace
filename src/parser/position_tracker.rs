@@ -1,3 +1,5 @@
+//! Wrapper around byte arrays that tracks line and column number.
+//! Used to keep track of position of the parser in the code.
 use std::fmt;
 use std::iter::Enumerate;
 use std::ops::{Range, RangeFrom, RangeFull, RangeTo};

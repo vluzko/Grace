@@ -1013,10 +1013,27 @@ mod type_tests {
     #[cfg(test)]
     mod stmts {
         use super::*;
+        use test_utils;
 
         #[test]
         fn type_check_function_def() {
-            panic!()
+            let context = Context::builtin();
+            let (with_func, _) = test_utils::add_function_to_context(
+                context,
+                "foo",
+                vec![Type::i32],
+                vec![],
+                Type::i32,
+            );
+            let function_type = with_func.get_type(0, &Identifier::from("foo"));
+            assert_eq!(
+                function_type,
+                Type::Function(
+                    vec![(Identifier::from("arg0"), Type::i32)],
+                    vec![],
+                    Box::new(Type::i32)
+                )
+            );
         }
 
         #[test]

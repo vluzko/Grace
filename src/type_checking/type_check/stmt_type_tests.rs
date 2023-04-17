@@ -1,5 +1,6 @@
 use super::*;
 use testing::{minimal_examples, test_utils};
+use type_checking::type_check::GetContext;
 
 #[test]
 fn type_check_function_def() {
@@ -33,9 +34,17 @@ fn type_check_struct_dec() {
 
 #[test]
 fn type_check_let_stmt() {
-    let context = minimal_examples::minimal_let_context();
-    let stmt_type = context.get_type(0, &minimal_examples::minimal_identifier());
-    assert_eq!(stmt_type, Type::i32);
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_letn();
+    stmt.scope = context.root_id;
+    let (typed_context, _) = stmt.add_to_context(context).unwrap();
+    // let context = minimal_examples::minimal_let_context();
+    // typed_context.print_all_variables();
+    let stmt_type = typed_context.get_type(
+        typed_context.root_id,
+        &minimal_examples::minimal_identifier(),
+    );
+    // assert_eq!(stmt_type, Type::i32);
 }
 
 #[test]

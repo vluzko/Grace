@@ -248,16 +248,6 @@ impl Context {
 
 /// Basic methods
 impl Context {
-    /// Get a scope by its ID.
-    pub fn get_scope(&self, scope_id: usize) -> &Scope {
-        return self.scopes.get(&scope_id).unwrap();
-    }
-
-    /// Get a mutable reference to a Scope.
-    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
-        return self.scopes.get_mut(&scope_id).unwrap();
-    }
-
     /// Record the type of a node.
     pub fn add_type(&mut self, id: usize, t: Type) {
         self.type_map.insert(id, t);
@@ -309,14 +299,39 @@ impl Context {
 
     /// Pretty print
     pub fn pretty_print(&self) -> () {
-        for val in self.type_map.values() {
-            println!("{:?}", val);
+        for (k, val) in self.type_map.iter() {
+            println!("{:?}: {:?}", k, val);
         }
+    }
+
+    pub fn print_identifier_map(&self) -> () {
+        for (scope_id, scope) in &self.scopes {
+            for name in scope.names() {
+                let t = self.get_type(*scope_id, &name);
+                println!("{:?}: {:?}", name, t)
+            }
+        }
+        // let scope_id = match scope_id {
+        //     Some(id) => id,
+        //     None => self.root_id,
+        // };
+        // let scope = self.get_scope(scope_id);
+        // scope.print_identifier_map();
     }
 }
 
 /// Scoping
 impl Context {
+    /// Get a scope by its ID.
+    pub fn get_scope(&self, scope_id: usize) -> &Scope {
+        return self.scopes.get(&scope_id).unwrap();
+    }
+
+    /// Get a mutable reference to a Scope.
+    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
+        return self.scopes.get_mut(&scope_id).unwrap();
+    }
+
     /// Create a new scope, returning the ID.
     pub fn new_scope(&mut self, scope: Scope) -> usize {
         let scope_id = general_utils::get_next_scope_id();
@@ -325,12 +340,7 @@ impl Context {
     }
 
     /// Add a statement to a scope.
-    pub fn append_declaration(
-        &mut self,
-        scope_id: usize,
-        name: &Identifier,
-        stmt: &Box<Node<Stmt>>,
-    ) {
+    pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Node<Stmt>) {
         let scope = self.scopes.get_mut(&scope_id).unwrap();
         scope.append_declaration(name, stmt);
     }

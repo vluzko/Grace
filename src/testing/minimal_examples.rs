@@ -27,6 +27,10 @@ pub fn minimal_let() -> expression::Stmt {
     }
 }
 
+pub fn minimal_letn() -> expression::Node<expression::Stmt> {
+    expression::Node::from(minimal_let())
+}
+
 pub fn minimal_struct_type() -> types::Type {
     let mut attr_map = std::collections::BTreeMap::new();
     attr_map.insert(minimal_identifier(), types::Type::i32);

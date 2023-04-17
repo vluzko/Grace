@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use expression::*;
 use general_utils;
+use type_checking::context::Context;
 use type_checking::types::Type;
 
 /// A sum type for things that can modify scope.
@@ -102,17 +103,24 @@ impl Scope {
         };
     }
 
-    pub fn append_declaration(&mut self, name: &Identifier, stmt: &Box<Node<Stmt>>) {
+    /// Add a declaration to scope.
+    pub fn append_declaration(&mut self, name: &Identifier, stmt: &Node<Stmt>) {
         self.declaration_order
             .insert(name.clone(), self.declaration_order.len() + 1);
-        let scope_mod = CanModifyScope::Statement(stmt.as_ref() as *const _, stmt.id);
+        let scope_mod = CanModifyScope::Statement(stmt as *const _, stmt.id);
         self.declarations.insert(name.clone(), scope_mod);
     }
 
+    /// Add a modication to scope
     pub fn append_modification(&mut self, name: &Identifier, modification: CanModifyScope) {
         self.declaration_order
             .insert(name.clone(), self.declaration_order.len() + 1);
         self.declarations.insert(name.clone(), modification);
+    }
+
+    /// All the names in a scope.
+    pub fn names(&self) -> Vec<Identifier> {
+        return self.declarations.keys().cloned().collect();
     }
 }
 
@@ -227,6 +235,150 @@ impl From<Identifier> for Type {
     }
 }
 
+/// Create and populate scopes.
+pub trait SetScope {
+    fn set_scope(&mut self, parent_scope: usize, context: Context) -> Context;
+}
+
+/// Use the root scope, recurse over all children.
+impl SetScope for Node<Module> {
+    fn set_scope(&mut self, parent_scope_id: usize, mut context: Context) -> Context {
+        // TODO: Add traits
+        self.scope = parent_scope_id;
+        let scope = context.get_mut_scope(parent_scope_id);
+
+        // Add function names to scope
+        for stmt in self.data.functions.iter_mut() {
+            scope.append_declaration(&stmt.data.get_name(), &stmt);
+        }
+
+        // Add struct names to scope
+        for stmt in &self.data.structs {
+            scope.append_declaration(&stmt.data.get_name(), &stmt);
+        }
+
+        // Add all traits to the context.
+        for (k, v) in &self.data.traits {
+            context.traits.insert(k.clone(), v.clone());
+        }
+
+        // Add all trait implementations to the context.
+        for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter_mut() {
+            assert!(self.data.traits.contains_key(&trait_name));
+
+            // Create the scope for this trait implementation
+            let implementation_scope =
+                Scope::child_trait_impl(parent_scope_id, struct_name, trait_name);
+            let impl_scope_id = context.new_scope(implementation_scope);
+
+            for dec in func_impls.iter_mut() {
+                context = dec.set_scope(impl_scope_id, context);
+            }
+        }
+
+        // Set scopes for functions
+        for stmt in self.data.functions.iter_mut() {
+            context = stmt.set_scope(parent_scope_id, context);
+        }
+
+        // Set scopes for structs
+        for stmt in self.data.structs.iter_mut() {
+            context = stmt.set_scope(parent_scope_id, context);
+        }
+
+        return context;
+    }
+}
+
+/// New scope for the block, then recurse.
+impl SetScope for Node<Block> {
+    fn set_scope(&mut self, parent_scope: usize, mut context: Context) -> Context {
+        let new_scope = Scope::child(parent_scope);
+        let scope_id = context.new_scope(new_scope);
+        self.scope = scope_id;
+
+        // let mut new_context = context;
+        for stmt in self.data.statements.iter_mut() {
+            context = stmt.set_scope(scope_id, context);
+
+            // Add declarations to scope.
+            match &stmt.data {
+                Stmt::FunctionDecStmt { ref name, .. } | Stmt::StructDec { ref name, .. } => {
+                    context.append_declaration(self.scope, name, &stmt);
+                }
+                _ => {}
+            };
+        }
+
+        return context;
+    }
+}
+
+/// Recurse, create new scopes for any blocks.
+impl SetScope for Node<Stmt> {
+    fn set_scope(&mut self, parent_scope: usize, mut context: Context) -> Context {
+        self.scope = parent_scope;
+        return match self.data {
+            Stmt::LetStmt {
+                ref name,
+                ref mut expression,
+                ref type_annotation,
+            } => {
+                context = expression.set_scope(parent_scope, context);
+                context.append_declaration(self.scope, name, &self);
+                context
+            }
+
+            Stmt::FunctionDecStmt {
+                ref mut kwargs,
+                ref mut block,
+                ..
+            } => {
+                for (_, _, ref mut val) in kwargs.iter_mut() {
+                    context = val.set_scope(self.scope, context);
+                }
+                block.set_scope(self.scope, context)
+            }
+            Stmt::WhileStmt {
+                ref mut condition,
+                ref mut block,
+            } => {
+                context = condition.set_scope(self.scope, context);
+                block.set_scope(self.scope, context)
+            }
+            Stmt::IfStmt {
+                ref mut condition,
+                ref mut block,
+                ref mut else_block,
+            } => {
+                // Scope for condition and first block.
+                context = condition.set_scope(self.scope, context);
+                context = block.set_scope(self.scope, context);
+
+                if let Some(b) = else_block {
+                    context = b.set_scope(self.scope, context);
+                }
+                context
+            }
+            Stmt::StructDec { .. } => context,
+            Stmt::AssignmentStmt {
+                ref mut expression, ..
+            }
+            | Stmt::ReturnStmt(ref mut expression) => expression.set_scope(parent_scope, context),
+            Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => context,
+            _ => panic!("add_to_context not implemented for {:?}", self.data),
+        };
+    }
+}
+
+/// Recurse, don't create new scopes.
+impl SetScope for Node<Expr> {
+    fn set_scope(&mut self, parent_scope: usize, context: Context) -> Context {
+        self.scope = parent_scope;
+        context
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -249,62 +401,22 @@ mod test {
             };
         }
 
-        // impl Node<Stmt> {
-        //     fn mod_scope(&mut self, new_scope: usize) {
-        //         self.scope = new_scope;
-        //         match self.data {
-        //             Stmt::LetStmt{ref mut expression, ..} => {
-        //                 expression.mod_scope(new_scope);
-        //             }
-        //             _ => {}
-        //         }
-        //     }
-        // }
-
-        /// Utility function to recursively modify the scope of an Expr AST.
-        impl Node<Expr> {
-            fn mod_scope(&mut self, new_scope: usize) {
-                self.scope = new_scope;
-                match self.data {
-                    Expr::BinaryExpr {
-                        ref mut left,
-                        ref mut right,
-                        ..
-                    } => {
-                        left.mod_scope(new_scope);
-                        right.mod_scope(new_scope);
-                    }
-                    Expr::FunctionCall {
-                        ref mut function,
-                        ref mut args,
-                        ..
-                    } => {
-                        function.mod_scope(new_scope);
-                        for arg in args {
-                            arg.mod_scope(new_scope);
-                        }
-                    }
-                    _ => {}
-                }
-            }
-        }
-
         #[test]
         fn test_block_scope() {
             let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
-            e1.mod_scope(1);
+            e1.scope = 1;
             let s1 = Stmt::LetStmt {
                 name: Identifier::from("a"),
                 type_annotation: None,
-                expression: Node::from(e1),
+                expression: e1,
             };
 
             let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
-            e2.mod_scope(1);
+            e2.scope = 1;
             let s2 = Stmt::LetStmt {
                 name: Identifier::from("b"),
                 type_annotation: None,
-                expression: Node::from(e2),
+                expression: e2,
             };
 
             let input = r#"
@@ -324,6 +436,30 @@ mod test {
                 .get_declaration(block.scope, &Identifier::from("b"))
                 .unwrap();
             check_ptr_stmt(stmt2_pointer, &s2);
+        }
+
+        #[cfg(test)]
+        mod exprs {
+            use super::*;
+
+            /// Test scope modifications from literals.
+            /// All should be empty.
+            // TODO: Should be a proptest.
+            #[test]
+            fn test_literal_scope() {
+                let original = Context::builtin();
+                let inputs = vec![
+                    Node::<Expr>::from(5),
+                    Node::<Expr>::from(5.0),
+                    Node::<Expr>::from(true),
+                ];
+                // let mut input = Node::<Expr>::from(5);
+                for mut input in inputs {
+                    let context = Context::builtin();
+                    let scoped_context = input.set_scope(context.root_id, context);
+                    assert_eq!(scoped_context.scopes, original.scopes);
+                }
+            }
         }
 
         #[cfg(test)]

@@ -6,7 +6,7 @@ use type_checking::types::Trait;
 
 /// Check that an expression has the desired type.
 fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
-    let (_, t) = expr.add_to_context(0, context).unwrap();
+    let (_, t) = expr.add_to_context(context).unwrap();
     assert_eq!(t, expected_type);
 }
 
@@ -18,7 +18,7 @@ fn simple_check_expr(expr: Node<Expr>, expected_type: Type) {
 
 /// Check that type checking *fails*
 fn fail_check_expr(context: Context, mut expr: Node<Expr>) {
-    let res = expr.add_to_context(0, context);
+    let res = expr.add_to_context(context);
     match res {
         Ok((_, t)) => panic!("Expected failed type check. Expr has type {:?}", t),
         Err(e) => match e.underlying {
@@ -295,4 +295,15 @@ fn type_check_tuple_literal() {
 #[test]
 fn type_check_map_literal() {
     panic!()
+}
+
+#[cfg(test)]
+mod expected_failures {
+    use compiler_layers;
+    #[test]
+    #[should_panic]
+    fn add_incompatible() {
+        let input = "fn a():\n   let x = \"a\" + 0";
+        compiler_layers::Compilation::compile_from_string(&input.to_string());
+    }
 }

@@ -13,9 +13,6 @@ extern crate pretty_assertions;
 extern crate petgraph;
 extern crate proptest;
 
-// pub mod position_tracker;
-// #[macro_use]
-// pub mod parser_utils;
 pub mod bytecode;
 pub mod cfg;
 pub mod compiler_layers;
@@ -26,6 +23,6 @@ pub mod llr;
 #[macro_use]
 pub mod parser;
 pub mod pre_cfg_rewrites;
-pub(crate) mod proptest_utils;
-pub(crate) mod test_utils;
+#[cfg(test)]
+pub(crate) mod testing;
 pub mod type_checking;

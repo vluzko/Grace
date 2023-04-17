@@ -11,6 +11,7 @@ use expression::{Identifier, Import, Module, Node};
 use parser::base::Parseable;
 use parser::position_tracker::PosStr;
 use type_checking::context::Context;
+use type_checking::scope::SetScope;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
@@ -169,8 +170,8 @@ impl Compilation {
 
         parsed_module.data.imports = new_imports;
 
-        let (mut context, _) =
-            parsed_module.scopes_and_types(init_context.root_id, init_context)?;
+        let scoped_context = parsed_module.set_scope(init_context.root_id, init_context);
+        let (mut context, _) = parsed_module.add_to_context(scoped_context)?;
         let rewritten = parsed_module.type_based_rewrite(&mut context);
         let cfg_map = module_to_cfg(&rewritten, &context);
         let wasm = module_to_llr(&rewritten, &context, &cfg_map);
@@ -292,7 +293,8 @@ impl Compilation {
             panic!()
         }
 
-        let context_res = parsed_module.scopes_and_types(init_context.root_id, init_context);
+        let scope_context = parsed_module.set_scope(init_context.root_id, init_context);
+        let context_res = parsed_module.add_to_context(scope_context);
         return match context_res {
             Ok((context, _)) => {
                 let cfg_map = module_to_cfg(&parsed_module, &context);
@@ -454,7 +456,8 @@ where
     let mut result = T::parse(new_input);
     let init = Context::builtin();
     let id = init.root_id;
-    let context_res = result.scopes_and_types(id, init);
+    let scoped_context = result.set_scope(id, init);
+    let context_res = result.add_to_context(scoped_context);
     return match context_res {
         Ok((context, _)) => (result, context),
         x => panic!("COMPILER ERROR: {:?}", x),
@@ -498,7 +501,8 @@ where
         None => Context::builtin(),
     };
     let id = init.root_id;
-    let context_res = input.scopes_and_types(id, init);
+    let scoped_context = input.set_scope(id, init);
+    let context_res = input.add_to_context(scoped_context);
     return match context_res {
         Ok((context, _)) => (input, context),
         x => panic!("COMPILER ERROR: {:?}", x),

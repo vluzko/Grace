@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use expression::*;
 use type_checking::context::Context;
+use type_checking::scope::SetScope;
 use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
@@ -74,7 +75,8 @@ pub(crate) fn add_identifier_to_context(
         type_annotation: None,
         expression: Node::from(ident_value),
     });
-    let (mut new_c, _) = stmt.scopes_and_types(0, context).unwrap();
+    let scoped_context = stmt.set_scope(0, context);
+    let (mut new_c, _) = stmt.add_to_context(scoped_context).unwrap();
     new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
 
     return new_c;

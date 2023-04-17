@@ -10,6 +10,8 @@ use itertools::join;
 use general_utils;
 use type_checking::types::{Trait, Type};
 
+/// AST node.
+/// Keeps track of line, column, and scope information.
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Node<T> {
     pub id: usize,
@@ -39,6 +41,7 @@ impl<T> Node<T> {
     }
 }
 
+/// A module (a file) in Grace.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
     pub functions: Vec<Box<Node<Stmt>>>,

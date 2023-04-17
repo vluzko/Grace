@@ -1,4 +1,4 @@
-/// All expression parsers.
+//! All expression parsers.
 extern crate nom;
 use self::nom::*;
 use expression::*;

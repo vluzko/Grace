@@ -23,6 +23,7 @@ pub struct WASMModule {
     pub trait_implementations: Vec<WASMFunc>,
 }
 
+/// A WASM import statement
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct WASMImport {
     pub path: String,
@@ -63,6 +64,7 @@ pub enum WASM {
     Store(WASMType),
 }
 
+/// A WASM operator. Not comprehensive
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASMOperator {
     /// Addition
@@ -97,6 +99,8 @@ pub enum WASMOperator {
     Abs,
 }
 
+/// A WASM type.
+/// Either i32, i64, f32, or f64.
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum WASMType {
@@ -115,6 +119,7 @@ impl WASMType {
     }
 }
 
+/// Get the variables declared within a node.
 trait GetTrueDeclarations {
     fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)>;
 }
@@ -244,7 +249,7 @@ pub fn module_to_llr(
     });
 }
 
-// Helper for module_to_llr
+/// Shared code to convert function and struct declarations to LLR
 pub fn handle_declaration(
     declaration: &Node<Stmt>,
     context: &Context,
@@ -324,6 +329,7 @@ pub fn handle_declaration(
     };
 }
 
+/// Convert a trait function to LLR.
 pub fn handle_trait_func_dec(
     declaration: &Node<Stmt>,
     name_prefix: &String,
@@ -379,10 +385,13 @@ pub fn handle_trait_func_dec(
     };
 }
 
+/// Convert a value to LLR.
 pub trait ToLLR {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError>;
 }
 
+/// Convert a control flow graph to LLR.
+/// Essentially just walks over the graph.
 impl ToLLR for Cfg {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
         let mut wasm = vec![];
@@ -958,6 +967,66 @@ mod tests {
         }
 
         // fn
+    }
+
+    #[cfg(test)]
+    mod vertex {
+        #[test]
+        fn test_block() {
+            panic!()
+        }
+        #[test]
+        fn test_if_start() {
+            panic!()
+        }
+
+        #[test]
+        fn test_loop_start() {
+            panic!()
+        }
+
+        #[test]
+        fn test_break() {
+            panic!()
+        }
+
+        #[test]
+        fn test_continue() {
+            panic!()
+        }
+
+        #[test]
+        fn test_else() {
+            panic!()
+        }
+
+        #[test]
+        fn test_end() {
+            panic!()
+        }
+
+        #[test]
+        fn test_entry() {
+            panic!()
+        }
+    }
+
+    #[cfg(test)]
+    mod stmts {
+        #[test]
+        fn test_assignment() {
+            panic!()
+        }
+
+        #[test]
+        fn test_let() {
+            panic!()
+        }
+
+        #[test]
+        fn test_return() {
+            panic!()
+        }
     }
 
     #[test]

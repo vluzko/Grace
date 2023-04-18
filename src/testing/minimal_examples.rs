@@ -29,6 +29,11 @@ pub fn minimal_expression() -> expression::Expr {
     expression::Expr::Int("1".to_string())
 }
 
+/// Minimal boolean expression
+pub fn minimal_bool_expression() -> expression::Expr {
+    expression::Expr::Bool(true)
+}
+
 /// Minimal expression node
 pub fn minimal_node_expression() -> expression::Node<expression::Expr> {
     expression::Node::from(minimal_expression())
@@ -62,6 +67,26 @@ pub fn minimal_function_dec() -> expression::Stmt {
     }
 }
 
+/// Function declaration with empty block
+pub fn minimal_no_ret_function() -> expression::Stmt {
+    expression::Stmt::FunctionDecStmt {
+        name: minimal_identifier(),
+        args: vec![],
+        kwargs: vec![],
+        return_type: types::Type::i32,
+        block: expression::Node::from(minimal_block()),
+    }
+}
+
+/// Minimal if node
+pub fn minimal_if() -> expression::Stmt {
+    expression::Stmt::IfStmt {
+        condition: expression::Node::from(minimal_bool_expression()),
+        block: expression::Node::from(minimal_block()),
+        else_block: None,
+    }
+}
+
 /// Minimal return statement
 pub fn minimal_return() -> expression::Stmt {
     expression::Stmt::ReturnStmt(minimal_node_expression())
@@ -80,6 +105,25 @@ pub fn minimal_assnn() -> expression::Node<expression::Stmt> {
 /// Minimal function declaration node
 pub fn minimal_function_decn() -> expression::Node<expression::Stmt> {
     expression::Node::from(minimal_function_dec())
+}
+
+/// Minimal function with no return node
+pub fn minimal_no_ret_functionn() -> expression::Node<expression::Stmt> {
+    expression::Node::from(minimal_no_ret_function())
+}
+
+/// Minimal if node
+pub fn minimal_ifn() -> expression::Node<expression::Stmt> {
+    expression::Node::from(minimal_if())
+}
+
+/// Minimal if with non-boolean condition node.
+pub fn minimal_if_non_booln() -> expression::Node<expression::Stmt> {
+    expression::Node::from(expression::Stmt::IfStmt {
+        condition: minimal_node_expression(),
+        block: expression::Node::from(minimal_block()),
+        else_block: None,
+    })
 }
 
 /// Minimal return node

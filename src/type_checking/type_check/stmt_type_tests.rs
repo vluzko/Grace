@@ -14,6 +14,18 @@ fn type_check_function_def() {
 }
 
 #[test]
+#[should_panic]
+fn function_def_no_return_statement() {
+    let context = Context::builtin();
+    let mut stmt = minimal_examples::minimal_no_ret_functionn();
+    let scoped_context = stmt.set_scope(context.root_id, context);
+    let (typed_context, ret_type) = stmt.add_to_context(scoped_context).unwrap();
+    let function_type = typed_context.get_type(0, &minimal_examples::minimal_identifier());
+    assert_eq!(function_type, minimal_examples::minimal_function_type());
+    assert_eq!(function_type, ret_type);
+}
+
+#[test]
 fn type_check_assignment() {
     let context = Context::empty();
     let mut let_s = minimal_examples::minimal_letn();
@@ -66,8 +78,23 @@ fn type_check_let_stmt() {
 }
 
 #[test]
-fn type_check_if_stmt() {
-    panic!()
+fn type_check_if_statement() {
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_ifn();
+    stmt.scope = context.root_id;
+    let (typed_context, t) = stmt.add_to_context(context).unwrap();
+    let found_t = typed_context.get_node_type(stmt.id);
+    assert_eq!(found_t, t);
+    assert_eq!(found_t, Type::empty);
+}
+
+#[test]
+#[should_panic]
+fn if_stmt_non_boolean() {
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_if_non_booln();
+    stmt.scope = context.root_id;
+    stmt.add_to_context(context).unwrap();
 }
 
 #[test]

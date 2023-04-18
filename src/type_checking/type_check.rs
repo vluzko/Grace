@@ -284,7 +284,9 @@ impl GetContext for Node<Stmt> {
                 ref else_block,
             } => {
                 let (new_context, condition_type) = condition.add_to_context(context)?;
-                assert_eq!(condition_type, Type::boolean);
+                if condition_type != Type::boolean {
+                    return Err(GraceError::type_error("Non boolean condition".to_string()));
+                }
                 let (new_context, if_type) = block.add_to_context(new_context)?;
 
                 match else_block {
@@ -393,9 +395,8 @@ fn _add_function_call_to_context(
         let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
 
         // TODO: Type checking: Pass error
-        match new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
-            true => {}
-            false => return Err(GraceError::type_error(format!("Argument type mismatch"))),
+        if !new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
+            return Err(GraceError::type_error(format!("Argument type mismatch")));
         }
     }
 
@@ -424,9 +425,8 @@ fn _add_function_call_to_context(
         let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
 
         // // TODO: Type checking: Pass error
-        match new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
-            true => {}
-            false => return Err(GraceError::type_error(format!("Argument type mismatch"))),
+        if !new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
+            return Err(GraceError::type_error(format!("Argument type mismatch")));
         }
     }
     Ok((new_c, ret))

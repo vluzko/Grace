@@ -5,22 +5,42 @@ use type_checking::type_check::GetContext;
 #[test]
 fn type_check_function_def() {
     let context = Context::builtin();
-    let (with_func, _) =
-        test_utils::add_function_to_context(context, "foo", vec![Type::i32], vec![], Type::i32);
-    let function_type = with_func.get_type(0, &Identifier::from("foo"));
-    assert_eq!(
-        function_type,
-        Type::Function(
-            vec![(Identifier::from("arg0"), Type::i32)],
-            vec![],
-            Box::new(Type::i32)
-        )
-    );
+    let mut stmt = minimal_examples::minimal_function_decn();
+    let scoped_context = stmt.set_scope(context.root_id, context);
+    let (typed_context, ret_type) = stmt.add_to_context(scoped_context).unwrap();
+    let function_type = typed_context.get_type(0, &minimal_examples::minimal_identifier());
+    assert_eq!(function_type, minimal_examples::minimal_function_type());
+    assert_eq!(function_type, ret_type);
 }
 
 #[test]
 fn type_check_assignment() {
-    panic!()
+    let context = Context::empty();
+    let mut let_s = minimal_examples::minimal_letn();
+    let mut stmt = minimal_examples::minimal_assnn();
+    let_s.scope = context.root_id;
+    stmt.scope = context.root_id;
+    let (typed_context, _) = let_s.add_to_context(context).unwrap();
+    let (typed_context, _) = stmt.add_to_context(typed_context).unwrap();
+    let stmt_type = typed_context.get_type(
+        typed_context.root_id,
+        &minimal_examples::minimal_identifier(),
+    );
+    assert_eq!(stmt_type, Type::i32);
+}
+
+#[test]
+#[should_panic]
+fn assignment_no_init() {
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_assnn();
+    stmt.scope = context.root_id;
+    let (typed_context, _) = stmt.add_to_context(context).unwrap();
+    let stmt_type = typed_context.get_type(
+        typed_context.root_id,
+        &minimal_examples::minimal_identifier(),
+    );
+    assert_eq!(stmt_type, Type::i32);
 }
 
 #[test]
@@ -38,13 +58,11 @@ fn type_check_let_stmt() {
     let mut stmt = minimal_examples::minimal_letn();
     stmt.scope = context.root_id;
     let (typed_context, _) = stmt.add_to_context(context).unwrap();
-    // let context = minimal_examples::minimal_let_context();
-    // typed_context.print_all_variables();
     let stmt_type = typed_context.get_type(
         typed_context.root_id,
         &minimal_examples::minimal_identifier(),
     );
-    // assert_eq!(stmt_type, Type::i32);
+    assert_eq!(stmt_type, Type::i32);
 }
 
 #[test]

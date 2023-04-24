@@ -303,7 +303,8 @@ impl SetScope for Node<Block> {
 
             // Add declarations to scope.
             match &stmt.data {
-                Stmt::FunctionDecStmt { ref name, .. } | Stmt::StructDec { ref name, .. } => {
+                // Stmt::FunctionDecStmt { ref name, .. } |
+                Stmt::StructDec { ref name, .. } => {
                     context.append_declaration(self.scope, name, &stmt);
                 }
                 _ => {}
@@ -330,6 +331,7 @@ impl SetScope for Node<Stmt> {
             }
 
             Stmt::FunctionDecStmt {
+                ref name,
                 ref mut kwargs,
                 ref mut block,
                 ..
@@ -337,7 +339,9 @@ impl SetScope for Node<Stmt> {
                 for (_, _, ref mut val) in kwargs.iter_mut() {
                     context = val.set_scope(self.scope, context);
                 }
-                block.set_scope(self.scope, context)
+                context = block.set_scope(self.scope, context);
+                context.append_declaration(self.scope, name, &self);
+                context
             }
             Stmt::WhileStmt {
                 ref mut condition,

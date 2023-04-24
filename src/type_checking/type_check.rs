@@ -122,11 +122,11 @@ impl GetContext for Node<Block> {
 
             // Update the block type if it's a return statement.
             block_type = match stmt.data {
-                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1),
-                Stmt::BreakStmt | Stmt::ContinueStmt => block_type.merge(&Type::empty),
+                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1)?,
+                Stmt::BreakStmt | Stmt::ContinueStmt => block_type.merge(&Type::empty)?,
                 Stmt::IfStmt { .. } | Stmt::WhileStmt { .. } => {
                     if res.1 != Type::empty {
-                        block_type.merge(&res.1)
+                        block_type.merge(&res.1)?
                     } else {
                         block_type
                     }
@@ -274,36 +274,32 @@ impl GetContext for Node<Stmt> {
                 ref condition,
                 ref block,
             } => {
-                let (mut condition_context, condition_type) = condition.add_to_context(context)?;
-                assert_eq!(condition_type, Type::boolean);
-
-                block.add_to_context(condition_context)
+                let (condition_context, condition_type) = condition.add_to_context(context)?;
+                match condition_type {
+                    Type::boolean => block.add_to_context(condition_context),
+                    x => Err(GraceError::type_error(format!(
+                        "Non boolean condition: {:?}",
+                        x
+                    ))),
+                }
             }
             Stmt::IfStmt {
                 ref condition,
                 ref block,
                 ref else_block,
             } => {
-                let (mut new_context, condition_type) = condition.add_to_context(context)?;
-                assert_eq!(condition_type, Type::boolean);
+                let (new_context, condition_type) = condition.add_to_context(context)?;
+                if condition_type != Type::boolean {
+                    return Err(GraceError::type_error("Non boolean condition".to_string()));
+                }
+                let (new_context, if_type) = block.add_to_context(new_context)?;
 
-                let res = block.add_to_context(new_context);
-
-                match res {
-                    Ok(v) => {
-                        new_context = v.0;
-                        let mut if_type = v.1;
-
-                        match else_block {
-                            Some(b) => {
-                                let (else_context, else_type) = b.add_to_context(new_context)?;
-                                if_type = if_type.merge(&else_type);
-                                Ok((else_context, if_type))
-                            }
-                            None => Ok((new_context, if_type)),
-                        }
+                match else_block {
+                    Some(b) => {
+                        let (new_context, else_type) = b.add_to_context(new_context)?;
+                        Ok((new_context, if_type.merge(&else_type)?))
                     }
-                    Err(e) => Err(e),
+                    None => Ok((new_context, if_type)),
                 }
             }
             Stmt::StructDec {
@@ -320,14 +316,7 @@ impl GetContext for Node<Stmt> {
                 context.define_type(name.clone(), record);
                 Ok((context, Type::Named(name.clone())))
             }
-            Stmt::ReturnStmt(ref expression) => {
-                let ret_name = Identifier::from("$ret");
-                let exp_type = context.get_type(self.scope, &ret_name);
-                let (mut new_c, new_t) = expression.add_to_context(context)?;
-                assert!(new_c.check_subtype(expression.scope, &new_t, &exp_type));
-
-                Ok((new_c, new_t))
-            }
+            Stmt::ReturnStmt(ref expression) => expression.add_to_context(context),
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => Ok((context, Type::empty)),
             _ => panic!("add_to_context not implemented for {:?}", self.data),
         };
@@ -349,6 +338,96 @@ impl GetContext for Node<Expr> {
             Err(e) => Err(self.annotate_error(e)),
         };
     }
+}
+
+/// Add a function call to the context.
+fn _add_function_call_to_context(
+    function: &Box<Node<Expr>>,
+    args: &Vec<Node<Expr>>,
+    kwargs: &Vec<(Identifier, Node<Expr>)>,
+    context: Context,
+) -> TypeCheckRes {
+    let (mut new_c, wrapped_func) = function.add_to_context(context)?;
+    let (arg_types, _kwarg_types, ret) = match wrapped_func {
+        Type::Function(a, b, c) => Ok((a, b, *c.clone())),
+        x => Err(GraceError::type_error(format!(
+            "Somehow got a non-function type {:?}",
+            x
+        ))),
+    }?;
+
+    // Check argument length
+    // If there's a self type argument, we don't check it.
+    // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
+    let arg_types_to_match =
+        match args.len() > 1 && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined)) {
+            true => {
+                if args.len() != arg_types.len() - 1 {
+                    return Err(GraceError::type_error(format!(
+                        "Function call to {:?} has {} arguments, but expected {}",
+                        function,
+                        args.len(),
+                        arg_types.len() - 1
+                    )));
+                }
+                &arg_types[1..]
+            }
+            false => {
+                if args.len() != arg_types.len() {
+                    return Err(GraceError::type_error(format!(
+                        "Function call to {:?} has {} arguments, but expected {}",
+                        function,
+                        args.len(),
+                        arg_types.len()
+                    )));
+                }
+                &arg_types
+            }
+        };
+
+    for (i, arg) in args.into_iter().enumerate() {
+        let res = arg.add_to_context(new_c)?;
+        new_c = res.0;
+        let arg_t = res.1;
+
+        let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
+
+        // TODO: Type checking: Pass error
+        if !new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
+            return Err(GraceError::type_error(format!("Argument type mismatch")));
+        }
+    }
+
+    for (name, value) in kwargs {
+        let res = value.add_to_context(new_c)?;
+        new_c = res.0;
+        let kwarg_t = res.1;
+
+        fn find_kwarg_index(
+            types: &Vec<(Identifier, Type)>,
+            n: &Identifier,
+        ) -> Result<usize, GraceError> {
+            for (i, (ident, _)) in types.iter().enumerate() {
+                if ident == n {
+                    return Ok(i);
+                }
+            }
+            return Err(GraceError::type_error(format!(
+                "Invalid kwarg name. Passed {:?}, must be in {:?}",
+                types, n
+            )));
+        }
+
+        let i = find_kwarg_index(&arg_types, &name)?;
+
+        let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
+
+        // // TODO: Type checking: Pass error
+        if !new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
+            return Err(GraceError::type_error(format!("Argument type mismatch")));
+        }
+    }
+    Ok((new_c, ret))
 }
 
 impl Node<Expr> {
@@ -398,97 +477,7 @@ impl Node<Expr> {
                 ref function,
                 ref args,
                 ref kwargs,
-            } => {
-                let (mut new_c, wrapped_func) = function.add_to_context(context)?;
-                let (arg_types, _kwarg_types, ret) = match wrapped_func {
-                    Type::Function(a, b, c) => Ok((a, b, *c.clone())),
-                    x => Err(GraceError::type_error(format!(
-                        "Somehow got a non-function type {:?}",
-                        x
-                    ))),
-                }?;
-
-                // Check argument length
-                // If there's a self type argument, we don't check it.
-                // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
-                let arg_types_to_match = match args.len() > 1
-                    && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined))
-                {
-                    true => {
-                        if args.len() != arg_types.len() - 1 {
-                            return Err(GraceError::type_error(format!(
-                                "Function call to {:?} has {} arguments, but expected {}",
-                                function,
-                                args.len(),
-                                arg_types.len() - 1
-                            )));
-                        }
-                        &arg_types[1..]
-                    }
-                    false => {
-                        if args.len() != arg_types.len() {
-                            return Err(GraceError::type_error(format!(
-                                "Function call to {:?} has {} arguments, but expected {}",
-                                function,
-                                args.len(),
-                                arg_types.len()
-                            )));
-                        }
-                        &arg_types
-                    }
-                };
-
-                for (i, arg) in args.into_iter().enumerate() {
-                    let res = arg.add_to_context(new_c)?;
-                    new_c = res.0;
-                    let arg_t = res.1;
-
-                    let expected_type =
-                        arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
-
-                    // TODO: Type checking: Pass error
-                    match new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
-                        true => {}
-                        false => {
-                            return Err(GraceError::type_error(format!("Argument type mismatch")))
-                        }
-                    }
-                }
-
-                for (name, value) in kwargs {
-                    let res = value.add_to_context(new_c)?;
-                    new_c = res.0;
-                    let kwarg_t = res.1;
-
-                    fn find_kwarg_index(
-                        types: &Vec<(Identifier, Type)>,
-                        n: &Identifier,
-                    ) -> Result<usize, GraceError> {
-                        for (i, (ident, _)) in types.iter().enumerate() {
-                            if ident == n {
-                                return Ok(i);
-                            }
-                        }
-                        return Err(GraceError::type_error(format!(
-                            "Invalid kwarg name. Passed {:?}, must be in {:?}",
-                            types, n
-                        )));
-                    }
-
-                    let i = find_kwarg_index(&arg_types, &name)?;
-
-                    let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
-
-                    // // TODO: Type checking: Pass error
-                    match new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
-                        true => {}
-                        false => {
-                            return Err(GraceError::type_error(format!("Argument type mismatch")))
-                        }
-                    }
-                }
-                Ok((new_c, ret))
-            }
+            } => _add_function_call_to_context(function, args, kwargs, context),
             Expr::StructLiteral {
                 ref base,
                 ref fields,
@@ -582,7 +571,7 @@ impl Node<Expr> {
                     let (c, mut vec_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(c)?;
                     // TODO: Type checking: Use context level merge.
-                    vec_t = vec_t.merge(&t);
+                    vec_t = vec_t.merge(&t)?;
                     Ok((new_c, vec_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
@@ -595,7 +584,7 @@ impl Node<Expr> {
                                        expr: &Node<Expr>| {
                     let (new_c, mut set_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(new_c)?;
-                    set_t = set_t.merge(&t);
+                    set_t = set_t.merge(&t)?;
                     Ok((new_c, set_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));

@@ -214,10 +214,10 @@ fn _add_function_declaration_to_context(
     let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
     context.add_type(stmt_id, function_type.clone());
 
-    let (block_context, block_type) = block.add_to_context(context)?;
+    let (mut block_context, block_type) = block.add_to_context(context)?;
 
     // if !return_type.is_compatible(&block_type)
-    if !block_context.check_subtype(scope_id, return_type, block_type) {
+    if !block_context.check_subtype(scope_id, return_type, &block_type) {
         return Err(GraceError::type_error(format!(
             "Type mismatch: expected type {:?} but found type {:?}.",
             return_type, block_type

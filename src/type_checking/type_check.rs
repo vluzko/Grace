@@ -290,7 +290,10 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (new_context, condition_type) = condition.add_to_context(context)?;
                 if condition_type != Type::boolean {
-                    return Err(GraceError::type_error("Non boolean condition".to_string()));
+                    return Err(GraceError::type_error(format!(
+                        "Non boolean condition: {:?}",
+                        condition_type
+                    )));
                 }
                 let (new_context, if_type) = block.add_to_context(new_context)?;
 

@@ -89,7 +89,7 @@ fn type_check_if_statement() {
 }
 
 #[test]
-#[should_panic]
+#[should_panic(expected = "Non boolean condition: i32")]
 fn if_stmt_non_boolean() {
     let context = Context::empty();
     let mut stmt = minimal_examples::minimal_if_non_booln();

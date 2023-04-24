@@ -417,7 +417,6 @@ impl Context {
 /// Typechecking
 impl Context {
     /// Resolve an attribute access within the current context.
-    /// # Arguments:
     pub fn resolve_attribute(
         &self,
         base_type: &Type,
@@ -467,10 +466,10 @@ impl Context {
                 }
                 // TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
-                    panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
+                    return Err(GraceError::type_error(format!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits)));
                 } else {
                     return Err(GraceError::type_error(format!(
-                        "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
+                        "No matching attribute found for: {:?}, {:?}",
                         base_type, name
                     )));
                 }
@@ -479,22 +478,25 @@ impl Context {
     }
 
     /// Modify a Type::Self so it contains whatever Self actually is.
-    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
-        return match base_type {
+    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Result<Type, GraceError> {
+        match base_type {
             Type::self_type(t) => {
-                assert!(
-                    matches!(**t, Type::Undetermined),
-                    "TYPE ERROR: Matching against a self type that is not undetermined: {:?}",
-                    base_type
-                );
+                if !(matches!(**t, Type::Undetermined)) {
+                    return Err(GraceError::type_error(format!(
+                        "Matching against a self type that is not undetermined: {:?}",
+                        base_type
+                    )));
+                }
                 let (struct_name, _) = self.get_struct_and_trait(scope_id);
                 match struct_name {
-                    Some(x) => Type::self_type(Box::new(Type::Named(x))),
-                    None => panic!("TYPE ERROR: Self used outside of a method implementation."),
+                    Some(x) => Ok(Type::self_type(Box::new(Type::Named(x)))),
+                    None => Err(GraceError::type_error(
+                        "Self used outside of a method implementation.".to_string(),
+                    )),
                 }
             }
-            t => t.clone(),
-        };
+            t => Ok(t.clone()),
+        }
     }
 
     /// Check if this is a trait method call or an attribute access.

@@ -140,7 +140,7 @@ fn _add_let_to_context(
     let (mut c, t) = expression.add_to_context(context)?;
     match &type_annotation {
         Some(ref x) => {
-            let actual_type = c.resolve_self_type(x, scope_id);
+            let actual_type = c.resolve_self_type(x, scope_id)?;
             c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
         }
         None => {}
@@ -165,7 +165,7 @@ fn _add_function_declaration_to_context(
     let mut kwarg_types = vec![];
     let mut modifications = vec![];
     for (key, t) in args.iter() {
-        let resolved = context.resolve_self_type(t, scope_id);
+        let resolved = context.resolve_self_type(t, scope_id)?;
         arg_types.push((key.clone(), resolved.clone()));
 
         let modification = CanModifyScope::Argument(resolved);
@@ -184,7 +184,7 @@ fn _add_function_declaration_to_context(
         context.check_grad_and_ref_equality(scope_id, &res.1, t)?;
 
         // Add the type to the function type.
-        let resolved = context.resolve_self_type(t, scope_id);
+        let resolved = context.resolve_self_type(t, scope_id)?;
         kwarg_types.push((key.clone(), resolved.clone()));
 
         // Add kwargs to
@@ -200,14 +200,12 @@ fn _add_function_declaration_to_context(
         new_scope.append_modification(k, m);
     }
 
-    let resolved_return_t = context.resolve_self_type(return_type, scope_id);
-    let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
+    let resolved_return_t = context.resolve_self_type(return_type, scope_id)?;
+    let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t.clone()));
     context.add_type(stmt_id, function_type.clone());
 
     let (mut block_context, block_type) = block.add_to_context(context)?;
-    println!("Block type {:?}", block_type);
-    println!("Return type {:?}", return_type);
-    block_context.check_grad_and_ref_equality(scope_id, return_type, &block_type)?;
+    block_context.check_grad_and_ref_equality(scope_id, &resolved_return_t, &block_type)?;
 
     Ok((block_context, function_type))
 }

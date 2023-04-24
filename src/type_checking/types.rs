@@ -160,34 +160,43 @@ impl Type {
     }
 
     /// Merge two types if they're compatible.
-    pub fn merge(&self, other: &Type) -> Type {
+    pub fn merge(&self, other: &Type) -> Result<Type, GraceError> {
         if self == other {
-            return self.clone();
+            return Ok(self.clone());
         } else {
             return match self {
                 Type::Sum(ref types) => match other {
                     Type::Sum(ref other_types) => {
-                        Type::Sum(general_utils::vec_c_int(types, other_types))
+                        Ok(Type::Sum(general_utils::vec_c_int(types, other_types)))
                     }
                     x => {
                         if types.contains(&x) {
-                            x.clone()
+                            Ok(x.clone())
                         } else {
-                            panic!()
+                            Err(GraceError::type_error(format!(
+                                "Type error. Tried to merge {:?} and {:?}",
+                                self, other
+                            )))
                         }
                     }
                 },
                 Type::Refinement(ref base, ..) => other.merge(&base),
-                Type::Undetermined => other.clone(),
+                Type::Undetermined => Ok(other.clone()),
                 x => match other {
                     Type::Sum(ref other_types) => {
                         if other_types.contains(&x) {
-                            x.clone()
+                            Ok(x.clone())
                         } else {
-                            panic!()
+                            Err(GraceError::type_error(format!(
+                                "Type error. Tried to merge {:?} and {:?}",
+                                self, other
+                            )))
                         }
                     }
-                    y => panic!("Type error. Tried to merge {:?} and {:?}", x, y),
+                    y => Err(GraceError::type_error(format!(
+                        "Type error. Tried to merge {:?} and {:?}",
+                        self, other
+                    ))),
                 },
             };
         }

@@ -272,6 +272,7 @@ impl Context {
 
     /// Get the type of the identifier in the given scope.
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
+        println!("Getting type of {:?} in scope {}", name, scope_id);
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
             CanModifyScope::Statement(_, ref id) => self.type_map.get(id).unwrap().clone(),
@@ -563,7 +564,16 @@ impl Context {
     }
 
     /// Get the return type of a binary operator.
-    pub fn bin_op_ret_type(&self, op: &BinaryOperator, left: &Type, right: &Type) -> Type {
+    pub fn bin_op_ret_type(
+        &self,
+        op: &BinaryOperator,
+        left: &Type,
+        right: &Type,
+    ) -> Result<Type, GraceError> {
+        let err = Err(GraceError::type_error(format!(
+            "TYPE ERROR. Tried to {:?} {:?} and {:?}",
+            op, left, right
+        )));
         return match op {
             // TODO: 540: Update left and right with an "addable" constraint.
             BinaryOperator::Add
@@ -571,18 +581,18 @@ impl Context {
             | BinaryOperator::Mult
             | BinaryOperator::Mod => match left {
                 Type::Gradual(_) => match right {
-                    Type::Gradual(_) => Type::Gradual(general_utils::get_next_grad()),
-                    Type::i32 | Type::i64 | Type::f32 | Type::f64 => right.clone(),
-                    _ => panic!("TYPE ERROR. Tried to add {:?} and {:?}", left, right),
+                    Type::Gradual(_) => Ok(Type::Gradual(general_utils::get_next_grad())),
+                    Type::i32 | Type::i64 | Type::f32 | Type::f64 => Ok(right.clone()),
+                    _ => err,
                 },
                 x => match right {
-                    Type::Gradual(_) => left.clone(),
+                    Type::Gradual(_) => Ok(left.clone()),
                     y => x.merge(y),
                 },
             },
-            BinaryOperator::Div => Type::f64,
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Type::boolean,
-            _ => panic!(),
+            BinaryOperator::Div => Ok(Type::f64),
+            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Ok(Type::boolean),
+            _ => err,
         };
     }
 

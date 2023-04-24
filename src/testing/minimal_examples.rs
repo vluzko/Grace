@@ -126,6 +126,15 @@ pub fn minimal_if_non_booln() -> expression::Node<expression::Stmt> {
     })
 }
 
+/// Minimal if statement with non matching main and else blocks
+pub fn minimal_if_nonmatching() -> expression::Node<expression::Stmt> {
+    expression::Node::from(expression::Stmt::IfStmt {
+        condition: expression::Node::from(minimal_bool_expression()),
+        block: expression::Node::from(minimal_block()),
+        else_block: Some(expression::Node::from(minimal_ret_block())),
+    })
+}
+
 /// Minimal return node
 pub fn minimal_returnn() -> expression::Node<expression::Stmt> {
     expression::Node::from(minimal_return())

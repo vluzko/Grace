@@ -98,6 +98,19 @@ fn if_stmt_non_boolean() {
 }
 
 #[test]
+#[should_panic(expected = "Type error. Tried to merge empty and i32")]
+fn if_stmt_mismatched_blocks() {
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_if_nonmatching();
+    let w_scopes = stmt.set_scope(context.root_id, context);
+    stmt.add_to_context(w_scopes).unwrap();
+}
+
+#[test]
 fn type_check_while() {
     panic!()
 }
+
+#[test]
+#[should_panic]
+fn while_stmt_non_boolean() {}

@@ -122,11 +122,11 @@ impl GetContext for Node<Block> {
 
             // Update the block type if it's a return statement.
             block_type = match stmt.data {
-                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1),
-                Stmt::BreakStmt | Stmt::ContinueStmt => block_type.merge(&Type::empty),
+                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1)?,
+                Stmt::BreakStmt | Stmt::ContinueStmt => block_type.merge(&Type::empty)?,
                 Stmt::IfStmt { .. } | Stmt::WhileStmt { .. } => {
                     if res.1 != Type::empty {
-                        block_type.merge(&res.1)
+                        block_type.merge(&res.1)?
                     } else {
                         block_type
                     }
@@ -292,7 +292,7 @@ impl GetContext for Node<Stmt> {
                 match else_block {
                     Some(b) => {
                         let (new_context, else_type) = b.add_to_context(new_context)?;
-                        Ok((new_context, if_type.merge(&else_type)))
+                        Ok((new_context, if_type.merge(&else_type)?))
                     }
                     None => Ok((new_context, if_type)),
                 }
@@ -311,14 +311,7 @@ impl GetContext for Node<Stmt> {
                 context.define_type(name.clone(), record);
                 Ok((context, Type::Named(name.clone())))
             }
-            Stmt::ReturnStmt(ref expression) => {
-                let ret_name = Identifier::from("$ret");
-                let exp_type = context.get_type(self.scope, &ret_name);
-                let (mut new_c, new_t) = expression.add_to_context(context)?;
-                assert!(new_c.check_subtype(expression.scope, &new_t, &exp_type));
-
-                Ok((new_c, new_t))
-            }
+            Stmt::ReturnStmt(ref expression) => expression.add_to_context(context),
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => Ok((context, Type::empty)),
             _ => panic!("add_to_context not implemented for {:?}", self.data),
         };
@@ -573,7 +566,7 @@ impl Node<Expr> {
                     let (c, mut vec_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(c)?;
                     // TODO: Type checking: Use context level merge.
-                    vec_t = vec_t.merge(&t);
+                    vec_t = vec_t.merge(&t)?;
                     Ok((new_c, vec_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
@@ -586,7 +579,7 @@ impl Node<Expr> {
                                        expr: &Node<Expr>| {
                     let (new_c, mut set_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(new_c)?;
-                    set_t = set_t.merge(&t);
+                    set_t = set_t.merge(&t)?;
                     Ok((new_c, set_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));

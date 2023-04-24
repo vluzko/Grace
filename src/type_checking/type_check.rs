@@ -141,12 +141,7 @@ fn _add_let_to_context(
     match &type_annotation {
         Some(ref x) => {
             let actual_type = c.resolve_self_type(x, scope_id);
-            if !c.check_subtype(expression.scope, &t, &actual_type) {
-                return Err(GraceError::type_error(format!(
-                    "Type mismatch: expected type {:?} but found type {:?}.",
-                    x, t
-                )));
-            }
+            c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
         }
         None => {}
     };
@@ -186,12 +181,7 @@ fn _add_function_declaration_to_context(
         context = res.0;
 
         // Check kwarg expression type matches annotation
-        if !context.check_subtype(scope_id, &res.1, t) {
-            return Err(GraceError::type_error(format!(
-                "Type mismatch: expected type {:?} but found type {:?}.",
-                t, res.1
-            )));
-        }
+        context.check_grad_and_ref_equality(scope_id, &res.1, t)?;
 
         // Add the type to the function type.
         let resolved = context.resolve_self_type(t, scope_id);
@@ -214,15 +204,10 @@ fn _add_function_declaration_to_context(
     let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
     context.add_type(stmt_id, function_type.clone());
 
-    let (block_context, block_type) = block.add_to_context(context)?;
-
-    // if !return_type.is_compatible(&block_type)
-    if !block_context.check_subtype(scope_id, return_type, block_type) {
-        return Err(GraceError::type_error(format!(
-            "Type mismatch: expected type {:?} but found type {:?}.",
-            return_type, block_type
-        )));
-    }
+    let (mut block_context, block_type) = block.add_to_context(context)?;
+    println!("Block type {:?}", block_type);
+    println!("Return type {:?}", return_type);
+    block_context.check_grad_and_ref_equality(scope_id, return_type, &block_type)?;
 
     Ok((block_context, function_type))
 }
@@ -247,12 +232,7 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (mut c, t) = expression.add_to_context(context)?;
                 let expected_type = c.get_type(self.scope, name);
-                if !c.check_subtype(expression.scope, &t, &expected_type) {
-                    return Err(GraceError::type_error(format!(
-                        "Type mismatch: expected type {:?} but found type {:?}.",
-                        expected_type, t
-                    )));
-                }
+                c.check_grad_and_ref_equality(expression.scope, &t, &expected_type)?;
                 Ok((c, t))
             }
             Stmt::FunctionDecStmt {
@@ -396,9 +376,7 @@ fn _add_function_call_to_context(
         let expected_type = arg_types_to_match[i].1.add_constraint(&arg_types[i].0, arg);
 
         // TODO: Type checking: Pass error
-        if !new_c.check_subtype(arg.scope, &arg_t, &expected_type) {
-            return Err(GraceError::type_error(format!("Argument type mismatch")));
-        }
+        new_c.check_grad_and_ref_equality(arg.scope, &arg_t, &expected_type)?;
     }
 
     for (name, value) in kwargs {
@@ -426,9 +404,7 @@ fn _add_function_call_to_context(
         let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
 
         // // TODO: Type checking: Pass error
-        if !new_c.check_subtype(value.scope, &kwarg_t, &expected_type) {
-            return Err(GraceError::type_error(format!("Argument type mismatch")));
-        }
+        new_c.check_grad_and_ref_equality(value.scope, &kwarg_t, &expected_type)?;
     }
     Ok((new_c, ret))
 }
@@ -492,13 +468,9 @@ impl Node<Expr> {
                         let (new_c, mut vec_t) = aggregate?;
                         let (mut expr_c, t) = expr.add_to_context(new_c)?;
 
-                        if expr_c.check_subtype(expr.scope, &t, expected_type) {
-                            vec_t.push(t);
-                            Ok((expr_c, vec_t))
-                        } else {
-                            // TODO: Error messages: More info
-                            Err(GraceError::type_error(format!("Wrong type for attribute.")))
-                        }
+                        expr_c.check_grad_and_ref_equality(expr.scope, &t, expected_type)?;
+                        vec_t.push(t);
+                        Ok((expr_c, vec_t))
                     };
 
                 // TODO: cleanup: The record type checker should be separated out.

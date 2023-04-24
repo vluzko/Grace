@@ -543,9 +543,7 @@ impl Context {
                     Type::Function(ref args, ref kwargs, ref return_type) => {
 
                         for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
-                            if !self.check_subtype(scope_id, actual_t, expected_t) {
-                                return Err(GraceError::type_error("Argument type constraint not satisfied".to_string()))
-                            }
+                            self.check_grad_and_ref_equality(scope_id, actual_t, expected_t)?;
                         }
 
                         if kwargs.len() > 0 {
@@ -661,11 +659,7 @@ impl Context {
         }
     }
 
-    /// Check if the type of expr is a subtype of desired_type.
-    /// For types that do *not* include any gradual or refinement types this is equivalent to equality.
-    /// For refinement types we have the additional requirement that the refinement constraints be satisfied.
-    /// For gradual types *at least one* of the possible gradual types must be a subtype of the desired type.
-    pub fn check_subtype(&mut self, scope_id: usize, expr_t: &Type, desired_type: &Type) -> bool {
+    pub fn _type_matches(&mut self, scope_id: usize, expr_t: &Type, desired_type: &Type) -> bool {
         if expr_t == desired_type {
             return true;
         } else {
@@ -679,7 +673,7 @@ impl Context {
                 Type::i32 | Type::i64 | Type::f32 | Type::f64 | Type::boolean | Type::string => {
                     match unwrapped_self {
                         Type::Refinement(ref base, ..) => {
-                            self.check_subtype(scope_id, base, desired_type)
+                            self._type_matches(scope_id, base, desired_type)
                         }
                         Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
                         x => x.has_simple_conversion(desired_type),
@@ -689,35 +683,56 @@ impl Context {
                     Type::Product(ref expr_types) => expr_types
                         .iter()
                         .enumerate()
-                        .all(|(i, x)| self.check_subtype(scope_id, x, &types[i])),
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
+                        .all(|(i, x)| self._type_matches(scope_id, x, &types[i])),
+                    _ => false,
                 },
                 Type::Function(ref args, ref kwargs, ref ret) => match &unwrapped_self {
                     Type::Function(ref e_args, ref e_kwargs, ref e_ret) => {
                         let args_match = args
                             .iter()
                             .enumerate()
-                            .all(|(i, x)| self.check_subtype(scope_id, &e_args[i].1, &x.1));
+                            .all(|(i, x)| self._type_matches(scope_id, &e_args[i].1, &x.1));
                         let kwargs_match = kwargs
                             .iter()
                             .enumerate()
-                            .all(|(i, x)| self.check_subtype(scope_id, &e_kwargs[i].1, &x.1));
-                        args_match && kwargs_match && self.check_subtype(scope_id, ret, e_ret)
+                            .all(|(i, x)| self._type_matches(scope_id, &e_kwargs[i].1, &x.1));
+                        args_match && kwargs_match && self._type_matches(scope_id, ret, e_ret)
                     }
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
+                    _ => false,
                 },
                 Type::Vector(ref t) => match &unwrapped_self {
-                    Type::Vector(ref e_t) => self.check_subtype(scope_id, e_t, t),
-                    x => panic!("TYPE ERROR: Can't get {:?} from {:?}", &desired_type, x),
+                    Type::Vector(ref e_t) => self._type_matches(scope_id, e_t, t),
+                    _ => false,
                 },
                 Type::Refinement(_, ref d_conds) => {
                     check_constraints(scope_id, self, d_conds.clone())
                 }
                 Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
                 Type::Named(..) => desired_type == &unwrapped_self,
-                Type::self_type(x) => self.check_subtype(scope_id, &unwrapped_self, x),
-                x => panic!("TYPE ERROR: We don't handle subtyping for {:?}.", x),
+                Type::self_type(x) => self._type_matches(scope_id, &unwrapped_self, x),
+                _ => false,
             };
+        }
+    }
+
+    /// Check if the type of expr is a subtype of desired_type.
+    /// For types that do *not* include any gradual or refinement types this is equivalent to equality.
+    /// For refinement types we have the additional requirement that the refinement constraints be satisfied.
+    /// For gradual types *at least one* of the possible gradual types must be a subtype of the desired type.
+    pub fn check_grad_and_ref_equality(
+        &mut self,
+        scope_id: usize,
+        expr_t: &Type,
+        desired_type: &Type,
+    ) -> Result<(), GraceError> {
+        match self._type_matches(scope_id, expr_t, desired_type) {
+            false => {
+                return Err(GraceError::type_error(format!(
+                    "Tried to match type {:?} with {:?}",
+                    expr_t, desired_type
+                )))
+            }
+            true => Ok(()),
         }
     }
 }
@@ -756,18 +771,52 @@ mod tests {
         let a: i32 = 2;
         let i32_expr: Node<Expr> = Node::from(a);
         let string_expr = Node::from(Expr::String("foo".to_string()));
-        assert!(context.check_subtype(bool_expr.scope, &Type::boolean, &Type::boolean));
-        assert!(context.check_subtype(string_expr.scope, &Type::string, &Type::string));
-        assert!(context.check_subtype(i32_expr.scope, &Type::i32, &Type::i32));
-        assert!(!(context.check_subtype(bool_expr.scope, &Type::boolean, &Type::string)));
+        assert!(context
+            .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::boolean)
+            .is_ok());
+        assert!(context
+            .check_grad_and_ref_equality(string_expr.scope, &Type::string, &Type::string)
+            .is_ok());
+        assert!(context
+            .check_grad_and_ref_equality(i32_expr.scope, &Type::i32, &Type::i32)
+            .is_ok());
+        assert!(!(context.check_grad_and_ref_equality(
+            bool_expr.scope,
+            &Type::boolean,
+            &Type::string
+        ))
+        .is_ok());
     }
 
     #[test]
+    #[should_panic(
+        expected = "Tried to match type Product([i32, i32, i32]) with Product([boolean, boolean, boolean])"
+    )]
     fn product_types() {
         let mut context = Context::builtin();
         let bool_expr: Node<Expr> = Node::from(true);
         let product_i32 = Type::Product(vec![Type::i32, Type::i32, Type::i32]);
         let product_bool = Type::Product(vec![Type::boolean, Type::boolean, Type::boolean]);
-        assert!(!(context.check_subtype(bool_expr.scope, &product_i32, &product_bool)));
+        context
+            .check_grad_and_ref_equality(bool_expr.scope, &product_i32, &product_bool)
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Tried to match type i32 with empty")]
+    fn empty_desired_test() {
+        let mut context = Context::builtin();
+        context
+            .check_grad_and_ref_equality(context.root_id, &Type::i32, &Type::empty)
+            .unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Tried to match type empty with i32")]
+    fn empty_expr_type() {
+        let mut context = Context::builtin();
+        context
+            .check_grad_and_ref_equality(context.root_id, &Type::empty, &Type::i32)
+            .unwrap();
     }
 }

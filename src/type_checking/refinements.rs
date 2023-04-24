@@ -51,7 +51,7 @@ fn call_from_refinement_type(
                         constraint_strings.push(format!("{} == {}", variable, dec_str));
 
                         // Add the type to the constraints.
-                        let var_scope = context.get_declaring_scope(scope_id, &variable);
+                        let var_scope = context.get_declaring_scope(scope_id, &variable).unwrap();
                         let var_type = context.get_type(scope_id, &variable);
                         match var_type {
                             Type::Refinement(_, ref new_conds) => {

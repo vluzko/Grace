@@ -24,6 +24,8 @@ pub struct GraceError {
 pub enum ErrorDetails {
     /// A parsing error
     ParserError { msg: String, nom_error: ErrorKind },
+    /// A scoping error
+    ScopeError { msg: String },
     /// A typing error
     TypeError { msg: String },
     /// A set of errors
@@ -34,18 +36,7 @@ pub enum ErrorDetails {
 }
 
 impl GraceError {
-    /// Create a type error from a message
-    pub fn type_error(msg: String) -> GraceError {
-        GraceError {
-            file: String::new(),
-            line: 0,
-            column: 0,
-            end_line: 0,
-            end_column: 0,
-            underlying: ErrorDetails::TypeError { msg: msg },
-        }
-    }
-
+    /// Create a parser error from a message and a Nom error
     pub fn parser_error(msg: String, nom_error: ErrorKind) -> GraceError {
         return GraceError {
             file: String::new(),
@@ -60,6 +51,31 @@ impl GraceError {
         };
     }
 
+    /// Create a scoping error
+    pub fn scoping_error(msg: String) -> GraceError {
+        GraceError {
+            file: String::new(),
+            line: 0,
+            column: 0,
+            end_line: 0,
+            end_column: 0,
+            underlying: ErrorDetails::ScopeError { msg: msg },
+        }
+    }
+
+    /// Create a type error from a message
+    pub fn type_error(msg: String) -> GraceError {
+        GraceError {
+            file: String::new(),
+            line: 0,
+            column: 0,
+            end_line: 0,
+            end_column: 0,
+            underlying: ErrorDetails::TypeError { msg: msg },
+        }
+    }
+
+    /// Create a compiler error from a message.
     pub fn compiler_error(msg: String) -> GraceError {
         return GraceError {
             file: String::new(),

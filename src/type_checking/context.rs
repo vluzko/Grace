@@ -273,12 +273,11 @@ impl Context {
 
     /// Get the type of the identifier in the given scope.
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
-        println!("Getting type of {:?} in scope {}", name, scope_id);
         let scope_mod = self.get_declaration(scope_id, name).unwrap();
         let t = match scope_mod {
             CanModifyScope::Statement(_, ref id) => self.type_map.get(id).unwrap().clone(),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!(),
+            CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
         };
         return t;
     }
@@ -290,7 +289,7 @@ impl Context {
         return match maybe_scope_mod? {
             CanModifyScope::Statement(_, ref id) => Some(self.type_map.get(id).unwrap().clone()),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => panic!(),
+            CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
         };
     }
 
@@ -313,12 +312,6 @@ impl Context {
                 println!("{:?}: {:?}", name, t)
             }
         }
-        // let scope_id = match scope_id {
-        //     Some(id) => id,
-        //     None => self.root_id,
-        // };
-        // let scope = self.get_scope(scope_id);
-        // scope.print_identifier_map();
     }
 }
 
@@ -371,16 +364,33 @@ impl Context {
         }
     }
 
-    pub fn get_declaring_scope(&self, scope_id: usize, name: &Identifier) -> usize {
-        let initial_scope = self.scopes.get(&scope_id).unwrap();
-        if scope_id == 0 {
-            panic!("Reached scope id 0 searching for {}", name);
-        } else if initial_scope.declarations.contains_key(name) {
-            return scope_id;
+    /// Safely access a scope.
+    pub fn safe_get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
+        match self.scopes.get(&scope_id) {
+            Some(scope) => Ok(scope),
+            None => Err(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            ))),
+        }
+    }
+
+    /// Get the scope that declares the given identifier.
+    pub fn get_declaring_scope(
+        &self,
+        scope_id: usize,
+        name: &Identifier,
+    ) -> Result<usize, GraceError> {
+        let initial_scope = self.safe_get_scope(scope_id)?;
+        if initial_scope.declarations.contains_key(name) {
+            return Ok(scope_id);
         } else {
             return match initial_scope.parent_id {
                 Some(id) => self.get_declaring_scope(id, name),
-                None => panic!(),
+                None => Err(GraceError::scoping_error(format!(
+                    "No scope containing identifier {:?} found.",
+                    name
+                ))),
             };
         }
     }

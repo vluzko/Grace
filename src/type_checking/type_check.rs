@@ -1,3 +1,4 @@
+//! Type checking for Grace.
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::iter::FromIterator;
 
@@ -34,71 +35,54 @@ impl GetContext for Node<Module> {
 
         // Add all trait implementations to the context.
         for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter() {
-            assert!(self.data.traits.contains_key(&trait_name));
-
-            let trait_dec = self.data.traits.get(&trait_name).unwrap();
-
-            // The names of functions the trait needs implementations for.
-            let mut need_impl =
-                HashSet::<&Identifier>::from_iter(self.data.traits[trait_name].functions.keys());
-
-            let mut func_types = HashMap::new();
-
-            for dec in func_impls.iter() {
-                let res = dec.add_to_context(new_context)?;
-                new_context = res.0;
-                let func_type = res.1;
-                let func_name = dec.data.get_name();
-
-                // Check that this function declaration is an actual method of the trait.
-                assert!(need_impl.contains(&func_name));
-                // Check that the declaration type and the expected type are the same.
-                let expected_type = trait_dec.functions.get(&func_name).unwrap();
-
-                match (expected_type, &func_type) {
-                    (
-                        Type::Function(ref args_1, ref kwargs_1, ref ret_1),
-                        Type::Function(ref args_2, ref kwargs_2, ref ret_2),
-                    ) => {
-                        for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
-                            match (t1, t2) {
-                                (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
-                                    "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
-                                (x, y) => assert!(x == y,
-                                    "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
-                            };
-                        }
-                        for ((_, t1), (_, t2)) in kwargs_1.iter().zip(kwargs_2.iter()) {
-                            match (t1, t2) {
-                                (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
-                                    "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", kwargs_1),
-                                (x, y) => assert!(x == y,
-                                    "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
-                            };
-                        }
-                        match (&**ret_1, &**ret_2) {
-                            (Type::self_type(ref b1), _) => assert!(**b1 == Type::Undetermined,
-                                "TYPE ERROR: A self type inside a trait definition should be undetermined. Got {:?}", args_1),
-                            (x, y) => assert!(x == y,
-                                "TYPE ERROR: Incompatible function types. Called function with type {:?}, received {:?}", expected_type, func_type)
-                        };
+            match self.data.traits.get(&trait_name) {
+                Some(trait_dec) => {
+                    // Check that all functions are
+                    let need_impl = HashSet::<Identifier>::from_iter(
+                        self.data.traits[trait_name].functions.keys().cloned(),
+                    );
+                    let has_impl = func_impls
+                        .iter()
+                        .map(|x| x.data.get_name())
+                        .collect::<HashSet<_>>();
+                    if need_impl != has_impl {
+                        return Err(GraceError::type_error(format!(
+                            "Trait {} has implementations for functions {:?} but needs implementations for functions {:?}.",
+                            trait_name, has_impl, need_impl
+                        )));
                     }
-                    x => panic!("TYPE ERROR: Somehow got a non function type: {:?}", x),
+
+                    let mut func_types = HashMap::new();
+
+                    for dec in func_impls.iter() {
+                        let res = dec.add_to_context(new_context)?;
+                        new_context = res.0;
+                        let func_type = res.1;
+                        let func_name = dec.data.get_name();
+
+                        // Check that this function declaration is an actual method of the trait.
+                        // Check that the declaration type and the expected type are the same.
+                        let expected_type = trait_dec.functions.get(&func_name).expect("Unreachable code: function not found in trait, but function names already checked.");
+                        new_context.check_function_types(expected_type, &func_type)?;
+
+                        // Add the function type to the map
+                        func_types.insert(func_name.clone(), func_type.clone());
+
+                        // Remove this function from the set of functions that need to be implemented.
+                    }
+
+                    let alias_type = Type::Named(struct_name.clone());
+                    new_context
+                        .trait_implementations
+                        .insert((trait_name.clone(), alias_type), func_types);
                 }
-
-                // Add the function type to the map
-                func_types.insert(func_name.clone(), func_type.clone());
-
-                // Remove this function from the set of functions that need to be implemented.
-                need_impl.remove(&func_name);
+                None => {
+                    return Err(GraceError::type_error(format!(
+                        "Trait {} not found.",
+                        trait_name
+                    )));
+                }
             }
-            // Demand that all methods of the trait have implementations.
-            assert!(need_impl.len() == 0);
-
-            let alias_type = Type::Named(struct_name.clone());
-            new_context
-                .trait_implementations
-                .insert((trait_name.clone(), alias_type), func_types);
         }
 
         for stmt in self.data.functions.iter() {
@@ -157,7 +141,12 @@ fn _add_let_to_context(
     match &type_annotation {
         Some(ref x) => {
             let actual_type = c.resolve_self_type(x, scope_id);
-            assert!(c.check_subtype(expression.scope, &t, &actual_type));
+            if !c.check_subtype(expression.scope, &t, &actual_type) {
+                return Err(GraceError::type_error(format!(
+                    "Type mismatch: expected type {:?} but found type {:?}.",
+                    x, t
+                )));
+            }
         }
         None => {}
     };
@@ -197,7 +186,12 @@ fn _add_function_declaration_to_context(
         context = res.0;
 
         // Check kwarg expression type matches annotation
-        assert_eq!(*t, res.1);
+        if !context.check_subtype(scope_id, &res.1, t) {
+            return Err(GraceError::type_error(format!(
+                "Type mismatch: expected type {:?} but found type {:?}.",
+                t, res.1
+            )));
+        }
 
         // Add the type to the function type.
         let resolved = context.resolve_self_type(t, scope_id);
@@ -222,12 +216,13 @@ fn _add_function_declaration_to_context(
 
     let (block_context, block_type) = block.add_to_context(context)?;
 
-    assert!(
-        return_type.is_compatible(&block_type),
-        "{:?} not compatible with {:?}",
-        return_type,
-        block_type
-    );
+    // if !return_type.is_compatible(&block_type)
+    if !block_context.check_subtype(scope_id, return_type, block_type) {
+        return Err(GraceError::type_error(format!(
+            "Type mismatch: expected type {:?} but found type {:?}.",
+            return_type, block_type
+        )));
+    }
 
     Ok((block_context, function_type))
 }
@@ -252,7 +247,12 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (mut c, t) = expression.add_to_context(context)?;
                 let expected_type = c.get_type(self.scope, name);
-                assert!(c.check_subtype(expression.scope, &t, &expected_type));
+                if !c.check_subtype(expression.scope, &t, &expected_type) {
+                    return Err(GraceError::type_error(format!(
+                        "Type mismatch: expected type {:?} but found type {:?}.",
+                        expected_type, t
+                    )));
+                }
                 Ok((c, t))
             }
             Stmt::FunctionDecStmt {
@@ -290,7 +290,10 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (new_context, condition_type) = condition.add_to_context(context)?;
                 if condition_type != Type::boolean {
-                    return Err(GraceError::type_error("Non boolean condition".to_string()));
+                    return Err(GraceError::type_error(format!(
+                        "Non boolean condition: {:?}",
+                        condition_type
+                    )));
                 }
                 let (new_context, if_type) = block.add_to_context(new_context)?;
 
@@ -609,10 +612,10 @@ impl Node<Expr> {
                 ref trait_name,
                 ref attribute,
             } => {
-                panic!()
+                panic!("Not implemented")
             }
             Expr::MapLiteral(ref exprs) => {
-                panic!()
+                panic!("Not implemented")
             }
         }?;
         final_c.add_type(self.id, final_t.clone());
@@ -649,6 +652,3 @@ mod expr_type_tests;
 
 #[cfg(test)]
 mod stmt_type_tests;
-
-#[cfg(test)]
-mod type_tests {}

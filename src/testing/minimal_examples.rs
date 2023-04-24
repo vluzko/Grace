@@ -135,6 +135,20 @@ pub fn minimal_if_nonmatching() -> expression::Node<expression::Stmt> {
     })
 }
 
+pub fn minimal_while() -> expression::Node<expression::Stmt> {
+    expression::Node::from(expression::Stmt::WhileStmt {
+        condition: expression::Node::from(minimal_bool_expression()),
+        block: expression::Node::from(minimal_block()),
+    })
+}
+
+pub fn minimal_while_non_booln() -> expression::Node<expression::Stmt> {
+    expression::Node::from(expression::Stmt::WhileStmt {
+        condition: expression::Node::from(minimal_expression()),
+        block: expression::Node::from(minimal_block()),
+    })
+}
+
 /// Minimal return node
 pub fn minimal_returnn() -> expression::Node<expression::Stmt> {
     expression::Node::from(minimal_return())

@@ -275,8 +275,13 @@ impl GetContext for Node<Stmt> {
                 ref block,
             } => {
                 let (condition_context, condition_type) = condition.add_to_context(context)?;
-                assert_eq!(condition_type, Type::boolean);
-                block.add_to_context(condition_context)
+                match condition_type {
+                    Type::boolean => block.add_to_context(condition_context),
+                    x => Err(GraceError::type_error(format!(
+                        "Non boolean condition: {:?}",
+                        x
+                    ))),
+                }
             }
             Stmt::IfStmt {
                 ref condition,

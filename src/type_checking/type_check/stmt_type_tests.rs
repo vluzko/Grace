@@ -108,9 +108,19 @@ fn if_stmt_mismatched_blocks() {
 
 #[test]
 fn type_check_while() {
-    panic!()
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_while();
+    let w_scopes = stmt.set_scope(context.root_id, context);
+    let (context, t) = stmt.add_to_context(w_scopes).unwrap();
+    assert_eq!(t, Type::empty);
+    assert_eq!(context.get_node_type(stmt.id), Type::empty);
 }
 
 #[test]
-#[should_panic]
-fn while_stmt_non_boolean() {}
+#[should_panic(expected = "Non boolean condition: i32")]
+fn while_stmt_non_boolean() {
+    let context = Context::empty();
+    let mut stmt = minimal_examples::minimal_while_non_booln();
+    let w_scopes = stmt.set_scope(context.root_id, context);
+    stmt.add_to_context(w_scopes).unwrap();
+}

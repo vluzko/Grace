@@ -1,3 +1,4 @@
+//! The context object.
 use std::collections::HashMap;
 
 use expression::*;
@@ -610,6 +611,54 @@ impl Context {
         };
 
         return true;
+    }
+
+    pub fn check_function_types(
+        &self,
+        expected_type: &Type,
+        func_type: &Type,
+    ) -> Result<(), GraceError> {
+        fn check_type_match(t1: &Type, t2: &Type) -> Result<(), GraceError> {
+            let self_type_error = GraceError::type_error(format!(
+                "A self type inside a trait definition should be undetermined. Got {:?}",
+                t1
+            ));
+            let incompatible_error = GraceError::type_error(format!(
+                "Incompatible function types. Called function with type {:?}, received {:?}",
+                t1, t2
+            ));
+            match (t1, t2) {
+                (Type::self_type(ref b1), _) => {
+                    if **b1 != Type::Undetermined {
+                        return Err(self_type_error);
+                    }
+                }
+                (x, y) => {
+                    if x != y {
+                        return Err(incompatible_error);
+                    }
+                }
+            }
+            Ok(())
+        }
+        match (expected_type, &func_type) {
+            (
+                Type::Function(ref args_1, ref kwargs_1, ref ret_1),
+                Type::Function(ref args_2, ref kwargs_2, ref ret_2),
+            ) => {
+                for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
+                    check_type_match(t1, t2)?;
+                }
+                for ((_, t1), (_, t2)) in kwargs_1.iter().zip(kwargs_2.iter()) {
+                    check_type_match(t1, t2)?;
+                }
+                check_type_match(ret_1, ret_2)
+            }
+            x => Err(GraceError::type_error(format!(
+                "Somehow got a non function type: {:?}",
+                x
+            ))),
+        }
     }
 
     /// Check if the type of expr is a subtype of desired_type.

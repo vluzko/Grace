@@ -92,7 +92,7 @@ fn type_check_if_statement() {
     let mut stmt = minimal_examples::minimal_ifn();
     stmt.scope = context.root_id;
     let (typed_context, t) = stmt.add_to_context(context).unwrap();
-    let found_t = typed_context.get_node_type(stmt.id);
+    let found_t = typed_context.get_node_type(stmt.id).unwrap();
     assert_eq!(found_t, t);
     assert_eq!(found_t, Type::empty);
 }
@@ -122,7 +122,7 @@ fn type_check_while() {
     let w_scopes = stmt.set_scope(context.root_id, context);
     let (context, t) = stmt.add_to_context(w_scopes).unwrap();
     assert_eq!(t, Type::empty);
-    assert_eq!(context.get_node_type(stmt.id), Type::empty);
+    assert_eq!(context.get_node_type(stmt.id).unwrap(), Type::empty);
 }
 
 #[test]

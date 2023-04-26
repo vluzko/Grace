@@ -261,7 +261,7 @@ fn block_to_cfg(
             } => {
                 // Collect existing statements into a block.
                 let new_index = new_cfg.add_block(statements, previous_index);
-                let stmt_type = context.get_node_type(stmt.id);
+                let stmt_type = context.get_node_type(stmt.id).unwrap();
 
                 // A block for the initial if condition.
                 let condition_index =

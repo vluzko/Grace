@@ -512,7 +512,7 @@ impl Node<Expr> {
             }
             // TODO: cleanup: maybe move the renaming into resolve_nested_record?
             Expr::ModuleAccess(ref id, ref names) => {
-                let module_type = context.get_node_type(*id);
+                let module_type = context.get_node_type(*id)?;
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
                 // Named types have to be remapped to include the module access
                 let renamed_t = match t {

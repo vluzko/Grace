@@ -282,8 +282,15 @@ impl Context {
     }
 
     /// Get the type of the given node.
-    pub fn get_node_type(&self, node_id: usize) -> Type {
-        return self.type_map.get(&node_id).unwrap().clone();
+    pub fn get_node_type(&self, node_id: usize) -> Result<Type, GraceError> {
+        return self
+            .type_map
+            .get(&node_id)
+            .ok_or(GraceError::compiler_error(format!(
+                "No type found for node with ID {}",
+                node_id
+            )))
+            .cloned();
     }
 }
 

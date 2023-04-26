@@ -151,7 +151,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 let exp_type = context
                     .get_type(self.scope, &Identifier::from("$ret"))
                     .unwrap();
-                let ret_type = context.get_node_type(value.id);
+                let ret_type = context.get_node_type(value.id).unwrap();
                 let base = value.type_based_rewrite(context);
                 assert!(ret_type.is_compatible(&exp_type));
 
@@ -180,8 +180,8 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                 left,
                 right,
             } => {
-                let left_type = context.get_node_type(left.id);
-                let right_type = context.get_node_type(right.id);
+                let left_type = context.get_node_type(left.id).unwrap();
+                let right_type = context.get_node_type(right.id).unwrap();
                 let new_left = left.type_based_rewrite(context);
                 let new_right = right.type_based_rewrite(context);
 
@@ -243,7 +243,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                 }
             }
             Expr::UnaryExpr { operator, operand } => {
-                let operand_type = context.get_node_type(operand.id);
+                let operand_type = context.get_node_type(operand.id).unwrap();
                 let new_operand = operand.type_based_rewrite(context);
 
                 // If neither type is gradual, proceed as normal
@@ -306,7 +306,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
             Expr::AttributeAccess { base, attribute } => {
                 let rewritten_base = base.type_based_rewrite(context);
 
-                let base_type = context.get_node_type(rewritten_base.id);
+                let base_type = context.get_node_type(rewritten_base.id).unwrap();
                 let trait_info = context.trait_information(&base_type, &attribute);
 
                 match trait_info {
@@ -322,7 +322,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                 }
             }
             Expr::Int(_) | Expr::Float(_) => {
-                let current_type = context.get_node_type(self.id);
+                let current_type = context.get_node_type(self.id).unwrap();
                 context.add_type(self.id, choose_return_type(&current_type));
                 self.data
             }
@@ -391,9 +391,9 @@ mod test {
     fn test_identifier_resolution() {
         let block_str = "let a = 1\nlet b = a";
         let (parsed, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
-        assert_eq!(context.get_node_type(parsed.id), Type::empty);
+        assert_eq!(context.get_node_type(parsed.id).unwrap(), Type::empty);
         let id2 = parsed.data.statements[1].id;
-        assert_eq!(context.get_node_type(id2), Type::i32);
+        assert_eq!(context.get_node_type(id2).unwrap(), Type::i32);
     }
 
     fn if_stmt_fixture<'a>() -> &'a [u8] {

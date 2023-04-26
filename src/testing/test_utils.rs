@@ -59,7 +59,7 @@ pub(crate) fn add_struct_to_context(
     context.add_type(struct_dec.id, Type::Named(name.clone()));
 
     // Add it to the context
-    let top_scope = context.get_mut_scope(context.root_id);
+    let top_scope = context.get_mut_scope(context.root_id).unwrap();
     top_scope.append_declaration(&name, &Box::new(struct_dec));
 
     return context;

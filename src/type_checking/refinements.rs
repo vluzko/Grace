@@ -44,7 +44,7 @@ fn call_from_refinement_type(
                 // Add the declaration to the constraints.
                 let var_dec_opt = context.get_declaration(scope_id, &variable);
                 match var_dec_opt {
-                    Some(var_dec) => {
+                    Ok(var_dec) => {
                         let (dec_set, dec_str) = var_dec.construct_condition(context);
                         checked = m_union(checked, dec_set.clone());
                         variables = m_union(variables, dec_set);
@@ -52,7 +52,7 @@ fn call_from_refinement_type(
 
                         // Add the type to the constraints.
                         let var_scope = context.get_declaring_scope(scope_id, &variable).unwrap();
-                        let var_type = context.get_type(scope_id, &variable);
+                        let var_type = context.get_type(scope_id, &variable).unwrap();
                         match var_type {
                             Type::Refinement(_, ref new_conds) => {
                                 let (new_idents, mut new_constraints) =
@@ -66,7 +66,7 @@ fn call_from_refinement_type(
                         }
                         checked.insert(variable.clone());
                     }
-                    None => {}
+                    Err(_) => {}
                 }
             }
         }

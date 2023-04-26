@@ -8,7 +8,9 @@ fn type_check_function_def() {
     let mut stmt = minimal_examples::minimal_function_decn();
     let scoped_context = stmt.set_scope(context.root_id, context);
     let (typed_context, ret_type) = stmt.add_to_context(scoped_context).unwrap();
-    let function_type = typed_context.get_type(0, &minimal_examples::minimal_identifier());
+    let function_type = typed_context
+        .get_type(0, &minimal_examples::minimal_identifier())
+        .unwrap();
     assert_eq!(function_type, minimal_examples::minimal_function_type());
     assert_eq!(function_type, ret_type);
 }
@@ -20,7 +22,7 @@ fn function_def_no_return_statement() {
     let mut stmt = minimal_examples::minimal_no_ret_functionn();
     let scoped_context = stmt.set_scope(context.root_id, context);
     let (typed_context, ret_type) = stmt.add_to_context(scoped_context).unwrap();
-    println!("{:?}", typed_context.print_all_types());
+    println!("{:?}", typed_context.all_names_and_types());
     // let function_type = typed_context.get_type(0, &minimal_examples::minimal_identifier());
     // assert_eq!(function_type, minimal_examples::minimal_function_type());
     // assert_eq!(function_type, ret_type);
@@ -35,10 +37,12 @@ fn type_check_assignment() {
     stmt.scope = context.root_id;
     let (typed_context, _) = let_s.add_to_context(context).unwrap();
     let (typed_context, _) = stmt.add_to_context(typed_context).unwrap();
-    let stmt_type = typed_context.get_type(
-        typed_context.root_id,
-        &minimal_examples::minimal_identifier(),
-    );
+    let stmt_type = typed_context
+        .get_type(
+            typed_context.root_id,
+            &minimal_examples::minimal_identifier(),
+        )
+        .unwrap();
     assert_eq!(stmt_type, Type::i32);
 }
 
@@ -49,10 +53,12 @@ fn assignment_no_init() {
     let mut stmt = minimal_examples::minimal_assnn();
     stmt.scope = context.root_id;
     let (typed_context, _) = stmt.add_to_context(context).unwrap();
-    let stmt_type = typed_context.get_type(
-        typed_context.root_id,
-        &minimal_examples::minimal_identifier(),
-    );
+    let stmt_type = typed_context
+        .get_type(
+            typed_context.root_id,
+            &minimal_examples::minimal_identifier(),
+        )
+        .unwrap();
     assert_eq!(stmt_type, Type::i32);
 }
 
@@ -71,10 +77,12 @@ fn type_check_let_stmt() {
     let mut stmt = minimal_examples::minimal_letn();
     stmt.scope = context.root_id;
     let (typed_context, _) = stmt.add_to_context(context).unwrap();
-    let stmt_type = typed_context.get_type(
-        typed_context.root_id,
-        &minimal_examples::minimal_identifier(),
-    );
+    let stmt_type = typed_context
+        .get_type(
+            typed_context.root_id,
+            &minimal_examples::minimal_identifier(),
+        )
+        .unwrap();
     assert_eq!(stmt_type, Type::i32);
 }
 
@@ -84,7 +92,7 @@ fn type_check_if_statement() {
     let mut stmt = minimal_examples::minimal_ifn();
     stmt.scope = context.root_id;
     let (typed_context, t) = stmt.add_to_context(context).unwrap();
-    let found_t = typed_context.get_node_type(stmt.id);
+    let found_t = typed_context.get_node_type(stmt.id).unwrap();
     assert_eq!(found_t, t);
     assert_eq!(found_t, Type::empty);
 }
@@ -114,7 +122,7 @@ fn type_check_while() {
     let w_scopes = stmt.set_scope(context.root_id, context);
     let (context, t) = stmt.add_to_context(w_scopes).unwrap();
     assert_eq!(t, Type::empty);
-    assert_eq!(context.get_node_type(stmt.id), Type::empty);
+    assert_eq!(context.get_node_type(stmt.id).unwrap(), Type::empty);
 }
 
 #[test]

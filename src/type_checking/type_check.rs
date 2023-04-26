@@ -140,7 +140,7 @@ fn _add_let_to_context(
     let (mut c, t) = expression.add_to_context(context)?;
     match &type_annotation {
         Some(ref x) => {
-            let actual_type = c.resolve_self_type(x, scope_id);
+            let actual_type = c.resolve_self_type(x, scope_id)?;
             c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
         }
         None => {}
@@ -165,7 +165,7 @@ fn _add_function_declaration_to_context(
     let mut kwarg_types = vec![];
     let mut modifications = vec![];
     for (key, t) in args.iter() {
-        let resolved = context.resolve_self_type(t, scope_id);
+        let resolved = context.resolve_self_type(t, scope_id)?;
         arg_types.push((key.clone(), resolved.clone()));
 
         let modification = CanModifyScope::Argument(resolved);
@@ -184,7 +184,7 @@ fn _add_function_declaration_to_context(
         context.check_grad_and_ref_equality(scope_id, &res.1, t)?;
 
         // Add the type to the function type.
-        let resolved = context.resolve_self_type(t, scope_id);
+        let resolved = context.resolve_self_type(t, scope_id)?;
         kwarg_types.push((key.clone(), resolved.clone()));
 
         // Add kwargs to
@@ -194,20 +194,18 @@ fn _add_function_declaration_to_context(
     let binding = Identifier::from("$ret");
     modifications.push((&binding, CanModifyScope::Return(return_type.clone())));
 
-    let new_scope = context.get_mut_scope(scope_id);
+    let new_scope = context.get_mut_scope(scope_id)?;
 
     for (k, m) in modifications {
         new_scope.append_modification(k, m);
     }
 
-    let resolved_return_t = context.resolve_self_type(return_type, scope_id);
-    let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t));
+    let resolved_return_t = context.resolve_self_type(return_type, scope_id)?;
+    let function_type = Type::Function(arg_types, kwarg_types, Box::new(resolved_return_t.clone()));
     context.add_type(stmt_id, function_type.clone());
 
     let (mut block_context, block_type) = block.add_to_context(context)?;
-    println!("Block type {:?}", block_type);
-    println!("Return type {:?}", return_type);
-    block_context.check_grad_and_ref_equality(scope_id, return_type, &block_type)?;
+    block_context.check_grad_and_ref_equality(scope_id, &resolved_return_t, &block_type)?;
 
     Ok((block_context, function_type))
 }
@@ -231,7 +229,7 @@ impl GetContext for Node<Stmt> {
                 ref name,
             } => {
                 let (mut c, t) = expression.add_to_context(context)?;
-                let expected_type = c.get_type(self.scope, name);
+                let expected_type = c.get_type(self.scope, name)?;
                 c.check_grad_and_ref_equality(expression.scope, &t, &expected_type)?;
                 Ok((c, t))
             }
@@ -514,7 +512,7 @@ impl Node<Expr> {
             }
             // TODO: cleanup: maybe move the renaming into resolve_nested_record?
             Expr::ModuleAccess(ref id, ref names) => {
-                let module_type = context.get_node_type(*id);
+                let module_type = context.get_node_type(*id)?;
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
                 // Named types have to be remapped to include the module access
                 let renamed_t = match t {
@@ -530,12 +528,10 @@ impl Node<Expr> {
                 let (_new_c, _base_t) = base.add_to_context(context)?;
                 panic!("Not implemented")
             }
-            Expr::IdentifierExpr(ref name) => match context.safe_get_type(self.scope, name) {
-                Some(t) => Ok((context, t)),
-                None => Err(GraceError::type_error(
-                    "Failed to locate identifier in scope".to_string(),
-                )),
-            },
+            Expr::IdentifierExpr(ref name) => {
+                let t = context.get_type(self.scope, name)?;
+                Ok((context, t))
+            }
             Expr::Int(_) => Ok((context, Type::i32)),
             Expr::Float(_) => Ok((context, Type::f32)),
             Expr::String(_) => Ok((context, Type::string)),
@@ -610,11 +606,11 @@ mod trait_tests {
         f.read_to_string(&mut file_contents).unwrap();
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
-        context.print_all_variables();
-        for (k, t) in context.print_all_types() {
+        context.all_variable_names();
+        for (k, t) in context.all_names_and_types() {
             println!("{:?}: {:?}", k, t);
         }
-        // println!("{:?}", context.print_all_types());
+        // println!("{:?}", context.all_names_and_types());
         // panic!("Unfinished test")
     }
 }

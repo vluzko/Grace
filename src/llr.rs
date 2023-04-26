@@ -128,6 +128,7 @@ impl GetTrueDeclarations for Node<Block> {
     fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         let top_level: HashSet<Identifier> = context
             .get_scope(self.scope)
+            .unwrap()
             .declarations
             .keys()
             .map(|x| x.clone())
@@ -135,7 +136,7 @@ impl GetTrueDeclarations for Node<Block> {
         let mut with_types = top_level
             .into_iter()
             .map(|x| {
-                let t = context.get_type(self.scope, &x);
+                let t = context.get_type(self.scope, &x).unwrap();
                 (x, t)
             })
             .collect();
@@ -166,7 +167,7 @@ pub fn module_to_llr(
     let mut trait_implementations = vec![];
 
     for import in &module.data.imports {
-        let typing_info = context.get_node_type(import.id);
+        let typing_info = context.get_node_type(import.id)?;
         for value in &import.values {
             let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value)? {
                 // convert everything to WASMTypes
@@ -536,9 +537,9 @@ impl ToLLR for Node<Expr> {
             } => {
                 let mut llr = left.to_llr(context)?;
                 llr.append(&mut right.to_llr(context)?);
-                let left_id_type = context.get_node_type(left.id);
+                let left_id_type = context.get_node_type(left.id)?;
                 let left_wasm_type = WASMType::from(&left_id_type);
-                let right_id_type = context.get_node_type(right.id);
+                let right_id_type = context.get_node_type(right.id)?;
                 let right_wasm_type = WASMType::from(&right_id_type);
                 assert_eq!(left_wasm_type, right_wasm_type);
                 llr.push(WASM::Operation(
@@ -569,7 +570,7 @@ impl ToLLR for Node<Expr> {
                         ref trait_name,
                         ref attribute,
                     } => {
-                        let base_type = context.get_node_type(base.id);
+                        let base_type = context.get_node_type(base.id)?;
                         let full_func_name = format!(
                             "{}.{}.{}",
                             trait_name,
@@ -619,7 +620,7 @@ impl ToLLR for Node<Expr> {
                 let mut llr = vec![];
                 // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context)?);
-                let base_type = context.get_node_type(base.id);
+                let base_type = context.get_node_type(base.id)?;
                 match base_type {
                     Type::Record(ref names, ref fields) => {
                         let attr_type = fields.get(attribute).unwrap();
@@ -665,7 +666,7 @@ impl ToLLR for Node<Expr> {
                 llr
             }
             Expr::Int(ref value) | Expr::Float(ref value) => {
-                let id_type = context.get_node_type(self.id);
+                let id_type = context.get_node_type(self.id)?;
                 let wasm_type = WASMType::from(&id_type);
                 vec![WASM::Const(value.clone(), wasm_type)]
             }
@@ -676,7 +677,7 @@ impl ToLLR for Node<Expr> {
             Expr::IdentifierExpr(ref identifier) => vec![WASM::Get(identifier.name.clone())],
             Expr::VecLiteral(ref exprs) => {
                 let mut llr = vec![];
-                let t = context.get_node_type(self.id);
+                let t = context.get_node_type(self.id)?;
                 let vector_size = exprs.len() * t.size() + 3;
                 llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
                 llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
@@ -697,7 +698,7 @@ impl ToLLR for Node<Expr> {
             }
             Expr::TupleLiteral(ref exprs) => {
                 let mut llr = vec![];
-                let t = context.get_node_type(self.id);
+                let t = context.get_node_type(self.id)?;
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
                     x => {

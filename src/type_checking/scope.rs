@@ -245,7 +245,9 @@ impl SetScope for Node<Module> {
     fn set_scope(&mut self, parent_scope_id: usize, mut context: Context) -> Context {
         // TODO: Add traits
         self.scope = parent_scope_id;
-        let scope = context.get_mut_scope(parent_scope_id);
+        let scope = context
+            .get_mut_scope(parent_scope_id)
+            .expect("Compiler bug: parent scope doesn't exist.");
 
         // Add function names to scope
         for stmt in self.data.functions.iter_mut() {
@@ -428,7 +430,7 @@ mod test {
             let b = true and false"#;
 
             let (block, context) = compiler_layers::to_context::<Node<Block>>(input.as_bytes());
-            let scope = context.get_scope(block.scope);
+            let scope = context.get_scope(block.scope).unwrap();
             assert_eq!(scope.declarations.len(), 2);
 
             let stmt1_pointer = context
@@ -475,7 +477,7 @@ mod test {
                 let (block, context) =
                     compiler_layers::to_context::<Node<Block>>("let a = 1".as_bytes());
                 assert_eq!(context.scopes.len(), 2);
-                let scope = context.get_scope(block.scope);
+                let scope = context.get_scope(block.scope).unwrap();
                 assert_eq!(scope.declarations.len(), 1);
                 assert!(scope.declarations.contains_key(&Identifier::from("a")));
             }

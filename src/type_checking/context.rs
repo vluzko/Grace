@@ -272,59 +272,50 @@ impl Context {
     }
 
     /// Get the type of the identifier in the given scope.
-    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
-        let scope_mod = self.get_declaration(scope_id, name).unwrap();
-        let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) => self.type_map.get(id).unwrap().clone(),
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
-        };
-        return t;
-    }
-
-    /// Get the type of the identifier in the given scope, except it never panics.
-    /// Use this one when checking whether to give an identifier a globally unique name.
-    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
-        let maybe_scope_mod = self.get_declaration(scope_id, name);
-        return match maybe_scope_mod? {
-            CanModifyScope::Statement(_, ref id) => Some(self.type_map.get(id).unwrap().clone()),
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
+    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
+        let maybe_scope_mod = self.get_declaration(scope_id, name)?;
+        return match maybe_scope_mod {
+            CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
             CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
         };
     }
 
     /// Get the type of the given node.
-    pub fn get_node_type(&self, node_id: usize) -> Type {
-        return self.type_map.get(&node_id).unwrap().clone();
-    }
-
-    /// Pretty print
-    pub fn pretty_print(&self) -> () {
-        for (k, val) in self.type_map.iter() {
-            println!("{:?}: {:?}", k, val);
-        }
-    }
-
-    pub fn print_identifier_map(&self) -> () {
-        for (scope_id, scope) in &self.scopes {
-            for name in scope.names() {
-                let t = self.get_type(*scope_id, &name);
-                println!("{:?}: {:?}", name, t)
-            }
-        }
+    pub fn get_node_type(&self, node_id: usize) -> Result<Type, GraceError> {
+        return self
+            .type_map
+            .get(&node_id)
+            .ok_or(GraceError::compiler_error(format!(
+                "No type found for node with ID {}",
+                node_id
+            )))
+            .cloned();
     }
 }
 
-/// Scoping
+/// Scoping methods
 impl Context {
-    /// Get a scope by its ID.
-    pub fn get_scope(&self, scope_id: usize) -> &Scope {
-        return self.scopes.get(&scope_id).unwrap();
+    /// Access a scope.
+    pub fn get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
+        return self
+            .scopes
+            .get(&scope_id)
+            .ok_or(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            )));
     }
 
     /// Get a mutable reference to a Scope.
-    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
-        return self.scopes.get_mut(&scope_id).unwrap();
+    pub fn get_mut_scope(&mut self, scope_id: usize) -> Result<&mut Scope, GraceError> {
+        return self
+            .scopes
+            .get_mut(&scope_id)
+            .ok_or(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            )));
     }
 
     /// Create a new scope, returning the ID.
@@ -352,36 +343,13 @@ impl Context {
         scope.declarations.insert(import_name.clone(), scope_mod);
     }
 
-    pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
-        let initial_scope = self.scopes.get(&scope_id).unwrap();
-        if initial_scope.declarations.contains_key(name) {
-            return initial_scope.declarations.get(name);
-        } else {
-            return match initial_scope.parent_id {
-                Some(id) => self.get_declaration(id, name),
-                None => None,
-            };
-        }
-    }
-
-    /// Safely access a scope.
-    pub fn safe_get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
-        match self.scopes.get(&scope_id) {
-            Some(scope) => Ok(scope),
-            None => Err(GraceError::scoping_error(format!(
-                "No scope with id {} found.",
-                scope_id
-            ))),
-        }
-    }
-
     /// Get the scope that declares the given identifier.
     pub fn get_declaring_scope(
         &self,
         scope_id: usize,
         name: &Identifier,
     ) -> Result<usize, GraceError> {
-        let initial_scope = self.safe_get_scope(scope_id)?;
+        let initial_scope = self.get_scope(scope_id)?;
         if initial_scope.declarations.contains_key(name) {
             return Ok(scope_id);
         } else {
@@ -393,6 +361,24 @@ impl Context {
                 ))),
             };
         }
+    }
+
+    /// Get the declaration of a name within a scope.
+    pub fn get_declaration(
+        &self,
+        scope_id: usize,
+        name: &Identifier,
+    ) -> Result<&CanModifyScope, GraceError> {
+        let dec_scope_id = self.get_declaring_scope(scope_id, name)?;
+        // This can only fail if the scope hierarchy is constructed incorrectly.
+        let scope = &self.scopes[&dec_scope_id];
+        return scope
+            .declarations
+            .get(name)
+            .ok_or(GraceError::scoping_error(format!(
+                "No declaration found for {:?} in scope {}",
+                name, scope_id
+            )));
     }
 
     pub fn get_struct_and_trait(
@@ -417,7 +403,6 @@ impl Context {
 /// Typechecking
 impl Context {
     /// Resolve an attribute access within the current context.
-    /// # Arguments:
     pub fn resolve_attribute(
         &self,
         base_type: &Type,
@@ -467,10 +452,10 @@ impl Context {
                 }
                 // TODO: Handle ambiguous traits.
                 else if possible_traits.len() > 1 {
-                    panic!("ATTRIBUTE ERROR: Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits);
+                    return Err(GraceError::type_error(format!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits)));
                 } else {
                     return Err(GraceError::type_error(format!(
-                        "ATTRIBUTE ERROR: No matching attribute found for: {:?}, {:?}",
+                        "No matching attribute found for: {:?}, {:?}",
                         base_type, name
                     )));
                 }
@@ -479,22 +464,25 @@ impl Context {
     }
 
     /// Modify a Type::Self so it contains whatever Self actually is.
-    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Type {
-        return match base_type {
+    pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Result<Type, GraceError> {
+        match base_type {
             Type::self_type(t) => {
-                assert!(
-                    matches!(**t, Type::Undetermined),
-                    "TYPE ERROR: Matching against a self type that is not undetermined: {:?}",
-                    base_type
-                );
+                if !(matches!(**t, Type::Undetermined)) {
+                    return Err(GraceError::type_error(format!(
+                        "Matching against a self type that is not undetermined: {:?}",
+                        base_type
+                    )));
+                }
                 let (struct_name, _) = self.get_struct_and_trait(scope_id);
                 match struct_name {
-                    Some(x) => Type::self_type(Box::new(Type::Named(x))),
-                    None => panic!("TYPE ERROR: Self used outside of a method implementation."),
+                    Some(x) => Ok(Type::self_type(Box::new(Type::Named(x)))),
+                    None => Err(GraceError::type_error(
+                        "Self used outside of a method implementation.".to_string(),
+                    )),
                 }
             }
-            t => t.clone(),
-        };
+            t => Ok(t.clone()),
+        }
     }
 
     /// Check if this is a trait method call or an attribute access.
@@ -749,7 +737,8 @@ impl Context {
 
 /// Helpers
 impl Context {
-    pub fn print_all_variables(&self) -> Vec<Identifier> {
+    /// Get every variable name in the scope
+    pub fn all_variable_names(&self) -> Vec<Identifier> {
         let mut all_variables = vec![];
         for scope in self.scopes.values() {
             for key in scope.declaration_order.keys() {
@@ -759,15 +748,23 @@ impl Context {
         return all_variables;
     }
 
-    pub fn print_all_types(&self) -> Vec<(Identifier, Type)> {
+    /// Get every variable name and its type.
+    pub fn all_names_and_types(&self) -> Vec<(Identifier, Type)> {
         let mut all_variables = vec![];
         for (scope_id, scope) in self.scopes.iter() {
             for key in scope.declaration_order.keys() {
-                let t = self.get_type(*scope_id, key);
+                let t = self.get_type(*scope_id, key).unwrap();
                 all_variables.push((key.clone(), t.clone()));
             }
         }
         return all_variables;
+    }
+
+    /// Print every name and its type
+    pub fn print_identifier_map(&self) -> () {
+        for (n, t) in self.all_names_and_types() {
+            println!("{:?}: {:?}", n, t)
+        }
     }
 }
 

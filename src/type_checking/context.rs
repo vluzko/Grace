@@ -272,23 +272,11 @@ impl Context {
     }
 
     /// Get the type of the identifier in the given scope.
-    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Type {
-        let scope_mod = self.get_declaration(scope_id, name).unwrap();
-        let t = match scope_mod {
-            CanModifyScope::Statement(_, ref id) => self.type_map.get(id).unwrap().clone(),
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => t.clone(),
-            CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
-        };
-        return t;
-    }
-
-    /// Get the type of the identifier in the given scope, except it never panics.
-    /// Use this one when checking whether to give an identifier a globally unique name.
-    pub fn safe_get_type(&self, scope_id: usize, name: &Identifier) -> Option<Type> {
-        let maybe_scope_mod = self.get_declaration(scope_id, name);
-        return match maybe_scope_mod? {
-            CanModifyScope::Statement(_, ref id) => Some(self.type_map.get(id).unwrap().clone()),
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Some(t.clone()),
+    pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
+        let maybe_scope_mod = self.get_declaration(scope_id, name)?;
+        return match maybe_scope_mod {
+            CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
+            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
             CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
         };
     }
@@ -297,25 +285,9 @@ impl Context {
     pub fn get_node_type(&self, node_id: usize) -> Type {
         return self.type_map.get(&node_id).unwrap().clone();
     }
-
-    /// Pretty print
-    pub fn pretty_print(&self) -> () {
-        for (k, val) in self.type_map.iter() {
-            println!("{:?}: {:?}", k, val);
-        }
-    }
-
-    pub fn print_identifier_map(&self) -> () {
-        for (scope_id, scope) in &self.scopes {
-            for name in scope.names() {
-                let t = self.get_type(*scope_id, &name);
-                println!("{:?}: {:?}", name, t)
-            }
-        }
-    }
 }
 
-/// Scoping
+/// Scoping methods
 impl Context {
     /// Get a scope by its ID.
     pub fn get_scope(&self, scope_id: usize) -> &Scope {
@@ -352,29 +324,6 @@ impl Context {
         scope.declarations.insert(import_name.clone(), scope_mod);
     }
 
-    pub fn get_declaration(&self, scope_id: usize, name: &Identifier) -> Option<&CanModifyScope> {
-        let initial_scope = self.scopes.get(&scope_id).unwrap();
-        if initial_scope.declarations.contains_key(name) {
-            return initial_scope.declarations.get(name);
-        } else {
-            return match initial_scope.parent_id {
-                Some(id) => self.get_declaration(id, name),
-                None => None,
-            };
-        }
-    }
-
-    /// Safely access a scope.
-    pub fn safe_get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
-        match self.scopes.get(&scope_id) {
-            Some(scope) => Ok(scope),
-            None => Err(GraceError::scoping_error(format!(
-                "No scope with id {} found.",
-                scope_id
-            ))),
-        }
-    }
-
     /// Get the scope that declares the given identifier.
     pub fn get_declaring_scope(
         &self,
@@ -392,6 +341,35 @@ impl Context {
                     name
                 ))),
             };
+        }
+    }
+
+    /// Get the declaration of a name within a scope.
+    pub fn get_declaration(
+        &self,
+        scope_id: usize,
+        name: &Identifier,
+    ) -> Result<&CanModifyScope, GraceError> {
+        let dec_scope_id = self.get_declaring_scope(scope_id, name)?;
+        // This can only fail if the scope hierarchy is constructed incorrectly.
+        let scope = &self.scopes[&dec_scope_id];
+        return scope
+            .declarations
+            .get(name)
+            .ok_or(GraceError::scoping_error(format!(
+                "No declaration found for {:?} in scope {}",
+                name, scope_id
+            )));
+    }
+
+    /// Safely access a scope.
+    pub fn safe_get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
+        match self.scopes.get(&scope_id) {
+            Some(scope) => Ok(scope),
+            None => Err(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            ))),
         }
     }
 
@@ -751,7 +729,8 @@ impl Context {
 
 /// Helpers
 impl Context {
-    pub fn print_all_variables(&self) -> Vec<Identifier> {
+    /// Get every variable name in the scope
+    pub fn all_variable_names(&self) -> Vec<Identifier> {
         let mut all_variables = vec![];
         for scope in self.scopes.values() {
             for key in scope.declaration_order.keys() {
@@ -761,15 +740,23 @@ impl Context {
         return all_variables;
     }
 
-    pub fn print_all_types(&self) -> Vec<(Identifier, Type)> {
+    /// Get every variable name and its type.
+    pub fn all_names_and_types(&self) -> Vec<(Identifier, Type)> {
         let mut all_variables = vec![];
         for (scope_id, scope) in self.scopes.iter() {
             for key in scope.declaration_order.keys() {
-                let t = self.get_type(*scope_id, key);
+                let t = self.get_type(*scope_id, key).unwrap();
                 all_variables.push((key.clone(), t.clone()));
             }
         }
         return all_variables;
+    }
+
+    /// Print every name and its type
+    pub fn print_identifier_map(&self) -> () {
+        for (n, t) in self.all_names_and_types() {
+            println!("{:?}: {:?}", n, t)
+        }
     }
 }
 

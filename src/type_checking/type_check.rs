@@ -229,7 +229,7 @@ impl GetContext for Node<Stmt> {
                 ref name,
             } => {
                 let (mut c, t) = expression.add_to_context(context)?;
-                let expected_type = c.get_type(self.scope, name);
+                let expected_type = c.get_type(self.scope, name)?;
                 c.check_grad_and_ref_equality(expression.scope, &t, &expected_type)?;
                 Ok((c, t))
             }
@@ -528,12 +528,10 @@ impl Node<Expr> {
                 let (_new_c, _base_t) = base.add_to_context(context)?;
                 panic!("Not implemented")
             }
-            Expr::IdentifierExpr(ref name) => match context.safe_get_type(self.scope, name) {
-                Some(t) => Ok((context, t)),
-                None => Err(GraceError::type_error(
-                    "Failed to locate identifier in scope".to_string(),
-                )),
-            },
+            Expr::IdentifierExpr(ref name) => {
+                let t = context.get_type(self.scope, name)?;
+                Ok((context, t))
+            }
             Expr::Int(_) => Ok((context, Type::i32)),
             Expr::Float(_) => Ok((context, Type::f32)),
             Expr::String(_) => Ok((context, Type::string)),
@@ -608,11 +606,11 @@ mod trait_tests {
         f.read_to_string(&mut file_contents).unwrap();
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
-        context.print_all_variables();
-        for (k, t) in context.print_all_types() {
+        context.all_variable_names();
+        for (k, t) in context.all_names_and_types() {
             println!("{:?}: {:?}", k, t);
         }
-        // println!("{:?}", context.print_all_types());
+        // println!("{:?}", context.all_names_and_types());
         // panic!("Unfinished test")
     }
 }

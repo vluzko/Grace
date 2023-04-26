@@ -148,7 +148,9 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 block: block.type_based_rewrite(context),
             },
             Stmt::ReturnStmt(value) => {
-                let exp_type = context.get_type(self.scope, &Identifier::from("$ret"));
+                let exp_type = context
+                    .get_type(self.scope, &Identifier::from("$ret"))
+                    .unwrap();
                 let ret_type = context.get_node_type(value.id);
                 let base = value.type_based_rewrite(context);
                 assert!(ret_type.is_compatible(&exp_type));

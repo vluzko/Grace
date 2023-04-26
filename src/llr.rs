@@ -135,7 +135,7 @@ impl GetTrueDeclarations for Node<Block> {
         let mut with_types = top_level
             .into_iter()
             .map(|x| {
-                let t = context.get_type(self.scope, &x);
+                let t = context.get_type(self.scope, &x).unwrap();
                 (x, t)
             })
             .collect();

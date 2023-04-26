@@ -194,7 +194,7 @@ fn _add_function_declaration_to_context(
     let binding = Identifier::from("$ret");
     modifications.push((&binding, CanModifyScope::Return(return_type.clone())));
 
-    let new_scope = context.get_mut_scope(scope_id);
+    let new_scope = context.get_mut_scope(scope_id)?;
 
     for (k, m) in modifications {
         new_scope.append_modification(k, m);

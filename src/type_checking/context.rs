@@ -296,14 +296,26 @@ impl Context {
 
 /// Scoping methods
 impl Context {
-    /// Get a scope by its ID.
-    pub fn get_scope(&self, scope_id: usize) -> &Scope {
-        return self.scopes.get(&scope_id).unwrap();
+    /// Access a scope.
+    pub fn get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
+        return self
+            .scopes
+            .get(&scope_id)
+            .ok_or(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            )));
     }
 
     /// Get a mutable reference to a Scope.
-    pub fn get_mut_scope(&mut self, scope_id: usize) -> &mut Scope {
-        return self.scopes.get_mut(&scope_id).unwrap();
+    pub fn get_mut_scope(&mut self, scope_id: usize) -> Result<&mut Scope, GraceError> {
+        return self
+            .scopes
+            .get_mut(&scope_id)
+            .ok_or(GraceError::scoping_error(format!(
+                "No scope with id {} found.",
+                scope_id
+            )));
     }
 
     /// Create a new scope, returning the ID.
@@ -337,7 +349,7 @@ impl Context {
         scope_id: usize,
         name: &Identifier,
     ) -> Result<usize, GraceError> {
-        let initial_scope = self.safe_get_scope(scope_id)?;
+        let initial_scope = self.get_scope(scope_id)?;
         if initial_scope.declarations.contains_key(name) {
             return Ok(scope_id);
         } else {
@@ -367,17 +379,6 @@ impl Context {
                 "No declaration found for {:?} in scope {}",
                 name, scope_id
             )));
-    }
-
-    /// Safely access a scope.
-    pub fn safe_get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
-        match self.scopes.get(&scope_id) {
-            Some(scope) => Ok(scope),
-            None => Err(GraceError::scoping_error(format!(
-                "No scope with id {} found.",
-                scope_id
-            ))),
-        }
     }
 
     pub fn get_struct_and_trait(

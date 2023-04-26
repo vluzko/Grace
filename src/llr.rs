@@ -128,6 +128,7 @@ impl GetTrueDeclarations for Node<Block> {
     fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         let top_level: HashSet<Identifier> = context
             .get_scope(self.scope)
+            .unwrap()
             .declarations
             .keys()
             .map(|x| x.clone())

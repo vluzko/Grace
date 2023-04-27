@@ -542,29 +542,12 @@ impl Node<Expr> {
             Expr::String(_) => Ok((context, Type::string)),
             Expr::Bool(_) => Ok((context, Type::boolean)),
             Expr::VecLiteral(ref exprs) => {
-                let element_checker = |aggregate: Result<(Context, Type), GraceError>,
-                                       expr: &Node<Expr>| {
-                    let (c, mut vec_t) = aggregate?;
-                    let (new_c, t) = expr.add_to_context(c)?;
-                    // TODO: Type checking: Use context level merge.
-                    vec_t = new_c.merge(&vec_t, &t)?;
-                    Ok((new_c, vec_t))
-                };
-                let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
-                let (new_c, vec_t) = exprs.iter().fold(init, element_checker)?;
+                let (new_c, vec_t) = _folded_check(exprs, context)?;
                 let t = Type::Vector(Box::new(vec_t));
                 Ok((new_c, t))
             }
             Expr::SetLiteral(ref exprs) => {
-                let element_checker = |aggregate: Result<(Context, Type), GraceError>,
-                                       expr: &Node<Expr>| {
-                    let (new_c, mut set_t) = aggregate?;
-                    let (new_c, t) = expr.add_to_context(new_c)?;
-                    set_t = new_c.merge(&set_t, &t)?;
-                    Ok((new_c, set_t))
-                };
-                let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
-                let (new_c, set_t) = exprs.iter().fold(init, element_checker)?;
+                let (new_c, set_t) = _folded_check(exprs, context)?;
                 let t = Type::Parameterized(Identifier::from("Set"), vec![set_t]);
                 Ok((new_c, t))
             }
@@ -588,12 +571,33 @@ impl Node<Expr> {
                 panic!("Not implemented")
             }
             Expr::MapLiteral(ref exprs) => {
-                panic!("Not implemented")
+                let (keys, values): (Vec<Node<Expr>>, Vec<Node<Expr>>) =
+                    exprs.iter().cloned().unzip();
+                let (key_c, key_t) = _folded_check(&keys, context)?;
+                let (new_c, val_t) = _folded_check(&values, key_c)?;
+                let t = Type::Parameterized(Identifier::from("Map"), vec![key_t, val_t]);
+                Ok((new_c, t))
             }
         }?;
         final_c.add_type(self.id, final_t.clone());
         Ok((final_c, final_t))
     }
+}
+
+/// Fold over the expressions, adding them to context and merging the types.
+fn _folded_check(exprs: &Vec<Node<Expr>>, context: Context) -> Result<(Context, Type), GraceError> {
+    fn _agg(
+        aggregate: Result<(Context, Type), GraceError>,
+        expr: &Node<Expr>,
+    ) -> Result<(Context, Type), GraceError> {
+        let (new_c, mut merged_t) = aggregate?;
+        let (new_c, t) = expr.add_to_context(new_c)?;
+        merged_t = new_c.merge(&merged_t, &t)?;
+        Ok((new_c, merged_t))
+    }
+    let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
+    let (new_c, t) = exprs.iter().fold(init, _agg)?;
+    Ok((new_c, t))
 }
 
 #[cfg(test)]

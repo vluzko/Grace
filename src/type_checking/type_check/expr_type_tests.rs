@@ -4,9 +4,12 @@ use grace_error::ErrorDetails;
 use testing::test_utils;
 use type_checking::types::Trait;
 
+use crate::testing::minimal_examples;
+
 /// Check that an expression has the desired type.
 fn check_expr(context: Context, mut expr: Node<Expr>, expected_type: Type) {
-    let (_, t) = expr.add_to_context(context).unwrap();
+    let w_scope = expr.set_scope(context.root_id, context);
+    let (_, t) = expr.add_to_context(w_scope).unwrap();
     assert_eq!(t, expected_type);
 }
 
@@ -265,6 +268,11 @@ fn type_check_module_access_fail() {
 }
 
 #[test]
+fn type_check_method_call() {
+    panic!()
+}
+
+#[test]
 fn type_check_identifier() {
     let init = Context::builtin();
     let context = test_utils::add_identifier_to_context(init, "a", Expr::from(0));
@@ -273,28 +281,29 @@ fn type_check_identifier() {
 }
 
 #[test]
-fn type_check_index() {
-    panic!()
-}
-
-#[test]
 fn type_check_vec_literal() {
-    panic!()
+    let expr = minimal_examples::vec_literal_numeric();
+    simple_check_expr(expr, Type::Vector(Box::new(Type::i32)));
 }
 
 #[test]
 fn type_check_set_literal() {
-    panic!()
+    let expr = minimal_examples::set_literal_numeric();
+    let expected = Type::Parameterized(Identifier::from("Set"), vec![Type::i32]);
+    simple_check_expr(expr, expected);
 }
 
 #[test]
 fn type_check_tuple_literal() {
-    panic!()
+    let expr = minimal_examples::tuple_literal_numeric();
+    simple_check_expr(expr, Type::Product(vec![Type::i32, Type::i32, Type::i32]));
 }
 
 #[test]
 fn type_check_map_literal() {
-    panic!()
+    let expr = minimal_examples::map_literal_numeric();
+    let expected = Type::Parameterized(Identifier::from("Map"), vec![Type::i32, Type::i32]);
+    simple_check_expr(expr, expected);
 }
 
 #[cfg(test)]

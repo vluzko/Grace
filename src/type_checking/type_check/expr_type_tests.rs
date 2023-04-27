@@ -283,7 +283,8 @@ fn type_check_identifier() {
 #[test]
 fn type_check_vec_literal() {
     let expr = minimal_examples::vec_literal_numeric();
-    simple_check_expr(expr, Type::Vector(Box::new(Type::i32)));
+    let expected = Type::Parameterized(Identifier::from("Vector"), vec![Type::i32]);
+    simple_check_expr(expr, expected);
 }
 
 #[test]

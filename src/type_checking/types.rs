@@ -18,22 +18,25 @@ pub enum Type {
     boolean,
     empty,
     self_type(Box<Type>),
-    // A sum type, e.g. a union type
+    /// A sum type, e.g. a union type
     Sum(Vec<Type>),
-    // A product type, e.g. a tuple
+    /// A product type, e.g. a tuple
     Product(Vec<Type>),
-    // A vector type.
+    /// A vector type.
     Vector(Box<Type>),
-    // A vector of argument and kwargument names and types, and the return type
+    /// A vector of argument and kwargument names and types, and the return type
     Function(Vec<(Identifier, Type)>, Vec<(Identifier, Type)>, Box<Type>),
-    // A referenced to a named type.
+    /// A referenced to a named type.
     Named(Identifier),
-    // Struct{name: Identifier, attributes: BTreeMap<Identifier, Type>, methods: BTreeMap<Identifier, Type>}
+    /// A parameterized type.
     Parameterized(Identifier, Vec<Type>),
-    // Attribute names, attribute types
+    /// Attribute names, attribute types
     Record(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    /// A module
     Module(Vec<Identifier>, BTreeMap<Identifier, Type>),
+    /// A gradual type
     Gradual(usize),
+    /// A refinement type
     Refinement(Box<Type>, Vec<Refinement>),
     Undetermined,
 }

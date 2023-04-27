@@ -34,9 +34,55 @@ pub fn minimal_bool_expression() -> expression::Expr {
     expression::Expr::Bool(true)
 }
 
+pub fn minimal_int() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::Int("1".to_string()))
+}
+
 /// Minimal expression node
 pub fn minimal_node_expression() -> expression::Node<expression::Expr> {
     expression::Node::from(minimal_expression())
+}
+
+/// Minimal vec literal
+pub fn minimal_vec_literal() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::VecLiteral(
+        vec![minimal_node_expression()],
+    ))
+}
+
+/// Minimal vec literal with integer elements
+pub fn vec_literal_numeric() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::VecLiteral(vec![
+        minimal_int(),
+        minimal_int(),
+        minimal_int(),
+    ]))
+}
+
+/// Minimal set literal with integer elements
+pub fn set_literal_numeric() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::SetLiteral(vec![
+        minimal_int(),
+        minimal_int(),
+        minimal_int(),
+    ]))
+}
+
+/// Minimal tuple literal with integer elements
+pub fn tuple_literal_numeric() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::TupleLiteral(vec![
+        minimal_int(),
+        minimal_int(),
+        minimal_int(),
+    ]))
+}
+
+/// Minimal map literal with integer elements
+pub fn map_literal_numeric() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::MapLiteral(vec![
+        (minimal_int(), minimal_int()),
+        (minimal_int(), minimal_int()),
+    ]))
 }
 
 /// Minimal assignment statement
@@ -85,11 +131,6 @@ pub fn minimal_if() -> expression::Stmt {
         block: expression::Node::from(minimal_block()),
         else_block: None,
     }
-}
-
-/// Minimal return statement
-pub fn minimal_return() -> expression::Stmt {
-    expression::Stmt::ReturnStmt(minimal_node_expression())
 }
 
 /// Minimal let node
@@ -151,7 +192,7 @@ pub fn minimal_while_non_booln() -> expression::Node<expression::Stmt> {
 
 /// Minimal return node
 pub fn minimal_returnn() -> expression::Node<expression::Stmt> {
-    expression::Node::from(minimal_return())
+    expression::Node::from(expression::Stmt::ReturnStmt(minimal_node_expression()))
 }
 
 /// Minimal function type

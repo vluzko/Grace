@@ -302,7 +302,8 @@ fn type_check_tuple_literal() {
 #[test]
 fn type_check_map_literal() {
     let expr = minimal_examples::map_literal_numeric();
-    simple_check_expr(expr, Type::Vector(Box::new(Type::i32)));
+    let expected = Type::Parameterized(Identifier::from("Map"), vec![Type::i32, Type::i32]);
+    simple_check_expr(expr, expected);
 }
 
 #[cfg(test)]

@@ -563,13 +563,9 @@ impl Node<Expr> {
                 let (new_c, types) = exprs.iter().fold(init, element_checker)?;
                 Ok((new_c, Type::Product(types)))
             }
-            Expr::TraitAccess {
-                ref base,
-                ref trait_name,
-                ref attribute,
-            } => {
-                panic!("Not implemented")
-            }
+            Expr::TraitAccess { .. } => Err(GraceError::compiler_error(
+                "Found a trait access in type checking".to_string(),
+            )),
             Expr::MapLiteral(ref exprs) => {
                 let (keys, values): (Vec<Node<Expr>>, Vec<Node<Expr>>) =
                     exprs.iter().cloned().unzip();

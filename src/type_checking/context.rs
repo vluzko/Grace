@@ -705,10 +705,6 @@ impl Context {
                     }
                     _ => false,
                 },
-                Type::Vector(ref t) => match &unwrapped_self {
-                    Type::Vector(ref e_t) => self._type_matches(scope_id, e_t, t),
-                    _ => false,
-                },
                 Type::Refinement(_, ref d_conds) => {
                     check_constraints(scope_id, self, d_conds.clone())
                 }

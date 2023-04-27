@@ -22,8 +22,6 @@ pub enum Type {
     Sum(Vec<Type>),
     /// A product type, e.g. a tuple
     Product(Vec<Type>),
-    /// A vector type.
-    Vector(Box<Type>),
     /// A vector of argument and kwargument names and types, and the return type
     Function(Vec<(Identifier, Type)>, Vec<(Identifier, Type)>, Box<Type>),
     /// A referenced to a named type.
@@ -103,7 +101,6 @@ impl Type {
             &Type::Record(..) => panic!("TODO: handle trait_impl_name for Record."),
             &Type::Sum(..) => panic!("TODO: handle trait_impl_name for Sum."),
             &Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
-            &Type::Vector(..) => panic!("TODO: handle trait_impl_name for Vector."),
             &Type::Named(ref name) => name.name.clone(),
             &Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
             _ => panic!(),
@@ -263,12 +260,11 @@ impl Type {
             Type::ui32 => 2,
             Type::boolean => 1,
             Type::string => 1,
-            Type::Vector(ref t) => t.size(),
             Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
             Type::Record(_, ref fields) | Type::Module(_, ref fields) => {
                 fields.iter().map(|(_, t)| t.size()).sum()
             }
-            _ => panic!(),
+            _ => panic!("Not implemented"),
         };
     }
 
@@ -363,16 +359,6 @@ impl Type {
             t = t.resolve_attribute(ident)?;
         }
         return Ok(t.clone());
-    }
-
-    pub fn resolve_slice(&self, slices: &Vec<(Option<Type>, Option<Type>, Option<Type>)>) -> Type {
-        return match self {
-            Type::Vector(ref t) => match slices.get(0).unwrap() {
-                (Some(_x), None, None) => (**t).clone(),
-                _ => panic!(),
-            },
-            _ => panic!(),
-        };
     }
 
     pub fn identifier_to_index(&self, ident: &Identifier) -> usize {

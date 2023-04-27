@@ -106,11 +106,15 @@ impl GetContext for Node<Block> {
 
             // Update the block type if it's a return statement.
             block_type = match stmt.data {
-                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => block_type.merge(&res.1)?,
-                Stmt::BreakStmt | Stmt::ContinueStmt => block_type.merge(&Type::empty)?,
+                Stmt::ReturnStmt(_) | Stmt::YieldStmt(_) => {
+                    new_context.merge(&block_type, &res.1)?
+                }
+                Stmt::BreakStmt | Stmt::ContinueStmt => {
+                    new_context.merge(&block_type, &Type::empty)?
+                }
                 Stmt::IfStmt { .. } | Stmt::WhileStmt { .. } => {
                     if res.1 != Type::empty {
-                        block_type.merge(&res.1)?
+                        new_context.merge(&block_type, &res.1)?
                     } else {
                         block_type
                     }
@@ -278,7 +282,8 @@ impl GetContext for Node<Stmt> {
                 match else_block {
                     Some(b) => {
                         let (new_context, else_type) = b.add_to_context(new_context)?;
-                        Ok((new_context, if_type.merge(&else_type)?))
+                        let merged_t = new_context.merge(&if_type, &else_type)?;
+                        Ok((new_context, merged_t))
                     }
                     None => Ok((new_context, if_type)),
                 }
@@ -542,7 +547,7 @@ impl Node<Expr> {
                     let (c, mut vec_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(c)?;
                     // TODO: Type checking: Use context level merge.
-                    vec_t = vec_t.merge(&t)?;
+                    vec_t = new_c.merge(&vec_t, &t)?;
                     Ok((new_c, vec_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));
@@ -555,7 +560,7 @@ impl Node<Expr> {
                                        expr: &Node<Expr>| {
                     let (new_c, mut set_t) = aggregate?;
                     let (new_c, t) = expr.add_to_context(new_c)?;
-                    set_t = set_t.merge(&t)?;
+                    set_t = new_c.merge(&set_t, &t)?;
                     Ok((new_c, set_t))
                 };
                 let init: Result<(Context, Type), GraceError> = Ok((context, Type::Undetermined));

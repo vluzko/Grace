@@ -327,7 +327,7 @@ impl Context {
 
     /// Add a statement to a scope.
     pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Node<Stmt>) {
-        let scope = self.scopes.get_mut(&scope_id).unwrap();
+        let scope = self.get_mut_scope(scope_id).expect("Scope not found");
         scope.append_declaration(name, stmt);
     }
 
@@ -336,7 +336,7 @@ impl Context {
         let import_name = import.path.get(0).unwrap().clone();
         let scope_mod = CanModifyScope::ImportedModule(import.id);
 
-        let scope = self.scopes.get_mut(&self.root_id).unwrap();
+        let scope = self.get_mut_scope(self.root_id).expect("Scope not found");
         scope
             .declaration_order
             .insert(import_name.clone(), scope.declaration_order.len() + 1);
@@ -385,7 +385,8 @@ impl Context {
         &self,
         scope_id: usize,
     ) -> (Option<Identifier>, Option<Identifier>) {
-        let initial_scope = self.scopes.get(&scope_id).unwrap();
+        let initial_scope = self.get_scope(scope_id).expect("Scope not found");
+
         return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
             (
                 initial_scope.maybe_struct.clone(),
@@ -416,7 +417,13 @@ impl Context {
         let attribute_type = match &unwrapped_self {
             Type::Record(_, ref attributes) => attributes.get(name),
             Type::Named(ref t_name) => {
-                let record_t = self.defined_types.get(t_name).unwrap();
+                let record_t = self
+                    .defined_types
+                    .get(t_name)
+                    .ok_or(GraceError::type_error(format!(
+                        "Couldn't find a type with name {:?}",
+                        t_name
+                    )))?;
                 match record_t {
                     Type::Record(_, ref attributes) => attributes.get(name),
                     _ => None,
@@ -584,7 +591,7 @@ impl Context {
                 },
                 x => match right {
                     Type::Gradual(_) => Ok(left.clone()),
-                    y => x.merge(y),
+                    y => self.merge(x, y),
                 },
             },
             BinaryOperator::Div => Ok(Type::f64),
@@ -731,6 +738,44 @@ impl Context {
                 )))
             }
             true => Ok(()),
+        }
+    }
+
+    /// Merge two types if they're compatible.
+    pub fn merge(&self, t1: &Type, t2: &Type) -> Result<Type, GraceError> {
+        let err = Err(GraceError::type_error(format!(
+            "Type error. Tried to merge {:?} and {:?}",
+            t1, t2
+        )));
+        if t1 == t2 {
+            return Ok(t1.clone());
+        } else {
+            return match t1 {
+                Type::Sum(ref types) => match t2 {
+                    Type::Sum(ref other_types) => {
+                        Ok(Type::Sum(general_utils::vec_c_int(types, other_types)))
+                    }
+                    x => {
+                        if types.contains(&x) {
+                            Ok(x.clone())
+                        } else {
+                            err
+                        }
+                    }
+                },
+                Type::Refinement(ref base, ..) => self.merge(&t2, &base),
+                Type::Undetermined => Ok(t2.clone()),
+                x => match t2 {
+                    Type::Sum(ref other_types) => {
+                        if other_types.contains(&x) {
+                            Ok(x.clone())
+                        } else {
+                            err
+                        }
+                    }
+                    _ => err,
+                },
+            };
         }
     }
 }

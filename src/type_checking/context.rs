@@ -327,7 +327,7 @@ impl Context {
 
     /// Add a statement to a scope.
     pub fn append_declaration(&mut self, scope_id: usize, name: &Identifier, stmt: &Node<Stmt>) {
-        let scope = self.scopes.get_mut(&scope_id).unwrap();
+        let scope = self.get_mut_scope(scope_id).expect("Scope not found");
         scope.append_declaration(name, stmt);
     }
 
@@ -336,7 +336,7 @@ impl Context {
         let import_name = import.path.get(0).unwrap().clone();
         let scope_mod = CanModifyScope::ImportedModule(import.id);
 
-        let scope = self.scopes.get_mut(&self.root_id).unwrap();
+        let scope = self.get_mut_scope(self.root_id).expect("Scope not found");
         scope
             .declaration_order
             .insert(import_name.clone(), scope.declaration_order.len() + 1);
@@ -385,7 +385,8 @@ impl Context {
         &self,
         scope_id: usize,
     ) -> (Option<Identifier>, Option<Identifier>) {
-        let initial_scope = self.scopes.get(&scope_id).unwrap();
+        let initial_scope = self.get_scope(scope_id).expect("Scope not found");
+
         return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
             (
                 initial_scope.maybe_struct.clone(),
@@ -416,7 +417,13 @@ impl Context {
         let attribute_type = match &unwrapped_self {
             Type::Record(_, ref attributes) => attributes.get(name),
             Type::Named(ref t_name) => {
-                let record_t = self.defined_types.get(t_name).unwrap();
+                let record_t = self
+                    .defined_types
+                    .get(t_name)
+                    .ok_or(GraceError::type_error(format!(
+                        "Couldn't find a type with name {:?}",
+                        t_name
+                    )))?;
                 match record_t {
                     Type::Record(_, ref attributes) => attributes.get(name),
                     _ => None,

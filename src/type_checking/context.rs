@@ -591,7 +591,7 @@ impl Context {
                 },
                 x => match right {
                     Type::Gradual(_) => Ok(left.clone()),
-                    y => x.merge(y),
+                    y => self.merge(x, y),
                 },
             },
             BinaryOperator::Div => Ok(Type::f64),
@@ -738,6 +738,44 @@ impl Context {
                 )))
             }
             true => Ok(()),
+        }
+    }
+
+    /// Merge two types if they're compatible.
+    pub fn merge(&self, t1: &Type, t2: &Type) -> Result<Type, GraceError> {
+        let err = Err(GraceError::type_error(format!(
+            "Type error. Tried to merge {:?} and {:?}",
+            t1, t2
+        )));
+        if t1 == t2 {
+            return Ok(t1.clone());
+        } else {
+            return match t1 {
+                Type::Sum(ref types) => match t2 {
+                    Type::Sum(ref other_types) => {
+                        Ok(Type::Sum(general_utils::vec_c_int(types, other_types)))
+                    }
+                    x => {
+                        if types.contains(&x) {
+                            Ok(x.clone())
+                        } else {
+                            err
+                        }
+                    }
+                },
+                Type::Refinement(ref base, ..) => self.merge(&t2, &base),
+                Type::Undetermined => Ok(t2.clone()),
+                x => match t2 {
+                    Type::Sum(ref other_types) => {
+                        if other_types.contains(&x) {
+                            Ok(x.clone())
+                        } else {
+                            err
+                        }
+                    }
+                    _ => err,
+                },
+            };
         }
     }
 }

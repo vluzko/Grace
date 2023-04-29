@@ -495,6 +495,7 @@ impl ToLLR for CfgVertex {
                 for stmt in block {
                     wasm.append(&mut stmt.to_llr(context)?);
                 }
+                // In WASM branching to 1 goes to the beginning of the loop.
                 wasm.push(WASM::Branch(1));
                 wasm
             }
@@ -1026,12 +1027,22 @@ mod tests {
 
         #[test]
         fn test_continue() {
-            panic!()
+            let vertex = min_cfg::minimal_continue();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Branch(1),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_else() {
-            panic!()
+            let vertex = min_cfg::minimal_else();
+            let expected = vec![WASM::Else];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]

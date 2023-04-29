@@ -273,4 +273,14 @@ pub(crate) mod cfgs {
     pub fn minimal_break() -> cfg::CfgVertex {
         cfg::CfgVertex::Break(vec![minimal_stmt(), minimal_assn()])
     }
+
+    /// Minimal continue vertex
+    pub fn minimal_continue() -> cfg::CfgVertex {
+        cfg::CfgVertex::Continue(vec![minimal_stmt(), minimal_assn()])
+    }
+
+    /// Minimal else vertex
+    pub fn minimal_else() -> cfg::CfgVertex {
+        cfg::CfgVertex::Else
+    }
 }

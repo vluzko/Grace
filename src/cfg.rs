@@ -28,9 +28,23 @@ pub enum CfgVertex {
     /// The start of an if.
     /// The expression is the condition expression
     /// The type is the type of the inner block.
+    /// Points to the if block and the else (if
+    /// it exists), or the end of the if block (if
+    /// there is no else.)
     IfStart(Node<Expr>, Type),
+    /// An else vertex
+    /// Points to the else block
     Else,
+    /// A break vertex
+    /// It contains all statements in the block up to
+    /// the break itself.
+    /// Points to the loop end.
     Break(Vec<Node<CfgStmt>>),
+    /// A continue vertex
+    /// It contains all statements in the block up to
+    /// the continue itself.
+    /// Similar to a break vertex, but points to the
+    /// loop start.
     Continue(Vec<Node<CfgStmt>>),
     End(usize),
     Exit,

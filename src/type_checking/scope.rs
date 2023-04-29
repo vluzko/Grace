@@ -21,20 +21,20 @@ pub enum CanModifyScope {
 
 impl CanModifyScope {
     pub fn extract_stmt(&self) -> Stmt {
-        return unsafe {
+        unsafe {
             match self {
                 CanModifyScope::Statement(stmt_ptr, _) => (**stmt_ptr).data.clone(),
                 _ => panic!(),
             }
-        };
+        }
     }
 
     pub fn get_id(&self) -> usize {
-        return match self {
+        match self {
             CanModifyScope::Statement(ref _ptr, ref id) => *id,
             CanModifyScope::ImportedModule(ref id) => *id,
             CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!(),
-        };
+        }
     }
 }
 
@@ -57,35 +57,35 @@ pub struct Scope {
 impl Scope {
     /// Create an empty scope.
     pub fn empty() -> Scope {
-        return Scope {
+        Scope {
             parent_id: None,
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
             maybe_struct: None,
-        };
+        }
     }
 
     /// Create a child of the given parent
     pub fn child(parent_id: usize) -> Scope {
-        return Scope {
+        Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
             maybe_struct: None,
-        };
+        }
     }
 
     /// Create a child of the given parent with a struct
     pub fn child_struct_impl(parent_id: usize, structname: &Identifier) -> Scope {
-        return Scope {
+        Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: None,
             maybe_struct: Some(structname.clone()),
-        };
+        }
     }
 
     /// Create a child of the given parent with a trait and a struct
@@ -94,13 +94,13 @@ impl Scope {
         structname: &Identifier,
         traitname: &Identifier,
     ) -> Scope {
-        return Scope {
+        Scope {
             parent_id: Some(parent_id),
             declarations: BTreeMap::new(),
             declaration_order: BTreeMap::new(),
             maybe_trait: Some(traitname.clone()),
             maybe_struct: Some(structname.clone()),
-        };
+        }
     }
 
     /// Add a declaration to scope.
@@ -120,12 +120,12 @@ impl Scope {
 
     /// All the names in a scope.
     pub fn names(&self) -> Vec<Identifier> {
-        return self.declarations.keys().cloned().collect();
+        self.declarations.keys().cloned().collect()
     }
 }
 
 pub fn choose_return_type(possible: &Type) -> Type {
-    return match possible {
+    match possible {
         Type::Sum(ref types) => {
             let mut i = 0;
             let mut min_size = usize::MAX;
@@ -138,36 +138,29 @@ pub fn choose_return_type(possible: &Type) -> Type {
             types[i].clone()
         }
         _ => possible.clone(),
-    };
+    }
 }
 
 impl BinaryOperator {
     pub fn choose_return_type(&self, merged_type: &Type) -> Type {
-        return match self {
+        match self {
             BinaryOperator::Add
             | BinaryOperator::Sub
             | BinaryOperator::Mult
             | BinaryOperator::Mod => choose_return_type(merged_type),
             BinaryOperator::Div => Type::f32,
             _ => panic!(),
-        };
-    }
-
-    pub fn requires_sign(&self) -> bool {
-        match self {
-            BinaryOperator::Div => true,
-            _ => false,
         }
     }
 
     /// Return the index of the corresponding gradual function in the gradual function table.
     pub fn gradual_index(&self) -> i32 {
-        return match self {
+        match self {
             BinaryOperator::Add => 0,
             BinaryOperator::Sub => 1,
             BinaryOperator::Mult => 2,
             _ => panic!(),
-        };
+        }
     }
 
     pub fn get_builtin_trait(&self) -> (Identifier, Identifier) {
@@ -194,7 +187,7 @@ impl BinaryOperator {
             BinaryOperator::LessEqual => ("LessEqual", "le"),
         };
 
-        return (Identifier::from(x), Identifier::from(y));
+        (Identifier::from(x), Identifier::from(y))
     }
 }
 
@@ -205,10 +198,9 @@ impl UnaryOperator {
             UnaryOperator::Negative => ("Negative", "negative"),
             UnaryOperator::Not => ("Not", "not"),
             UnaryOperator::Positive => ("Positive", "positive"),
-            _ => panic!(),
         };
 
-        return (Identifier::from(x), Identifier::from(y));
+        (Identifier::from(x), Identifier::from(y))
     }
 }
 
@@ -231,7 +223,7 @@ impl<'a> From<&'a Identifier> for Type {
 
 impl From<Identifier> for Type {
     fn from(input: Identifier) -> Self {
-        return Type::from(&input);
+        Type::from(&input)
     }
 }
 
@@ -251,12 +243,12 @@ impl SetScope for Node<Module> {
 
         // Add function names to scope
         for stmt in self.data.functions.iter_mut() {
-            scope.append_declaration(&stmt.data.get_name(), &stmt);
+            scope.append_declaration(&stmt.data.get_name(), stmt);
         }
 
         // Add struct names to scope
         for stmt in &self.data.structs {
-            scope.append_declaration(&stmt.data.get_name(), &stmt);
+            scope.append_declaration(&stmt.data.get_name(), stmt);
         }
 
         // Add all traits to the context.
@@ -266,7 +258,7 @@ impl SetScope for Node<Module> {
 
         // Add all trait implementations to the context.
         for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter_mut() {
-            assert!(self.data.traits.contains_key(&trait_name));
+            assert!(self.data.traits.contains_key(trait_name));
 
             // Create the scope for this trait implementation
             let implementation_scope =
@@ -288,7 +280,7 @@ impl SetScope for Node<Module> {
             context = stmt.set_scope(parent_scope_id, context);
         }
 
-        return context;
+        context
     }
 }
 
@@ -304,16 +296,12 @@ impl SetScope for Node<Block> {
             context = stmt.set_scope(scope_id, context);
 
             // Add declarations to scope.
-            match &stmt.data {
-                // Stmt::FunctionDecStmt { ref name, .. } |
-                Stmt::StructDec { ref name, .. } => {
-                    context.append_declaration(self.scope, name, &stmt);
-                }
-                _ => {}
-            };
+            if let Stmt::StructDec { ref name, .. } = &stmt.data {
+                context.append_declaration(self.scope, name, stmt);
+            }
         }
 
-        return context;
+        context
     }
 }
 
@@ -321,14 +309,14 @@ impl SetScope for Node<Block> {
 impl SetScope for Node<Stmt> {
     fn set_scope(&mut self, parent_scope: usize, mut context: Context) -> Context {
         self.scope = parent_scope;
-        return match self.data {
+        match self.data {
             Stmt::LetStmt {
                 ref name,
                 ref mut expression,
-                ref type_annotation,
+                type_annotation: _,
             } => {
                 context = expression.set_scope(parent_scope, context);
-                context.append_declaration(self.scope, name, &self);
+                context.append_declaration(self.scope, name, self);
                 context
             }
 
@@ -342,7 +330,7 @@ impl SetScope for Node<Stmt> {
                     context = val.set_scope(self.scope, context);
                 }
                 context = block.set_scope(self.scope, context);
-                context.append_declaration(self.scope, name, &self);
+                context.append_declaration(self.scope, name, self);
                 context
             }
             Stmt::WhileStmt {
@@ -373,7 +361,7 @@ impl SetScope for Node<Stmt> {
             | Stmt::ReturnStmt(ref mut expression) => expression.set_scope(parent_scope, context),
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => context,
             _ => panic!("add_to_context not implemented for {:?}", self.data),
-        };
+        }
     }
 }
 
@@ -397,14 +385,14 @@ mod test {
         use parser::position_tracker::PosStr;
 
         fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
-            return match ptr {
+            match ptr {
                 CanModifyScope::Statement(x, _) => unsafe {
                     let actual_stmt = &(**x).data;
                     assert_eq!(actual_stmt, expected);
                     true
                 },
                 x => panic!("Expected a statement modification, found: {:?}", x),
-            };
+            }
         }
 
         #[test]

@@ -20,7 +20,7 @@ fn simple_check_expr(expr: Node<Expr>, expected_type: Type) {
 }
 
 /// Check that type checking *fails*
-fn fail_check_expr(context: Context, mut expr: Node<Expr>) {
+fn fail_check_expr(context: Context, expr: Node<Expr>) {
     let res = expr.add_to_context(context);
     match res {
         Ok((_, t)) => panic!("Expected failed type check. Expr has type {:?}", t),

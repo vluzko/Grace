@@ -21,7 +21,7 @@ fn function_def_no_return_statement() {
     let context = Context::builtin();
     let mut stmt = minimal_examples::minimal_no_ret_functionn();
     let scoped_context = stmt.set_scope(context.root_id, context);
-    let (typed_context, ret_type) = stmt.add_to_context(scoped_context).unwrap();
+    let (typed_context, _ret_type) = stmt.add_to_context(scoped_context).unwrap();
     println!("{:?}", typed_context.all_names_and_types());
     // let function_type = typed_context.get_type(0, &minimal_examples::minimal_identifier());
     // assert_eq!(function_type, minimal_examples::minimal_function_type());

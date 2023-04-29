@@ -129,7 +129,7 @@ impl GraceError {
 
 impl Add for GraceError {
     type Output = Self;
-    fn add(self, other: Self) -> Self {
+    fn add(self, _other: Self) -> Self {
         panic!()
         // return match self {
         //     GraceError::MultiError { errors: errors1 } => match other {

@@ -15,7 +15,7 @@ pub fn compile_folder(subfolder: &str) -> (String, String) {
     let file_path = format!("{}/file_1.gr", folder_path);
     let compiled = compiler_layers::Compilation::compile(&file_path);
     let _ = compiled.generate_wast_files(&Box::from(Path::new(&output_path)));
-    return (folder_path, output_path);
+    (folder_path, output_path)
 }
 
 /// Compile a folder and check against expected output

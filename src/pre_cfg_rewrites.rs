@@ -160,7 +160,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
             _ => self.data,
         };
         // We can't use replace because self.data was already moved.
-        return Node {
+        Node {
             id: self.id,
             start_line: self.start_line,
             start_col: self.start_col,
@@ -168,7 +168,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
             end_col: self.end_col,
             data: new_data,
             scope: self.scope,
-        };
+        }
     }
 }
 

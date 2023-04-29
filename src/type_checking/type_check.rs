@@ -35,7 +35,7 @@ impl GetContext for Node<Module> {
 
         // Add all trait implementations to the context.
         for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter() {
-            match self.data.traits.get(&trait_name) {
+            match self.data.traits.get(trait_name) {
                 Some(trait_dec) => {
                     // Check that all functions are
                     let need_impl = HashSet::<Identifier>::from_iter(

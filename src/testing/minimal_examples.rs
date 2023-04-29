@@ -1,4 +1,6 @@
 //! Helper functions to generate minimal examples of various datatypes
+use std::collections::HashMap;
+
 use expression;
 use testing::test_utils;
 use type_checking::{context, types};
@@ -213,4 +215,28 @@ pub fn minimal_struct_context() -> context::Context {
     let mut attr_map = std::collections::BTreeMap::new();
     attr_map.insert(minimal_identifier(), types::Type::i32);
     test_utils::add_struct_to_context(context, minimal_name().as_str(), attr_map)
+}
+
+/// A trait with a single function.
+pub fn minimal_trait() -> types::Trait {
+    let functions = HashMap::from([(
+        minimal_identifier(),
+        types::Type::Function(vec![], vec![], Box::new(types::Type::i32)),
+    )]);
+    types::Trait {
+        name: minimal_identifier(),
+        functions,
+    }
+}
+
+/// Module containing a trait.
+pub fn trait_module() -> expression::Node<expression::Module> {
+    let t = minimal_trait();
+    expression::Node::from(expression::Module {
+        functions: vec![],
+        imports: vec![],
+        structs: vec![],
+        traits: HashMap::from([(t.name.clone(), t)]),
+        trait_implementations: vec![],
+    })
 }

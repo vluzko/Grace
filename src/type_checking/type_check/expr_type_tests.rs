@@ -268,11 +268,6 @@ fn type_check_module_access_fail() {
 }
 
 #[test]
-fn type_check_method_call() {
-    panic!()
-}
-
-#[test]
 fn type_check_identifier() {
     let init = Context::builtin();
     let context = test_utils::add_identifier_to_context(init, "a", Expr::from(0));

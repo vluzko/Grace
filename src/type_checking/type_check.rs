@@ -602,6 +602,8 @@ mod trait_tests {
     use compiler_layers;
     use std::fs::File;
     use std::io::Read;
+    use testing::minimal_examples;
+
     #[test]
     #[should_panic(expected = "Argument type mismatch")]
     // One trait, one struct, one implementation block that uses self, and a function that uses it
@@ -617,6 +619,18 @@ mod trait_tests {
         }
         // println!("{:?}", context.all_names_and_types());
         // panic!("Unfinished test")
+    }
+
+    #[test]
+    fn trait_creation() {
+        let context = Context::empty();
+        let mut module = minimal_examples::trait_module();
+        let scoped = module.set_scope(context.root_id, context);
+        let (w_types, t) = module.add_to_context(scoped).unwrap();
+        assert_eq!(w_types.traits.len(), 1);
+        let found_t = &w_types.traits[&minimal_examples::minimal_identifier()];
+        let expected_t = &minimal_examples::minimal_trait();
+        assert_eq!(found_t, expected_t);
     }
 }
 

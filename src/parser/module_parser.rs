@@ -14,7 +14,7 @@ use general_utils::get_next_id;
 use type_checking::types::Trait;
 
 /// Parse a module.
-pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
+pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
     let mut context = ParserContext::empty();
 
     enum ModuleDec {
@@ -55,10 +55,9 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
             alt_complete!(
                 map!(m!(context.function_declaration_stmt, 0), |x| {
                     ModuleDec::Func(x)
-                }) | map!(m!(context.struct_declaration_stmt), |x| ModuleDec::Struct(
-                    x
-                )) | map!(m!(w_self_type.trait_parser), |x| ModuleDec::TraitDec(x))
-                    | map!(m!(w_self_type.trait_impl), |x| ModuleDec::TraitImpl(x))
+                }) | map!(m!(context.struct_declaration_stmt), ModuleDec::Struct)
+                    | map!(m!(w_self_type.trait_parser), ModuleDec::TraitDec)
+                    | map!(m!(w_self_type.trait_impl), ModuleDec::TraitImpl)
             ),
             between_statement
         )),
@@ -90,20 +89,20 @@ pub fn module<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Node<Module>> {
                 };
             }
 
-            return Module {
-                imports: imports.into_iter().map(|z| Box::new(z.clone())).collect(),
+            Module {
+                imports: imports.iter().map(|z| Box::new(z.clone())).collect(),
                 functions: funcs,
-                structs: structs,
-                traits: traits,
+                structs,
+                traits,
                 trait_implementations: trait_impls,
-            };
+            }
         },
         &(input.line, input.column),
     );
 }
 
 /// Parse an import statement.
-pub(in parser) fn import<'a>(input: PosStr<'a>) -> Res<'a, Import> {
+pub(in parser) fn import(input: PosStr) -> Res<Import> {
     let parse_result = preceded!(
         input,
         IMPORT,

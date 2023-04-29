@@ -112,10 +112,10 @@ pub enum WASMType {
 
 impl WASMType {
     pub fn size(&self) -> usize {
-        return match self {
+        match self {
             WASMType::i32 | WASMType::f32 => 1,
             WASMType::i64 | WASMType::f64 => 2,
-        };
+        }
     }
 }
 
@@ -131,7 +131,7 @@ impl GetTrueDeclarations for Node<Block> {
             .unwrap()
             .declarations
             .keys()
-            .map(|x| x.clone())
+            .cloned()
             .collect();
         let mut with_types = top_level
             .into_iter()
@@ -143,16 +143,16 @@ impl GetTrueDeclarations for Node<Block> {
         for stmt in &self.data.statements {
             with_types = general_utils::m_bt_union(with_types, stmt.get_true_declarations(context));
         }
-        return with_types;
+        with_types
     }
 }
 
 impl GetTrueDeclarations for Node<Stmt> {
     fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
-        return match self.data {
+        match self.data {
             Stmt::FunctionDecStmt { ref block, .. } => block.get_true_declarations(context),
             _ => BTreeSet::new(),
-        };
+        }
     }
 }
 
@@ -208,7 +208,7 @@ pub fn module_to_llr(
             let wasm_import = WASMImport {
                 path: joined_path,
                 value: value.name.clone(),
-                internal_name: internal_name,
+                internal_name,
                 params: wasm_args,
                 return_type: wasm_return,
             };
@@ -243,11 +243,11 @@ pub fn module_to_llr(
             trait_implementations.push(full_name_func);
         }
     }
-    return Ok(WASMModule {
-        imports: imports,
-        functions: functions,
-        trait_implementations: trait_implementations,
-    });
+    Ok(WASMModule {
+        imports,
+        functions,
+        trait_implementations,
+    })
 }
 
 /// Shared code to convert function and struct declarations to LLR
@@ -338,11 +338,11 @@ pub fn handle_trait_func_dec(
     cfg_map: &HashMap<Identifier, Cfg>,
 ) -> Result<WASMFunc, GraceError> {
     return match &declaration.data {
-        &Stmt::FunctionDecStmt {
-            ref name,
-            ref args,
-            ref kwargs,
-            ref return_type,
+        Stmt::FunctionDecStmt {
+            name,
+            args,
+            kwargs,
+            return_type,
             ..
         } => {
             // Get local variables as WASM.
@@ -455,13 +455,13 @@ impl ToLLR for Cfg {
                 CfgVertex::Exit => {}
             };
         }
-        return Ok(wasm);
+        Ok(wasm)
     }
 }
 
 impl ToLLR for CfgVertex {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
-        return Ok(match &self {
+        Ok(match &self {
             CfgVertex::Block(statements) => {
                 let mut wasm = vec![];
                 for stmt in statements {
@@ -501,13 +501,13 @@ impl ToLLR for CfgVertex {
             CfgVertex::Else => vec![WASM::Else],
             CfgVertex::End(k) => vec![WASM::End(*k)],
             CfgVertex::Entry | CfgVertex::Exit => vec![],
-        });
+        })
     }
 }
 
 impl ToLLR for Node<CfgStmt> {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
-        return Ok(match self.data {
+        Ok(match self.data {
             CfgStmt::Assignment {
                 ref name,
                 ref expression,
@@ -523,13 +523,13 @@ impl ToLLR for Node<CfgStmt> {
             CfgStmt::Return(ref val) | CfgStmt::Yield(ref val) | CfgStmt::Branch(ref val) => {
                 val.to_llr(context)?
             }
-        });
+        })
     }
 }
 
 impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
-        return Ok(match &self.data {
+        Ok(match &self.data {
             Expr::BinaryExpr {
                 ref left,
                 ref right,
@@ -563,7 +563,7 @@ impl ToLLR for Node<Expr> {
                     }
                     Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
-                        llr.push(WASM::Call(format!(".{}", func_name.clone())));
+                        llr.push(WASM::Call(format!(".{}", func_name)));
                     }
                     Expr::TraitAccess {
                         ref base,
@@ -602,7 +602,7 @@ impl ToLLR for Node<Expr> {
                     }
                     Expr::ModuleAccess(_, ref path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
-                        llr.push(WASM::Call(format!(".{}", func_name.clone())));
+                        llr.push(WASM::Call(format!(".{}", func_name)));
                     }
                     x => {
                         return Err(GraceError::compiler_error(format!(
@@ -648,18 +648,18 @@ impl ToLLR for Node<Expr> {
             } => {
                 let mut llr = operand.to_llr(context)?;
                 match operator {
-                    &UnaryOperator::Negative => {
+                    UnaryOperator::Negative => {
                         llr.push(WASM::Operation(WASMOperator::Neg, WASMType::i32));
                     }
-                    &UnaryOperator::BitNot => {
+                    UnaryOperator::BitNot => {
                         // Calculate bitnot by xor with full mask.
                         llr.push(WASM::Const("2147483647".to_string(), WASMType::i32));
                         llr.push(WASM::Operation(WASMOperator::Xor, WASMType::i32));
                     }
-                    &UnaryOperator::Not => {
+                    UnaryOperator::Not => {
                         llr.push(WASM::Operation(WASMOperator::EqZ, WASMType::i32));
                     }
-                    &UnaryOperator::Positive => {
+                    UnaryOperator::Positive => {
                         llr.push(WASM::Operation(WASMOperator::Abs, WASMType::i32));
                     }
                 };
@@ -727,34 +727,36 @@ impl ToLLR for Node<Expr> {
                 //TODO this block needs a test case
             }
             Expr::TraitAccess { .. } => {
-                return Err(GraceError::compiler_error(format!(
-                    "TraitAccess not implemented"
-                )));
+                return Err(GraceError::compiler_error(
+                    "TraitAccess not implemented".to_string(),
+                ));
             }
             Expr::Index { .. } => {
-                return Err(GraceError::compiler_error(format!("Index not implemented")));
+                return Err(GraceError::compiler_error(
+                    "Index not implemented".to_string(),
+                ));
             }
             Expr::ModuleAccess { .. } => {
-                return Err(GraceError::compiler_error(format!(
-                    "ModuleAccess not implemented"
-                )));
+                return Err(GraceError::compiler_error(
+                    "ModuleAccess not implemented".to_string(),
+                ));
             }
             Expr::String { .. } => {
-                return Err(GraceError::compiler_error(format!(
-                    "String not implemented"
-                )));
+                return Err(GraceError::compiler_error(
+                    "String not implemented".to_string(),
+                ));
             }
             Expr::SetLiteral { .. } => {
-                return Err(GraceError::compiler_error(format!(
-                    "SetLiteral not implemented"
-                )));
+                return Err(GraceError::compiler_error(
+                    "SetLiteral not implemented".to_string(),
+                ));
             }
             Expr::MapLiteral { .. } => {
-                return Err(GraceError::compiler_error(format!(
-                    "MapLiteral not implemented"
-                )));
+                return Err(GraceError::compiler_error(
+                    "MapLiteral not implemented".to_string(),
+                ));
             }
-        });
+        })
     }
 }
 
@@ -769,10 +771,10 @@ fn calculate_offset(
         if val == name {
             break;
         } else {
-            offset += type_map.get(&val).unwrap().size();
+            offset += type_map.get(val).unwrap().size();
         }
     }
-    return offset;
+    offset
 }
 
 /// Implementations of Rust builtin traits.
@@ -816,7 +818,7 @@ pub mod rust_trait_impls {
 
     impl From<&BinaryOperator> for WASMOperator {
         fn from(input: &BinaryOperator) -> Self {
-            return match input {
+            match input {
                 BinaryOperator::Add => WASMOperator::Add,
                 BinaryOperator::Sub => WASMOperator::Sub,
                 BinaryOperator::Mult => WASMOperator::Mult,
@@ -837,7 +839,7 @@ pub mod rust_trait_impls {
                 BinaryOperator::BitOr => panic!("No WASM operator for bitwise or"),
                 BinaryOperator::BitXor => panic!("No WASM operator for bitwise xor"),
                 BinaryOperator::Exponent => panic!("No WASM operator for exponentiation"),
-            };
+            }
         }
     }
 
@@ -896,6 +898,7 @@ mod tests {
     use compiler_layers;
     use difference::{Changeset, Difference};
     use regex::Regex;
+    use testing::minimal_examples::cfgs as min_cfg;
 
     #[test]
     fn trait_impl_test() {
@@ -972,23 +975,53 @@ mod tests {
 
     #[cfg(test)]
     mod vertex {
+        use super::*;
+
         #[test]
         fn test_block() {
             panic!()
         }
+
+        fn simple_vertex_check(vertex: CfgVertex, expected: &[WASM]) {
+            let context = Context::builtin();
+            let res = vertex.to_llr(&context).unwrap();
+            assert_eq!(res, expected);
+        }
+
         #[test]
         fn test_if_start() {
-            panic!()
+            let vertex = min_cfg::minimal_if_start();
+            let expected = vec![
+                WASM::If(Some(WASMType::i32)),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Then,
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_loop_start() {
-            panic!()
+            let vertex = min_cfg::minimal_loop_start();
+            let expected = vec![
+                WASM::Block,
+                WASM::Loop,
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::BranchIf(0),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_break() {
-            panic!()
+            let vertex = min_cfg::minimal_break();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Branch(0),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]

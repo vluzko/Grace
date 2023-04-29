@@ -32,8 +32,8 @@ pub fn minimal_expression() -> expression::Expr {
 }
 
 /// Minimal boolean expression
-pub fn minimal_bool_expression() -> expression::Expr {
-    expression::Expr::Bool(true)
+pub fn minimal_bool_expression() -> expression::Node<expression::Expr> {
+    expression::Node::from(expression::Expr::Bool(true))
 }
 
 pub fn minimal_int() -> expression::Node<expression::Expr> {
@@ -129,7 +129,7 @@ pub fn minimal_no_ret_function() -> expression::Stmt {
 /// Minimal if node
 pub fn minimal_if() -> expression::Stmt {
     expression::Stmt::IfStmt {
-        condition: expression::Node::from(minimal_bool_expression()),
+        condition: minimal_bool_expression(),
         block: expression::Node::from(minimal_block()),
         else_block: None,
     }
@@ -172,7 +172,7 @@ pub fn minimal_if_non_booln() -> expression::Node<expression::Stmt> {
 /// Minimal if statement with non matching main and else blocks
 pub fn minimal_if_nonmatching() -> expression::Node<expression::Stmt> {
     expression::Node::from(expression::Stmt::IfStmt {
-        condition: expression::Node::from(minimal_bool_expression()),
+        condition: minimal_bool_expression(),
         block: expression::Node::from(minimal_block()),
         else_block: Some(expression::Node::from(minimal_ret_block())),
     })
@@ -180,7 +180,7 @@ pub fn minimal_if_nonmatching() -> expression::Node<expression::Stmt> {
 
 pub fn minimal_while() -> expression::Node<expression::Stmt> {
     expression::Node::from(expression::Stmt::WhileStmt {
-        condition: expression::Node::from(minimal_bool_expression()),
+        condition: minimal_bool_expression(),
         block: expression::Node::from(minimal_block()),
     })
 }
@@ -239,4 +239,38 @@ pub fn trait_module() -> expression::Node<expression::Module> {
         traits: HashMap::from([(t.name.clone(), t)]),
         trait_implementations: vec![],
     })
+}
+
+pub(crate) mod cfgs {
+    use super::*;
+    use cfg;
+
+    pub fn minimal_stmt() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Let {
+            name: minimal_identifier(),
+            expression: minimal_bool_expression(),
+        })
+    }
+
+    pub fn minimal_assn() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Assignment {
+            name: minimal_identifier(),
+            expression: minimal_bool_expression(),
+        })
+    }
+
+    /// Minimal if start vertex.
+    pub fn minimal_if_start() -> cfg::CfgVertex {
+        cfg::CfgVertex::IfStart(minimal_bool_expression(), types::Type::i32)
+    }
+
+    /// Minimal while loop start vertex
+    pub fn minimal_loop_start() -> cfg::CfgVertex {
+        cfg::CfgVertex::LoopStart(minimal_bool_expression())
+    }
+
+    /// Minimal break vertex
+    pub fn minimal_break() -> cfg::CfgVertex {
+        cfg::CfgVertex::Break(vec![minimal_stmt(), minimal_assn()])
+    }
 }

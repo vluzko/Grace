@@ -22,7 +22,12 @@ pub struct Cfg {
 pub enum CfgVertex {
     Entry,
     Block(Vec<Node<CfgStmt>>),
+    /// The start of a loop.
+    /// The expression is the condition expression.
     LoopStart(Node<Expr>),
+    /// The start of an if.
+    /// The expression is the condition expression
+    /// The type is the type of the inner block.
     IfStart(Node<Expr>, Type),
     Else,
     Break(Vec<Node<CfgStmt>>),
@@ -48,10 +53,10 @@ pub enum CfgStmt {
 
 impl Cfg {
     pub fn empty() -> Self {
-        return Cfg {
+        Cfg {
             entry_index: None,
             graph: Graph::<CfgVertex, bool>::new(),
-        };
+        }
     }
 
     pub fn add_node(&mut self, node: CfgVertex) -> NodeIndex {
@@ -62,11 +67,11 @@ impl Cfg {
                 self.entry_index = Some(index);
             }
         }
-        return index;
+        index
     }
 
     pub fn add_edge(&mut self, a: NodeIndex, b: NodeIndex, w: bool) -> EdgeIndex {
-        return self.graph.add_edge(a, b, w);
+        self.graph.add_edge(a, b, w)
     }
 
     /// Add a node containing the given statements.
@@ -77,14 +82,12 @@ impl Cfg {
     ) -> NodeIndex {
         let new_node = CfgVertex::Block(statements);
         let new_index = self.add_node(new_node);
-        match previous {
-            Some(x) => {
-                self.add_edge(x, new_index, false);
-            }
-            None => {}
-        };
 
-        return new_index;
+        if let Some(x) = previous {
+            self.add_edge(x, new_index, false);
+        }
+
+        new_index
     }
 }
 
@@ -129,7 +132,7 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
             }
         }
     }
-    return cfg_map;
+    cfg_map
 }
 
 #[allow(unused_assignments)]
@@ -221,14 +224,11 @@ fn block_to_cfg(
             Stmt::BreakStmt => {
                 let new_node = CfgVertex::Break(statements);
                 let new_index = new_cfg.add_node(new_node);
-                match previous_index {
-                    Some(i) => {
-                        new_cfg.add_edge(i, new_index, false);
-                    }
-                    None => {}
-                };
+                if let Some(i) = previous_index {
+                    new_cfg.add_edge(i, new_index, false);
+                }
 
-                need_edge_to_next_block.push(new_index.clone());
+                need_edge_to_next_block.push(new_index);
                 previous_index = Some(new_index);
 
                 statements = vec![];
@@ -237,12 +237,9 @@ fn block_to_cfg(
             Stmt::ContinueStmt => {
                 let new_index = new_cfg.add_node(CfgVertex::Continue(statements));
 
-                match previous_index {
-                    Some(i) => {
-                        new_cfg.add_edge(i, new_index, false);
-                    }
-                    None => {}
-                };
+                if let Some(i) = previous_index {
+                    new_cfg.add_edge(i, new_index, false);
+                }
 
                 // Add an edge from the new block back to the loop start.
                 match loop_start {
@@ -314,21 +311,21 @@ fn block_to_cfg(
     let final_index = new_cfg.add_block(statements, previous_index);
     entry_index = update_entry(entry_index, &final_index);
 
-    return (new_cfg, entry_index.unwrap(), need_edge_to_next_block);
+    (new_cfg, entry_index.unwrap(), need_edge_to_next_block)
 }
 
 fn update_entry(current: Option<NodeIndex>, new: &NodeIndex) -> Option<NodeIndex> {
-    return match current {
+    match current {
         Some(x) => Some(x),
-        None => Some(new.clone()),
-    };
+        None => Some(*new),
+    }
 }
 
 fn add_edges_to_next(mut current: Cfg, sources: Vec<NodeIndex>, target: NodeIndex) -> Cfg {
     for source in sources {
         current.add_edge(source, target, false);
     }
-    return current;
+    current
 }
 
 #[cfg(test)]

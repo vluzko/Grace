@@ -898,6 +898,7 @@ mod tests {
     use compiler_layers;
     use difference::{Changeset, Difference};
     use regex::Regex;
+    use testing::minimal_examples::cfgs as min_cfg;
 
     #[test]
     fn trait_impl_test() {
@@ -974,23 +975,53 @@ mod tests {
 
     #[cfg(test)]
     mod vertex {
+        use super::*;
+
         #[test]
         fn test_block() {
             panic!()
         }
+
+        fn simple_vertex_check(vertex: CfgVertex, expected: &[WASM]) {
+            let context = Context::builtin();
+            let res = vertex.to_llr(&context).unwrap();
+            assert_eq!(res, expected);
+        }
+
         #[test]
         fn test_if_start() {
-            panic!()
+            let vertex = min_cfg::minimal_if_start();
+            let expected = vec![
+                WASM::If(Some(WASMType::i32)),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Then,
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_loop_start() {
-            panic!()
+            let vertex = min_cfg::minimal_loop_start();
+            let expected = vec![
+                WASM::Block,
+                WASM::Loop,
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::BranchIf(0),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_break() {
-            panic!()
+            let vertex = min_cfg::minimal_break();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Branch(0),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]

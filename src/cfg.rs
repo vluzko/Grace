@@ -20,19 +20,35 @@ pub struct Cfg {
 /// A vertex of the Cfg. Represents some kind of block or control flow structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgVertex {
+    /// The source node for the graph.
     Entry,
     Block(Vec<Node<CfgStmt>>),
     /// The start of a loop.
     /// The expression is the condition expression.
+    /// Points to the loop block and to the loop end.
     LoopStart(Node<Expr>),
     /// The start of an if.
     /// The expression is the condition expression
     /// The type is the type of the inner block.
+    /// Points to the if block and the else (if it exists), or the end of the if block (if there is no else.)
     IfStart(Node<Expr>, Type),
+    /// An else vertex.
+    /// Points to the else block.
     Else,
+    /// A break vertex
+    /// It contains all statements in the block up to the break itself.
+    /// Points to the loop end.
     Break(Vec<Node<CfgStmt>>),
+    /// A continue vertex
+    /// It contains all statements in the block up to the continue itself.
+    /// Similar to a break vertex, but points to the loop start.
     Continue(Vec<Node<CfgStmt>>),
+    /// An end vertex.
+    /// The usize is the number of nested blocks
+    /// This is required when generating WASM
+    /// in order to write the correct number of parentheses.
     End(usize),
+    /// The sink node for the graph.
     Exit,
 }
 

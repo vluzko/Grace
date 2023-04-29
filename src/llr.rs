@@ -495,6 +495,7 @@ impl ToLLR for CfgVertex {
                 for stmt in block {
                     wasm.append(&mut stmt.to_llr(context)?);
                 }
+                // In WASM branching to 1 goes to the beginning of the loop.
                 wasm.push(WASM::Branch(1));
                 wasm
             }
@@ -977,15 +978,22 @@ mod tests {
     mod vertex {
         use super::*;
 
-        #[test]
-        fn test_block() {
-            panic!()
-        }
-
         fn simple_vertex_check(vertex: CfgVertex, expected: &[WASM]) {
             let context = Context::builtin();
             let res = vertex.to_llr(&context).unwrap();
             assert_eq!(res, expected);
+        }
+
+        #[test]
+        fn test_block() {
+            let vertex = min_cfg::minimal_block();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
@@ -1026,22 +1034,43 @@ mod tests {
 
         #[test]
         fn test_continue() {
-            panic!()
+            let vertex = min_cfg::minimal_continue();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Branch(1),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_else() {
-            panic!()
+            let vertex = min_cfg::minimal_else();
+            let expected = vec![WASM::Else];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_end() {
-            panic!()
+            let vertex = min_cfg::minimal_end();
+            let expected = vec![WASM::End(2)];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_entry() {
-            panic!()
+            let vertex = min_cfg::minimal_entry();
+            let expected = vec![];
+            simple_vertex_check(vertex, &expected);
+        }
+
+        #[test]
+        fn test_exit() {
+            let vertex = min_cfg::minimal_exit();
+            let expected = vec![];
+            simple_vertex_check(vertex, &expected);
         }
     }
 

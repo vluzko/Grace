@@ -109,20 +109,17 @@ impl ToPython for Node<Stmt> {
 }
 
 impl ToPython for Node<Expr> {
-    fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
+    fn construct_condition(&self, _context: &Context) -> (HashSet<Identifier>, String) {
         match &self.data {
             Expr::BinaryExpr {
                 ref operator,
                 ref left,
                 ref right,
             } => {
-                let (l_set, l_str) = left.construct_condition(context);
-                let (r_set, r_str) = right.construct_condition(context);
+                let (l_set, l_str) = left.construct_condition(_context);
+                let (r_set, r_str) = right.construct_condition(_context);
                 let f_set = m_union(l_set, r_set);
-                (
-                    f_set,
-                    format!("({}) {} ({})", l_str, operator.to_string(), r_str),
-                )
+                (f_set, format!("({}) {} ({})", l_str, operator, r_str))
             }
             Expr::IdentifierExpr(ref name) => {
                 let mut set = HashSet::new();

@@ -259,6 +259,11 @@ pub(crate) mod cfgs {
         })
     }
 
+    /// Minimal block vertex.
+    pub fn minimal_block() -> cfg::CfgVertex {
+        cfg::CfgVertex::Block(vec![minimal_stmt(), minimal_assn()])
+    }
+
     /// Minimal if start vertex.
     pub fn minimal_if_start() -> cfg::CfgVertex {
         cfg::CfgVertex::IfStart(minimal_bool_expression(), types::Type::i32)
@@ -292,5 +297,10 @@ pub(crate) mod cfgs {
     /// Minimal entry vertex
     pub fn minimal_entry() -> cfg::CfgVertex {
         cfg::CfgVertex::Entry
+    }
+
+    /// Minimal exit vertex
+    pub fn minimal_exit() -> cfg::CfgVertex {
+        cfg::CfgVertex::Exit
     }
 }

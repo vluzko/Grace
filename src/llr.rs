@@ -978,15 +978,22 @@ mod tests {
     mod vertex {
         use super::*;
 
-        #[test]
-        fn test_block() {
-            panic!()
-        }
-
         fn simple_vertex_check(vertex: CfgVertex, expected: &[WASM]) {
             let context = Context::builtin();
             let res = vertex.to_llr(&context).unwrap();
             assert_eq!(res, expected);
+        }
+
+        #[test]
+        fn test_block() {
+            let vertex = min_cfg::minimal_block();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+            ];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
@@ -1055,6 +1062,13 @@ mod tests {
         #[test]
         fn test_entry() {
             let vertex = min_cfg::minimal_entry();
+            let expected = vec![];
+            simple_vertex_check(vertex, &expected);
+        }
+
+        #[test]
+        fn test_exit() {
+            let vertex = min_cfg::minimal_exit();
             let expected = vec![];
             simple_vertex_check(vertex, &expected);
         }

@@ -1047,12 +1047,16 @@ mod tests {
 
         #[test]
         fn test_end() {
-            panic!()
+            let vertex = min_cfg::minimal_end();
+            let expected = vec![WASM::End(2)];
+            simple_vertex_check(vertex, &expected);
         }
 
         #[test]
         fn test_entry() {
-            panic!()
+            let vertex = min_cfg::minimal_entry();
+            let expected = vec![];
+            simple_vertex_check(vertex, &expected);
         }
     }
 

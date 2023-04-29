@@ -283,4 +283,14 @@ pub(crate) mod cfgs {
     pub fn minimal_else() -> cfg::CfgVertex {
         cfg::CfgVertex::Else
     }
+
+    /// Minimal end vertex
+    pub fn minimal_end() -> cfg::CfgVertex {
+        cfg::CfgVertex::End(2)
+    }
+
+    /// Minimal entry vertex
+    pub fn minimal_entry() -> cfg::CfgVertex {
+        cfg::CfgVertex::Entry
+    }
 }

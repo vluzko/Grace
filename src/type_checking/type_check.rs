@@ -89,7 +89,7 @@ impl GetContext for Node<Module> {
             new_context = stmt.add_to_context(new_context)?.0;
         }
 
-        return Ok((new_context, Type::empty));
+        Ok((new_context, Type::empty))
     }
 }
 
@@ -157,8 +157,8 @@ fn _add_let_to_context(
 fn _add_function_declaration_to_context(
     stmt_id: usize,
     scope_id: usize,
-    args: &Vec<(Identifier, Type)>,
-    kwargs: &Vec<(Identifier, Type, Node<Expr>)>,
+    args: &[(Identifier, Type)],
+    kwargs: &[(Identifier, Type, Node<Expr>)],
     block: &Node<Block>,
     mut context: Context,
     return_type: &Type,
@@ -225,7 +225,7 @@ impl GetContext for Node<Stmt> {
             } => {
                 let (mut new_context, t) =
                     _add_let_to_context(self.scope, context, expression, type_annotation)?;
-                new_context.append_declaration(self.scope, name, &self);
+                new_context.append_declaration(self.scope, name, self);
                 Ok((new_context, t))
             }
             Stmt::AssignmentStmt {
@@ -306,36 +306,36 @@ impl GetContext for Node<Stmt> {
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => Ok((context, Type::empty)),
             _ => panic!("add_to_context not implemented for {:?}", self.data),
         };
-        return match final_res {
+        match final_res {
             Ok((mut final_c, final_t)) => {
                 final_c.add_type(self.id, final_t.clone());
                 Ok((final_c, final_t))
             }
             Err(e) => Err(e),
-        };
+        }
     }
 }
 
 impl GetContext for Node<Expr> {
     fn add_to_context(&self, context: Context) -> TypeCheckRes {
         // We separate out the actual function call so we can use annotate_error and still use the ? operator.
-        return match self._add_to_context(context) {
+        match self._add_to_context(context) {
             Ok(v) => Ok(v),
             Err(e) => Err(self.annotate_error(e)),
-        };
+        }
     }
 }
 
 /// Add a function call to the context.
 fn _add_function_call_to_context(
-    function: &Box<Node<Expr>>,
+    function: &Node<Expr>,
     args: &Vec<Node<Expr>>,
     kwargs: &Vec<(Identifier, Node<Expr>)>,
     context: Context,
 ) -> TypeCheckRes {
     let (mut new_c, wrapped_func) = function.add_to_context(context)?;
     let (arg_types, _kwarg_types, ret) = match wrapped_func {
-        Type::Function(a, b, c) => Ok((a, b, *c.clone())),
+        Type::Function(a, b, c) => Ok((a, b, *c)),
         x => Err(GraceError::type_error(format!(
             "Somehow got a non-function type {:?}",
             x
@@ -371,7 +371,7 @@ fn _add_function_call_to_context(
             }
         };
 
-    for (i, arg) in args.into_iter().enumerate() {
+    for (i, arg) in args.iter().enumerate() {
         let res = arg.add_to_context(new_c)?;
         new_c = res.0;
         let arg_t = res.1;
@@ -396,13 +396,13 @@ fn _add_function_call_to_context(
                     return Ok(i);
                 }
             }
-            return Err(GraceError::type_error(format!(
+            Err(GraceError::type_error(format!(
                 "Invalid kwarg name. Passed {:?}, must be in {:?}",
                 types, n
-            )));
+            )))
         }
 
-        let i = find_kwarg_index(&arg_types, &name)?;
+        let i = find_kwarg_index(&arg_types, name)?;
 
         let expected_type = arg_types[i].1.add_constraint(&arg_types[i].0, value);
 
@@ -581,7 +581,7 @@ impl Node<Expr> {
 }
 
 /// Fold over the expressions, adding them to context and merging the types.
-fn _folded_check(exprs: &Vec<Node<Expr>>, context: Context) -> Result<(Context, Type), GraceError> {
+fn _folded_check(exprs: &[Node<Expr>], context: Context) -> Result<(Context, Type), GraceError> {
     fn _agg(
         aggregate: Result<(Context, Type), GraceError>,
         expr: &Node<Expr>,
@@ -613,6 +613,7 @@ mod trait_tests {
         f.read_to_string(&mut file_contents).unwrap();
 
         let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+
         context.all_variable_names();
         for (k, t) in context.all_names_and_types() {
             println!("{:?}: {:?}", k, t);
@@ -626,7 +627,7 @@ mod trait_tests {
         let context = Context::empty();
         let mut module = minimal_examples::trait_module();
         let scoped = module.set_scope(context.root_id, context);
-        let (w_types, t) = module.add_to_context(scoped).unwrap();
+        let (w_types, _) = module.add_to_context(scoped).unwrap();
         assert_eq!(w_types.traits.len(), 1);
         let found_t = &w_types.traits[&minimal_examples::minimal_identifier()];
         let expected_t = &minimal_examples::minimal_trait();

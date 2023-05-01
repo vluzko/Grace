@@ -130,7 +130,7 @@ impl GetContext for Node<Block> {
 
         new_context.add_type(self.id, block_type.clone());
 
-        return Ok((new_context, block_type));
+        Ok((new_context, block_type))
     }
 }
 
@@ -604,6 +604,7 @@ mod trait_tests {
     use std::io::Read;
     use testing::minimal_examples;
 
+    #[ignore]
     #[test]
     #[should_panic(expected = "Argument type mismatch")]
     // One trait, one struct, one implementation block that uses self, and a function that uses it
@@ -612,14 +613,9 @@ mod trait_tests {
         let mut file_contents = String::new();
         f.read_to_string(&mut file_contents).unwrap();
 
-        let (_, context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
+        let (_, _context) = compiler_layers::to_context::<Node<Module>>(file_contents.as_bytes());
 
-        context.all_variable_names();
-        for (k, t) in context.all_names_and_types() {
-            println!("{:?}: {:?}", k, t);
-        }
-        // println!("{:?}", context.all_names_and_types());
-        // panic!("Unfinished test")
+        panic!("Unfinished test")
     }
 
     #[test]

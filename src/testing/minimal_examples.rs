@@ -303,4 +303,33 @@ pub(crate) mod cfgs {
     pub fn minimal_exit() -> cfg::CfgVertex {
         cfg::CfgVertex::Exit
     }
+
+    /// Minimal CFG assignment
+    pub fn minimal_cfg_assn() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Assignment {
+            name: minimal_identifier(),
+            expression: minimal_bool_expression(),
+        })
+    }
+
+    /// Minimal CFG let
+    pub fn minimal_cfg_let() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Let {
+            name: minimal_identifier(),
+            expression: minimal_bool_expression(),
+        })
+    }
+
+    /// Minimal CFG return
+    pub fn minimal_cfg_return() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Return(minimal_bool_expression()))
+    }
+
+    pub fn minimal_cfg_yield() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Yield(minimal_bool_expression()))
+    }
+
+    pub fn minimal_branch() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Branch(minimal_bool_expression()))
+    }
 }

@@ -52,18 +52,29 @@ pub enum CfgVertex {
     Exit,
 }
 
+// TODO: Can let and assignment be combined?
+// TODO: Can return and yield be combined?
+/// A statement in the CFG.
+/// All control flow structures (except branches)
+/// are part of the CFG structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgStmt {
+    /// An assignment
     Assignment {
         name: Identifier,
         expression: Node<Expr>,
     },
+    /// A let.
+    /// No longer type checked.
     Let {
         name: Identifier,
         expression: Node<Expr>,
     },
+    /// Return the contained value
     Return(Node<Expr>),
+    /// Yield the contained value
     Yield(Node<Expr>),
+    /// Branch on the contained value
     Branch(Node<Expr>),
 }
 

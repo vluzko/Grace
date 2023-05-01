@@ -59,23 +59,13 @@ pub enum CfgVertex {
 /// are part of the CFG structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgStmt {
-    /// An assignment
+    /// An assignment or let.
     Assignment {
         name: Identifier,
         expression: Node<Expr>,
     },
-    /// A let.
-    /// No longer type checked.
-    Let {
-        name: Identifier,
-        expression: Node<Expr>,
-    },
-    /// Return the contained value
+    /// A return or yield.
     Return(Node<Expr>),
-    /// Yield the contained value
-    Yield(Node<Expr>),
-    /// Branch on the contained value
-    Branch(Node<Expr>),
 }
 
 impl Cfg {
@@ -186,30 +176,22 @@ fn block_to_cfg(
 
     for stmt in &block.data.statements {
         match stmt.data {
-            Stmt::LetStmt {
-                ref name,
-                ref expression,
-                ..
-            } => {
-                statements.push(stmt.replace(CfgStmt::Let {
-                    name: name.clone(),
-                    expression: expression.clone(),
-                }));
-            }
             Stmt::AssignmentStmt {
                 ref name,
                 ref expression,
+            }
+            | Stmt::LetStmt {
+                ref name,
+                ref expression,
+                ..
             } => {
                 statements.push(stmt.replace(CfgStmt::Assignment {
                     name: name.clone(),
                     expression: expression.clone(),
                 }));
             }
-            Stmt::ReturnStmt(ref val) => {
+            Stmt::ReturnStmt(ref val) | Stmt::YieldStmt(ref val) => {
                 statements.push(stmt.replace(CfgStmt::Return(val.clone())));
-            }
-            Stmt::YieldStmt(ref val) => {
-                statements.push(stmt.replace(CfgStmt::Yield(val.clone())));
             }
             Stmt::WhileStmt {
                 ref condition,

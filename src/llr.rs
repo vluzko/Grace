@@ -512,18 +512,12 @@ impl ToLLR for Node<CfgStmt> {
             CfgStmt::Assignment {
                 ref name,
                 ref expression,
-            }
-            | CfgStmt::Let {
-                ref name,
-                ref expression,
             } => {
                 let mut expr_wasm = expression.to_llr(context)?;
                 expr_wasm.push(WASM::Set(name.name.clone()));
                 expr_wasm
             }
-            CfgStmt::Return(ref val) | CfgStmt::Yield(ref val) | CfgStmt::Branch(ref val) => {
-                val.to_llr(context)?
-            }
+            CfgStmt::Return(ref val) => val.to_llr(context)?,
         })
     }
 }
@@ -1089,27 +1083,11 @@ mod tests {
         }
 
         #[test]
-        fn test_let() {
-            let vertex = min_cfg::minimal_cfg_let();
-            let expected = vec![
-                WASM::Const("1".to_string(), WASMType::i32),
-                WASM::Set("x".to_string()),
-            ];
+        fn test_return() {
+            let vertex = min_cfg::minimal_cfg_return();
+            let expected = vec![WASM::Const("1".to_string(), WASMType::i32)];
             simple_llr_check(vertex, &expected);
         }
-
-        #[test]
-        fn test_return() {
-            panic!()
-        }
-
-        #[test]
-        fn test_yield() {
-            panic!()
-        }
-
-        #[test]
-        fn test_branch() {}
     }
 
     #[test]

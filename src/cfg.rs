@@ -52,19 +52,20 @@ pub enum CfgVertex {
     Exit,
 }
 
+// TODO: Can let and assignment be combined?
+// TODO: Can return and yield be combined?
+/// A statement in the CFG.
+/// All control flow structures (except branches)
+/// are part of the CFG structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum CfgStmt {
+    /// An assignment or let.
     Assignment {
         name: Identifier,
         expression: Node<Expr>,
     },
-    Let {
-        name: Identifier,
-        expression: Node<Expr>,
-    },
+    /// A return or yield.
     Return(Node<Expr>),
-    Yield(Node<Expr>),
-    Branch(Node<Expr>),
 }
 
 impl Cfg {
@@ -175,30 +176,22 @@ fn block_to_cfg(
 
     for stmt in &block.data.statements {
         match stmt.data {
-            Stmt::LetStmt {
-                ref name,
-                ref expression,
-                ..
-            } => {
-                statements.push(stmt.replace(CfgStmt::Let {
-                    name: name.clone(),
-                    expression: expression.clone(),
-                }));
-            }
             Stmt::AssignmentStmt {
                 ref name,
                 ref expression,
+            }
+            | Stmt::LetStmt {
+                ref name,
+                ref expression,
+                ..
             } => {
                 statements.push(stmt.replace(CfgStmt::Assignment {
                     name: name.clone(),
                     expression: expression.clone(),
                 }));
             }
-            Stmt::ReturnStmt(ref val) => {
+            Stmt::ReturnStmt(ref val) | Stmt::YieldStmt(ref val) => {
                 statements.push(stmt.replace(CfgStmt::Return(val.clone())));
-            }
-            Stmt::YieldStmt(ref val) => {
-                statements.push(stmt.replace(CfgStmt::Yield(val.clone())));
             }
             Stmt::WhileStmt {
                 ref condition,

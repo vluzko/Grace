@@ -246,7 +246,7 @@ pub(crate) mod cfgs {
     use cfg;
 
     pub fn minimal_stmt() -> expression::Node<cfg::CfgStmt> {
-        expression::Node::from(cfg::CfgStmt::Let {
+        expression::Node::from(cfg::CfgStmt::Assignment {
             name: minimal_identifier(),
             expression: minimal_bool_expression(),
         })
@@ -302,5 +302,18 @@ pub(crate) mod cfgs {
     /// Minimal exit vertex
     pub fn minimal_exit() -> cfg::CfgVertex {
         cfg::CfgVertex::Exit
+    }
+
+    /// Minimal CFG assignment
+    pub fn minimal_cfg_assn() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Assignment {
+            name: minimal_identifier(),
+            expression: minimal_bool_expression(),
+        })
+    }
+
+    /// Minimal CFG return
+    pub fn minimal_cfg_return() -> expression::Node<cfg::CfgStmt> {
+        expression::Node::from(cfg::CfgStmt::Return(minimal_bool_expression()))
     }
 }

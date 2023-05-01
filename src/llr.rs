@@ -512,18 +512,12 @@ impl ToLLR for Node<CfgStmt> {
             CfgStmt::Assignment {
                 ref name,
                 ref expression,
-            }
-            | CfgStmt::Let {
-                ref name,
-                ref expression,
             } => {
                 let mut expr_wasm = expression.to_llr(context)?;
                 expr_wasm.push(WASM::Set(name.name.clone()));
                 expr_wasm
             }
-            CfgStmt::Return(ref val) | CfgStmt::Yield(ref val) | CfgStmt::Branch(ref val) => {
-                val.to_llr(context)?
-            }
+            CfgStmt::Return(ref val) => val.to_llr(context)?,
         })
     }
 }
@@ -925,6 +919,13 @@ mod tests {
         );
     }
 
+    /// Build a context and check the generated WASM.
+    fn simple_llr_check<T: ToLLR>(value: T, expected: &[WASM]) {
+        let context = Context::builtin();
+        let res = value.to_llr(&context).unwrap();
+        assert_eq!(res, expected);
+    }
+
     #[cfg(test)]
     mod exprs {
         use super::*;
@@ -978,12 +979,6 @@ mod tests {
     mod vertex {
         use super::*;
 
-        fn simple_vertex_check(vertex: CfgVertex, expected: &[WASM]) {
-            let context = Context::builtin();
-            let res = vertex.to_llr(&context).unwrap();
-            assert_eq!(res, expected);
-        }
-
         #[test]
         fn test_block() {
             let vertex = min_cfg::minimal_block();
@@ -993,7 +988,7 @@ mod tests {
                 WASM::Const("1".to_string(), WASMType::i32),
                 WASM::Set("x".to_string()),
             ];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
@@ -1004,7 +999,7 @@ mod tests {
                 WASM::Const("1".to_string(), WASMType::i32),
                 WASM::Then,
             ];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
@@ -1016,7 +1011,7 @@ mod tests {
                 WASM::Const("1".to_string(), WASMType::i32),
                 WASM::BranchIf(0),
             ];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
@@ -1029,7 +1024,7 @@ mod tests {
                 WASM::Set("x".to_string()),
                 WASM::Branch(0),
             ];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
@@ -1042,53 +1037,56 @@ mod tests {
                 WASM::Set("x".to_string()),
                 WASM::Branch(1),
             ];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
         fn test_else() {
             let vertex = min_cfg::minimal_else();
             let expected = vec![WASM::Else];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
         fn test_end() {
             let vertex = min_cfg::minimal_end();
             let expected = vec![WASM::End(2)];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
         fn test_entry() {
             let vertex = min_cfg::minimal_entry();
             let expected = vec![];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
         fn test_exit() {
             let vertex = min_cfg::minimal_exit();
             let expected = vec![];
-            simple_vertex_check(vertex, &expected);
+            simple_llr_check(vertex, &expected);
         }
     }
 
     #[cfg(test)]
     mod stmts {
+        use super::*;
         #[test]
         fn test_assignment() {
-            panic!()
-        }
-
-        #[test]
-        fn test_let() {
-            panic!()
+            let vertex = min_cfg::minimal_cfg_assn();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Set("x".to_string()),
+            ];
+            simple_llr_check(vertex, &expected);
         }
 
         #[test]
         fn test_return() {
-            panic!()
+            let vertex = min_cfg::minimal_cfg_return();
+            let expected = vec![WASM::Const("1".to_string(), WASMType::i32)];
+            simple_llr_check(vertex, &expected);
         }
     }
 

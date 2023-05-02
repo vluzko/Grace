@@ -70,18 +70,18 @@ impl Type {
     /// Get the name of this type in WAST.
     pub fn wast_name(&self) -> String {
         match self {
-            &Type::i32 => "i32".to_string(),
-            &Type::i64 => "i64".to_string(),
-            &Type::f32 => "f32".to_string(),
-            &Type::f64 => "f64".to_string(),
-            &Type::ui32 => "i32".to_string(),
-            &Type::ui64 => "i64".to_string(),
-            &Type::boolean => "i32".to_string(),
-            &Type::empty => "".to_string(),
-            &Type::Function(ref _args, ref _kwargs, ref ret) => {
+            Type::i32 => "i32".to_string(),
+            Type::i64 => "i64".to_string(),
+            Type::f32 => "f32".to_string(),
+            Type::f64 => "f64".to_string(),
+            Type::ui32 => "i32".to_string(),
+            Type::ui64 => "i64".to_string(),
+            Type::boolean => "i32".to_string(),
+            Type::empty => "".to_string(),
+            Type::Function(ref _args, ref _kwargs, ref ret) => {
                 format!("(result {})", ret.wast_name())
             }
-            &Type::Record(..) => "i32".to_string(),
+            Type::Record(..) => "i32".to_string(),
             _ => panic!(),
         }
     }
@@ -89,20 +89,20 @@ impl Type {
     /// Get the name of this type in WAST.
     pub fn trait_impl_name(&self) -> String {
         match self {
-            &Type::i32 => "i32".to_string(),
-            &Type::i64 => "i64".to_string(),
-            &Type::f32 => "f32".to_string(),
-            &Type::f64 => "f64".to_string(),
-            &Type::ui32 => "ui32".to_string(),
-            &Type::ui64 => "ui64".to_string(),
-            &Type::boolean => "boolean".to_string(),
-            &Type::empty => panic!(),
-            &Type::Function(..) => panic!(),
-            &Type::Record(..) => panic!("TODO: handle trait_impl_name for Record."),
-            &Type::Sum(..) => panic!("TODO: handle trait_impl_name for Sum."),
-            &Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
-            &Type::Named(ref name) => name.name.clone(),
-            &Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
+            Type::i32 => "i32".to_string(),
+            Type::i64 => "i64".to_string(),
+            Type::f32 => "f32".to_string(),
+            Type::f64 => "f64".to_string(),
+            Type::ui32 => "ui32".to_string(),
+            Type::ui64 => "ui64".to_string(),
+            Type::boolean => "boolean".to_string(),
+            Type::empty => panic!(),
+            Type::Function(..) => panic!(),
+            Type::Record(..) => panic!("TODO: handle trait_impl_name for Record."),
+            Type::Sum(..) => panic!("TODO: handle trait_impl_name for Sum."),
+            Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
+            Type::Named(ref name) => name.name.clone(),
+            Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
             _ => panic!(),
         }
     }
@@ -118,15 +118,12 @@ impl Type {
 
     /// Check if a type is a refinement type.
     pub fn is_simple(&self) -> bool {
-        return match self {
-            Type::Refinement(..) => false,
-            _ => true,
-        };
+        !matches!(self, Type::Refinement(..))
     }
 
     /// Check if a type is a primitive type
     pub fn is_primitive(&self) -> bool {
-        return match self {
+        match self {
             Type::i32
             | Type::i64
             | Type::f32
@@ -136,80 +133,68 @@ impl Type {
             | Type::boolean => true,
             Type::Refinement(base_t, ..) => base_t.is_primitive(),
             _ => false,
-        };
+        }
     }
 
     /// Check if a type is a gradual type.
     /// Both pure gradual types and refinement types containing gradual types count.
     pub fn is_gradual(&self) -> bool {
-        return match self {
+        match self {
             Type::Gradual(..) => true,
             Type::Refinement(ref inner_t, _) => inner_t.is_gradual(),
             _ => false,
-        };
+        }
     }
 
     pub fn refined_equal(&self, other: &Type) -> bool {
-        return match self {
+        match self {
             Type::Refinement(ref inner_t, ..) => match other {
                 Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
                 x => inner_t.refined_equal(x),
             },
             _ => self == other,
-        };
+        }
     }
 
     /// Check if it is possible to convert from one type to the other
     pub fn is_compatible(&self, other: &Type) -> bool {
         if self == other {
-            return true;
+            true
         } else {
-            return match &other {
+            match &other {
                 Type::Refinement(ref base, ..) => self.is_compatible(base),
                 Type::Gradual(_) => true,
                 _ => match self {
                     Type::Refinement(ref base, ..) => base.is_compatible(other),
-                    Type::i32 => match other {
-                        Type::i64 | Type::f64 => true,
-                        _ => false,
-                    },
-                    Type::f32 => match other {
-                        Type::f64 => true,
-                        _ => false,
-                    },
+                    Type::i32 => matches!(other, Type::i64 | Type::f64),
+                    Type::f32 => matches!(other, Type::f64),
                     Type::Sum(ref types) => match other {
                         Type::Sum(_) => true,
-                        x => types.contains(&x),
+                        x => types.contains(x),
                     },
                     Type::Undetermined => true,
                     x => match other {
-                        Type::Sum(ref other_types) => other_types.contains(&x),
+                        Type::Sum(ref other_types) => other_types.contains(x),
                         _ => false,
                     },
                 },
-            };
+            }
         }
     }
 
     /// Check if the left type can be converted to the right type with a WASM operator.
     /// Only true for primitive numeric types.
     pub fn has_simple_conversion(&self, other: &Type) -> bool {
-        return match self {
-            Type::i32 => match other {
-                Type::i64 | Type::f64 => true,
-                _ => false,
-            },
-            Type::f32 => match other {
-                Type::f64 => true,
-                _ => false,
-            },
+        match self {
+            Type::i32 => matches!(other, Type::i64 | Type::f64),
+            Type::f32 => matches!(other, Type::f64),
             _ => false,
-        };
+        }
     }
 
     /// The number of words required to store a type in WASM memory.
     pub fn size(&self) -> usize {
-        return match self {
+        match self {
             Type::i32 => 1,
             Type::i64 => 2,
             Type::f32 => 1,
@@ -222,38 +207,38 @@ impl Type {
                 fields.iter().map(|(_, t)| t.size()).sum()
             }
             _ => panic!("Not implemented"),
-        };
+        }
     }
 
     /// Return true if other can be restricted to self.
     pub fn super_type(&self, other: &Type) -> bool {
-        return match self {
+        match self {
             Type::Sum(ref types) => match other {
                 Type::Sum(ref type_vec) => general_utils::vec_subset(type_vec, types),
                 x => types.contains(x),
             },
             _ => false,
-        };
+        }
     }
 
     /// Check if the type has an attribute corresponding to the given identifier
     /// Only Records and Modules have attributes.
     pub fn has_attribute(&self, attribute: &Identifier) -> bool {
-        return match self {
+        match self {
             Type::Record(_, attributes) | Type::Module(_, attributes) => {
-                for (attr_name, _) in attributes {
+                for attr_name in attributes.keys() {
                     if attribute == attr_name {
                         return true;
                     }
                 }
-                return false;
+                false
             }
             _ => false,
-        };
+        }
     }
 
     pub fn resolve_attribute(&self, attribute: &Identifier) -> Result<Type, GraceError> {
-        return match self {
+        match self {
             Type::Record(_, attributes) | Type::Module(_, attributes) => {
                 let mut t = None;
 
@@ -274,20 +259,20 @@ impl Type {
                 "Tried to access attribute {:?} on non-record type {:?}",
                 attribute, self
             ))),
-        };
+        }
     }
 
     pub fn all_attributes(&self) -> HashSet<Identifier> {
-        return match self {
+        match self {
             Type::Record(_, attributes) | Type::Module(_, attributes) => {
                 attributes.keys().cloned().collect::<HashSet<Identifier>>()
             }
             _ => HashSet::new(),
-        };
+        }
     }
 
-    pub fn flatten_to_record(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
-        let mut rec = Type::Record(base.keys().map(|x| x.clone()).collect(), base);
+    pub fn flatten_to_record(idents: &[Identifier], base: BTreeMap<Identifier, Type>) -> Type {
+        let mut rec = Type::Record(base.keys().cloned().collect(), base);
         for ident in idents[1..].iter().rev() {
             let mut map = BTreeMap::new();
             let mut order = vec![];
@@ -295,11 +280,11 @@ impl Type {
             order.push(ident.clone());
             rec = Type::Record(order, map);
         }
-        return rec;
+        rec
     }
 
-    pub fn flatten_to_module(idents: &Vec<Identifier>, base: BTreeMap<Identifier, Type>) -> Type {
-        let mut rec = Type::Module(base.keys().map(|x| x.clone()).collect(), base);
+    pub fn flatten_to_module(idents: &[Identifier], base: BTreeMap<Identifier, Type>) -> Type {
+        let mut rec = Type::Module(base.keys().cloned().collect(), base);
         for ident in idents[1..].iter().rev() {
             let mut map = BTreeMap::new();
             let mut order = vec![];
@@ -307,7 +292,7 @@ impl Type {
             order.push(ident.clone());
             rec = Type::Module(order, map);
         }
-        return rec;
+        rec
     }
 
     pub fn resolve_nested_record(&self, idents: &Vec<Identifier>) -> Result<Type, GraceError> {
@@ -315,11 +300,11 @@ impl Type {
         for ident in idents {
             t = t.resolve_attribute(ident)?;
         }
-        return Ok(t.clone());
+        Ok(t.clone())
     }
 
     pub fn identifier_to_index(&self, ident: &Identifier) -> usize {
-        return match self {
+        match self {
             Type::Record(ref order, ref fields) => {
                 let mut words = 0;
                 for i in order {
@@ -333,22 +318,22 @@ impl Type {
                 words
             }
             _ => panic!(),
-        };
+        }
     }
 
     pub fn get_constructor_type(&self) -> (Vec<(Identifier, Type)>, Type) {
-        return match &self {
+        match &self {
             Type::Record(_, ref fields) => {
                 let args: Vec<(Identifier, Type)> = fields.clone().into_iter().collect();
                 (args, Type::i32)
             }
             _ => panic!(),
-        };
+        }
     }
 
     /// Add a constraint if the type is a refinement. Do nothing otherwise.
     pub fn add_constraint(&self, name: &Identifier, expr: &Node<Expr>) -> Type {
-        return match self {
+        match self {
             Type::Refinement(ref base, ref constraints) => {
                 let mut new_constraints = constraints.clone();
                 new_constraints.push(Refinement {
@@ -368,7 +353,7 @@ impl Type {
                 Type::Refinement(base.clone(), new_constraints)
             }
             x => x.clone(),
-        };
+        }
     }
 }
 
@@ -377,12 +362,11 @@ impl Type {
     /// Construct a module type from a type map.
     pub fn module_from_map(map: BTreeMap<Identifier, Type>) -> Type {
         let keys = map.keys().cloned().collect();
-        let module_type = Type::Module(keys, map);
-        return module_type;
+        Type::Module(keys, map)
     }
 
     /// Construct an argumentless function type.
     pub fn func_no_args(return_type: Type) -> Type {
-        return Type::Function(vec![], vec![], Box::new(return_type));
+        Type::Function(vec![], vec![], Box::new(return_type))
     }
 }

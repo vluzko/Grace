@@ -45,9 +45,9 @@ impl<'a> PosStr<'a> {
 
     pub fn new_at(input: &'a [u8], offset: usize, line: u32, column: u32) -> Self {
         PosStr {
-            offset: offset,
-            line: line,
-            column: column,
+            offset,
+            line,
+            column,
             slice: input,
         }
     }
@@ -79,24 +79,24 @@ impl<'a> fmt::Debug for PosStr<'a> {
 
 impl<'a> From<&'a [u8]> for PosStr<'a> {
     fn from(input: &'a [u8]) -> Self {
-        return PosStr {
+        PosStr {
             offset: 0,
             line: 0,
             column: 0,
             slice: input,
-        };
+        }
     }
 }
 
 impl<'a> From<&'a str> for PosStr<'a> {
     fn from(input: &'a str) -> Self {
-        return PosStr::new(input.as_bytes());
+        PosStr::new(input.as_bytes())
     }
 }
 
 impl<'a> From<&'a String> for PosStr<'a> {
     fn from(input: &'a String) -> Self {
-        return PosStr::new(input.as_bytes());
+        PosStr::new(input.as_bytes())
     }
 }
 
@@ -211,21 +211,19 @@ impl<'a, 'b> Compare<PosStr<'b>> for PosStr<'a> {
 
 impl<'a> AtEof for PosStr<'a> {
     fn at_eof(&self) -> bool {
-        return self.slice.at_eof();
+        self.slice.at_eof()
     }
 }
 
 impl<'a> InputTake for PosStr<'a> {
     fn take(&self, count: usize) -> Self {
         let new_slice = self.slice.take(count);
-        let new_pos_str = PosStr {
+        PosStr {
             offset: self.offset,
             line: self.line,
             column: self.column,
             slice: new_slice,
-        };
-
-        return new_pos_str;
+        }
     }
 
     fn take_split(&self, count: usize) -> (Self, Self) {
@@ -241,7 +239,7 @@ impl<'a> InputTake for PosStr<'a> {
         let next_column = if number_of_newlines == 0 {
             self.column + next_offset as u32
         } else {
-            match memchr::memrchr(b'\n', &first_slice) {
+            match memchr::memrchr(b'\n', first_slice) {
                 Some(last_newline_position) => (next_offset - last_newline_position) as u32,
                 None => 0, // unreachable
             }
@@ -254,7 +252,7 @@ impl<'a> InputTake for PosStr<'a> {
             slice: second_slice,
         };
 
-        return (second_pos_str, first_pos_str);
+        (second_pos_str, first_pos_str)
     }
 }
 
@@ -285,7 +283,7 @@ impl<'a> InputTakeAtPosition for PosStr<'a> {
 
 impl<'a> Offset for PosStr<'a> {
     fn offset(&self, second: &Self) -> usize {
-        return self.slice.offset(second.slice);
+        self.slice.offset(second.slice)
     }
 }
 

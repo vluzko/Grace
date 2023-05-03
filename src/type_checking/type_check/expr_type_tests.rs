@@ -100,8 +100,8 @@ fn type_check_unary_exprs_expect_fail() {
     let operand = Node::from(7);
     let operator = UnaryOperator::Not;
     let expr = Node::from(Expr::UnaryExpr {
-        operator: operator,
-        operand: Box::new(operand.clone()),
+        operator,
+        operand: Box::new(operand),
     });
     fail_check_expr(context, expr);
 }
@@ -171,7 +171,7 @@ fn type_check_attribute_access() {
         fields: vec![Node::from(4)],
     });
     let expr = Node::from(Expr::AttributeAccess {
-        base: Box::new(base.clone()),
+        base: Box::new(base),
         attribute: Identifier::from("a"),
     });
     check_expr(new_context, expr, Type::i32);
@@ -183,8 +183,8 @@ fn type_check_nonexistent_attribute_access() {
     let base = Node::from(0);
     let attribute = Identifier::from("string");
     let expr = Node::from(Expr::AttributeAccess {
-        base: Box::new(base.clone()),
-        attribute: attribute,
+        base: Box::new(base),
+        attribute,
     });
     fail_check_expr(context, expr);
 }
@@ -219,7 +219,7 @@ fn type_check_trait_access() {
         fields: vec![Node::from(4)],
     });
     let expr = Node::from(Expr::AttributeAccess {
-        base: Box::new(base.clone()),
+        base: Box::new(base),
         attribute: Identifier::from("test_funcname"),
     });
     check_expr(
@@ -254,7 +254,7 @@ fn type_check_module_access_fail() {
 
     // Add module type to context
     let func_type = Type::func_no_args(Type::i32);
-    let type_map = btreemap! {Identifier::from("a") => func_type.clone()};
+    let type_map = btreemap! {Identifier::from("a") => func_type};
     let module_type = Type::module_from_map(type_map);
     let id = general_utils::get_next_id();
     context.add_type(id, module_type);

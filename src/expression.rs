@@ -10,6 +10,7 @@ use itertools::join;
 use general_utils;
 use type_checking::types::{Trait, Type};
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 /// AST node.
 /// Keeps track of line, column, and scope information.
 #[derive(Debug, Clone, Eq, Hash)]
@@ -29,15 +30,15 @@ pub struct Node<T> {
 
 impl<T> Node<T> {
     pub fn replace<S>(&self, new_data: S) -> Node<S> {
-        return Node {
+        Node {
             id: self.id,
             start_line: self.start_line,
             start_col: self.start_col,
             end_line: self.end_line,
             end_col: self.end_col,
             data: new_data,
-            scope: self.scope.clone(),
-        };
+            scope: self.scope,
+        }
     }
 }
 
@@ -53,6 +54,7 @@ pub struct Module {
     pub trait_implementations: Vec<(Identifier, Identifier, Vec<Node<Stmt>>)>,
 }
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Clone, Eq, Hash)]
 pub struct Import {
     pub id: usize,
@@ -116,7 +118,7 @@ pub enum Stmt {
 
 impl Stmt {
     pub fn get_name(&self) -> Identifier {
-        return match self {
+        match self {
             Stmt::AssignmentStmt { ref name, .. } => name.clone(),
             Stmt::LetStmt { ref name, .. } => name.clone(),
             Stmt::FunctionDecStmt { ref name, .. } => name.clone(),
@@ -125,7 +127,7 @@ impl Stmt {
                 "get_name called on an enum value that doesn't have a name: {:?}",
                 x
             ),
-        };
+        }
     }
 }
 
@@ -160,6 +162,7 @@ pub enum Expr {
     },
     Index {
         base: Box<Node<Expr>>,
+        #[allow(clippy::type_complexity)]
         slices: Vec<(Option<Node<Expr>>, Option<Node<Expr>>, Option<Node<Expr>>)>,
     },
     ModuleAccess(usize, Vec<Identifier>),
@@ -176,7 +179,7 @@ pub enum Expr {
 
 impl Expr {
     pub fn flatten_to_module(&self) -> String {
-        return match self {
+        match self {
             Expr::IdentifierExpr(ref ident) => ident.name.clone(),
             Expr::AttributeAccess {
                 ref base,
@@ -186,7 +189,7 @@ impl Expr {
                 format!("{}.{}", base_str, attribute.name)
             }
             _ => panic!(),
-        };
+        }
     }
 }
 
@@ -259,7 +262,7 @@ pub struct Identifier {
 }
 
 pub fn wrap<T>(data: T) -> Box<Node<T>> {
-    return Box::new(Node::from(data));
+    Box::new(Node::from(data))
 }
 
 /// Various helpful constructors for `Expr` and `Stmt`.
@@ -272,7 +275,7 @@ pub mod constructors {
         where
             Node<Expr>: From<T>,
         {
-            return Stmt::IfStmt {
+            Stmt::IfStmt {
                 condition: Node::from(condition),
                 block: Node {
                     id: general_utils::get_next_id(),
@@ -284,7 +287,7 @@ pub mod constructors {
                     scope: 0,
                 },
                 else_block: None,
-            };
+            }
         }
 
         /// Construct an assignment statement from an identifier and an expression.
@@ -293,10 +296,10 @@ pub mod constructors {
             Identifier: From<T>,
             Expr: From<S>,
         {
-            return Stmt::AssignmentStmt {
+            Stmt::AssignmentStmt {
                 name: Identifier::from(name),
                 expression: Node::from(Expr::from(expr)),
-            };
+            }
         }
 
         /// Construct a no-argument function declaration from a name, a block, and a return type.
@@ -304,13 +307,13 @@ pub mod constructors {
         where
             Identifier: From<T>,
         {
-            return Stmt::FunctionDecStmt {
+            Stmt::FunctionDecStmt {
                 name: Identifier::from(name),
                 args: vec![],
                 kwargs: vec![],
                 block: Node::from(block),
                 return_type: ret,
-            };
+            }
         }
 
         /// Construct a return statement from an expression.
@@ -318,7 +321,7 @@ pub mod constructors {
         where
             Expr: From<T>,
         {
-            return Stmt::ReturnStmt(Node::from(Expr::from(expr)));
+            Stmt::ReturnStmt(Node::from(Expr::from(expr)))
         }
     }
 
@@ -328,52 +331,52 @@ pub mod constructors {
             Identifier: From<T>,
             T: Clone,
         {
-            return Expr::AttributeAccess {
+            Expr::AttributeAccess {
                 base: wrap(self.clone()),
                 attribute: Identifier::from(name.clone()),
-            };
+            }
         }
 
         /// Create an empty call expression.
         pub fn call(&self) -> Expr {
-            return Expr::FunctionCall {
+            Expr::FunctionCall {
                 function: wrap(self.clone()),
                 args: vec![],
                 kwargs: vec![],
-            };
+            }
         }
 
         /// Create a call with the passed arguments.
         pub fn callw(&self, args: Vec<Node<Expr>>) -> Expr {
-            return Expr::FunctionCall {
+            Expr::FunctionCall {
                 function: wrap(self.clone()),
-                args: args,
+                args,
                 kwargs: vec![],
-            };
+            }
         }
     }
 
     impl Identifier {
         /// Create a LetStmt assigning `expr` to `self`.
         pub fn simple_let(&self, expr: Expr) -> Stmt {
-            return Stmt::LetStmt {
+            Stmt::LetStmt {
                 name: self.clone(),
                 type_annotation: None,
                 expression: Node::from(expr),
-            };
+            }
         }
 
         /// Create an AssignmentStmt assigning `expr` to `self`.
         pub fn assn(&self, expr: Expr) -> Stmt {
-            return Stmt::AssignmentStmt {
+            Stmt::AssignmentStmt {
                 name: self.clone(),
                 expression: Node::from(expr),
-            };
+            }
         }
 
         /// Create an `IdentifierExpr` referring to `self`.
         pub fn as_expr(&self) -> Expr {
-            return Expr::IdentifierExpr(self.clone());
+            Expr::IdentifierExpr(self.clone())
         }
     }
 }
@@ -390,16 +393,14 @@ pub mod rust_trait_impls {
         T: PartialEq,
     {
         fn eq(&self, other: &Node<T>) -> bool {
-            return self.data == other.data && self.scope == other.scope;
+            self.data == other.data && self.scope == other.scope
         }
     }
 
     /// We don't compare the ids of import statements.
     impl PartialEq for Import {
         fn eq(&self, other: &Import) -> bool {
-            return self.path == other.path
-                && self.alias == other.alias
-                && self.values == other.values;
+            self.path == other.path && self.alias == other.alias && self.values == other.values
         }
     }
 
@@ -474,7 +475,6 @@ pub mod rust_trait_impls {
                         UnaryOperator::Negative => "-",
                         UnaryOperator::Not => "not ",
                         UnaryOperator::BitNot => "~",
-                        _ => panic!(),
                     }
                 )
             }
@@ -490,7 +490,7 @@ pub mod rust_trait_impls {
 
         impl<T> From<(T, u32, u32, u32, u32)> for Node<T> {
             fn from(input: (T, u32, u32, u32, u32)) -> Self {
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: input.1,
                     start_col: input.2,
@@ -498,13 +498,13 @@ pub mod rust_trait_impls {
                     end_col: input.4,
                     data: input.0,
                     scope: 0,
-                };
+                }
             }
         }
 
         impl<T> From<T> for Node<T> {
             fn from(input: T) -> Self {
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -512,14 +512,14 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: input,
                     scope: 0,
-                };
+                }
             }
         }
 
         impl From<bool> for Node<Expr> {
             fn from(input: bool) -> Self {
                 let expr = Expr::from(input);
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -527,14 +527,14 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: expr,
                     scope: 0,
-                };
+                }
             }
         }
 
         impl<'a> From<&'a str> for Node<Expr> {
             fn from(input: &'a str) -> Self {
                 let expr: Expr = Expr::from(input);
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -542,14 +542,14 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: expr,
                     scope: 0,
-                };
+                }
             }
         }
 
         impl From<i32> for Node<Expr> {
             fn from(input: i32) -> Self {
                 let expr: Expr = Expr::from(input);
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -557,13 +557,13 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: expr,
                     scope: 0,
-                };
+                }
             }
         }
         impl From<i64> for Node<Expr> {
             fn from(input: i64) -> Self {
                 let expr: Expr = Expr::from(input);
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -571,13 +571,13 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: expr,
                     scope: 0,
-                };
+                }
             }
         }
         impl From<f64> for Node<Expr> {
             fn from(input: f64) -> Self {
                 let expr: Expr = Expr::from(input);
-                return Node {
+                Node {
                     id: general_utils::get_next_id(),
                     start_line: 0,
                     start_col: 0,
@@ -585,56 +585,56 @@ pub mod rust_trait_impls {
                     end_col: 0,
                     data: expr,
                     scope: 0,
-                };
+                }
             }
         }
 
         /// From for Expr
         impl<'a> From<&'a str> for Expr {
             fn from(input: &'a str) -> Self {
-                return Expr::IdentifierExpr(Identifier::from(input));
+                Expr::IdentifierExpr(Identifier::from(input))
             }
         }
         impl<'a> From<&'a [u8]> for Expr {
             fn from(input: &'a [u8]) -> Self {
-                return Expr::IdentifierExpr(Identifier::from(input));
+                Expr::IdentifierExpr(Identifier::from(input))
             }
         }
         impl<'a> From<PosStr<'a>> for Expr {
             fn from(input: PosStr<'a>) -> Self {
-                return Expr::from(input.slice);
+                Expr::from(input.slice)
             }
         }
         impl From<bool> for Expr {
             fn from(input: bool) -> Self {
-                return Expr::Bool(input);
+                Expr::Bool(input)
             }
         }
         impl From<i32> for Expr {
             fn from(input: i32) -> Self {
-                return Expr::Int(input.to_string());
+                Expr::Int(input.to_string())
             }
         }
         impl From<i64> for Expr {
             fn from(input: i64) -> Self {
-                return Expr::Int(input.to_string());
+                Expr::Int(input.to_string())
             }
         }
         impl From<f64> for Expr {
             fn from(input: f64) -> Self {
-                return Expr::Float(input.to_string());
+                Expr::Float(input.to_string())
             }
         }
         impl From<Identifier> for Expr {
             fn from(input: Identifier) -> Self {
-                return Expr::IdentifierExpr(input.clone());
+                Expr::IdentifierExpr(input)
             }
         }
 
         /// From for Assignment
         impl<'a> From<&'a str> for Assignment {
             fn from(input: &'a str) -> Self {
-                return match input {
+                match input {
                     "=" => Assignment::Normal,
                     "+=" => Assignment::Add,
                     "-=" => Assignment::Sub,
@@ -651,12 +651,12 @@ pub mod rust_trait_impls {
                         // TODO: Log
                         panic!("Bad input to Assignment::from<&str>: {}", input)
                     }
-                };
+                }
             }
         }
         impl<'a> From<&'a [u8]> for Assignment {
             fn from(input: &'a [u8]) -> Self {
-                return match input {
+                match input {
                     b"=" => Assignment::Normal,
                     b"+=" => Assignment::Add,
                     b"-=" => Assignment::Sub,
@@ -672,19 +672,19 @@ pub mod rust_trait_impls {
                     _ => {
                         panic!("Bad input to Assignment::from<&[u8]>: {:?}", input)
                     }
-                };
+                }
             }
         }
         impl<'a> From<PosStr<'a>> for Assignment {
             fn from(input: PosStr<'a>) -> Self {
-                return Assignment::from(input.slice);
+                Assignment::from(input.slice)
             }
         }
 
         /// From for ComparisonOperator
         impl<'a> From<&'a [u8]> for ComparisonOperator {
             fn from(input: &'a [u8]) -> Self {
-                return match input {
+                match input {
                     b"==" => ComparisonOperator::Equal,
                     b">=" => ComparisonOperator::GreaterEqual,
                     b"<=" => ComparisonOperator::LessEqual,
@@ -692,19 +692,19 @@ pub mod rust_trait_impls {
                     b"<" => ComparisonOperator::Less,
                     b"!=" => ComparisonOperator::Unequal,
                     _ => panic!(),
-                };
+                }
             }
         }
         impl<'a> From<PosStr<'a>> for ComparisonOperator {
             fn from(input: PosStr<'a>) -> Self {
-                return ComparisonOperator::from(input.slice);
+                ComparisonOperator::from(input.slice)
             }
         }
 
         /// From for BinaryOperator
         impl<'a> From<&'a str> for BinaryOperator {
             fn from(input: &'a str) -> Self {
-                return match input {
+                match input {
                     "or" => BinaryOperator::Or,
                     "and" => BinaryOperator::And,
                     "xor" => BinaryOperator::Xor,
@@ -729,12 +729,12 @@ pub mod rust_trait_impls {
                         // TODO: Log
                         panic!("Bad input to BinaryOperator::from<&str>: {}", input)
                     }
-                };
+                }
             }
         }
         impl<'a> From<&'a [u8]> for BinaryOperator {
             fn from(input: &'a [u8]) -> Self {
-                return match input {
+                match input {
                     b"or" => BinaryOperator::Or,
                     b"and" => BinaryOperator::And,
                     b"xor" => BinaryOperator::Xor,
@@ -758,50 +758,50 @@ pub mod rust_trait_impls {
                     _ => {
                         panic!("Bad input to BinaryOperator::from<&[u8]>: {:?}", input)
                     }
-                };
+                }
             }
         }
         impl<'a> From<PosStr<'a>> for BinaryOperator {
             fn from(input: PosStr<'a>) -> Self {
-                return BinaryOperator::from(input.slice);
+                BinaryOperator::from(input.slice)
             }
         }
 
         /// From for UnaryOperator
         impl<'a> From<&'a str> for UnaryOperator {
             fn from(input: &'a str) -> Self {
-                return match input {
+                match input {
                     "not" => UnaryOperator::Not,
                     "+" => UnaryOperator::Positive,
                     "-" => UnaryOperator::Negative,
                     "~" => UnaryOperator::BitNot,
                     _ => panic!(),
-                };
+                }
             }
         }
         impl<'a> From<&'a [u8]> for UnaryOperator {
             fn from(input: &'a [u8]) -> Self {
-                return match input {
+                match input {
                     b"not" => UnaryOperator::Not,
                     b"+" => UnaryOperator::Positive,
                     b"-" => UnaryOperator::Negative,
                     b"~" => UnaryOperator::BitNot,
                     _ => panic!("Bad input to UnaryOperator::from<&[u8]>: {:?}", input),
-                };
+                }
             }
         }
         impl<'a> From<PosStr<'a>> for UnaryOperator {
             fn from(input: PosStr<'a>) -> Self {
-                return UnaryOperator::from(input.slice);
+                UnaryOperator::from(input.slice)
             }
         }
 
         /// From for Identifier
         impl<'a> From<&'a str> for Identifier {
             fn from(input: &'a str) -> Self {
-                return Identifier {
+                Identifier {
                     name: input.to_string(),
-                };
+                }
             }
         }
 
@@ -811,23 +811,21 @@ pub mod rust_trait_impls {
                     Ok(v) => v,
                     _ => panic!(),
                 };
-                return Identifier {
+                Identifier {
                     name: val.to_string(),
-                };
+                }
             }
         }
 
         impl<'a> From<PosStr<'a>> for Identifier {
             fn from(input: PosStr<'a>) -> Self {
-                return Identifier::from(input.slice);
+                Identifier::from(input.slice)
             }
         }
 
         impl From<String> for Identifier {
             fn from(input: String) -> Self {
-                return Identifier {
-                    name: input.clone(),
-                };
+                Identifier { name: input }
             }
         }
     }

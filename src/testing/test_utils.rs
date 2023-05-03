@@ -25,17 +25,17 @@ pub(crate) fn add_function_to_context(
         .enumerate()
         .map(|(i, x)| (Identifier::from(format!("kwarg{}", i)), x))
         .collect();
-    let function_type = Type::Function(args.clone(), kwargs.clone(), Box::new(ret_type.clone()));
+    let function_type = Type::Function(args.clone(), kwargs, Box::new(ret_type.clone()));
     let null_function = wrap(Stmt::FunctionDecStmt {
         name: func_name.clone(),
-        args: args,
+        args,
         kwargs: vec![],
         block: Node::from(Block { statements: vec![] }),
         return_type: ret_type,
     });
     context.append_declaration(0, &func_name, &null_function);
     context.add_type(null_function.id, function_type);
-    return (context, null_function.id);
+    (context, null_function.id)
 }
 
 /// Add a struct of the specified type and name to the context.
@@ -50,19 +50,19 @@ pub(crate) fn add_struct_to_context(
     // Create struct declaration
     let struct_dec = Node::from(Stmt::StructDec {
         name: name.clone(),
-        fields: fields,
+        fields,
     });
 
     // Add type to context
     let record_type = Type::Record(struct_t.keys().cloned().collect(), struct_t);
-    context.define_type(name.clone(), record_type.clone());
+    context.define_type(name.clone(), record_type);
     context.add_type(struct_dec.id, Type::Named(name.clone()));
 
     // Add it to the context
     let top_scope = context.get_mut_scope(context.root_id).unwrap();
     top_scope.append_declaration(&name, &Box::new(struct_dec));
 
-    return context;
+    context
 }
 
 pub(crate) fn add_identifier_to_context(
@@ -79,5 +79,5 @@ pub(crate) fn add_identifier_to_context(
     let (mut new_c, _) = stmt.add_to_context(scoped_context).unwrap();
     new_c.append_declaration(0, &Identifier::from(ident_name), &Box::new(stmt));
 
-    return new_c;
+    new_c
 }

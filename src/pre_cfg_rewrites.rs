@@ -47,7 +47,7 @@ impl TypeRewritable<Node<Module>> for Node<Module> {
             traits: self.data.traits,
             trait_implementations: new_impls,
         };
-        return Node {
+        Node {
             id: self.id,
             start_line: self.start_line,
             start_col: self.start_col,
@@ -55,7 +55,7 @@ impl TypeRewritable<Node<Module>> for Node<Module> {
             end_col: self.end_col,
             data: new_data,
             scope: self.scope,
-        };
+        }
     }
 }
 
@@ -85,12 +85,12 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
                 Stmt::FunctionDecStmt { ref name, .. }
                 | Stmt::LetStmt { ref name, .. }
                 | Stmt::StructDec { ref name, .. } => {
-                    context.append_declaration(self.scope, name, &stmt);
+                    context.append_declaration(self.scope, name, stmt);
                 }
                 _ => {}
             };
         }
-        return new_block;
+        new_block
     }
 }
 
@@ -134,10 +134,7 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 block,
                 else_block,
             } => {
-                let new_else_block = match else_block {
-                    None => None,
-                    Some(block) => Some(block.type_based_rewrite(context)),
-                };
+                let new_else_block = else_block.map(|x| x.type_based_rewrite(context));
                 Stmt::IfStmt {
                     condition: condition.type_based_rewrite(context),
                     block: block.type_based_rewrite(context),
@@ -201,7 +198,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     if !left_type.is_primitive() {
                         let func_expr = Expr::TraitAccess {
                             base: Box::new(new_left),
-                            trait_name: trait_name,
+                            trait_name,
                             attribute: method_name,
                         };
                         let new_node = Node {
@@ -242,12 +239,11 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     // Set up the function call
                     let args = vec![op_ptr_expr, new_left, new_right];
                     let kwargs = vec![];
-                    let func_call = Expr::FunctionCall {
+                    Expr::FunctionCall {
                         function: func_name_expr,
                         args,
                         kwargs,
-                    };
-                    func_call
+                    }
                 }
             }
             Expr::UnaryExpr { operator, operand } => {
@@ -262,7 +258,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                     if !operand_type.is_primitive() {
                         let func_expr = Expr::TraitAccess {
                             base: Box::new(new_operand),
-                            trait_name: trait_name,
+                            trait_name,
                             attribute: method_name,
                         };
                         let new_node = Node {
@@ -320,12 +316,12 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                 match trait_info {
                     Some(trait_name) => Expr::TraitAccess {
                         base: Box::new(rewritten_base),
-                        trait_name: trait_name,
-                        attribute: attribute,
+                        trait_name,
+                        attribute,
                     },
                     None => Expr::AttributeAccess {
                         base: Box::new(rewritten_base),
-                        attribute: attribute,
+                        attribute,
                     },
                 }
             }
@@ -338,7 +334,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
         };
 
         // We can't use replace because self.data was already moved.
-        return Node {
+        Node {
             id: self.id,
             start_line: self.start_line,
             start_col: self.start_col,
@@ -346,7 +342,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
             end_col: self.end_col,
             data: new_data,
             scope: self.scope,
-        };
+        }
     }
 }
 
@@ -421,10 +417,10 @@ mod test {
 
         // Helper method to extract a particular statement from a function body.
         fn extract_stmt_from_body(function: &Node<Stmt>, index: usize) -> Node<Stmt> {
-            return match &function.data {
+            match &function.data {
                 Stmt::FunctionDecStmt { block, .. } => (*block.data.statements[index]).clone(),
                 _ => panic!(),
-            };
+            }
         }
 
         #[test]

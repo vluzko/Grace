@@ -300,7 +300,7 @@ impl Type {
         for ident in idents {
             t = t.resolve_attribute(ident)?;
         }
-        Ok(t.clone())
+        Ok(t)
     }
 
     pub fn identifier_to_index(&self, ident: &Identifier) -> usize {
@@ -311,7 +311,7 @@ impl Type {
                     if i == ident {
                         break;
                     } else {
-                        let size = fields.get(&i).unwrap().size();
+                        let size = fields.get(i).unwrap().size();
                         words += size;
                     }
                 }

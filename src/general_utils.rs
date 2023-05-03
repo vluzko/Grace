@@ -13,8 +13,7 @@ where
     T: Clone,
 {
     let int = a.intersection(b);
-    let cloned = int.into_iter().map(|x| x.clone()).collect();
-    return cloned;
+    int.into_iter().cloned().collect()
 }
 
 /// Take the union of two hashsets, cloning elements from both and consuming neither set.
@@ -25,8 +24,7 @@ where
     T: Clone,
 {
     let union = a.union(b);
-    let cloned = union.into_iter().map(|x| x.clone()).collect();
-    return cloned;
+    union.into_iter().cloned().collect()
 }
 
 /// Take the union of two hashsets, moving elements out of the second. Both original sets are consumed.
@@ -38,7 +36,7 @@ where
     for element in b.into_iter() {
         a.insert(element);
     }
-    return a;
+    a
 }
 
 /// Take the union of two btreesets, moving elements out of the second. Both original sets are consumed.
@@ -50,7 +48,7 @@ where
     for element in b.into_iter() {
         a.insert(element);
     }
-    return a;
+    a
 }
 
 /// Take the union of two BTreeSets, consuming both.
@@ -62,26 +60,26 @@ where
     for element in b.into_iter() {
         a.insert(element);
     }
-    return a;
+    a
 }
 
 /// Take the union of two vectors, without consuming either.
-pub fn vec_c_union<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T>
+pub fn vec_c_union<T>(a: &[T], b: &[T]) -> Vec<T>
 where
     T: Eq,
     T: Clone,
 {
-    let mut new_vec: Vec<T> = a.clone();
+    let mut new_vec: Vec<T> = a.to_vec();
     for element in b.iter() {
         if !new_vec.contains(element) {
             new_vec.push((*element).clone());
         }
     }
-    return new_vec;
+    new_vec
 }
 
 /// Take the intersection of two vectors, without consuming either.
-pub fn vec_c_int<T>(a: &Vec<T>, b: &Vec<T>) -> Vec<T>
+pub fn vec_c_int<T>(a: &[T], b: &[T]) -> Vec<T>
 where
     T: Eq,
     T: Clone,
@@ -92,13 +90,13 @@ where
             new_vec.push((*element).clone());
         }
     }
-    return new_vec;
+    new_vec
 }
 
 /// Append vec `b` to vec `a` and return the result, consuming both.
 pub fn join<T>(mut a: Vec<T>, mut b: Vec<T>) -> Vec<T> {
     a.append(&mut b);
-    return a;
+    a
 }
 
 /// Unzip a vector of two tuples into a tuple of vectors.
@@ -109,10 +107,10 @@ pub fn unzip_vec<S, T>(a: Vec<(S, T)>) -> (Vec<S>, Vec<T>) {
         ss.push(s);
         ts.push(t);
     }
-    return (ss, ts);
+    (ss, ts)
 }
 
-pub fn vec_subset<T>(a: &Vec<T>, b: &Vec<T>) -> bool
+pub fn vec_subset<T>(a: &[T], b: &[T]) -> bool
 where
     T: Eq,
     T: Clone,
@@ -122,7 +120,7 @@ where
             return false;
         }
     }
-    return true;
+    true
 }
 
 pub fn extend_map<K, V>(mut a: HashMap<K, V>, b: HashMap<K, V>) -> HashMap<K, V>
@@ -134,6 +132,8 @@ where
     V: Debug,
 {
     for (k, v) in b.into_iter() {
+        // clippy is wrong, we can't refactor this easily.
+        #[allow(clippy::map_entry)]
         if a.contains_key(&k) {
             if a.get(&k) != Some(&v) {
                 panic!("Duplicate key found:\n {:?}\n {:?}", v, a.get(&k));
@@ -142,7 +142,7 @@ where
             a.insert(k, v);
         }
     }
-    return a;
+    a
 }
 
 macro_rules! generate_counter {
@@ -184,32 +184,29 @@ static MODULE_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static LOCAL_VAR_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
 static GRADUAL_TYPE_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-// Return a unique node ID.
+// Generate a globally unique node ID.
 pub fn get_next_id() -> usize {
-    let next_id = NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as usize;
+    NODE_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
-/// Return a unique scope ID.
+/// Generate a globally unique scope ID.
 pub fn get_next_scope_id() -> usize {
-    let next_id = SCOPE_ID_COUNTER::next();
-    return next_id as usize;
+    SCOPE_ID_COUNTER::next()
 }
 
-/// Return a unique module ID.
+/// Generate a globally unique module ID.
 pub fn get_next_module_id() -> usize {
-    let next_id = MODULE_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as usize;
+    MODULE_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
+/// Generate a globally unique variable ID.
 pub fn get_next_var() -> usize {
-    let next_id = LOCAL_VAR_ID_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as usize;
+    LOCAL_VAR_ID_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
+/// Generate a globally unique gradual type ID.
 pub fn get_next_grad() -> usize {
-    let next_id = GRADUAL_TYPE_COUNTER.fetch_add(1, Ordering::SeqCst);
-    return next_id as usize;
+    GRADUAL_TYPE_COUNTER.fetch_add(1, Ordering::SeqCst)
 }
 
 #[cfg(test)]

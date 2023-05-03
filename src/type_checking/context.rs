@@ -10,7 +10,7 @@ use type_checking::types::{Trait, Type};
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
-    return Trait {
+    Trait {
         name: trait_name,
         functions: hashmap! {
             method_name => Type::Function(
@@ -21,12 +21,13 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
         },
-    };
+    }
 }
 
+#[allow(dead_code)]
 /// Generate a single unary trait.
 fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
-    return Trait {
+    Trait {
         name: trait_name,
         functions: hashmap! {
             method_name => Type::Function(
@@ -36,11 +37,11 @@ fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
                 Box::new(Type::self_type(Box::new(Type::Undetermined)))
             )
         },
-    };
+    }
 }
 
 fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
-    return vec![
+    vec![
         ("Add", "add"),
         ("Sub", "sub"),
         ("Mult", "mult"),
@@ -48,32 +49,32 @@ fn builtin_numeric() -> Vec<(Identifier, Identifier)> {
     ]
     .into_iter()
     .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
-    .collect();
+    .collect()
 }
 
 fn builtin_binary_bool() -> Vec<(Identifier, Identifier)> {
-    return vec![("And", "and"), ("Or", "or")]
+    vec![("And", "and"), ("Or", "or")]
         .into_iter()
         .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
-        .collect();
+        .collect()
 }
 
 fn builtin_comparison() -> Vec<(Identifier, Identifier)> {
-    return vec![
+    vec![
         BinaryOperator::Equal.get_builtin_trait(),
         BinaryOperator::Unequal.get_builtin_trait(),
         BinaryOperator::Greater.get_builtin_trait(),
         BinaryOperator::Less.get_builtin_trait(),
         BinaryOperator::GreaterEqual.get_builtin_trait(),
         BinaryOperator::LessEqual.get_builtin_trait(),
-    ];
+    ]
 }
 
 fn builtin_unary() -> Vec<(Identifier, Identifier)> {
-    return vec![("Not", "not")]
+    vec![("Not", "not")]
         .into_iter()
         .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
-        .collect();
+        .collect()
 }
 
 /// Generate all the builtin binary traits.
@@ -93,16 +94,18 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
         let trt = binary_trait(tn.clone(), mn);
         traits.insert(tn, trt);
     }
-    return traits;
+    traits
 }
 
+#[allow(dead_code)]
+/// Generate all builtin unary traits.
 fn builtin_unary_traits() -> HashMap<Identifier, Trait> {
     let mut map = HashMap::new();
     for (tn, mn) in builtin_unary().into_iter() {
         let tr = unary_trait(tn.clone(), mn);
-        map.insert(Identifier::from(tn), tr);
+        map.insert(tn, tr);
     }
-    return map;
+    map
 }
 
 /// Generate all the builtin trait implementations
@@ -164,30 +167,30 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
         }
     }
 
-    return impls;
+    impls
 }
 
 /// The full scoping and typing context for a compilation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Context {
-    // The ID of the root scope of the context.
+    /// The ID of the root scope of the context.
     pub root_id: usize,
-    // A map from Scope IDs to Scopes.
+    /// A map from Scope IDs to Scopes.
     pub scopes: HashMap<usize, Scope>,
-    // A map from Node IDs to Scope IDs. Each node that modifies scope
-    // maps to the scope it's contained in.
+    /// A map from Node IDs to Scope IDs. Each node that modifies scope
+    /// maps to the scope it's contained in.
     pub containing_scopes: HashMap<usize, usize>,
-    // A map from Node IDs to types.
+    /// A map from Node IDs to types.
     pub type_map: HashMap<usize, Type>,
-    // The user-defined types
+    /// The user-defined types
     pub defined_types: HashMap<Identifier, Type>,
-    // A vector containing all the gradual types in context.
+    /// A vector containing all the gradual types in context.
     pub gradual_constraints: HashMap<usize, Vec<Type>>,
-    // A vector of all the traits in context.
+    /// A vector of all the traits in context.
     pub traits: HashMap<Identifier, Trait>,
-    // The set of pairs (trait_name, type) available, where type implements trait_name
-    // (or the trait corresponding to trait_name, rather).
-    // The value is the map from method implementations to types.
+    /// The set of pairs (trait_name, type) available, where type implements trait_name
+    /// (or the trait corresponding to trait_name, rather).
+    /// The value is the map from method implementations to types.
     pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Type>>,
 }
 
@@ -199,7 +202,7 @@ impl Context {
         let mut init_scopes = HashMap::new();
         let id = 0;
         init_scopes.insert(id, empty);
-        let context = Context {
+        Context {
             root_id: id,
             scopes: init_scopes,
             containing_scopes: HashMap::new(),
@@ -208,8 +211,7 @@ impl Context {
             gradual_constraints: HashMap::new(),
             traits: builtin_binary_traits(),
             trait_implementations: builtin_trait_implementations(),
-        };
-        return context;
+        }
     }
 
     /// Create a context that contains only an empty scope.
@@ -217,16 +219,16 @@ impl Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scopes = HashMap::new();
         scopes.insert(root_id, Scope::empty());
-        return Context {
-            root_id: root_id,
-            scopes: scopes,
+        Context {
+            root_id,
+            scopes,
             containing_scopes: HashMap::new(),
             type_map: HashMap::new(),
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
             trait_implementations: HashMap::new(),
-        };
+        }
     }
 
     /// Create a new Context.
@@ -234,16 +236,16 @@ impl Context {
         let root_id = general_utils::get_next_scope_id();
         let mut scope_map = HashMap::new();
         scope_map.insert(root_id, scope);
-        return Context {
-            root_id: root_id,
+        Context {
+            root_id,
             scopes: scope_map,
             containing_scopes: HashMap::new(),
-            type_map: type_map,
+            type_map,
             defined_types: HashMap::new(),
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
             trait_implementations: HashMap::new(),
-        };
+        }
     }
 }
 
@@ -256,43 +258,42 @@ impl Context {
 
     /// Define a named type.
     pub fn define_type(&mut self, name: Identifier, t: Type) {
-        self.defined_types.insert(name.clone(), t);
+        self.defined_types.insert(name, t);
     }
 
     /// Get the type associated with a particular name.
     pub fn get_defined_type(&self, name: &Identifier) -> Result<Type, GraceError> {
         let possible_type = self.defined_types.get(name);
-        return match possible_type {
+        match possible_type {
             Some(t) => Ok(t.clone()),
             None => Err(GraceError::type_error(format!(
                 "No underlying type found for named type {:?}",
                 name
             ))),
-        };
+        }
     }
 
     /// Get the type of the identifier in the given scope.
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
         let maybe_scope_mod = self.get_declaration(scope_id, name)?;
-        return match maybe_scope_mod {
+        match maybe_scope_mod {
             CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
             CanModifyScope::ImportedModule(ref _id) => {
                 Err(GraceError::compiler_error("Not implemented".to_string()))
             }
-        };
+        }
     }
 
     /// Get the type of the given node.
     pub fn get_node_type(&self, node_id: usize) -> Result<Type, GraceError> {
-        return self
-            .type_map
+        self.type_map
             .get(&node_id)
             .ok_or(GraceError::compiler_error(format!(
                 "No type found for node with ID {}",
                 node_id
             )))
-            .cloned();
+            .cloned()
     }
 }
 
@@ -324,7 +325,7 @@ impl Context {
     pub fn new_scope(&mut self, scope: Scope) -> usize {
         let scope_id = general_utils::get_next_scope_id();
         self.scopes.insert(scope_id, scope);
-        return scope_id;
+        scope_id
     }
 
     /// Add a statement to a scope.
@@ -342,7 +343,7 @@ impl Context {
         scope
             .declaration_order
             .insert(import_name.clone(), scope.declaration_order.len() + 1);
-        scope.declarations.insert(import_name.clone(), scope_mod);
+        scope.declarations.insert(import_name, scope_mod);
     }
 
     /// Get the scope that declares the given identifier.
@@ -353,15 +354,15 @@ impl Context {
     ) -> Result<usize, GraceError> {
         let initial_scope = self.get_scope(scope_id)?;
         if initial_scope.declarations.contains_key(name) {
-            return Ok(scope_id);
+            Ok(scope_id)
         } else {
-            return match initial_scope.parent_id {
+            match initial_scope.parent_id {
                 Some(id) => self.get_declaring_scope(id, name),
                 None => Err(GraceError::scoping_error(format!(
                     "No scope containing identifier {:?} found.",
                     name
                 ))),
-            };
+            }
         }
     }
 
@@ -389,7 +390,7 @@ impl Context {
     ) -> (Option<Identifier>, Option<Identifier>) {
         let initial_scope = self.get_scope(scope_id).expect("Scope not found");
 
-        return if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
+        if initial_scope.maybe_struct.is_some() || initial_scope.maybe_trait.is_some() {
             (
                 initial_scope.maybe_struct.clone(),
                 initial_scope.maybe_trait.clone(),
@@ -399,7 +400,7 @@ impl Context {
                 Some(id) => self.get_struct_and_trait(id),
                 None => (None, None),
             }
-        };
+        }
     }
 }
 
@@ -455,18 +456,20 @@ impl Context {
                 }
 
                 // Just resolve the trait.
-                if possible_traits.len() == 1 {
-                    // Get the type of the trait function and return it.
-                    return Ok(possible_traits[0].functions.get(name).unwrap().clone());
-                }
-                // TODO: Handle ambiguous traits.
-                else if possible_traits.len() > 1 {
-                    return Err(GraceError::type_error(format!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits)));
-                } else {
-                    return Err(GraceError::type_error(format!(
-                        "No matching attribute found for: {:?}, {:?}",
-                        base_type, name
-                    )));
+                match possible_traits.len().cmp(&1) {
+                    std::cmp::Ordering::Less => {
+                        Err(GraceError::type_error(format!(
+                            "No matching attribute found for: {:?}, {:?}",
+                            base_type, name
+                        )))
+                    },
+                    std::cmp::Ordering::Equal => {
+                        // Get the type of the trait function and return it.
+                        Ok(possible_traits[0].functions.get(name).unwrap().clone())
+                    }
+                    std::cmp::Ordering::Greater => {
+                        Err(GraceError::type_error(format!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits)))
+                    }
                 }
             }
         };
@@ -512,11 +515,11 @@ impl Context {
             }
         }
 
-        return match possible_traits.len() {
+        match possible_traits.len() {
             0 => None,
             1 => Some(possible_traits[0].name.clone()),
             _ => panic!("Ambiguous trait"),
-        };
+        }
     }
 
     /// Check that a trait method call is valid, and get the return type.
@@ -544,7 +547,7 @@ impl Context {
         }?)
         .clone();
         let method_type_result = func_types.get(method_name);
-        return match method_type_result {
+        match method_type_result {
             Some(method_type) => {
                 match method_type {
                     Type::Function(ref args, ref kwargs, ref return_type) => {
@@ -553,7 +556,7 @@ impl Context {
                             self.check_grad_and_ref_equality(scope_id, actual_t, expected_t)?;
                         }
 
-                        if kwargs.len() > 0 {
+                        if !kwargs.is_empty() {
                             return Err(GraceError::compiler_error(format!(
                                 "Trait method call to {}::{} has keyword arguments, which are not supported.",
                                 trait_name, method_name
@@ -566,7 +569,7 @@ impl Context {
                 }
             }
             None => Err(GraceError::type_error(format!("Could not find implementation of trait method: {:?}.", method_name)))
-        };
+        }
     }
 
     /// Get the return type of a binary operator.
@@ -580,7 +583,7 @@ impl Context {
             "TYPE ERROR. Tried to {:?} {:?} and {:?}",
             op, left, right
         )));
-        return match op {
+        match op {
             // TODO: 540: Update left and right with an "addable" constraint.
             BinaryOperator::Add
             | BinaryOperator::Sub
@@ -599,7 +602,7 @@ impl Context {
             BinaryOperator::Div => Ok(Type::f64),
             BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Ok(Type::boolean),
             _ => err,
-        };
+        }
     }
 
     /// Update a gradual type with a new constraint.
@@ -615,7 +618,7 @@ impl Context {
             }
         };
 
-        return true;
+        true
     }
 
     pub fn check_function_types(
@@ -668,7 +671,7 @@ impl Context {
 
     pub fn _type_matches(&mut self, scope_id: usize, expr_t: &Type, desired_type: &Type) -> bool {
         if expr_t == desired_type {
-            return true;
+            true
         } else {
             let unwrapped_self = match expr_t {
                 Type::self_type(x) => (**x).clone(),
@@ -729,16 +732,15 @@ impl Context {
         desired_type: &Type,
     ) -> Result<(), GraceError> {
         match self._type_matches(scope_id, expr_t, desired_type) {
-            false => {
-                return Err(GraceError::type_error(format!(
-                    "Tried to match type {:?} with {:?}",
-                    expr_t, desired_type
-                )))
-            }
+            false => Err(GraceError::type_error(format!(
+                "Tried to match type {:?} with {:?}",
+                expr_t, desired_type
+            ))),
             true => Ok(()),
         }
     }
 
+    #[allow(clippy::only_used_in_recursion)]
     /// Merge two types if they're compatible.
     pub fn merge(&self, t1: &Type, t2: &Type) -> Result<Type, GraceError> {
         let err = Err(GraceError::type_error(format!(
@@ -746,26 +748,26 @@ impl Context {
             t1, t2
         )));
         if t1 == t2 {
-            return Ok(t1.clone());
+            Ok(t1.clone())
         } else {
-            return match t1 {
+            match t1 {
                 Type::Sum(ref types) => match t2 {
                     Type::Sum(ref other_types) => {
                         Ok(Type::Sum(general_utils::vec_c_int(types, other_types)))
                     }
                     x => {
-                        if types.contains(&x) {
+                        if types.contains(x) {
                             Ok(x.clone())
                         } else {
                             err
                         }
                     }
                 },
-                Type::Refinement(ref base, ..) => self.merge(&t2, &base),
+                Type::Refinement(ref base, ..) => self.merge(t2, base),
                 Type::Undetermined => Ok(t2.clone()),
                 x => match t2 {
                     Type::Sum(ref other_types) => {
-                        if other_types.contains(&x) {
+                        if other_types.contains(x) {
                             Ok(x.clone())
                         } else {
                             err
@@ -773,7 +775,7 @@ impl Context {
                     }
                     _ => err,
                 },
-            };
+            }
         }
     }
 }
@@ -788,7 +790,7 @@ impl Context {
                 all_variables.push(key.clone());
             }
         }
-        return all_variables;
+        all_variables
     }
 
     /// Get every variable name and its type.
@@ -800,11 +802,11 @@ impl Context {
                 all_variables.push((key.clone(), t.clone()));
             }
         }
-        return all_variables;
+        all_variables
     }
 
     /// Print every scope and its declarations.
-    pub(crate) fn print_scope_contents(&self) {
+    pub(crate) fn _print_scope_contents(&self) {
         for (scope_id, scope) in self.scopes.iter() {
             println!("Scope {}", scope_id);
             for (key, value) in scope.declaration_order.iter() {
@@ -813,7 +815,7 @@ impl Context {
         }
     }
 
-    pub(crate) fn print_scope_hierarchy(&self) {
+    pub(crate) fn _print_scope_hierarchy(&self) {
         for (scope_id, scope) in self.scopes.iter() {
             println!("Scope {} -> {:?}", scope_id, scope.parent_id);
         }
@@ -846,12 +848,9 @@ mod tests {
         assert!(context
             .check_grad_and_ref_equality(i32_expr.scope, &Type::i32, &Type::i32)
             .is_ok());
-        assert!(!(context.check_grad_and_ref_equality(
-            bool_expr.scope,
-            &Type::boolean,
-            &Type::string
-        ))
-        .is_ok());
+        assert!(context
+            .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::string)
+            .is_err());
     }
 
     #[test]

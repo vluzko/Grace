@@ -43,18 +43,18 @@ impl ToBytecode for WASMModule {
             let declaration_string = trait_function.to_bytecode(context);
             trait_function_declarations.push(declaration_string)
         }
-        return format!(
+        format!(
             "(module\n{}\n(import \"memory_management\" \"mem\" (memory (;0;) 1))\n\n{}\n)\n",
             join(import_strings, "\n"),
             join(function_declarations, "\n\n")
-        );
+        )
     }
 }
 
 impl ToBytecode for WASMFunc {
     fn to_bytecode(&self, context: &Context) -> String {
         fn empty_or_prepend(fill: &str, x: &Vec<(String, WASMType)>) -> String {
-            return match x.len() {
+            match x.len() {
                 0 => "".to_string(),
                 _ => format!(
                     " {}",
@@ -63,7 +63,7 @@ impl ToBytecode for WASMFunc {
                         " ",
                     )
                 ),
-            };
+            }
         }
 
         let param_string = empty_or_prepend("param", &self.args);
@@ -80,13 +80,13 @@ impl ToBytecode for WASMFunc {
         let footer = format!("(export \"{}\" (func ${}))", self.name, self.name);
 
         let code_string = join(self.code.iter().map(|x| x.to_bytecode(context)), "\n");
-        return format!("({}\n{}\n)\n{}", header, code_string, footer);
+        format!("({}\n{}\n)\n{}", header, code_string, footer)
     }
 }
 
 impl ToBytecode for WASM {
     fn to_bytecode(&self, _context: &Context) -> String {
-        return match self {
+        match self {
             // Control-flow
             WASM::Block => "(block $void".to_string(),
             WASM::Loop => "(loop $void".to_string(),
@@ -108,7 +108,7 @@ impl ToBytecode for WASM {
             WASM::Tee(name) => format!("tee_local ${}", name),
             WASM::Load(t) => format!("{}.load", t),
             WASM::Store(t) => format!("{}.store", t),
-        };
+        }
     }
 }
 

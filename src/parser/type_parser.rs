@@ -14,26 +14,26 @@ type JustExpr<'a> = IResult<PosStr<'a>, ExprNode>;
 impl ParserContext {
     pub fn parse_type<'a>(&self, input: PosStr<'a>) -> TypeRes<'a> {
         if self.can_use_self {
-            return with_self(input);
+            with_self(input)
         } else {
-            return any_type(input.clone());
+            any_type(input)
         }
     }
 }
 
-pub fn with_self<'a>(input: PosStr<'a>) -> TypeRes {
-    return alt_complete!(
+pub fn with_self(input: PosStr) -> TypeRes {
+    alt_complete!(
         input,
         map!(SELF, |_x| Type::self_type(Box::new(Type::Undetermined))) | any_type
-    );
+    )
 }
 
 /// Parse a type.
-pub fn any_type<'a>(input: PosStr<'a>) -> TypeRes {
-    return alt_complete!(input, product_type | sum_type);
+pub fn any_type(input: PosStr) -> TypeRes {
+    alt_complete!(input, product_type | sum_type)
 }
 
-pub fn product_type<'a>(input: PosStr<'a>) -> TypeRes {
+pub fn product_type(input: PosStr) -> TypeRes {
     let result = delimited!(
         input,
         OPEN_PAREN,
@@ -41,26 +41,26 @@ pub fn product_type<'a>(input: PosStr<'a>) -> TypeRes {
         CLOSE_PAREN
     );
 
-    return fmap_iresult(result, |x| Type::Product(x));
+    fmap_iresult(result, Type::Product)
 }
 
-pub fn sum_type<'a>(input: PosStr<'a>) -> TypeRes {
+pub fn sum_type(input: PosStr) -> TypeRes {
     let result = tuple!(
         input,
         parameterized_type,
         many0c!(preceded!(VBAR, parameterized_type))
     );
 
-    return fmap_iresult(result, |mut x| match x.1.len() {
+    fmap_iresult(result, |mut x| match x.1.len() {
         0 => x.0,
         _ => {
             x.1.insert(0, x.0);
             Type::Sum(x.1)
         }
-    });
+    })
 }
 
-pub fn parameterized_type<'a>(input: PosStr<'a>) -> TypeRes {
+pub fn parameterized_type(input: PosStr) -> TypeRes {
     let result = tuple!(
         input,
         IDENTIFIER,
@@ -71,7 +71,7 @@ pub fn parameterized_type<'a>(input: PosStr<'a>) -> TypeRes {
         )),
         optc!(refinement)
     );
-    return fmap_iresult(result, |(base, param, refine)| {
+    fmap_iresult(result, |(base, param, refine)| {
         let b = match param {
             Some(y) => Type::Parameterized(base, y),
             None => Type::from(base),
@@ -80,19 +80,19 @@ pub fn parameterized_type<'a>(input: PosStr<'a>) -> TypeRes {
             Some(r) => Type::Refinement(Box::new(b), r),
             None => b,
         }
-    });
+    })
 }
 
-fn refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Vec<Refinement>> {
-    return delimited!(
+fn refinement(input: PosStr) -> IResult<PosStr, Vec<Refinement>> {
+    delimited!(
         input,
         OPEN_BRACKET,
         separated_nonempty_list_complete!(COMMA, single_refinement),
         CLOSE_BRACKET
-    );
+    )
 }
 
-fn single_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
+fn single_refinement(input: PosStr) -> IResult<PosStr, Refinement> {
     let parse_result = tuple!(
         input,
         logical_binary_expr,
@@ -100,15 +100,15 @@ fn single_refinement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Refinement> {
         logical_binary_expr
     );
 
-    return fmap_iresult(parse_result, |(l, o, r)| Refinement {
+    fmap_iresult(parse_result, |(l, o, r)| Refinement {
         operator: ComparisonOperator::from(o),
         left: Box::new(l),
         right: Box::new(r),
-    });
+    })
 }
 
-fn flatten_binary<'a>(result: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)) -> Node<Expr> {
-    return match result.1 {
+fn flatten_binary(result: (Node<Expr>, Option<(PosStr, Node<Expr>)>)) -> Node<Expr> {
+    match result.1 {
         Some((o, right)) => {
             let op = BinaryOperator::from(o.slice);
             Node::from(Expr::BinaryExpr {
@@ -118,15 +118,15 @@ fn flatten_binary<'a>(result: (Node<Expr>, Option<(PosStr<'a>, Node<Expr>)>)) ->
             })
         }
         None => result.0,
-    };
+    }
 }
 
 /// Match a list of binary operations
-fn binary_expr<'a>(
-    input: PosStr<'a>,
+fn binary_expr(
+    input: PosStr,
     operator_parser: impl Fn(PosStr) -> IResult<PosStr, PosStr>,
     next_expr: impl Fn(PosStr) -> JustExpr,
-) -> JustExpr<'a> {
+) -> JustExpr {
     let parse_result = tuple!(
         input,
         next_expr,
@@ -136,39 +136,31 @@ fn binary_expr<'a>(
         ))
     );
 
-    return fmap_iresult(parse_result, flatten_binary);
+    fmap_iresult(parse_result, flatten_binary)
 }
 
 /// Match logical expressions.
 /// Must be public because it's used by several statements
-pub fn logical_binary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-    return binary_expr(
-        input,
-        |x| alt_complete!(x, AND | OR | XOR),
-        |x| additive_expr(x),
-    );
+pub fn logical_binary_expr(input: PosStr) -> JustExpr {
+    binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), additive_expr)
 }
 
 /// Match addition and subtraction expressions.
-fn additive_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-    return binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), |x| mult_expr(x));
+fn additive_expr(input: PosStr) -> JustExpr {
+    binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), mult_expr)
 }
 
 /// Match multiplication, division, and modulo expressions.
-fn mult_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-    return binary_expr(
-        input,
-        |x| alt_complete!(x, STAR | DIV | MOD),
-        |x| unary_expr(x),
-    );
+fn mult_expr(input: PosStr) -> JustExpr {
+    binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr)
 }
 
 /// Match an exponentiation expression.
-fn power_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-    return binary_expr(input, |x| call!(x, EXP), |x| atomic_expr(x));
+fn power_expr(input: PosStr) -> JustExpr {
+    binary_expr(input, |x| call!(x, EXP), atomic_expr)
 }
 
-fn unary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
+fn unary_expr(input: PosStr) -> JustExpr {
     let parse_result = alt!(
         input,
         tuple!(
@@ -184,11 +176,11 @@ fn unary_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
         }),
         None => expr,
     });
-    return node;
+    node
 }
 
-fn atomic_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
-    let node = w_followed!(
+fn atomic_expr(input: PosStr) -> JustExpr {
+    w_followed!(
         input,
         alt_complete!(
             bool_expr
@@ -197,8 +189,7 @@ fn atomic_expr<'a>(input: PosStr<'a>) -> JustExpr<'a> {
                 | map!(IDENTIFIER, |x| Node::from(Expr::IdentifierExpr(x)))
                 | map!(w_followed!(tag!("$ret")), |x| Node::from(Expr::from(x)))
         )
-    );
-    return node;
+    )
 }
 
 #[cfg(test)]

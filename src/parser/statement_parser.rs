@@ -29,7 +29,7 @@ impl ParserContext {
                 | continue_stmt
         );
 
-        return node;
+        node
     }
 
     /// Match a let statement.
@@ -61,8 +61,8 @@ impl ParserContext {
     // TODO: Cleanup: rewrite the inner function
     fn assignment_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         /// Match an assignment operator.
-        fn assignments<'a>(input: PosStr<'a>) -> IO<'a> {
-            return alt_complete!(
+        fn assignments(input: PosStr) -> IO {
+            alt_complete!(
                 input,
                 EQUALS
                     | ADDASN
@@ -76,12 +76,12 @@ impl ParserContext {
                     | BORASN
                     | BANDASN
                     | BXORASN
-            );
+            )
         }
 
         let parse_result = tuple!(input, IDENTIFIER, assignments, m!(self.expression));
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |(name, assn, (expr, u))| {
                 (
@@ -117,7 +117,7 @@ impl ParserContext {
                 )
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Parse a function declaration.
@@ -148,18 +148,16 @@ impl ParserContext {
                     res_kwargs.push((ident, t, expr));
                 }
 
-                let stmt = Stmt::FunctionDecStmt {
-                    name: name,
-                    args: args,
+                Stmt::FunctionDecStmt {
+                    name,
+                    args,
                     kwargs: res_kwargs,
                     block: body,
                     return_type: match return_type {
                         Some(x) => x,
                         None => Type::empty,
                     },
-                };
-
-                return stmt;
+                }
             },
             &(input.line, input.column),
         );
@@ -182,7 +180,7 @@ impl ParserContext {
             )))
         );
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |(((cond, mut cond_u), block), elifs, mut else_block)| {
                 let mut just_elifs = Vec::with_capacity(elifs.len());
@@ -201,7 +199,7 @@ impl ParserContext {
                     let if_stmt = Stmt::IfStmt {
                         condition: elif_cond,
                         block: elif_block,
-                        else_block: else_block,
+                        else_block,
                     };
                     let sub_if = Node::from((if_stmt, elif_line, elif_col, block_line, block_col));
                     else_block = Some(Node::from((
@@ -217,13 +215,13 @@ impl ParserContext {
 
                 let stmt = Stmt::IfStmt {
                     condition: cond,
-                    block: block,
+                    block,
                     else_block,
                 };
-                return (stmt, cond_u);
+                (stmt, cond_u)
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Parse a while loop.
@@ -231,19 +229,19 @@ impl ParserContext {
     fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
         let parse_result =
             line_and_block!(input, self, preceded!(WHILE, m!(self.expression)), indent);
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |((cond, cu), block)| {
                 (
                     Stmt::WhileStmt {
                         condition: cond,
-                        block: block,
+                        block,
                     },
                     cu,
                 )
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Parse a for in loop.
@@ -258,34 +256,26 @@ impl ParserContext {
             indent
         );
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |((iter_var, (iterator, iu)), block)| {
                 let (stmt, update) = for_to_while(iter_var, &iterator, block.data.statements);
                 (stmt, join(iu, update))
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match a return statement.
     fn return_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded!(input, RETURN, m!(self.expression));
-        return fmap_pass(
-            parse_result,
-            |x| Stmt::ReturnStmt(x),
-            &(input.line, input.column),
-        );
+        return fmap_pass(parse_result, Stmt::ReturnStmt, &(input.line, input.column));
     }
 
     /// Match a yield statement.
     fn yield_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded!(input, YIELD, m!(self.expression));
-        return fmap_pass(
-            parse_result,
-            |x| Stmt::YieldStmt(x),
-            &(input.line, input.column),
-        );
+        return fmap_pass(parse_result, Stmt::YieldStmt, &(input.line, input.column));
     }
 
     /// Match all keyword arguments in a function declaration.
@@ -324,12 +314,12 @@ impl ParserContext {
                 )
             )
         );
-        return result;
+        result
     }
 }
 
 /// Match a break statement.
-pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+pub fn break_stmt(input: PosStr) -> StmtRes {
     let parse_result = BREAK(input);
 
     return fmap_nodeu(
@@ -340,7 +330,7 @@ pub fn break_stmt<'a>(input: PosStr<'a>) -> StmtRes {
 }
 
 /// Match a pass statement.
-pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+pub fn pass_stmt(input: PosStr) -> StmtRes {
     let parse_result = PASS(input);
 
     return fmap_nodeu(
@@ -351,7 +341,7 @@ pub fn pass_stmt<'a>(input: PosStr<'a>) -> StmtRes {
 }
 
 /// Match a continue statement.
-pub fn continue_stmt<'a>(input: PosStr<'a>) -> StmtRes {
+pub fn continue_stmt(input: PosStr) -> StmtRes {
     let parse_result = CONTINUE(input);
 
     return fmap_nodeu(

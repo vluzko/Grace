@@ -517,6 +517,7 @@ where
     }
 }
 
+#[allow(dead_code)]
 /// Run the compiler from an AST to a rewritten AST.
 pub(crate) fn ast_to_type_rewrites<T>(
     input: Node<T>,

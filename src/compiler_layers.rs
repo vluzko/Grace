@@ -445,16 +445,25 @@ pub fn compile_from_file(file_name: String) -> (Node<Module>, Context, String) {
     // return to_bytecode::<Node<Module>>(file_contents.as_bytes());
 }
 
-pub fn to_context<T>(input: &[u8]) -> (T, Context)
+pub fn to_scoped<T>(input: &[u8]) -> (T, Context)
 where
     T: Parseable,
-    T: GetContext,
+    T: SetScope,
 {
     let new_input = PosStr::from(input);
     let mut result = T::parse(new_input);
     let init = Context::builtin();
     let id = init.root_id;
-    let scoped_context = result.set_scope(id, init);
+    let context = result.set_scope(id, init);
+    (result, context)
+}
+
+pub fn to_context<T>(input: &[u8]) -> (T, Context)
+where
+    T: Parseable,
+    T: GetContext,
+{
+    let (result, scoped_context) = to_scoped::<T>(input);
     let context_res = result.add_to_context(scoped_context);
     match context_res {
         Ok((context, _)) => (result, context),

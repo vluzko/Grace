@@ -891,9 +891,8 @@ mod tests {
     use std::io::Read;
 
     use compiler_layers;
-    use difference::{Changeset, Difference};
-    use regex::Regex;
     use testing::minimal_examples::cfgs as min_cfg;
+    use testing::snippets;
 
     /// Build a context and check the generated WASM.
     fn simple_llr_check<T: ToLLR>(value: T, expected: &[WASM]) {
@@ -1097,33 +1096,23 @@ mod tests {
     }
 
     #[test]
-    fn test_get_declarations() {
+    fn test_get_true_declarations() {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>(
             "fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(),
         );
-        // let new_ident = Identifier::from("x");
-        let actual = func_dec.get_true_declarations(&context);
-        let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
-        for ptr in actual {
-            let changeset = Changeset::new("x", ptr.0.name.as_str(), "");
-            for diff in changeset.diffs {
-                match diff {
-                    Difference::Same(_) => {}
-                    Difference::Rem(_) => panic!(),
-                    Difference::Add(added_string) => {
-                        // Check if the thing being added is a scope ID on the end
-                        // of a variable
-                        assert!(scope_suffix_regex.is_match(added_string.as_str()));
-                    }
-                }
-            }
-        }
+        let actual = func_dec
+            .get_true_declarations(&context)
+            .iter()
+            .cloned()
+            .map(|x| x.0)
+            .collect::<Vec<_>>();
+        let expected = vec![Identifier::from("x")];
+        assert_eq!(actual, expected);
     }
 
     #[test]
     fn refined_function_test() {
-        let code = "fn require_ref(x: i32 [x > 0], y: i32) -> i32:
-        return x + y";
+        let code = snippets::refined_fn();
 
         let (_module, _context, _cfg, wasm) = compiler_layers::to_llr(code.as_bytes());
         assert!(wasm.functions.len() == 1);

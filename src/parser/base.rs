@@ -28,33 +28,33 @@ pub(in parser) type ExprRes<'a> = IResult<PosStr<'a>, ExprU>;
 pub(in parser) type TypeRes<'a> = IResult<PosStr<'a>, Type>;
 
 pub trait Parseable {
-    fn parse<'a>(input: PosStr<'a>) -> Self;
+    fn parse(input: PosStr) -> Self;
 }
 
 impl Parseable for Node<Module> {
-    fn parse<'a>(input: PosStr<'a>) -> Node<Module> {
-        return output(module(PosStr::from(input)));
+    fn parse(input: PosStr) -> Node<Module> {
+        return output(module(input));
     }
 }
 
 impl Parseable for Node<Block> {
-    fn parse<'a>(input: PosStr<'a>) -> Node<Block> {
+    fn parse(input: PosStr) -> Node<Block> {
         let e = ParserContext::empty();
-        return output(e.block(PosStr::from(input), 0));
+        output(e.block(input, 0))
     }
 }
 
 impl Parseable for Node<Stmt> {
-    fn parse<'a>(input: PosStr<'a>) -> Node<Stmt> {
+    fn parse(input: PosStr) -> Node<Stmt> {
         let e = ParserContext::empty();
-        return output(e.statement(PosStr::from(input), 0)).0;
+        output(e.statement(input, 0)).0
     }
 }
 
 impl Parseable for Node<Expr> {
-    fn parse<'a>(input: PosStr<'a>) -> Node<Expr> {
+    fn parse(input: PosStr) -> Node<Expr> {
         let e = ParserContext::empty();
-        return output(e.expression(PosStr::from(input))).0;
+        output(e.expression(input)).0
     }
 }
 
@@ -68,10 +68,10 @@ pub struct ParserContext {
 
 impl ParserContext {
     pub fn empty() -> ParserContext {
-        return ParserContext {
+        ParserContext {
             imported: HashMap::new(),
             can_use_self: false,
-        };
+        }
     }
 }
 
@@ -105,13 +105,10 @@ impl ParserContext {
             for (k, v) in signatures {
                 m.insert(k, v);
             }
-            return Trait {
-                name: name,
-                functions: m,
-            };
+            Trait { name, functions: m }
         });
 
-        return trait_val;
+        trait_val
     }
 
     /// Parse a single function description in a trait.
@@ -124,9 +121,9 @@ impl ParserContext {
             preceded!(TARROW, any_type)
         );
 
-        return fmap_iresult(parse_result, |(name, args, ret)| {
+        fmap_iresult(parse_result, |(name, args, ret)| {
             (name, Type::Function(args, vec![], Box::new(ret)))
-        });
+        })
     }
 
     pub(in parser) fn trait_impl<'a>(
@@ -152,9 +149,9 @@ impl ParserContext {
         };
 
         let full_res = chain(header, body_parser);
-        return fmap_iresult(full_res, |((trait_name, struct_name), declarations)| {
+        fmap_iresult(full_res, |((trait_name, struct_name), declarations)| {
             (trait_name, struct_name, declarations)
-        });
+        })
     }
 }
 
@@ -188,25 +185,20 @@ impl ParserContext {
         let full_res = chain(header, body_parser);
         let struct_dec = fmap_node(
             full_res,
-            |(name, fields)| {
-                return Stmt::StructDec {
-                    name: name,
-                    fields: fields,
-                };
-            },
+            |(name, fields)| Stmt::StructDec { name, fields },
             &(input.line, input.column),
         );
 
-        return struct_dec;
+        struct_dec
     }
 }
 
 /// Recognize an integer. No post-processing.
-pub(in parser) fn just_int<'a>(input: PosStr<'a>) -> IO<'a> {
-    return w_followed!(
+pub(in parser) fn just_int(input: PosStr) -> IO {
+    w_followed!(
         input,
         recognize!(tuple!(optc!(SIGN), terminated!(DIGIT, VALID_NUM_FOLLOW)))
-    );
+    )
 }
 
 // /// Type parsers
@@ -216,7 +208,7 @@ pub(in parser) fn just_int<'a>(input: PosStr<'a>) -> IO<'a> {
 
 /// Get the next hidden variable.
 pub(in parser) fn next_hidden() -> Identifier {
-    return Identifier::from(format!(".{}", get_next_var()));
+    Identifier::from(format!(".{}", get_next_var()))
 }
 
 /// Rewrite a for loop as a while loop.
@@ -299,7 +291,7 @@ pub(in parser) fn for_to_while(
         }),
     };
 
-    return (while_loop, outer_stmts);
+    (while_loop, outer_stmts)
 }
 
 #[cfg(test)]

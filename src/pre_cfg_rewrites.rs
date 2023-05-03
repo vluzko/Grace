@@ -4,11 +4,12 @@ use std::convert::From;
 use expression::*;
 use type_checking::context::Context;
 use type_checking::scope::choose_return_type;
+use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
 use crate::general_utils::get_next_id;
 
-pub trait TypeRewritable<T> {
+pub trait TypeRewritable<T>: GetContext {
     fn type_based_rewrite(self, context: &mut Context) -> T;
 }
 
@@ -148,11 +149,18 @@ impl TypeRewritable<Node<Stmt>> for Node<Stmt> {
                 block: block.type_based_rewrite(context),
             },
             Stmt::ReturnStmt(value) => {
+                println!("{:?}", &value);
+                // println!("{:?}", &context.all_names_and_types());
+                for (n, t) in context.all_names_and_types() {
+                    println!("{}: {:?}", n, t);
+                }
                 let exp_type = context
                     .get_type(self.scope, &Identifier::from("$ret"))
                     .unwrap();
                 let ret_type = context.get_node_type(value.id).unwrap();
                 let base = value.type_based_rewrite(context);
+                println!("ret_type: {:?}", ret_type);
+                println!("exp_type: {:?}", exp_type);
                 assert!(ret_type.is_compatible(&exp_type));
 
                 Stmt::ReturnStmt(base)

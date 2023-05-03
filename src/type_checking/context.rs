@@ -277,7 +277,9 @@ impl Context {
         return match maybe_scope_mod {
             CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => panic!("Not implemented"),
+            CanModifyScope::ImportedModule(ref _id) => {
+                Err(GraceError::compiler_error("Not implemented".to_string()))
+            }
         };
     }
 
@@ -790,19 +792,35 @@ impl Context {
     }
 
     /// Get every variable name and its type.
-    pub fn all_names_and_types(&self) -> Vec<(Identifier, Type)> {
+    pub fn all_names_and_types(&self) -> Vec<(Identifier, Result<Type, GraceError>)> {
         let mut all_variables = vec![];
         for (scope_id, scope) in self.scopes.iter() {
             for key in scope.declaration_order.keys() {
-                let t = self.get_type(*scope_id, key).unwrap();
+                let t = self.get_type(*scope_id, key);
                 all_variables.push((key.clone(), t.clone()));
             }
         }
         return all_variables;
     }
 
+    /// Print every scope and its declarations.
+    pub(crate) fn print_scope_contents(&self) {
+        for (scope_id, scope) in self.scopes.iter() {
+            println!("Scope {}", scope_id);
+            for (key, value) in scope.declaration_order.iter() {
+                println!("\t{}: {:?}", key, value);
+            }
+        }
+    }
+
+    pub(crate) fn print_scope_hierarchy(&self) {
+        for (scope_id, scope) in self.scopes.iter() {
+            println!("Scope {} -> {:?}", scope_id, scope.parent_id);
+        }
+    }
+
     /// Print every name and its type
-    pub fn print_identifier_map(&self) -> () {
+    pub fn print_identifier_map(&self) {
         for (n, t) in self.all_names_and_types() {
             println!("{:?}: {:?}", n, t)
         }

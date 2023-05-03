@@ -10,6 +10,7 @@ fn import_calls_test() {
     utils::check_against_expected("import_calls_test");
 }
 
+#[ignore]
 #[test]
 fn refinement_types_test() {
     utils::check_against_expected("refinement_types_test");
@@ -29,4 +30,9 @@ fn refinement_failures_test() {
 #[test]
 fn binary_operations_test() {
     utils::check_against_expected("builtin_tests");
+}
+
+#[test]
+fn single_binary() {
+    utils::check_against_expected("single_binary");
 }

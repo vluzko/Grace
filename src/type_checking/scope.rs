@@ -326,11 +326,14 @@ impl SetScope for Node<Stmt> {
                 ref mut block,
                 ..
             } => {
+                let function_scope = Scope::child(parent_scope);
+                let function_scope_id = context.new_scope(function_scope);
+                self.scope = function_scope_id;
                 for (_, _, ref mut val) in kwargs.iter_mut() {
                     context = val.set_scope(self.scope, context);
                 }
                 context = block.set_scope(self.scope, context);
-                context.append_declaration(self.scope, name, self);
+                context.append_declaration(parent_scope, name, self);
                 context
             }
             Stmt::WhileStmt {
@@ -368,8 +371,72 @@ impl SetScope for Node<Stmt> {
 /// Recurse, don't create new scopes.
 impl SetScope for Node<Expr> {
     fn set_scope(&mut self, parent_scope: usize, context: Context) -> Context {
-        self.scope = parent_scope;
+        self._set_scope(parent_scope);
         context
+    }
+}
+
+impl Node<Expr> {
+    /// Recurse, don't create new scopes.
+    fn _set_scope(&mut self, parent_scope: usize) {
+        self.scope = parent_scope;
+        match self.data {
+            Expr::BinaryExpr {
+                ref mut left,
+                ref mut right,
+                ..
+            } => {
+                left._set_scope(parent_scope);
+                right._set_scope(parent_scope)
+            }
+            Expr::UnaryExpr {
+                ref mut operand, ..
+            } => operand._set_scope(parent_scope),
+            Expr::FunctionCall {
+                ref mut function,
+                ref mut args,
+                ref mut kwargs,
+            } => {
+                function._set_scope(parent_scope);
+                for arg in args {
+                    arg._set_scope(parent_scope);
+                }
+                for (_, ref mut val) in kwargs {
+                    val._set_scope(parent_scope);
+                }
+            }
+            Expr::StructLiteral {
+                ref mut base,
+                ref mut fields,
+            } => {
+                base._set_scope(parent_scope);
+                for ref mut val in fields {
+                    val._set_scope(parent_scope);
+                }
+            }
+            Expr::AttributeAccess { ref mut base, .. } => base._set_scope(parent_scope),
+            Expr::TraitAccess { ref mut base, .. } => base._set_scope(parent_scope),
+            Expr::Index { .. } => panic!(),
+            Expr::ModuleAccess(..)
+            | Expr::IdentifierExpr(..)
+            | Expr::Bool(..)
+            | Expr::Int(..)
+            | Expr::Float(..)
+            | Expr::String(..) => {}
+            Expr::VecLiteral(ref mut exprs)
+            | Expr::SetLiteral(ref mut exprs)
+            | Expr::TupleLiteral(ref mut exprs) => {
+                for expr in exprs {
+                    expr._set_scope(parent_scope);
+                }
+            }
+            Expr::MapLiteral(ref mut exprs) => {
+                for (key, val) in exprs {
+                    key._set_scope(parent_scope);
+                    val._set_scope(parent_scope);
+                }
+            }
+        }
     }
 }
 
@@ -377,130 +444,149 @@ impl SetScope for Node<Expr> {
 mod test {
     use super::*;
     use compiler_layers;
+    use parser::base::Parseable;
+    use parser::position_tracker::PosStr;
 
-    #[cfg(test)]
-    mod scope_generation {
-        use super::*;
-        use parser::base::Parseable;
-        use parser::position_tracker::PosStr;
+    use testing::minimal_examples;
 
-        fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
-            match ptr {
-                CanModifyScope::Statement(x, _) => unsafe {
-                    let actual_stmt = &(**x).data;
-                    assert_eq!(actual_stmt, expected);
-                    true
-                },
-                x => panic!("Expected a statement modification, found: {:?}", x),
-            }
+    fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
+        match ptr {
+            CanModifyScope::Statement(x, _) => unsafe {
+                let actual_stmt = &(**x).data;
+                assert_eq!(actual_stmt, expected);
+                true
+            },
+            x => panic!("Expected a statement modification, found: {:?}", x),
         }
+    }
 
-        #[test]
-        fn test_block_scope() {
-            let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
-            e1.scope = 1;
-            let s1 = Stmt::LetStmt {
-                name: Identifier::from("a"),
-                type_annotation: None,
-                expression: e1,
-            };
+    #[test]
+    fn test_block_scope() {
+        let mut e1 = Node::<Expr>::parse(PosStr::from("5 + -1"));
+        e1._set_scope(1);
+        let s1 = Stmt::LetStmt {
+            name: Identifier::from("a"),
+            type_annotation: None,
+            expression: e1,
+        };
 
-            let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
-            e2.scope = 1;
-            let s2 = Stmt::LetStmt {
-                name: Identifier::from("b"),
-                type_annotation: None,
-                expression: e2,
-            };
+        let mut e2 = Node::<Expr>::parse(PosStr::from("true and false"));
+        e2._set_scope(1);
+        let s2 = Stmt::LetStmt {
+            name: Identifier::from("b"),
+            type_annotation: None,
+            expression: e2,
+        };
 
-            let input = r#"
+        let input = r#"
             let a = 5 + -1
             let b = true and false"#;
 
-            let (block, context) = compiler_layers::to_context::<Node<Block>>(input.as_bytes());
+        let (block, context) = compiler_layers::to_context::<Node<Block>>(input.as_bytes());
+        let scope = context.get_scope(block.scope).unwrap();
+        assert_eq!(scope.declarations.len(), 2);
+
+        let stmt1_pointer = context
+            .get_declaration(block.scope, &Identifier::from("a"))
+            .unwrap();
+        check_ptr_stmt(stmt1_pointer, &s1);
+
+        let stmt2_pointer = context
+            .get_declaration(block.scope, &Identifier::from("b"))
+            .unwrap();
+        check_ptr_stmt(stmt2_pointer, &s2);
+    }
+
+    #[cfg(test)]
+    mod exprs {
+        use super::*;
+
+        /// Test scope modifications from literals.
+        /// All should be empty.
+        // TODO: Should be a proptest.
+        #[test]
+        fn test_literal_scope() {
+            let original = Context::builtin();
+            let inputs = vec![
+                Node::<Expr>::from(5),
+                Node::<Expr>::from(5.0),
+                Node::<Expr>::from(true),
+            ];
+            // let mut input = Node::<Expr>::from(5);
+            for mut input in inputs {
+                let context = Context::builtin();
+                let scoped_context = input.set_scope(context.root_id, context);
+                assert_eq!(scoped_context.scopes, original.scopes);
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod stmts {
+        use super::*;
+
+        #[test]
+        fn test_let_stmt() {
+            let (block, context) =
+                compiler_layers::to_context::<Node<Block>>("let a = 1".as_bytes());
+            assert_eq!(context.scopes.len(), 2);
             let scope = context.get_scope(block.scope).unwrap();
-            assert_eq!(scope.declarations.len(), 2);
-
-            let stmt1_pointer = context
-                .get_declaration(block.scope, &Identifier::from("a"))
-                .unwrap();
-            check_ptr_stmt(stmt1_pointer, &s1);
-
-            let stmt2_pointer = context
-                .get_declaration(block.scope, &Identifier::from("b"))
-                .unwrap();
-            check_ptr_stmt(stmt2_pointer, &s2);
+            assert_eq!(scope.declarations.len(), 1);
+            assert!(scope.declarations.contains_key(&Identifier::from("a")));
         }
 
-        #[cfg(test)]
-        mod exprs {
-            use super::*;
-
-            /// Test scope modifications from literals.
-            /// All should be empty.
-            // TODO: Should be a proptest.
-            #[test]
-            fn test_literal_scope() {
-                let original = Context::builtin();
-                let inputs = vec![
-                    Node::<Expr>::from(5),
-                    Node::<Expr>::from(5.0),
-                    Node::<Expr>::from(true),
-                ];
-                // let mut input = Node::<Expr>::from(5);
-                for mut input in inputs {
-                    let context = Context::builtin();
-                    let scoped_context = input.set_scope(context.root_id, context);
-                    assert_eq!(scoped_context.scopes, original.scopes);
-                }
-            }
-        }
-
-        #[cfg(test)]
-        mod stmts {
-            use super::*;
-
-            #[test]
-            fn test_let_stmt() {
-                let (block, context) =
-                    compiler_layers::to_context::<Node<Block>>("let a = 1".as_bytes());
-                assert_eq!(context.scopes.len(), 2);
-                let scope = context.get_scope(block.scope).unwrap();
-                assert_eq!(scope.declarations.len(), 1);
-                assert!(scope.declarations.contains_key(&Identifier::from("a")));
-            }
-
-            #[test]
-            fn test_function_decl() {
-                let block_str = r#"
+        #[test]
+        fn test_function_decl() {
+            let block_str = r#"
                 fn a() -> i32:
                     return 0
 
                 fn b() -> i32:
                     return 1
                 "#;
-                let (block, context) =
-                    compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
-                let fn1 = context
-                    .get_declaration(block.scope, &Identifier::from("a"))
-                    .unwrap();
-                let fn2 = context
-                    .get_declaration(block.scope, &Identifier::from("b"))
-                    .unwrap();
-                match fn1.extract_stmt() {
-                    Stmt::FunctionDecStmt { name, .. } => {
-                        assert_eq!(name, Identifier::from("a"))
-                    }
-                    _ => panic!(),
-                };
+            let (block, context) = compiler_layers::to_context::<Node<Block>>(block_str.as_bytes());
+            let fn1 = context
+                .get_declaration(block.scope, &Identifier::from("a"))
+                .unwrap();
+            let fn2 = context
+                .get_declaration(block.scope, &Identifier::from("b"))
+                .unwrap();
+            match fn1.extract_stmt() {
+                Stmt::FunctionDecStmt { name, .. } => {
+                    assert_eq!(name, Identifier::from("a"))
+                }
+                _ => panic!(),
+            };
 
-                match fn2.extract_stmt() {
-                    Stmt::FunctionDecStmt { name, .. } => {
-                        assert_eq!(name, Identifier::from("b"))
-                    }
-                    _ => panic!(),
-                };
-            }
+            match fn2.extract_stmt() {
+                Stmt::FunctionDecStmt { name, .. } => {
+                    assert_eq!(name, Identifier::from("b"))
+                }
+                _ => panic!(),
+            };
+        }
+
+        #[test]
+        fn function_dec_with_args_and_let() {
+            let context = Context::empty();
+            let mut stmt = minimal_examples::minimal_function_with_args_and_ops();
+            let w_scopes = stmt.set_scope(context.root_id, context);
+            let scope = w_scopes.get_scope(stmt.scope).unwrap();
+            println!("{:?}", scope);
+        }
+    }
+
+    #[cfg(test)]
+    mod snippet_tests {
+        use super::*;
+        use compiler_layers;
+        use testing::snippets;
+
+        #[test]
+        fn refined_fn_scope() {
+            let code = snippets::refined_fn();
+            let (result, context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
+            println!("{:?}", result);
         }
     }
 }

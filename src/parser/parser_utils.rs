@@ -162,19 +162,19 @@ macro_rules! w_followed (
 );
 
 #[inline]
-pub fn inline_whitespace_char<'a>(input: PosStr<'a>) -> IO<'a> {
+pub fn inline_whitespace_char(input: PosStr) -> IO {
     tag!(input, " ")
 }
 
-pub fn eof_or_line<'a>(input: PosStr<'a>) -> IO<'a> {
+pub fn eof_or_line(input: PosStr) -> IO {
     let val = alt!(input, eof!() | NEWLINE | EMPTY);
     val
 }
 
 /// Recognize a single line comment.
 /// Single line comments can be placed anywhere a new line can be placed.
-pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
-    let f = |x: u8| if x == b'\n' { true } else { false };
+pub fn single_line_comment(input: PosStr) -> IO {
+    let f = |x: u8| x == b'\n';
     recognize!(
         input,
         delimited!(tag!("//"), take_till!(f), alt!(tag!("\n") | END_OF_INPUT))
@@ -182,7 +182,7 @@ pub fn single_line_comment<'a>(input: PosStr<'a>) -> IO<'a> {
 }
 
 /// Recognize any sequence of whitespace, newlines, and comments, possibly ending with end of input.
-pub fn between_statement<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>> {
+pub fn between_statement(input: PosStr) -> IResult<PosStr, PosStr> {
     let n = recognize!(
         input,
         terminated!(
@@ -201,7 +201,7 @@ pub mod tokens {
     use super::*;
     use expression::Identifier;
 
-    static RESERVED_WORDS: &'static [&[u8]] = &[
+    static RESERVED_WORDS: &[&[u8]] = &[
         b"if",
         b"else",
         b"elif",
@@ -244,7 +244,7 @@ pub mod tokens {
     }
 
     /// Recognize an empty input.
-    pub fn EMPTY<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn EMPTY(input: PosStr) -> IO {
         if input.input_len() == 0 {
             Ok((input, PosStr::empty()))
         } else {
@@ -253,7 +253,7 @@ pub mod tokens {
     }
 
     /// Recognize an empty input or an end of file
-    pub fn END_OF_INPUT<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn END_OF_INPUT(input: PosStr) -> IO {
         if input.input_len() == 0 || input.at_eof() {
             Ok((input, PosStr::empty()))
         } else {
@@ -261,7 +261,7 @@ pub mod tokens {
         }
     }
 
-    pub fn NUM_START<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn NUM_START(input: PosStr) -> IO {
         match input.slice.len() {
             0 => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             _ => {
@@ -275,7 +275,7 @@ pub mod tokens {
     }
 
     /// Recognize a non-empty sequence of decimal digits.
-    pub fn DIGIT<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn DIGIT(input: PosStr) -> IO {
         match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -287,7 +287,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of decimal digits.
-    pub fn DIGIT0<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn DIGIT0(input: PosStr) -> IO {
         match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
             Some(n) => Ok(input.take_split(n)),
             None => Ok(input.take_split(input.input_len())),
@@ -295,7 +295,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of (ASCII) alphabetic characters.
-    pub fn ALPHA<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn ALPHA(input: PosStr) -> IO {
         match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -307,7 +307,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of alphanumeric characters.
-    pub fn ALPHANUM<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn ALPHANUM(input: PosStr) -> IO {
         match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
             Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
@@ -319,7 +319,7 @@ pub mod tokens {
     }
 
     /// Recognize a sequence of valid internal identifier characters.
-    pub fn IDENT_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn IDENT_CHAR(input: PosStr) -> IO {
         let identifier_segment = input.position(|x| {
             let y = x.as_char();
             !(y.is_alpha() || y.is_dec_digit() || y == '_')
@@ -335,7 +335,7 @@ pub mod tokens {
     }
 
     /// Recognize a character in a string, or an escape sequence.
-    pub fn STRING_CHAR<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn STRING_CHAR(input: PosStr) -> IO {
         alt!(
             input,
             tag!("\\\"")
@@ -348,10 +348,10 @@ pub mod tokens {
     }
 
     /// true if a key
-    pub fn RESERVED<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn RESERVED(input: PosStr) -> IO {
         let tag_lam = |x| recognize!(input, complete!(tag!(PosStr::new(x))));
         let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
-        let mut final_result: IO<'a> = wrap_err(input, ErrorKind::Tag);
+        let mut final_result: IO = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
             match res {
                 Ok((i, o)) => {
@@ -365,7 +365,7 @@ pub mod tokens {
     }
 
     /// Parser to an Identifier AST.
-    pub fn IDENTIFIER<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, Identifier> {
+    pub fn IDENTIFIER(input: PosStr) -> IResult<PosStr, Identifier> {
         let parse_result = w_followed!(
             input,
             recognize!(pair!(alt!(ALPHA | tag!("_")), optc!(IDENT_CHAR)))
@@ -380,7 +380,7 @@ pub mod tokens {
         fmap_iresult(intermediate, Identifier::from)
     }
 
-    pub fn VALID_NUM_FOLLOW<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn VALID_NUM_FOLLOW(input: PosStr) -> IO {
         if input.input_len() == 0 {
             Ok((input.clone(), input.clone()))
         } else {
@@ -414,16 +414,16 @@ pub mod tokens {
         }
     }
 
-    pub fn NEWLINE<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn NEWLINE(input: PosStr) -> IO {
         alt_complete!(input, tag!("\n") | single_line_comment)
     }
 
-    pub fn SIGN<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn SIGN(input: PosStr) -> IO {
         recognize!(input, alt!(tag!("+") | tag!("-")))
     }
 
     /// Parser for the negative unary operator. Checks that it's not immediately followed by a digit.
-    pub fn NEG<'a>(input: PosStr<'a>) -> IO<'a> {
+    pub fn NEG(input: PosStr) -> IO {
         w_followed!(input, terminated!(tag!("-"), peek!(not!(NUM_START))))
     }
 
@@ -567,7 +567,7 @@ pub mod iresult_helpers {
 
     /// Map the contents of an IResult.
     /// Rust functors plox
-    pub fn fmap_iresult<'a, X, T, F>(res: Res<'a, X>, func: F) -> Res<'a, T>
+    pub fn fmap_iresult<X, T, F>(res: Res<X>, func: F) -> Res<T>
     where
         F: Fn(X) -> T,
     {
@@ -577,7 +577,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn fmap_update<'a, X, U, T, F>(res: Res<'a, (X, U)>, func: F) -> Res<'a, (T, U)>
+    pub fn fmap_update<X, U, T, F>(res: Res<(X, U)>, func: F) -> Res<(T, U)>
     where
         F: Fn(X) -> T,
     {
@@ -646,11 +646,11 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn wrap_err<'a, T>(input: PosStr<'a>, error: ErrorKind) -> Res<'a, T> {
+    pub fn wrap_err<T>(input: PosStr, error: ErrorKind) -> Res<T> {
         Err(Err::Error(Context::Code(input, error)))
     }
 
-    pub fn output<'a, T>(res: Res<'a, T>) -> T {
+    pub fn output<T>(res: Res<T>) -> T {
         match res {
             Ok((_, o)) => o,
             Err(e) => panic!("Output error: {:?}.", e),
@@ -804,7 +804,7 @@ pub mod iresult_helpers {
         }
     }
 
-    pub fn unwrap_and_check_error<'a, T>(result: Res<'a, T>, expected: ErrorKind)
+    pub fn unwrap_and_check_error<T>(result: Res<T>, expected: ErrorKind)
     where
         T: Debug,
     {

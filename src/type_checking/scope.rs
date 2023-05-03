@@ -585,7 +585,7 @@ mod test {
         #[test]
         fn refined_fn_scope() {
             let code = snippets::refined_fn();
-            let (result, context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
+            let (result, _context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
             println!("{:?}", result);
         }
     }

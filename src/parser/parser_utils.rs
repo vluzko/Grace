@@ -263,12 +263,12 @@ pub mod tokens {
 
     pub fn NUM_START(input: PosStr) -> IO {
         match input.slice.len() {
-            0 => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            0 => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
             _ => {
                 let x = input.slice[0];
-                match (x >= 0x30 && x <= 0x39) || x == 0x2e {
+                match (0x30..=0x39).contains(&x) || x == 0x2e {
                     true => Ok(input.take_split(1)),
-                    false => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+                    false => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
                 }
             }
         }
@@ -276,11 +276,11 @@ pub mod tokens {
 
     /// Recognize a non-empty sequence of decimal digits.
     pub fn DIGIT(input: PosStr) -> IO {
-        match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
-            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+        match input.position(|x| !(0x30..=0x39).contains(&x)) {
+            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                0 => wrap_err(input, ErrorKind::Digit),
                 n => Ok(input.take_split(n)),
             },
         }
@@ -288,7 +288,7 @@ pub mod tokens {
 
     /// Recognize a sequence of decimal digits.
     pub fn DIGIT0(input: PosStr) -> IO {
-        match input.position(|x| !(x >= 0x30 && x <= 0x39)) {
+        match input.position(|x| !(0x30..=0x39).contains(&x)) {
             Some(n) => Ok(input.take_split(n)),
             None => Ok(input.take_split(input.input_len())),
         }
@@ -296,11 +296,11 @@ pub mod tokens {
 
     /// Recognize a sequence of (ASCII) alphabetic characters.
     pub fn ALPHA(input: PosStr) -> IO {
-        match input.position(|x| !((x >= 65 && x <= 90) || (x >= 97 && x <= 122))) {
-            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+        match input.position(|x| !((65..=90).contains(&x) || (97..=122).contains(&x))) {
+            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                0 => wrap_err(input, ErrorKind::Digit),
                 n => Ok(input.take_split(n)),
             },
         }
@@ -309,10 +309,10 @@ pub mod tokens {
     /// Recognize a sequence of alphanumeric characters.
     pub fn ALPHANUM(input: PosStr) -> IO {
         match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
-            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                0 => wrap_err(input, ErrorKind::Digit),
                 n => Ok(input.take_split(n)),
             },
         }
@@ -325,10 +325,10 @@ pub mod tokens {
             !(y.is_alpha() || y.is_dec_digit() || y == '_')
         });
         match identifier_segment {
-            Some(0) => Err(Err::Error(Context::Code(input.clone(), ErrorKind::Digit))),
+            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
-                0 => wrap_err(input.clone(), ErrorKind::Digit),
+                0 => wrap_err(input, ErrorKind::Digit),
                 n => Ok(input.take_split(n)),
             },
         }
@@ -382,10 +382,10 @@ pub mod tokens {
 
     pub fn VALID_NUM_FOLLOW(input: PosStr) -> IO {
         if input.input_len() == 0 {
-            Ok((input.clone(), input.clone()))
+            Ok((input, input))
         } else {
             peek!(
-                input.clone(),
+                input,
                 alt!(
                     eof!()
                         | tag!(" ")

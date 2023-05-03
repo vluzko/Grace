@@ -38,17 +38,14 @@ pub enum ErrorDetails {
 impl GraceError {
     /// Create a parser error from a message and a Nom error
     pub fn parser_error(msg: String, nom_error: ErrorKind) -> GraceError {
-        return GraceError {
+        GraceError {
             file: String::new(),
             line: 0,
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::ParserError {
-                msg: msg,
-                nom_error: nom_error,
-            },
-        };
+            underlying: ErrorDetails::ParserError { msg, nom_error },
+        }
     }
 
     /// Create a scoping error
@@ -59,7 +56,7 @@ impl GraceError {
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::ScopeError { msg: msg },
+            underlying: ErrorDetails::ScopeError { msg },
         }
     }
 
@@ -71,31 +68,31 @@ impl GraceError {
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::TypeError { msg: msg },
+            underlying: ErrorDetails::TypeError { msg },
         }
     }
 
     /// Create a compiler error from a message.
     pub fn compiler_error(msg: String) -> GraceError {
-        return GraceError {
+        GraceError {
             file: String::new(),
             line: 0,
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::CompilerError { msg: msg },
-        };
+            underlying: ErrorDetails::CompilerError { msg },
+        }
     }
 
     pub fn multi_error(errors: Vec<GraceError>) -> GraceError {
-        return GraceError {
+        GraceError {
             file: String::new(),
             line: 0,
             column: 0,
             end_line: 0,
             end_column: 0,
-            underlying: ErrorDetails::MultiError { errors: errors },
-        };
+            underlying: ErrorDetails::MultiError { errors },
+        }
     }
 
     pub fn update_line_col(
@@ -105,25 +102,25 @@ impl GraceError {
         end_line: u32,
         end_column: u32,
     ) -> GraceError {
-        return GraceError {
+        GraceError {
             file: self.file.clone(),
-            line: line,
-            column: column,
-            end_line: end_line,
-            end_column: end_column,
+            line,
+            column,
+            end_line,
+            end_column,
             underlying: self.underlying.clone(),
-        };
+        }
     }
 
     pub fn annotate_file(&self, file: String) -> GraceError {
-        return GraceError {
-            file: file,
+        GraceError {
+            file,
             line: self.line,
             column: self.column,
             end_line: self.end_line,
             end_column: self.end_column,
             underlying: self.underlying.clone(),
-        };
+        }
     }
 }
 
@@ -131,7 +128,7 @@ impl Add for GraceError {
     type Output = Self;
     fn add(self, _other: Self) -> Self {
         panic!()
-        // return match self {
+        // match self {
         //     GraceError::MultiError { errors: errors1 } => match other {
         //         GraceError::MultiError { errors: errors2 } => GraceError::MultiError {
         //             errors: general_utils::join(errors1, errors2)
@@ -161,6 +158,6 @@ impl Error for GraceError {
 
 impl<T> Node<T> {
     pub fn annotate_error(&self, error: GraceError) -> GraceError {
-        return error.update_line_col(self.start_line, self.start_col, self.end_line, self.end_col);
+        error.update_line_col(self.start_line, self.start_col, self.end_line, self.end_col)
     }
 }

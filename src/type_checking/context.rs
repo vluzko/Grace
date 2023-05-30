@@ -572,39 +572,6 @@ impl Context {
         }
     }
 
-    /// Get the return type of a binary operator.
-    pub fn bin_op_ret_type(
-        &self,
-        op: &BinaryOperator,
-        left: &Type,
-        right: &Type,
-    ) -> Result<Type, GraceError> {
-        let err = Err(GraceError::type_error(format!(
-            "TYPE ERROR. Tried to {:?} {:?} and {:?}",
-            op, left, right
-        )));
-        match op {
-            // TODO: 540: Update left and right with an "addable" constraint.
-            BinaryOperator::Add
-            | BinaryOperator::Sub
-            | BinaryOperator::Mult
-            | BinaryOperator::Mod => match left {
-                Type::Gradual(_) => match right {
-                    Type::Gradual(_) => Ok(Type::Gradual(general_utils::get_next_grad())),
-                    Type::i32 | Type::i64 | Type::f32 | Type::f64 => Ok(right.clone()),
-                    _ => err,
-                },
-                x => match right {
-                    Type::Gradual(_) => Ok(left.clone()),
-                    y => self.merge(x, y),
-                },
-            },
-            BinaryOperator::Div => Ok(Type::f64),
-            BinaryOperator::And | BinaryOperator::Or | BinaryOperator::Xor => Ok(Type::boolean),
-            _ => err,
-        }
-    }
-
     /// Update a gradual type with a new constraint.
     pub fn update_gradual(&mut self, gradual_id: usize, constraint: &Type) -> bool {
         let maybe_constraints = self.gradual_constraints.get_mut(&gradual_id);

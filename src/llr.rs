@@ -119,13 +119,15 @@ impl WASMType {
     }
 }
 
-/// Get the variables declared within a node.
-trait GetTrueDeclarations {
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)>;
+/// Get the variables declared within a node and its subnodes
+/// With scopes it is difficult to move down the tree, so instead
+/// we move down the tree within the relevant nodes.
+trait GetContainedDeclarations {
+    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)>;
 }
 
-impl GetTrueDeclarations for Node<Block> {
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
+impl GetContainedDeclarations for Node<Block> {
+    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         let top_level: HashSet<Identifier> = context
             .get_scope(self.scope)
             .unwrap()
@@ -141,16 +143,31 @@ impl GetTrueDeclarations for Node<Block> {
             })
             .collect();
         for stmt in &self.data.statements {
-            with_types = general_utils::m_bt_union(with_types, stmt.get_true_declarations(context));
+            with_types =
+                general_utils::m_bt_union(with_types, stmt.get_contained_declarations(context));
         }
         with_types
     }
 }
 
-impl GetTrueDeclarations for Node<Stmt> {
-    fn get_true_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
+impl GetContainedDeclarations for Node<Stmt> {
+    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
         match self.data {
-            Stmt::FunctionDecStmt { ref block, .. } => block.get_true_declarations(context),
+            Stmt::FunctionDecStmt { ref block, .. } | Stmt::WhileStmt { ref block, .. } => {
+                block.get_contained_declarations(context)
+            }
+            Stmt::IfStmt {
+                ref block,
+                ref else_block,
+                ..
+            } => {
+                let block_dec = block.get_contained_declarations(context);
+                let else_dec = match else_block {
+                    Some(b) => b.get_contained_declarations(context),
+                    None => BTreeSet::new(),
+                };
+                general_utils::m_bt_union(block_dec, else_dec)
+            }
             _ => BTreeSet::new(),
         }
     }
@@ -264,12 +281,15 @@ pub fn handle_declaration(
             ref return_type,
             ..
         } => {
-            let local_variables = declaration.get_true_declarations(context);
+            let local_variables = declaration.get_contained_declarations(context);
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
                 .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
                 .collect();
-            let cfg = cfg_map.get(name).unwrap();
+            let cfg = cfg_map.get(name).ok_or(GraceError::compiler_error(format!(
+                "No CFG found for function {}",
+                name
+            )))?;
             let block_llr = cfg.to_llr(context)?;
             let mut wasm_args: Vec<(String, WASMType)> = args
                 .iter()
@@ -346,7 +366,7 @@ pub fn handle_trait_func_dec(
             ..
         } => {
             // Get local variables as WASM.
-            let local_variables = declaration.get_true_declarations(context);
+            let local_variables = declaration.get_contained_declarations(context);
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
                 .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
@@ -354,7 +374,12 @@ pub fn handle_trait_func_dec(
 
             // Get function block LLR.
             let full_name = Identifier::from(format!("{}.{}", name_prefix, name.name));
-            let cfg = cfg_map.get(&full_name).unwrap();
+            let cfg = cfg_map
+                .get(&full_name)
+                .ok_or(GraceError::compiler_error(format!(
+                    "Could not find a CFG corresponding to the function {}.",
+                    full_name
+                )))?;
             let block_llr = cfg.to_llr(context)?;
 
             // Add args
@@ -397,10 +422,18 @@ impl ToLLR for Cfg {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
         let mut wasm = vec![];
 
-        let mut unvisited = vec![self.entry_index.unwrap()];
+        let mut unvisited = vec![self
+            .entry_index
+            .expect("No entry index found for a CFG. Should be impossible.")];
 
         while let Some(current_index) = unvisited.pop() {
-            let node = self.graph.node_weight(current_index).unwrap();
+            let node = self
+                .graph
+                .node_weight(current_index)
+                .ok_or(GraceError::compiler_error(format!(
+                    "Could not find a node with index {:?} in a CFG.",
+                    current_index
+                )))?;
             wasm.append(&mut node.to_llr(context)?);
             match node {
                 CfgVertex::Block(_) | CfgVertex::Else | CfgVertex::End(_) | CfgVertex::Entry => {
@@ -618,7 +651,10 @@ impl ToLLR for Node<Expr> {
                 let base_type = context.get_node_type(base.id)?;
                 match base_type {
                     Type::Record(ref names, ref fields) => {
-                        let attr_type = fields.get(attribute).unwrap();
+                        let attr_type = fields.get(attribute).ok_or(GraceError::compiler_error(format!(
+                            "Attribute {} not found in record in LLR. Should have been caught by type checking.",
+                            attribute
+                        )))?;
                         // Calculate the offset of `attribute` from the start of the expression result.
                         let offset = calculate_offset(attribute, names, fields);
                         llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
@@ -689,7 +725,6 @@ impl ToLLR for Node<Expr> {
                 ));
                 llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
                 llr
-                //TODO this block needs a test case
             }
             Expr::TupleLiteral(ref exprs) => {
                 let mut llr = vec![];
@@ -1096,12 +1131,12 @@ mod tests {
     }
 
     #[test]
-    fn test_get_true_declarations() {
+    fn test_get_contained_declarations() {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>(
             "fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(),
         );
         let actual = func_dec
-            .get_true_declarations(&context)
+            .get_contained_declarations(&context)
             .iter()
             .cloned()
             .map(|x| x.0)

@@ -977,6 +977,31 @@ mod tests {
             }
         }
 
+        #[test]
+        fn function_call() {
+            panic!("Not implemented");
+        }
+
+        #[test]
+        fn attribute_access() {
+            panic!("Not implemented");
+        }
+
+        #[test]
+        fn unary_ops() {
+            panic!("Not implemented");
+        }
+
+        #[test]
+        fn tuple_literal() {
+            panic!("Not implemented");
+        }
+
+        #[test]
+        fn vec_literal() {
+            panic!("Not implemented");
+        }
+
         // fn
     }
 
@@ -1131,5 +1156,25 @@ mod tests {
             ],
         };
         assert_eq!(wasm.functions[0], expected);
+    }
+
+    #[test]
+    fn module_test() {
+        panic!("Unfinished test");
+    }
+
+    #[test]
+    fn import_test() {
+        panic!("Unfinished test");
+    }
+
+    #[test]
+    fn cfg_to_llr_test() {
+        panic!("Unfinished test");
+    }
+
+    #[test]
+    fn calculate_offset_test() {
+        panic!("Unfinished test");
     }
 }

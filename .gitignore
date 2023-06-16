@@ -6,3 +6,4 @@ Cargo.lock
 Grace.iml
 *.wasm
 .metadata/
+.coverage/

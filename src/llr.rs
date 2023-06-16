@@ -891,6 +891,7 @@ mod tests {
     use std::io::Read;
 
     use compiler_layers;
+    use testing::minimal_examples;
     use testing::minimal_examples::cfgs as min_cfg;
     use testing::snippets;
 
@@ -979,7 +980,10 @@ mod tests {
 
         #[test]
         fn function_call() {
-            panic!("Not implemented");
+            let func_call = minimal_examples::minimal_call();
+            let (context, _) = minimal_examples::minimal_function_context();
+            let expected = vec![WASM::Call("x".to_string())];
+            check_expr(func_call, expected, Some(context));
         }
 
         #[test]

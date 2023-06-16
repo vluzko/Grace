@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use expression;
 use expression::{Block, Expr, Node, Stmt};
 use testing::test_utils;
+use type_checking::context::Context;
 use type_checking::{context, types};
 
 use crate::expression::Identifier;
@@ -139,6 +140,27 @@ pub fn minimal_function_dec() -> Stmt {
         return_type: types::Type::i32,
         block: Node::from(minimal_ret_block()),
     }
+}
+
+/// Context containing the minimal function declaration
+pub fn minimal_function_context() -> (Context, usize) {
+    let context = context::Context::builtin();
+    test_utils::add_function_to_context(
+        context,
+        minimal_name().as_str(),
+        vec![],
+        vec![],
+        types::Type::i32,
+    )
+}
+
+/// Minimal function call corresponding to minimal function declaration.
+pub fn minimal_call() -> Node<Expr> {
+    Node::from(Expr::FunctionCall {
+        function: Box::new(Node::from(Expr::from(minimal_identifier()))),
+        args: vec![],
+        kwargs: vec![],
+    })
 }
 
 /// Function declaration with empty block

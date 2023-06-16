@@ -229,7 +229,7 @@ pub mod tokens {
 
     macro_rules! token {
         ($name:ident, $i: expr) => {
-            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
+            pub fn $name(input: PosStr) -> IO {
                 w_followed!(input, tag!($i))
             }
         };
@@ -237,7 +237,7 @@ pub mod tokens {
 
     macro_rules! keyword {
         ($name:ident, $i: expr) => {
-            pub fn $name<'a>(input: PosStr<'a>) -> IO<'a> {
+            pub fn $name(input: PosStr) -> IO {
                 w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))))
             }
         };

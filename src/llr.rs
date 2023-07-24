@@ -993,7 +993,13 @@ mod tests {
 
         #[test]
         fn unary_ops() {
-            panic!("Not implemented");
+            let func_call = minimal_examples::minimal_unary();
+            // let (context, _) = minimal_examples::minimal_context();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+            ];
+            simple_check_expr(func_call, expected);
         }
 
         #[test]

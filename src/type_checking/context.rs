@@ -77,6 +77,13 @@ fn builtin_unary() -> Vec<(Identifier, Identifier)> {
         .collect()
 }
 
+fn builtin_unary_numeric() -> Vec<(Identifier, Identifier)> {
+    vec![("Negative", "negative"), ("Positive", "positive")]
+        .into_iter()
+        .map(|(a, b)| (Identifier::from(a), Identifier::from(b)))
+        .collect()
+}
+
 /// Generate all the builtin binary traits.
 fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
     let mut traits = HashMap::new();
@@ -102,6 +109,10 @@ fn builtin_binary_traits() -> HashMap<Identifier, Trait> {
 fn builtin_unary_traits() -> HashMap<Identifier, Trait> {
     let mut map = HashMap::new();
     for (tn, mn) in builtin_unary().into_iter() {
+        let tr = unary_trait(tn.clone(), mn);
+        map.insert(tn, tr);
+    }
+    for (tn, mn) in builtin_unary_numeric().into_iter() {
         let tr = unary_trait(tn.clone(), mn);
         map.insert(tn, tr);
     }
@@ -157,6 +168,18 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
 
     for (tn, mn) in builtin_unary().into_iter() {
         for t in vec![Type::boolean] {
+            let func_t = Type::Function(
+                vec![(Identifier::from("operand"), t.clone())],
+                vec![],
+                Box::new(t.clone()),
+            );
+            let func_types = hashmap! {mn.clone() => func_t};
+            impls.insert((tn.clone(), t), func_types);
+        }
+    }
+
+    for (tn, mn) in builtin_unary_numeric().into_iter() {
+        for t in vec![Type::i32, Type::i64, Type::f32, Type::f64] {
             let func_t = Type::Function(
                 vec![(Identifier::from("operand"), t.clone())],
                 vec![],
@@ -825,6 +848,13 @@ impl Context {
     pub fn print_identifier_map(&self) {
         for (n, t) in self.all_names_and_types() {
             println!("{:?}: {:?}", n, t)
+        }
+    }
+
+    /// Print every trait implementation
+    pub fn print_implemented_traits(&self) {
+        for ((trait_name, t), _impls) in self.trait_implementations.iter() {
+            println!("Trait {:?} for type {:?}", trait_name, t);
         }
     }
 }

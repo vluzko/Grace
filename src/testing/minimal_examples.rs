@@ -74,6 +74,14 @@ pub fn binary_op_with_identifiers() -> Node<Expr> {
     })
 }
 
+/// Minimal unary expression
+pub fn minimal_unary() -> Node<Expr> {
+    Node::from(Expr::UnaryExpr {
+        operator: expression::UnaryOperator::Negative,
+        operand: Box::new(minimal_int()),
+    })
+}
+
 /// Minimal expression node
 pub fn minimal_node_expression() -> Node<Expr> {
     Node::from(minimal_expression())

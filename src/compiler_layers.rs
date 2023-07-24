@@ -508,6 +508,7 @@ where
         Some(context) => context,
         None => Context::builtin(),
     };
+    init.print_implemented_traits();
     let id = init.root_id;
     let scoped_context = input.set_scope(id, init);
     let context_res = input.add_to_context(scoped_context);

@@ -41,18 +41,6 @@ pub(crate) mod strategies {
         ]
     }
 
-    /// Generate a random comparison operator.
-    // fn comparison_operator_strat() -> impl Strategy<Value = ComparisonOperator> {
-    //     prop_oneof![
-    //         Just(ComparisonOperator::Greater),
-    //         Just(ComparisonOperator::Less),
-    //         Just(ComparisonOperator::Equal),
-    //         Just(ComparisonOperator::Unequal),
-    //         Just(ComparisonOperator::GreaterEqual),
-    //         Just(ComparisonOperator::LessEqual)
-    //     ]
-    // }
-
     /// Generate a random unary operator.
     fn unary_operator_strat() -> impl Strategy<Value = UnaryOperator> {
         prop_oneof![
@@ -113,12 +101,12 @@ pub(crate) mod strategies {
     }
 
     /// Strategy for an arbitrary integer
-    fn int_strat() -> BoxedStrategy<Expr> {
+    pub fn int_strat() -> BoxedStrategy<Expr> {
         Strategy::boxed(any::<i64>().prop_map(Expr::from))
     }
 
     /// Strategy for an arbitrary floating point
-    fn float_strat() -> BoxedStrategy<Expr> {
+    pub fn float_strat() -> BoxedStrategy<Expr> {
         Strategy::boxed(any::<f64>().prop_map(|x| {
             if x.fract() == 0.0 {
                 Expr::Float(format!("{}.", x))
@@ -129,11 +117,11 @@ pub(crate) mod strategies {
     }
 
     /// A strategy for an arbitrary boolean
-    fn bool_strat() -> BoxedStrategy<Expr> {
+    pub fn bool_strat() -> BoxedStrategy<Expr> {
         Strategy::boxed(any::<bool>().prop_map(Expr::from))
     }
 
-    fn string_strat() -> BoxedStrategy<Expr> {
+    pub fn string_strat() -> BoxedStrategy<Expr> {
         Strategy::boxed(
             string_regex(r#"[[ !#-\[\]-~]]*"#)
                 .unwrap()
@@ -141,7 +129,7 @@ pub(crate) mod strategies {
         )
     }
 
-    fn identifier_strategy() -> impl Strategy<Value = Identifier> {
+    pub fn identifier_strategy() -> impl Strategy<Value = Identifier> {
         string_regex(r"[_a-zA-Z][_a-zA-Z0-9]*")
             .unwrap()
             .prop_map(Identifier::from)

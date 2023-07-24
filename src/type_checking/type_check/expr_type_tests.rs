@@ -1,3 +1,5 @@
+use proptest::prelude::*;
+use testing::proptest_utils::strategies;
 use type_checking::type_check::*;
 // use super::*;
 use grace_error::ErrorDetails;
@@ -300,6 +302,30 @@ fn type_check_map_literal() {
     let expr = minimal_examples::map_literal_numeric();
     let expected = Type::Parameterized(Identifier::from("Map"), vec![Type::i32, Type::i32]);
     simple_check_expr(expr, expected);
+}
+
+#[cfg(test)]
+mod prop_tests {
+    use super::*;
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 50, .. ProptestConfig::default()
+        })]
+        #[test]
+        fn prop_type_check_int(v in strategies::int_strat()) {
+            simple_check_expr(Node::from(v), Type::i32);
+        }
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig {
+            cases: 50, .. ProptestConfig::default()
+        })]
+        #[test]
+        fn prop_type_check_float(v in strategies::float_strat()) {
+            simple_check_expr(Node::from(v), Type::f32);
+        }
+    }
 }
 
 #[cfg(test)]

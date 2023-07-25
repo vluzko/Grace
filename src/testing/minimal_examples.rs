@@ -97,7 +97,7 @@ pub fn minimal_struct_literal() -> Node<Expr> {
 /// Minimal attribute access
 pub fn minimal_attribute_access() -> Node<Expr> {
     Node::from(Expr::AttributeAccess {
-        base: Box::new(minimal_expression()),
+        base: Box::new(minimal_identifiern()),
         attribute: minimal_identifier(),
     })
 }

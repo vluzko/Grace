@@ -616,25 +616,8 @@ impl ToLLR for Node<Expr> {
                 // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context)?);
                 let base_type = context.get_node_type(base.id)?;
-                match base_type {
-                    Type::Record(ref names, ref fields) => {
-                        let attr_type = fields.get(attribute).unwrap();
-                        // Calculate the offset of `attribute` from the start of the expression result.
-                        let offset = calculate_offset(attribute, names, fields);
-                        llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
-                        // Add the offset and the address
-                        llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                        // Get the value at that address.
-                        llr.push(WASM::Load(WASMType::from(attr_type)));
-                    }
-                    x => {
-                        return Err(GraceError::compiler_error(format!(
-                            "Cannot access attribute of: {:?}. Should be a type error.",
-                            x
-                        )))
-                    }
-                }
-
+                let new_llr = attr_access(&base_type, attribute, context)?;
+                llr.extend(new_llr);
                 llr
             }
             Expr::UnaryExpr {
@@ -753,6 +736,38 @@ impl ToLLR for Node<Expr> {
             }
         })
     }
+}
+
+/// Recursively handle attribute accesses on named types.
+fn attr_access(
+    base_type: &Type,
+    attribute: &Identifier,
+    context: &Context,
+) -> Result<Vec<WASM>, GraceError> {
+    Ok(match base_type {
+        Type::Record(ref names, ref fields) => {
+            let mut llr = vec![];
+            let attr_type = fields.get(attribute).unwrap();
+            // Calculate the offset of `attribute` from the start of the expression result.
+            let offset = calculate_offset(attribute, names, fields);
+            llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
+            // Add the offset and the address
+            llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+            // Get the value at that address.
+            llr.push(WASM::Load(WASMType::from(attr_type)));
+            llr
+        }
+        Type::Named(ref name) => {
+            let underlying_type = context.get_defined_type(name)?;
+            attr_access(&underlying_type, attribute, context)?
+        }
+        x => {
+            return Err(GraceError::compiler_error(format!(
+                "Cannot access attribute of: {:?}. Should be a type error.",
+                x
+            )))
+        }
+    })
 }
 
 /// Calculate the offset of a field in a tuple.
@@ -948,6 +963,18 @@ mod tests {
             check_expr(expr, expected_wasm, None);
         }
 
+        fn check_expr_seq(exprs: Vec<Node<Expr>>, expected_wasm: Vec<WASM>, context: Context) {
+            let mut context = context;
+            let mut actual_wasm = vec![];
+            for expr in exprs {
+                let (result, new_context) =
+                    compiler_layers::ast_to_type_rewrites(expr, Some(context));
+                context = new_context;
+                actual_wasm.append(&mut result.to_llr(&context).unwrap());
+            }
+            assert_eq!(actual_wasm, expected_wasm);
+        }
+
         #[test]
         fn llr_constants() {
             let expr: Node<Expr> = Node::from(0);
@@ -996,13 +1023,17 @@ mod tests {
 
         #[test]
         fn attribute_access() {
-            let expr = minimal_examples::minimal_attribute_access();
+            let expr1 = minimal_examples::minimal_struct_literal();
+            let expr2 = minimal_examples::minimal_attribute_access();
+            let context = minimal_examples::minimal_struct_context();
             let expected = vec![
-                WASM::Const("1".to_string(), WASMType::i32),
-                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+                WASM::Call("x".to_string()),
+                WASM::Get("x".to_string()),
+                WASM::Const("8".to_string(), WASMType::i32),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::Load(WASMType::i32),
             ];
-            simple_check_expr(expr, expected);
-            panic!("Not implemented");
+            check_expr_seq(vec![expr1, expr2], expected, context);
         }
 
         #[test]

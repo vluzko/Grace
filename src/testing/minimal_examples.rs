@@ -44,6 +44,10 @@ pub fn minimal_identifier() -> expression::Identifier {
     expression::Identifier::from(minimal_name())
 }
 
+pub fn minimal_identifiern() -> Node<Expr> {
+    Node::from(Expr::from(minimal_identifier()))
+}
+
 pub fn minimal_identifier_2() -> Node<Expr> {
     Node::from("a")
 }
@@ -53,8 +57,8 @@ pub fn minimal_identifier_3() -> Node<Expr> {
 }
 
 /// Minimal generic expression
-pub fn minimal_expression() -> Expr {
-    Expr::Int("1".to_string())
+pub fn minimal_expression() -> Node<Expr> {
+    Node::from(Expr::Int("1".to_string()))
 }
 
 /// Minimal boolean expression
@@ -82,9 +86,20 @@ pub fn minimal_unary() -> Node<Expr> {
     })
 }
 
-/// Minimal expression node
-pub fn minimal_node_expression() -> Node<Expr> {
-    Node::from(minimal_expression())
+/// Minimal struct literal expression
+pub fn minimal_struct_literal() -> Node<Expr> {
+    Node::from(Expr::StructLiteral {
+        base: Box::new(minimal_identifiern()),
+        fields: vec![],
+    })
+}
+
+/// Minimal attribute access
+pub fn minimal_attribute_access() -> Node<Expr> {
+    Node::from(Expr::AttributeAccess {
+        base: Box::new(minimal_expression()),
+        attribute: minimal_identifier(),
+    })
 }
 
 /// Minimal vec literal with integer elements
@@ -126,7 +141,7 @@ pub fn map_literal_numeric() -> Node<Expr> {
 pub fn minimal_assn() -> Stmt {
     Stmt::AssignmentStmt {
         name: minimal_identifier(),
-        expression: minimal_node_expression(),
+        expression: minimal_expression(),
     }
 }
 
@@ -135,7 +150,7 @@ pub fn minimal_let() -> Stmt {
     Stmt::LetStmt {
         name: minimal_identifier(),
         type_annotation: None,
-        expression: minimal_node_expression(),
+        expression: minimal_expression(),
     }
 }
 
@@ -165,7 +180,7 @@ pub fn minimal_function_context() -> (Context, usize) {
 /// Minimal function call corresponding to minimal function declaration.
 pub fn minimal_call() -> Node<Expr> {
     Node::from(Expr::FunctionCall {
-        function: Box::new(Node::from(Expr::from(minimal_identifier()))),
+        function: Box::new(minimal_identifiern()),
         args: vec![],
         kwargs: vec![],
     })
@@ -233,7 +248,7 @@ pub fn minimal_ifn() -> Node<Stmt> {
 /// Minimal if with non-boolean condition node.
 pub fn minimal_if_non_booln() -> Node<Stmt> {
     Node::from(Stmt::IfStmt {
-        condition: minimal_node_expression(),
+        condition: minimal_expression(),
         block: Node::from(minimal_block()),
         else_block: None,
     })
@@ -257,14 +272,14 @@ pub fn minimal_while() -> Node<Stmt> {
 
 pub fn minimal_while_non_booln() -> Node<Stmt> {
     Node::from(Stmt::WhileStmt {
-        condition: Node::from(minimal_expression()),
+        condition: minimal_expression(),
         block: Node::from(minimal_block()),
     })
 }
 
 /// Minimal return node
 pub fn minimal_returnn() -> Node<Stmt> {
-    Node::from(Stmt::ReturnStmt(minimal_node_expression()))
+    Node::from(Stmt::ReturnStmt(minimal_expression()))
 }
 
 /// Minimal function type

@@ -987,19 +987,32 @@ mod tests {
         }
 
         #[test]
+        fn struct_literal() {
+            let expr = minimal_examples::minimal_struct_literal();
+            let context = minimal_examples::minimal_struct_context();
+            let expected = vec![WASM::Call("x".to_string())];
+            check_expr(expr, expected, Some(context));
+        }
+
+        #[test]
         fn attribute_access() {
+            let expr = minimal_examples::minimal_attribute_access();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
             panic!("Not implemented");
         }
 
         #[test]
         fn unary_ops() {
-            let func_call = minimal_examples::minimal_unary();
-            // let (context, _) = minimal_examples::minimal_context();
+            let expr = minimal_examples::minimal_unary();
             let expected = vec![
                 WASM::Const("1".to_string(), WASMType::i32),
                 WASM::Operation(WASMOperator::Neg, WASMType::i32),
             ];
-            simple_check_expr(func_call, expected);
+            simple_check_expr(expr, expected);
         }
 
         #[test]

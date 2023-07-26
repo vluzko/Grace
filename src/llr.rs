@@ -771,17 +771,26 @@ fn attr_access(
 }
 
 /// Calculate the offset of a field in a tuple.
+///
+/// # Arguments
+/// * `name` - The name of the field to calculate the offset of.
+/// * `order` - The order of the fields in the tuple.
+/// * `type_map` - The types of the fields in the tuple.
 fn calculate_offset(
     name: &Identifier,
     order: &Vec<Identifier>,
     type_map: &BTreeMap<Identifier, Type>,
 ) -> usize {
+    // This is hardcoded by memory_management::create_chunk
+    // It's one word for the next chunk pointer and one word
+    // for the size of the chunk.
     let mut offset = 8;
     for val in order {
         if val == name {
             break;
         } else {
-            offset += type_map.get(val).unwrap().size();
+            // Size gives number of words, we want bytes.
+            offset += type_map.get(val).unwrap().size() * 4;
         }
     }
     offset
@@ -1048,12 +1057,12 @@ mod tests {
 
         #[test]
         fn tuple_literal() {
-            panic!("Not implemented");
+            panic!("Unfinished test");
         }
 
         #[test]
         fn vec_literal() {
-            panic!("Not implemented");
+            panic!("Unfinished test");
         }
 
         // fn
@@ -1229,6 +1238,13 @@ mod tests {
 
     #[test]
     fn calculate_offset_test() {
-        panic!("Unfinished test");
+        let order = vec![Identifier::from("x"), Identifier::from("y")];
+        let mut type_map = BTreeMap::new();
+        type_map.insert(Identifier::from("x"), Type::i32);
+        type_map.insert(Identifier::from("y"), Type::i32);
+        let offset = calculate_offset(&Identifier::from("x"), &order, &type_map);
+        assert_eq!(offset, 8);
+        let offset = calculate_offset(&Identifier::from("y"), &order, &type_map);
+        assert_eq!(offset, 12);
     }
 }

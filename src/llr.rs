@@ -737,16 +737,6 @@ impl ToLLR for Node<Expr> {
                     "String not implemented".to_string(),
                 ));
             }
-            Expr::SetLiteral { .. } => {
-                return Err(GraceError::compiler_error(
-                    "SetLiteral not implemented".to_string(),
-                ));
-            }
-            Expr::MapLiteral { .. } => {
-                return Err(GraceError::compiler_error(
-                    "MapLiteral not implemented".to_string(),
-                ));
-            }
         })
     }
 }

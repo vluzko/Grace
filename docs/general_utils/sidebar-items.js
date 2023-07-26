@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["c_int","c_union","extend_map","get_next_grad","get_next_id","get_next_module_id","get_next_scope_id","get_next_var","join","m_bt_union","m_union","mb_union","unzip_vec","vec_c_int","vec_c_union","vec_subset"],"mod":["SCOPE_ID_COUNTER"]};

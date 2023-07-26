@@ -111,29 +111,12 @@ pub fn vec_literal_numeric() -> Node<Expr> {
     ]))
 }
 
-/// Minimal set literal with integer elements
-pub fn set_literal_numeric() -> Node<Expr> {
-    Node::from(Expr::SetLiteral(vec![
-        minimal_int(),
-        minimal_int(),
-        minimal_int(),
-    ]))
-}
-
 /// Minimal tuple literal with integer elements
 pub fn tuple_literal_numeric() -> Node<Expr> {
     Node::from(Expr::TupleLiteral(vec![
         minimal_int(),
         minimal_int(),
         minimal_int(),
-    ]))
-}
-
-/// Minimal map literal with integer elements
-pub fn map_literal_numeric() -> Node<Expr> {
-    Node::from(Expr::MapLiteral(vec![
-        (minimal_int(), minimal_int()),
-        (minimal_int(), minimal_int()),
     ]))
 }
 

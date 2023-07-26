@@ -543,7 +543,7 @@ impl Node<Expr> {
             Expr::Bool(_) => Ok((context, Type::boolean)),
             Expr::VecLiteral(ref exprs) => {
                 let (new_c, vec_t) = _folded_check(exprs, context)?;
-                let t = Type::Parameterized(Identifier::from("Vector"), vec![vec_t]);
+                let t = Type::Vector(Box::new(vec_t));
                 Ok((new_c, t))
             }
             Expr::SetLiteral(ref exprs) => {

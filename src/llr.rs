@@ -662,28 +662,12 @@ impl ToLLR for Node<Expr> {
             },
             Expr::IdentifierExpr(ref identifier) => vec![WASM::Get(identifier.name.clone())],
             Expr::VecLiteral(ref exprs) => {
-                let mut llr = vec![];
                 let t = context.get_node_type(self.id)?;
-                let vector_size = exprs.len() * t.size() + 3;
-                llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
-                llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
-
-                for expr in exprs {
-                    llr.append(&mut expr.to_llr(context)?);
-                    llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
-                    llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                }
-                llr.push(WASM::Const(
-                    format!("{}", t.size() * 4 * (exprs.len())),
-                    WASMType::i32,
-                ));
-                llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
-                llr
-                //TODO this block needs a test case
+                let type_sizes = vec![t.size(); exprs.len()];
+                // In WASM a vector is just a tuple of uniform type.
+                store_tuple(exprs, &type_sizes, context)?
             }
             Expr::TupleLiteral(ref exprs) => {
-                let mut llr = vec![];
                 let t = context.get_node_type(self.id)?;
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
@@ -694,31 +678,11 @@ impl ToLLR for Node<Expr> {
                         )))
                     }
                 };
-                // Total memory used by the tuple.
-                let vector_size = t.size() + HEADER_SIZE_WORDS;
-                llr.push(WASM::from(vector_size));
-                llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
-                // After calling alloc_words, the top of the stack is the address of the start of the tuple.
-
-                for (i, expr) in exprs.iter().enumerate() {
-                    // Insert the code to calculate the address of the next element.
-                    llr.append(&mut expr.to_llr(context)?);
-                    // Store the value at the given address
-                    llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    // Put the size of the type on the stack.
-                    llr.push(WASM::Const(
-                        format!("{}", individual_types[i].size() * 4),
-                        WASMType::i32,
-                    ));
-                    // Add the size of the type to the address.
-                    // The top of the stack is now the address of the next element.
-                    llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                }
-                // At the end of the for loop the top of the stack is the address of the last element + 1.
-                // Put the start of the tuple on the stack
-                llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
-                llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
-                llr
+                let type_sizes = individual_types
+                    .iter()
+                    .map(|x| x.size())
+                    .collect::<Vec<_>>();
+                store_tuple(exprs, &type_sizes, context)?
             }
             Expr::TraitAccess { .. } => {
                 return Err(GraceError::compiler_error(
@@ -752,6 +716,43 @@ impl ToLLR for Node<Expr> {
             }
         })
     }
+}
+
+/// Store a tuple/vector of data
+///
+/// # Arguments
+/// * `exprs` - The expressions to store.
+/// * `type_sizes` - The size of each type in the tuple. Constant for vectors.
+/// * `context` - The typing context. Needed for recursive calls.
+fn store_tuple(
+    exprs: &[Node<Expr>],
+    type_sizes: &[usize],
+    context: &Context,
+) -> Result<Vec<WASM>, GraceError> {
+    let mut llr = vec![];
+    // Total memory used by the tuple.
+    let data_size: usize = type_sizes.iter().sum();
+    let vector_size = data_size + HEADER_SIZE_WORDS;
+    llr.push(WASM::from(vector_size));
+    llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+    // After calling alloc_words, the top of the stack is the address of the start of the tuple.
+
+    for (i, expr) in exprs.iter().enumerate() {
+        // Insert the code to calculate the address of the next element.
+        llr.append(&mut expr.to_llr(context)?);
+        // Store the value at the given address
+        llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
+        // Put the size of the type on the stack.
+        llr.push(WASM::Const(format!("{}", type_sizes[i] * 4), WASMType::i32));
+        // Add the size of the type to the address.
+        // The top of the stack is now the address of the next element.
+        llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+    }
+    // At the end of the for loop the top of the stack is the address of the last element + 1.
+    // Put the start of the tuple on the stack
+    llr.push(WASM::Const(format!("{}", data_size * 4), WASMType::i32));
+    llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
+    Ok(llr)
 }
 
 /// Recursively handle attribute accesses on named types.
@@ -1117,9 +1118,25 @@ mod tests {
         fn vec_literal() {
             let expr = minimal_examples::vec_literal_numeric();
             let expected = vec![
-                // WASM::Const("5".to_string(), WASMType::i32),
+                // Allocate memory
                 WASM::from(5),
-                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+                WASM::Call(".memory_management.alloc_words".to_string()),
+                // For rounds of storing 1
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                // Return to the start of the tuple
+                WASM::from(12),
+                WASM::Operation(WASMOperator::Sub, WASMType::i32),
             ];
             simple_check_expr(expr, expected);
         }

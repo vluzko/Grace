@@ -13,6 +13,14 @@ use grace_error::GraceError;
 use type_checking::context::Context;
 use type_checking::types::Type;
 
+// These values are hardcoded by memory_management::create_chunk
+// It's one word for the next chunk pointer and one word
+// for the size of the chunk.
+/// The size of the header of a chunk in words.
+static HEADER_SIZE_WORDS: usize = 2;
+/// The size of the header of a chunk in bytes.
+static HEADER_SIZE_BYTES: usize = HEADER_SIZE_WORDS * 4;
+
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -686,23 +694,31 @@ impl ToLLR for Node<Expr> {
                         )))
                     }
                 };
-                let vector_size = t.size() + 3;
-                llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
+                // Total memory used by the tuple.
+                let vector_size = t.size() + HEADER_SIZE_WORDS;
+                llr.push(WASM::from(vector_size));
                 llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+                // After calling alloc_words, the top of the stack is the address of the start of the tuple.
 
                 for (i, expr) in exprs.iter().enumerate() {
+                    // Insert the code to calculate the address of the next element.
                     llr.append(&mut expr.to_llr(context)?);
+                    // Store the value at the given address
                     llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
+                    // Put the size of the type on the stack.
                     llr.push(WASM::Const(
                         format!("{}", individual_types[i].size() * 4),
                         WASMType::i32,
                     ));
+                    // Add the size of the type to the address.
+                    // The top of the stack is now the address of the next element.
                     llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
                 }
+                // At the end of the for loop the top of the stack is the address of the last element + 1.
+                // Put the start of the tuple on the stack
                 llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
                 llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
                 llr
-                //TODO this block needs a test case
             }
             Expr::TraitAccess { .. } => {
                 return Err(GraceError::compiler_error(
@@ -781,10 +797,7 @@ fn calculate_offset(
     order: &Vec<Identifier>,
     type_map: &BTreeMap<Identifier, Type>,
 ) -> usize {
-    // This is hardcoded by memory_management::create_chunk
-    // It's one word for the next chunk pointer and one word
-    // for the size of the chunk.
-    let mut offset = 8;
+    let mut offset = HEADER_SIZE_BYTES;
     for val in order {
         if val == name {
             break;
@@ -815,6 +828,24 @@ pub mod rust_trait_impls {
                 Type::empty => None,
                 x => panic!("Tried to convert {:?} to WASM", x),
             }
+        }
+    }
+
+    impl From<usize> for WASM {
+        fn from(input: usize) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i32)
+        }
+    }
+
+    impl From<i32> for WASM {
+        fn from(input: i32) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i32)
+        }
+    }
+
+    impl From<i64> for WASM {
+        fn from(input: i64) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i64)
         }
     }
 
@@ -1057,12 +1088,40 @@ mod tests {
 
         #[test]
         fn tuple_literal() {
-            panic!("Unfinished test");
+            let expr = minimal_examples::tuple_literal_numeric();
+            let expected = vec![
+                // Allocate memory
+                WASM::from(5),
+                WASM::Call(".memory_management.alloc_words".to_string()),
+                // For rounds of storing 1
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                // Return to the start of the tuple
+                WASM::from(12),
+                WASM::Operation(WASMOperator::Sub, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
         }
 
         #[test]
         fn vec_literal() {
-            panic!("Unfinished test");
+            let expr = minimal_examples::vec_literal_numeric();
+            let expected = vec![
+                // WASM::Const("5".to_string(), WASMType::i32),
+                WASM::from(5),
+                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
         }
 
         // fn

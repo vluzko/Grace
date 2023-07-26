@@ -297,11 +297,12 @@
 )
 (export "free_chunk" (func $free_chunk))
 
-;; Allocate a chunk of memory whose size is given in words
+;; Store $val at $loc, and then put $loc on the stack.
 ;; Args:
-;;      number_of_words (i32):
+;;      loc (i32): The location to store the value.
+;;      val (i32): The value to store.
 ;; Returns:
-;;      A pointer to the data segment of the new chunk.
+;;      The location of the stored value.
 (func $tee_memory (param $loc i32) (param $val i32) (result i32)
     get_local $loc
     get_local $val

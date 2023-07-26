@@ -4,5 +4,7 @@ export RUSTFLAGS="-Cinstrument-coverage -Zprofile -Ccodegen-units=1 -Copt-level=
 export RUSTDOCFLAGS="-Cpanic=abort"
 export LLVM_PROFILE_FILE=".coverage/llvm_profile.profraw"
 cargo test
+# Generate HTML report
 grcov . --binary-path ./target/debug/deps/ -s . -t html --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o .coverage/html
+# Generate an lcov file.
 # grcov . --binary-path ./target/debug/deps/ -s . -t lcov --branch --ignore-not-existing --ignore '../*' --ignore "/*" -o .coverage/tests.lcov

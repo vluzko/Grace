@@ -946,10 +946,12 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
+    use cfg;
     use compiler_layers;
     use testing::minimal_examples;
     use testing::minimal_examples::cfgs as min_cfg;
     use testing::snippets;
+    use type_checking::type_check::GetContext;
 
     /// Build a context and check the generated WASM.
     fn simple_llr_check<T: ToLLR>(value: T, expected: &[WASM]) {
@@ -1299,7 +1301,24 @@ mod tests {
 
     #[test]
     fn module_test() {
-        panic!("Unfinished test");
+        let module = minimal_examples::minimal_module();
+        let context = Context::builtin();
+        let (context, _) = module.add_to_context(context).unwrap();
+        let cfg_map = cfg::module_to_cfg(&module, &context);
+        let res = module_to_llr(&module, &context, &cfg_map).unwrap();
+        let func_wasm = WASMFunc {
+            name: "x".to_string(),
+            args: vec![],
+            locals: vec![("$ret".to_string(), WASMType::i32)],
+            result: Some(WASMType::i32),
+            code: vec![WASM::from(1)],
+        };
+        let expected = WASMModule {
+            imports: vec![],
+            functions: vec![func_wasm],
+            trait_implementations: vec![],
+        };
+        assert_eq!(res, expected);
     }
 
     #[test]

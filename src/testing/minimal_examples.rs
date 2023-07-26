@@ -326,6 +326,16 @@ pub fn trait_module() -> Node<expression::Module> {
     })
 }
 
+pub fn minimal_module() -> Node<expression::Module> {
+    Node::from(expression::Module {
+        functions: vec![Box::new(minimal_function_decn())],
+        imports: vec![],
+        structs: vec![],
+        traits: HashMap::new(),
+        trait_implementations: vec![],
+    })
+}
+
 pub(crate) mod cfgs {
     use super::*;
     use cfg;

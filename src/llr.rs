@@ -965,6 +965,8 @@ pub mod rust_trait_impls {
 
 #[cfg(test)]
 mod tests {
+    use crate::testing::minimal_examples::cfgs::minimal_cfg;
+
     use super::*;
     use std::fs::File;
     use std::io::Read;
@@ -1351,7 +1353,19 @@ mod tests {
 
     #[test]
     fn cfg_to_llr_test() {
-        panic!("Unfinished test");
+        let (cfg, context) = minimal_cfg();
+        let result = cfg.to_llr(&context).unwrap();
+        let expected = vec![
+            WASM::from(1),
+            WASM::from(1),
+            WASM::Operation(WASMOperator::Add, WASMType::i32),
+            WASM::Set("x".to_string()),
+            WASM::from(1),
+            WASM::from(1),
+            WASM::Operation(WASMOperator::Add, WASMType::i32),
+            WASM::Set("x".to_string()),
+        ];
+        assert_eq!(result, expected);
     }
 
     #[test]

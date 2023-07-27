@@ -379,6 +379,7 @@ impl Context {
         if initial_scope.declarations.contains_key(name) {
             Ok(scope_id)
         } else {
+            // println!("{:?}", self.scopes);
             match initial_scope.parent_id {
                 Some(id) => self.get_declaring_scope(id, name),
                 None => Err(GraceError::scoping_error(format!(

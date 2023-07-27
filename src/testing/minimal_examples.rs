@@ -20,6 +20,24 @@ pub fn minimal_ret_block() -> Block {
     }
 }
 
+pub fn minimal_unscoped_block() -> Node<Block> {
+    let stmts = vec![
+        Stmt::LetStmt {
+            name: minimal_identifier(),
+            type_annotation: None,
+            expression: binary_op(),
+        },
+        Stmt::LetStmt {
+            name: minimal_identifier(),
+            type_annotation: None,
+            expression: binary_op(),
+        },
+    ];
+    Node::from(Block {
+        statements: stmts.into_iter().map(|x| Box::new(Node::from(x))).collect(),
+    })
+}
+
 pub fn minimal_op_block() -> Node<Block> {
     let stmts = vec![
         Stmt::LetStmt {
@@ -68,6 +86,14 @@ pub fn minimal_bool_expression() -> Node<Expr> {
 
 pub fn minimal_int() -> Node<Expr> {
     Node::from(Expr::Int("1".to_string()))
+}
+
+pub fn binary_op() -> Node<Expr> {
+    Node::from(Expr::BinaryExpr {
+        left: Box::new(minimal_int()),
+        right: Box::new(minimal_int()),
+        operator: expression::BinaryOperator::Add,
+    })
 }
 
 pub fn binary_op_with_identifiers() -> Node<Expr> {
@@ -322,6 +348,7 @@ pub fn minimal_module() -> Node<expression::Module> {
 pub(crate) mod cfgs {
     use super::*;
     use cfg;
+    use compiler_layers::UpToCfg;
 
     pub fn minimal_stmt() -> Node<cfg::CfgStmt> {
         Node::from(cfg::CfgStmt::Assignment {
@@ -335,6 +362,12 @@ pub(crate) mod cfgs {
             name: minimal_identifier(),
             expression: minimal_bool_expression(),
         })
+    }
+
+    pub fn minimal_cfg() -> (cfg::Cfg, Context) {
+        let block = minimal_unscoped_block();
+        let (_, cfg, context) = block.up_to_cfg().unwrap();
+        (cfg, context)
     }
 
     /// Minimal block vertex.

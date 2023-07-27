@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use itertools::join;
 
-use expression::{Identifier, Import, Module, Node};
+use expression::{Block, Identifier, Import, Module, Node};
 use parser::base::Parseable;
 use parser::position_tracker::PosStr;
 use type_checking::context::Context;
@@ -16,7 +16,7 @@ use type_checking::type_check::GetContext;
 use type_checking::types::Type;
 
 use bytecode::ToBytecode;
-use cfg::{module_to_cfg, Cfg, CfgMap};
+use cfg::{block_to_cfg, module_to_cfg, Cfg, CfgMap};
 use general_utils::{extend_map, get_next_id, join as join_vec};
 use grace_error::GraceError;
 use llr::{module_to_llr, WASMModule};
@@ -532,20 +532,25 @@ where
     (rewritten, context)
 }
 
-pub(crate) trait PreContext<T: PreRewrite<T> + PreCfg> {
-    fn to_context(&self) -> (Type, Context);
+/// Run the compiler from the implementing type to a CFG.
+pub(crate) trait UpToCfg<T> {
+    fn up_to_cfg(self) -> Result<(T, Cfg, Context), GraceError>;
 }
 
-pub(crate) trait PreRewrite<T: PreCfg> {
-    fn to_type_rewrites(self) -> (T, Context);
-}
-
-impl<T: PreContext<T> + TypeRewritable<T> + PreCfg> PreRewrite<T> for T {
-    fn to_type_rewrites(self) -> (T, Context) {
-        let (_t, mut context) = self.to_context();
-        let rewritten = self.type_based_rewrite(&mut context);
-        (rewritten, context)
+impl UpToCfg<Node<Block>> for (Node<Block>, Context) {
+    fn up_to_cfg(self) -> Result<(Node<Block>, Cfg, Context), GraceError> {
+        let (original, mut context) = self;
+        let rewritten = original.type_based_rewrite(&mut context);
+        let (cfg, _, _) = block_to_cfg(&rewritten, &context, Cfg::empty(), None);
+        Ok((rewritten, cfg, context))
     }
 }
 
-pub(crate) trait PreCfg {}
+impl UpToCfg<Node<Block>> for Node<Block> {
+    fn up_to_cfg(mut self) -> Result<(Node<Block>, Cfg, Context), GraceError> {
+        let base_context = Context::builtin();
+        let scoped_context = self.set_scope(base_context.root_id, base_context);
+        let (context, _) = self.add_to_context(scoped_context)?;
+        (self, context).up_to_cfg()
+    }
+}

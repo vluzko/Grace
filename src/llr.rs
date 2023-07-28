@@ -1348,7 +1348,20 @@ mod tests {
 
     #[test]
     fn import_test() {
-        panic!("Unfinished test");
+        let (module, context) = minimal_examples::minimal_import();
+        let wasm = module_to_llr(&module, &context, &HashMap::new()).unwrap();
+        let expected = WASMModule {
+            imports: vec![WASMImport {
+                path: "x".to_string(),
+                value: "a".to_string(),
+                internal_name: ".x.a".to_string(),
+                params: vec![],
+                return_type: WASMType::i32,
+            }],
+            functions: vec![],
+            trait_implementations: vec![],
+        };
+        assert_eq!(wasm, expected);
     }
 
     #[test]

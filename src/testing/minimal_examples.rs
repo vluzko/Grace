@@ -345,6 +345,31 @@ pub fn minimal_module() -> Node<expression::Module> {
     })
 }
 
+pub fn minimal_import() -> (Node<expression::Module>, Context) {
+    let import = expression::Import {
+        id: 0,
+        path: vec![Identifier::from("x")],
+        alias: None,
+        values: vec![Identifier::from("a")],
+    };
+    let v = vec![Identifier::from("a")];
+    let m = btreemap! {Identifier::from("a")=>minimal_function_type()};
+    let import_type = types::Type::Module(v, m);
+    let mut context = context::Context::builtin();
+    context.append_import(&import);
+    context.add_type(import.id, import_type);
+    (
+        Node::from(expression::Module {
+            functions: vec![],
+            imports: vec![Box::new(import)],
+            structs: vec![],
+            traits: HashMap::new(),
+            trait_implementations: vec![],
+        }),
+        context,
+    )
+}
+
 pub(crate) mod cfgs {
     use super::*;
     use cfg;

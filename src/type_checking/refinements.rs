@@ -35,8 +35,7 @@ fn call_from_refinement_type(
     let mut checked = HashSet::new();
 
     let mut constraint_strings = vec![];
-    while !full_constraints.is_empty() {
-        let constraint = full_constraints.pop().unwrap();
+    while let Some(constraint) = full_constraints.pop() {
         let (set, constraint_str) = constraint.construct_condition(context);
 
         for variable in set.iter() {

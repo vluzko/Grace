@@ -423,17 +423,9 @@ impl Node<Expr> {
             | Expr::Int(..)
             | Expr::Float(..)
             | Expr::String(..) => {}
-            Expr::VecLiteral(ref mut exprs)
-            | Expr::SetLiteral(ref mut exprs)
-            | Expr::TupleLiteral(ref mut exprs) => {
+            Expr::VecLiteral(ref mut exprs) | Expr::TupleLiteral(ref mut exprs) => {
                 for expr in exprs {
                     expr._set_scope(parent_scope);
-                }
-            }
-            Expr::MapLiteral(ref mut exprs) => {
-                for (key, val) in exprs {
-                    key._set_scope(parent_scope);
-                    val._set_scope(parent_scope);
                 }
             }
         }

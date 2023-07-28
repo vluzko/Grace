@@ -20,6 +20,7 @@ pub fn compile_folder(subfolder: &str) -> (String, String) {
 
 /// Compile a folder and check against expected output
 /// The expected output must be in the "output" subfolder
+#[allow(dead_code)] // Not actually dead code, clippy just doesn't detect properly.
 pub fn check_against_expected(subfolder: &str) {
     let (folder_path, output_path) = compile_folder(subfolder);
     let paths = read_dir(folder_path).unwrap();

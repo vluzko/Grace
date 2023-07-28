@@ -13,6 +13,14 @@ use grace_error::GraceError;
 use type_checking::context::Context;
 use type_checking::types::Type;
 
+// These values are hardcoded by memory_management::create_chunk
+// It's one word for the next chunk pointer and one word
+// for the size of the chunk.
+/// The size of the header of a chunk in words.
+static HEADER_SIZE_WORDS: usize = 2;
+/// The size of the header of a chunk in bytes.
+static HEADER_SIZE_BYTES: usize = HEADER_SIZE_WORDS * 4;
+
 /// A representation of a WASM module.
 /// Includes function declarations, imports, and memory declarations.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -649,28 +657,8 @@ impl ToLLR for Node<Expr> {
                 // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context)?);
                 let base_type = context.get_node_type(base.id)?;
-                match base_type {
-                    Type::Record(ref names, ref fields) => {
-                        let attr_type = fields.get(attribute).ok_or(GraceError::compiler_error(format!(
-                            "Attribute {} not found in record in LLR. Should have been caught by type checking.",
-                            attribute
-                        )))?;
-                        // Calculate the offset of `attribute` from the start of the expression result.
-                        let offset = calculate_offset(attribute, names, fields);
-                        llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
-                        // Add the offset and the address
-                        llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                        // Get the value at that address.
-                        llr.push(WASM::Load(WASMType::from(attr_type)));
-                    }
-                    x => {
-                        return Err(GraceError::compiler_error(format!(
-                            "Cannot access attribute of: {:?}. Should be a type error.",
-                            x
-                        )))
-                    }
-                }
-
+                let new_llr = attr_access(&base_type, attribute, context)?;
+                llr.extend(new_llr);
                 llr
             }
             Expr::UnaryExpr {
@@ -707,27 +695,12 @@ impl ToLLR for Node<Expr> {
             },
             Expr::IdentifierExpr(ref identifier) => vec![WASM::Get(identifier.name.clone())],
             Expr::VecLiteral(ref exprs) => {
-                let mut llr = vec![];
                 let t = context.get_node_type(self.id)?;
-                let vector_size = exprs.len() * t.size() + 3;
-                llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
-                llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
-
-                for expr in exprs {
-                    llr.append(&mut expr.to_llr(context)?);
-                    llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
-                    llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                }
-                llr.push(WASM::Const(
-                    format!("{}", t.size() * 4 * (exprs.len())),
-                    WASMType::i32,
-                ));
-                llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
-                llr
+                let type_sizes = vec![t.size(); exprs.len()];
+                // In WASM a vector is just a tuple of uniform type.
+                store_tuple(exprs, &type_sizes, context)?
             }
             Expr::TupleLiteral(ref exprs) => {
-                let mut llr = vec![];
                 let t = context.get_node_type(self.id)?;
                 let individual_types = match &t {
                     Type::Product(ref types) => types.clone(),
@@ -738,23 +711,11 @@ impl ToLLR for Node<Expr> {
                         )))
                     }
                 };
-                let vector_size = t.size() + 3;
-                llr.push(WASM::Const(format!("{}", vector_size), WASMType::i32));
-                llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
-
-                for (i, expr) in exprs.iter().enumerate() {
-                    llr.append(&mut expr.to_llr(context)?);
-                    llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
-                    llr.push(WASM::Const(
-                        format!("{}", individual_types[i].size() * 4),
-                        WASMType::i32,
-                    ));
-                    llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
-                }
-                llr.push(WASM::Const(format!("{}", t.size() * 4), WASMType::i32));
-                llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
-                llr
-                //TODO this block needs a test case
+                let type_sizes = individual_types
+                    .iter()
+                    .map(|x| x.size())
+                    .collect::<Vec<_>>();
+                store_tuple(exprs, &type_sizes, context)?
             }
             Expr::TraitAccess { .. } => {
                 return Err(GraceError::compiler_error(
@@ -776,32 +737,97 @@ impl ToLLR for Node<Expr> {
                     "String not implemented".to_string(),
                 ));
             }
-            Expr::SetLiteral { .. } => {
-                return Err(GraceError::compiler_error(
-                    "SetLiteral not implemented".to_string(),
-                ));
-            }
-            Expr::MapLiteral { .. } => {
-                return Err(GraceError::compiler_error(
-                    "MapLiteral not implemented".to_string(),
-                ));
-            }
         })
     }
 }
 
+/// Store a tuple/vector of data
+///
+/// # Arguments
+/// * `exprs` - The expressions to store.
+/// * `type_sizes` - The size of each type in the tuple. Constant for vectors.
+/// * `context` - The typing context. Needed for recursive calls.
+fn store_tuple(
+    exprs: &[Node<Expr>],
+    type_sizes: &[usize],
+    context: &Context,
+) -> Result<Vec<WASM>, GraceError> {
+    let mut llr = vec![];
+    // Total memory used by the tuple.
+    let data_size: usize = type_sizes.iter().sum();
+    let vector_size = data_size + HEADER_SIZE_WORDS;
+    llr.push(WASM::from(vector_size));
+    llr.push(WASM::Call(".memory_management.alloc_words".to_string()));
+    // After calling alloc_words, the top of the stack is the address of the start of the tuple.
+
+    for (i, expr) in exprs.iter().enumerate() {
+        // Insert the code to calculate the address of the next element.
+        llr.append(&mut expr.to_llr(context)?);
+        // Store the value at the given address
+        llr.push(WASM::Call(".memory_management.tee_memory".to_string()));
+        // Put the size of the type on the stack.
+        llr.push(WASM::Const(format!("{}", type_sizes[i] * 4), WASMType::i32));
+        // Add the size of the type to the address.
+        // The top of the stack is now the address of the next element.
+        llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+    }
+    // At the end of the for loop the top of the stack is the address of the last element + 1.
+    // Put the start of the tuple on the stack
+    llr.push(WASM::Const(format!("{}", data_size * 4), WASMType::i32));
+    llr.push(WASM::Operation(WASMOperator::Sub, WASMType::i32));
+    Ok(llr)
+}
+
+/// Recursively handle attribute accesses on named types.
+fn attr_access(
+    base_type: &Type,
+    attribute: &Identifier,
+    context: &Context,
+) -> Result<Vec<WASM>, GraceError> {
+    Ok(match base_type {
+        Type::Record(ref names, ref fields) => {
+            let mut llr = vec![];
+            let attr_type = fields.get(attribute).unwrap();
+            // Calculate the offset of `attribute` from the start of the expression result.
+            let offset = calculate_offset(attribute, names, fields);
+            llr.push(WASM::Const(format!("{}", offset), WASMType::i32));
+            // Add the offset and the address
+            llr.push(WASM::Operation(WASMOperator::Add, WASMType::i32));
+            // Get the value at that address.
+            llr.push(WASM::Load(WASMType::from(attr_type)));
+            llr
+        }
+        Type::Named(ref name) => {
+            let underlying_type = context.get_defined_type(name)?;
+            attr_access(&underlying_type, attribute, context)?
+        }
+        x => {
+            return Err(GraceError::compiler_error(format!(
+                "Cannot access attribute of: {:?}. Should be a type error.",
+                x
+            )))
+        }
+    })
+}
+
 /// Calculate the offset of a field in a tuple.
+///
+/// # Arguments
+/// * `name` - The name of the field to calculate the offset of.
+/// * `order` - The order of the fields in the tuple.
+/// * `type_map` - The types of the fields in the tuple.
 fn calculate_offset(
     name: &Identifier,
     order: &Vec<Identifier>,
     type_map: &BTreeMap<Identifier, Type>,
 ) -> usize {
-    let mut offset = 8;
+    let mut offset = HEADER_SIZE_BYTES;
     for val in order {
         if val == name {
             break;
         } else {
-            offset += type_map.get(val).unwrap().size();
+            // Size gives number of words, we want bytes.
+            offset += type_map.get(val).unwrap().size() * 4;
         }
     }
     offset
@@ -826,6 +852,24 @@ pub mod rust_trait_impls {
                 Type::empty => None,
                 x => panic!("Tried to convert {:?} to WASM", x),
             }
+        }
+    }
+
+    impl From<usize> for WASM {
+        fn from(input: usize) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i32)
+        }
+    }
+
+    impl From<i32> for WASM {
+        fn from(input: i32) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i32)
+        }
+    }
+
+    impl From<i64> for WASM {
+        fn from(input: i64) -> Self {
+            WASM::Const(format!("{}", input), WASMType::i64)
         }
     }
 
@@ -921,13 +965,18 @@ pub mod rust_trait_impls {
 
 #[cfg(test)]
 mod tests {
+    use crate::testing::minimal_examples::cfgs::minimal_cfg;
+
     use super::*;
     use std::fs::File;
     use std::io::Read;
 
+    use cfg;
     use compiler_layers;
+    use testing::minimal_examples;
     use testing::minimal_examples::cfgs as min_cfg;
     use testing::snippets;
+    use type_checking::type_check::GetContext;
 
     /// Build a context and check the generated WASM.
     fn simple_llr_check<T: ToLLR>(value: T, expected: &[WASM]) {
@@ -982,6 +1031,18 @@ mod tests {
             check_expr(expr, expected_wasm, None);
         }
 
+        fn check_expr_seq(exprs: Vec<Node<Expr>>, expected_wasm: Vec<WASM>, context: Context) {
+            let mut context = context;
+            let mut actual_wasm = vec![];
+            for expr in exprs {
+                let (result, new_context) =
+                    compiler_layers::ast_to_type_rewrites(expr, Some(context));
+                context = new_context;
+                actual_wasm.append(&mut result.to_llr(&context).unwrap());
+            }
+            assert_eq!(actual_wasm, expected_wasm);
+        }
+
         #[test]
         fn llr_constants() {
             let expr: Node<Expr> = Node::from(0);
@@ -1010,6 +1071,101 @@ mod tests {
                     ],
                 );
             }
+        }
+
+        #[test]
+        fn function_call() {
+            let func_call = minimal_examples::minimal_call();
+            let (context, _) = minimal_examples::minimal_function_context();
+            let expected = vec![WASM::Call("x".to_string())];
+            check_expr(func_call, expected, Some(context));
+        }
+
+        #[test]
+        fn struct_literal() {
+            let expr = minimal_examples::minimal_struct_literal();
+            let context = minimal_examples::minimal_struct_context();
+            let expected = vec![WASM::Call("x".to_string())];
+            check_expr(expr, expected, Some(context));
+        }
+
+        #[test]
+        fn attribute_access() {
+            let expr1 = minimal_examples::minimal_struct_literal();
+            let expr2 = minimal_examples::minimal_attribute_access();
+            let context = minimal_examples::minimal_struct_context();
+            let expected = vec![
+                WASM::Call("x".to_string()),
+                WASM::Get("x".to_string()),
+                WASM::Const("8".to_string(), WASMType::i32),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::Load(WASMType::i32),
+            ];
+            check_expr_seq(vec![expr1, expr2], expected, context);
+        }
+
+        #[test]
+        fn unary_ops() {
+            let expr = minimal_examples::minimal_unary();
+            let expected = vec![
+                WASM::Const("1".to_string(), WASMType::i32),
+                WASM::Operation(WASMOperator::Neg, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
+        }
+
+        #[test]
+        fn tuple_literal() {
+            let expr = minimal_examples::tuple_literal_numeric();
+            let expected = vec![
+                // Allocate memory
+                WASM::from(5),
+                WASM::Call(".memory_management.alloc_words".to_string()),
+                // For rounds of storing 1
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                // Return to the start of the tuple
+                WASM::from(12),
+                WASM::Operation(WASMOperator::Sub, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
+        }
+
+        #[test]
+        fn vec_literal() {
+            let expr = minimal_examples::vec_literal_numeric();
+            let expected = vec![
+                // Allocate memory
+                WASM::from(5),
+                WASM::Call(".memory_management.alloc_words".to_string()),
+                // For rounds of storing 1
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                WASM::from(1),
+                WASM::Call(".memory_management.tee_memory".to_string()),
+                WASM::from(4),
+                WASM::Operation(WASMOperator::Add, WASMType::i32),
+                // Return to the start of the tuple
+                WASM::from(12),
+                WASM::Operation(WASMOperator::Sub, WASMType::i32),
+            ];
+            simple_check_expr(expr, expected);
         }
 
         // fn
@@ -1166,5 +1322,74 @@ mod tests {
             ],
         };
         assert_eq!(wasm.functions[0], expected);
+    }
+
+    #[test]
+    fn module_test() {
+        let module = minimal_examples::minimal_module();
+        let context = Context::builtin();
+        let (context, _) = module.add_to_context(context).unwrap();
+        let cfg_map = cfg::module_to_cfg(&module, &context);
+        let res = module_to_llr(&module, &context, &cfg_map).unwrap();
+        let func_wasm = WASMFunc {
+            name: "x".to_string(),
+            args: vec![],
+            locals: vec![("$ret".to_string(), WASMType::i32)],
+            result: Some(WASMType::i32),
+            code: vec![WASM::from(1)],
+        };
+        let expected = WASMModule {
+            imports: vec![],
+            functions: vec![func_wasm],
+            trait_implementations: vec![],
+        };
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn import_test() {
+        let (module, context) = minimal_examples::minimal_import();
+        let wasm = module_to_llr(&module, &context, &HashMap::new()).unwrap();
+        let expected = WASMModule {
+            imports: vec![WASMImport {
+                path: "x".to_string(),
+                value: "a".to_string(),
+                internal_name: ".x.a".to_string(),
+                params: vec![],
+                return_type: WASMType::i32,
+            }],
+            functions: vec![],
+            trait_implementations: vec![],
+        };
+        assert_eq!(wasm, expected);
+    }
+
+    #[test]
+    fn cfg_to_llr_test() {
+        let (cfg, context) = minimal_cfg();
+        let result = cfg.to_llr(&context).unwrap();
+        let expected = vec![
+            WASM::from(1),
+            WASM::from(1),
+            WASM::Operation(WASMOperator::Add, WASMType::i32),
+            WASM::Set("x".to_string()),
+            WASM::from(1),
+            WASM::from(1),
+            WASM::Operation(WASMOperator::Add, WASMType::i32),
+            WASM::Set("x".to_string()),
+        ];
+        assert_eq!(result, expected);
+    }
+
+    #[test]
+    fn calculate_offset_test() {
+        let order = vec![Identifier::from("x"), Identifier::from("y")];
+        let mut type_map = BTreeMap::new();
+        type_map.insert(Identifier::from("x"), Type::i32);
+        type_map.insert(Identifier::from("y"), Type::i32);
+        let offset = calculate_offset(&Identifier::from("x"), &order, &type_map);
+        assert_eq!(offset, 8);
+        let offset = calculate_offset(&Identifier::from("y"), &order, &type_map);
+        assert_eq!(offset, 12);
     }
 }

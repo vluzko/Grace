@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Assignment","BinaryOperator","ComparisonOperator","Expr","Stmt","UnaryOperator"],"fn":["wrap"],"mod":["constructors","rust_trait_impls"],"struct":["Block","Identifier","Import","Module","Node"]};

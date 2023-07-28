@@ -543,12 +543,7 @@ impl Node<Expr> {
             Expr::Bool(_) => Ok((context, Type::boolean)),
             Expr::VecLiteral(ref exprs) => {
                 let (new_c, vec_t) = _folded_check(exprs, context)?;
-                let t = Type::Parameterized(Identifier::from("Vector"), vec![vec_t]);
-                Ok((new_c, t))
-            }
-            Expr::SetLiteral(ref exprs) => {
-                let (new_c, set_t) = _folded_check(exprs, context)?;
-                let t = Type::Parameterized(Identifier::from("Set"), vec![set_t]);
+                let t = Type::Vector(Box::new(vec_t));
                 Ok((new_c, t))
             }
             Expr::TupleLiteral(ref exprs) => {
@@ -566,14 +561,6 @@ impl Node<Expr> {
             Expr::TraitAccess { .. } => Err(GraceError::compiler_error(
                 "Found a trait access in type checking".to_string(),
             )),
-            Expr::MapLiteral(ref exprs) => {
-                let (keys, values): (Vec<Node<Expr>>, Vec<Node<Expr>>) =
-                    exprs.iter().cloned().unzip();
-                let (key_c, key_t) = _folded_check(&keys, context)?;
-                let (new_c, val_t) = _folded_check(&values, key_c)?;
-                let t = Type::Parameterized(Identifier::from("Map"), vec![key_t, val_t]);
-                Ok((new_c, t))
-            }
         }?;
         final_c.add_type(self.id, final_t.clone());
         Ok((final_c, final_t))

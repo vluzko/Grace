@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use expression;
 use expression::{Block, Expr, Node, Stmt};
 use testing::test_utils;
+use type_checking::context::Context;
 use type_checking::{context, types};
 
 use crate::expression::Identifier;
@@ -17,6 +18,24 @@ pub fn minimal_ret_block() -> Block {
     Block {
         statements: vec![Box::new(minimal_returnn())],
     }
+}
+
+pub fn minimal_unscoped_block() -> Node<Block> {
+    let stmts = vec![
+        Stmt::LetStmt {
+            name: minimal_identifier(),
+            type_annotation: None,
+            expression: binary_op(),
+        },
+        Stmt::LetStmt {
+            name: minimal_identifier(),
+            type_annotation: None,
+            expression: binary_op(),
+        },
+    ];
+    Node::from(Block {
+        statements: stmts.into_iter().map(|x| Box::new(Node::from(x))).collect(),
+    })
 }
 
 pub fn minimal_op_block() -> Node<Block> {
@@ -43,6 +62,10 @@ pub fn minimal_identifier() -> expression::Identifier {
     expression::Identifier::from(minimal_name())
 }
 
+pub fn minimal_identifiern() -> Node<Expr> {
+    Node::from(Expr::from(minimal_identifier()))
+}
+
 pub fn minimal_identifier_2() -> Node<Expr> {
     Node::from("a")
 }
@@ -52,8 +75,8 @@ pub fn minimal_identifier_3() -> Node<Expr> {
 }
 
 /// Minimal generic expression
-pub fn minimal_expression() -> Expr {
-    Expr::Int("1".to_string())
+pub fn minimal_expression() -> Node<Expr> {
+    Node::from(Expr::Int("1".to_string()))
 }
 
 /// Minimal boolean expression
@@ -65,6 +88,14 @@ pub fn minimal_int() -> Node<Expr> {
     Node::from(Expr::Int("1".to_string()))
 }
 
+pub fn binary_op() -> Node<Expr> {
+    Node::from(Expr::BinaryExpr {
+        left: Box::new(minimal_int()),
+        right: Box::new(minimal_int()),
+        operator: expression::BinaryOperator::Add,
+    })
+}
+
 pub fn binary_op_with_identifiers() -> Node<Expr> {
     Node::from(Expr::BinaryExpr {
         left: Box::new(minimal_identifier_2()),
@@ -73,23 +104,33 @@ pub fn binary_op_with_identifiers() -> Node<Expr> {
     })
 }
 
-/// Minimal expression node
-pub fn minimal_node_expression() -> Node<Expr> {
-    Node::from(minimal_expression())
+/// Minimal unary expression
+pub fn minimal_unary() -> Node<Expr> {
+    Node::from(Expr::UnaryExpr {
+        operator: expression::UnaryOperator::Negative,
+        operand: Box::new(minimal_int()),
+    })
+}
+
+/// Minimal struct literal expression
+pub fn minimal_struct_literal() -> Node<Expr> {
+    Node::from(Expr::StructLiteral {
+        base: Box::new(minimal_identifiern()),
+        fields: vec![],
+    })
+}
+
+/// Minimal attribute access
+pub fn minimal_attribute_access() -> Node<Expr> {
+    Node::from(Expr::AttributeAccess {
+        base: Box::new(minimal_identifiern()),
+        attribute: minimal_identifier(),
+    })
 }
 
 /// Minimal vec literal with integer elements
 pub fn vec_literal_numeric() -> Node<Expr> {
     Node::from(Expr::VecLiteral(vec![
-        minimal_int(),
-        minimal_int(),
-        minimal_int(),
-    ]))
-}
-
-/// Minimal set literal with integer elements
-pub fn set_literal_numeric() -> Node<Expr> {
-    Node::from(Expr::SetLiteral(vec![
         minimal_int(),
         minimal_int(),
         minimal_int(),
@@ -105,19 +146,11 @@ pub fn tuple_literal_numeric() -> Node<Expr> {
     ]))
 }
 
-/// Minimal map literal with integer elements
-pub fn map_literal_numeric() -> Node<Expr> {
-    Node::from(Expr::MapLiteral(vec![
-        (minimal_int(), minimal_int()),
-        (minimal_int(), minimal_int()),
-    ]))
-}
-
 /// Minimal assignment statement
 pub fn minimal_assn() -> Stmt {
     Stmt::AssignmentStmt {
         name: minimal_identifier(),
-        expression: minimal_node_expression(),
+        expression: minimal_expression(),
     }
 }
 
@@ -126,7 +159,7 @@ pub fn minimal_let() -> Stmt {
     Stmt::LetStmt {
         name: minimal_identifier(),
         type_annotation: None,
-        expression: minimal_node_expression(),
+        expression: minimal_expression(),
     }
 }
 
@@ -139,6 +172,27 @@ pub fn minimal_function_dec() -> Stmt {
         return_type: types::Type::i32,
         block: Node::from(minimal_ret_block()),
     }
+}
+
+/// Context containing the minimal function declaration
+pub fn minimal_function_context() -> (Context, usize) {
+    let context = context::Context::builtin();
+    test_utils::add_function_to_context(
+        context,
+        minimal_name().as_str(),
+        vec![],
+        vec![],
+        types::Type::i32,
+    )
+}
+
+/// Minimal function call corresponding to minimal function declaration.
+pub fn minimal_call() -> Node<Expr> {
+    Node::from(Expr::FunctionCall {
+        function: Box::new(minimal_identifiern()),
+        args: vec![],
+        kwargs: vec![],
+    })
 }
 
 /// Function declaration with empty block
@@ -203,7 +257,7 @@ pub fn minimal_ifn() -> Node<Stmt> {
 /// Minimal if with non-boolean condition node.
 pub fn minimal_if_non_booln() -> Node<Stmt> {
     Node::from(Stmt::IfStmt {
-        condition: minimal_node_expression(),
+        condition: minimal_expression(),
         block: Node::from(minimal_block()),
         else_block: None,
     })
@@ -227,14 +281,14 @@ pub fn minimal_while() -> Node<Stmt> {
 
 pub fn minimal_while_non_booln() -> Node<Stmt> {
     Node::from(Stmt::WhileStmt {
-        condition: Node::from(minimal_expression()),
+        condition: minimal_expression(),
         block: Node::from(minimal_block()),
     })
 }
 
 /// Minimal return node
 pub fn minimal_returnn() -> Node<Stmt> {
-    Node::from(Stmt::ReturnStmt(minimal_node_expression()))
+    Node::from(Stmt::ReturnStmt(minimal_expression()))
 }
 
 /// Minimal function type
@@ -281,9 +335,45 @@ pub fn trait_module() -> Node<expression::Module> {
     })
 }
 
+pub fn minimal_module() -> Node<expression::Module> {
+    Node::from(expression::Module {
+        functions: vec![Box::new(minimal_function_decn())],
+        imports: vec![],
+        structs: vec![],
+        traits: HashMap::new(),
+        trait_implementations: vec![],
+    })
+}
+
+pub fn minimal_import() -> (Node<expression::Module>, Context) {
+    let import = expression::Import {
+        id: 0,
+        path: vec![Identifier::from("x")],
+        alias: None,
+        values: vec![Identifier::from("a")],
+    };
+    let v = vec![Identifier::from("a")];
+    let m = btreemap! {Identifier::from("a")=>minimal_function_type()};
+    let import_type = types::Type::Module(v, m);
+    let mut context = context::Context::builtin();
+    context.append_import(&import);
+    context.add_type(import.id, import_type);
+    (
+        Node::from(expression::Module {
+            functions: vec![],
+            imports: vec![Box::new(import)],
+            structs: vec![],
+            traits: HashMap::new(),
+            trait_implementations: vec![],
+        }),
+        context,
+    )
+}
+
 pub(crate) mod cfgs {
     use super::*;
     use cfg;
+    use compiler_layers::UpToCfg;
 
     pub fn minimal_stmt() -> Node<cfg::CfgStmt> {
         Node::from(cfg::CfgStmt::Assignment {
@@ -297,6 +387,12 @@ pub(crate) mod cfgs {
             name: minimal_identifier(),
             expression: minimal_bool_expression(),
         })
+    }
+
+    pub fn minimal_cfg() -> (cfg::Cfg, Context) {
+        let block = minimal_unscoped_block();
+        let (_, cfg, context) = block.up_to_cfg().unwrap();
+        (cfg, context)
     }
 
     /// Minimal block vertex.

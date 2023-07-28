@@ -469,7 +469,8 @@ impl ParserContext {
                     exprs.push(expr);
                     updates.append(&mut update);
                 }
-                (Expr::SetLiteral(exprs), updates)
+                panic!("Not implemented")
+                // (Expr::SetLiteral(exprs), updates)
             },
             &(input.line, input.column),
         )
@@ -498,8 +499,8 @@ impl ParserContext {
                     updates.append(&mut ku);
                     updates.append(&mut vu);
                 }
-
-                (Expr::MapLiteral(mappings), updates)
+                panic!("Not implemented")
+                // (Expr::MapLiteral(mappings), updates)
             },
             &(input.line, input.column),
         )
@@ -1322,19 +1323,9 @@ mod tests {
         );
 
         check_match_no_update(
-            "{x : y}",
-            |x| e.expression(x),
-            Node::from(Expr::MapLiteral(vec![(Node::from("x"), Node::from("y"))])),
-        );
-        check_match_no_update(
             "[true, false]",
             |x| e.expression(x),
             Node::from(Expr::VecLiteral(vec![Node::from(true), Node::from(false)])),
-        );
-        check_match_no_update(
-            "{true, false}",
-            |x| e.expression(x),
-            Node::from(Expr::SetLiteral(vec![Node::from(true), Node::from(false)])),
         );
         check_match_no_update(
             "(true, false)",
@@ -1377,12 +1368,6 @@ mod tests {
             "(1, 2,)",
             |x| e.expression(x),
             Expr::TupleLiteral(vec![Node::from(1), Node::from(2)]),
-        );
-
-        check_data(
-            "{a: 2}",
-            |x| e.expression(x),
-            Expr::MapLiteral(vec![(Node::from("a"), Node::from(2))]),
         );
     }
 

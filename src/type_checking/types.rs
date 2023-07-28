@@ -22,6 +22,8 @@ pub enum Type {
     Sum(Vec<Type>),
     /// A product type, e.g. a tuple
     Product(Vec<Type>),
+    /// A vector type
+    Vector(Box<Type>),
     /// A vector of argument and kwargument names and types, and the return type
     Function(Vec<(Identifier, Type)>, Vec<(Identifier, Type)>, Box<Type>),
     /// A referenced to a named type.
@@ -206,7 +208,8 @@ impl Type {
             Type::Record(_, ref fields) | Type::Module(_, ref fields) => {
                 fields.iter().map(|(_, t)| t.size()).sum()
             }
-            _ => panic!("Not implemented"),
+            Type::Vector(ref t) => t.size(),
+            x => panic!("Size not implemented for {:?}", x),
         }
     }
 

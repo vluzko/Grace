@@ -379,7 +379,6 @@ impl Context {
         if initial_scope.declarations.contains_key(name) {
             Ok(scope_id)
         } else {
-            // println!("{:?}", self.scopes);
             match initial_scope.parent_id {
                 Some(id) => self.get_declaring_scope(id, name),
                 None => Err(GraceError::scoping_error(format!(
@@ -838,7 +837,7 @@ impl Context {
         }
     }
 
-    /// Get all the declarations contained within a particular scope.
+    /// Get all the local declarations contained within a particular scope.
     /// Does not guarantee that the declarations are in the order they were declared.
     pub fn get_contained_declarations(
         &self,
@@ -851,8 +850,11 @@ impl Context {
             let current_scope = self.get_scope(current_scope_id)?;
 
             // Add the declarations
-            for (name, _) in current_scope.declaration_order.iter() {
-                declarations.insert((name.clone(), self.get_type(current_scope_id, name)?));
+            for (name, scope_mod) in current_scope.declarations.iter() {
+                if let CanModifyScope::Statement(_, _) = scope_mod {
+                    println!("Adding {:?} to declarations", scope_mod);
+                    declarations.insert((name.clone(), self.get_type(current_scope_id, name)?));
+                }
             }
 
             // Add children to the stack.

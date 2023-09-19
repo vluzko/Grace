@@ -1,13 +1,13 @@
 //! Low-level representation of WebAssembly.
 use itertools::join;
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, HashMap};
 use std::convert::From;
 use std::fmt;
 
 use petgraph::{visit::EdgeRef, Outgoing};
 
 use cfg::{Cfg, CfgStmt, CfgVertex};
-use expression::{BinaryOperator, Block, Expr, Identifier, Module, Node, Stmt, UnaryOperator};
+use expression::{BinaryOperator, Expr, Identifier, Module, Node, Stmt, UnaryOperator};
 use general_utils;
 use grace_error::GraceError;
 use type_checking::context::Context;
@@ -127,60 +127,6 @@ impl WASMType {
     }
 }
 
-/// Get the variables declared within a node and its subnodes
-/// With scopes it is difficult to move down the tree, so instead
-/// we move down the tree within the relevant nodes.
-trait GetContainedDeclarations {
-    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)>;
-}
-
-impl GetContainedDeclarations for Node<Block> {
-    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
-        let top_level: HashSet<Identifier> = context
-            .get_scope(self.scope)
-            .unwrap()
-            .declarations
-            .keys()
-            .cloned()
-            .collect();
-        let mut with_types = top_level
-            .into_iter()
-            .map(|x| {
-                let t = context.get_type(self.scope, &x).unwrap();
-                (x, t)
-            })
-            .collect();
-        for stmt in &self.data.statements {
-            with_types =
-                general_utils::m_bt_union(with_types, stmt.get_contained_declarations(context));
-        }
-        with_types
-    }
-}
-
-impl GetContainedDeclarations for Node<Stmt> {
-    fn get_contained_declarations(&self, context: &Context) -> BTreeSet<(Identifier, Type)> {
-        match self.data {
-            Stmt::FunctionDecStmt { ref block, .. } | Stmt::WhileStmt { ref block, .. } => {
-                block.get_contained_declarations(context)
-            }
-            Stmt::IfStmt {
-                ref block,
-                ref else_block,
-                ..
-            } => {
-                let block_dec = block.get_contained_declarations(context);
-                let else_dec = match else_block {
-                    Some(b) => b.get_contained_declarations(context),
-                    None => BTreeSet::new(),
-                };
-                general_utils::m_bt_union(block_dec, else_dec)
-            }
-            _ => BTreeSet::new(),
-        }
-    }
-}
-
 /// Convert a module to LLR.
 pub fn module_to_llr(
     module: &Node<Module>,
@@ -289,7 +235,8 @@ pub fn handle_declaration(
             ref return_type,
             ..
         } => {
-            let local_variables = declaration.get_contained_declarations(context);
+            // let local_variables = declaration.get_contained_declarations(context);
+            let local_variables = context.get_contained_declarations(declaration.scope)?;
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
                 .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
@@ -374,7 +321,8 @@ pub fn handle_trait_func_dec(
             ..
         } => {
             // Get local variables as WASM.
-            let local_variables = declaration.get_contained_declarations(context);
+            // let local_variables = declaration.get_contained_declarations(context);
+            let local_variables = context.get_contained_declarations(declaration.scope)?;
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
                 .map(|(n, t)| (n.name.clone(), WASMType::from(t)))

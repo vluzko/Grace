@@ -564,7 +564,7 @@ mod test {
             let mut stmt = minimal_examples::minimal_function_with_args_and_ops();
             let w_scopes = stmt.set_scope(context.root_id, context);
             let scope = w_scopes.get_scope(stmt.scope).unwrap();
-            println!("{:?}", scope);
+            panic!("Unfinished test")
         }
     }
 
@@ -578,7 +578,7 @@ mod test {
         fn refined_fn_scope() {
             let code = snippets::refined_fn();
             let (result, _context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
-            println!("{:?}", result);
+            panic!("Unfinished test")
         }
     }
 }

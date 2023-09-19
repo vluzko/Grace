@@ -235,7 +235,6 @@ pub fn handle_declaration(
             ref return_type,
             ..
         } => {
-            // let local_variables = declaration.get_contained_declarations(context);
             let local_variables = context.get_contained_declarations(declaration.scope)?;
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
@@ -321,7 +320,6 @@ pub fn handle_trait_func_dec(
             ..
         } => {
             // Get local variables as WASM.
-            // let local_variables = declaration.get_contained_declarations(context);
             let local_variables = context.get_contained_declarations(declaration.scope)?;
             let locals_with_wasm_types: Vec<(String, WASMType)> = local_variables
                 .iter()
@@ -1239,8 +1237,9 @@ mod tests {
         let (func_dec, context) = compiler_layers::to_context::<Node<Stmt>>(
             "fn a(b: i32) -> i32:\n let x = 5 + 6\n return x\n".as_bytes(),
         );
-        let actual = func_dec
-            .get_contained_declarations(&context)
+        let actual = context
+            .get_contained_declarations(func_dec.scope)
+            .unwrap()
             .iter()
             .cloned()
             .map(|x| x.0)
@@ -1282,7 +1281,7 @@ mod tests {
         let func_wasm = WASMFunc {
             name: "x".to_string(),
             args: vec![],
-            locals: vec![("$ret".to_string(), WASMType::i32)],
+            locals: vec![],
             result: Some(WASMType::i32),
             code: vec![WASM::from(1)],
         };

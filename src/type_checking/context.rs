@@ -1,5 +1,5 @@
 //! The context object.
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 use expression::*;
 use general_utils;
@@ -137,7 +137,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
         }
     }
     for (tn, mn) in builtin_binary_bool().into_iter() {
-        for t in vec![Type::boolean] {
+        for t in [Type::boolean] {
             let func_t = Type::Function(
                 vec![
                     (Identifier::from("left"), t.clone()),
@@ -167,7 +167,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
     }
 
     for (tn, mn) in builtin_unary().into_iter() {
-        for t in vec![Type::boolean] {
+        for t in [Type::boolean] {
             let func_t = Type::Function(
                 vec![(Identifier::from("operand"), t.clone())],
                 vec![],
@@ -425,6 +425,18 @@ impl Context {
                 None => (None, None),
             }
         }
+    }
+
+    /// Build the tree of scopes.
+    pub fn get_scope_tree(&self) -> HashMap<usize, Vec<usize>> {
+        let mut tree = HashMap::new();
+        for (id, scope) in self.scopes.iter() {
+            if let Some(parent_id) = scope.parent_id {
+                let children = tree.entry(parent_id).or_insert(vec![]);
+                children.push(*id);
+            }
+        }
+        tree
     }
 }
 
@@ -824,6 +836,29 @@ impl Context {
         for ((trait_name, t), _impls) in self.trait_implementations.iter() {
             println!("Trait {:?} for type {:?}", trait_name, t);
         }
+    }
+
+    /// Get all the declarations contained within a particular scope.
+    /// Does not guarantee that the declarations are in the order they were declared.
+    pub fn get_contained_declarations(
+        &self,
+        scope_id: usize,
+    ) -> Result<BTreeSet<(Identifier, Type)>, GraceError> {
+        let tree = self.get_scope_tree();
+        let mut stack = vec![scope_id];
+        let mut declarations = BTreeSet::new();
+        while let Some(current_scope_id) = stack.pop() {
+            let current_scope = self.get_scope(current_scope_id)?;
+
+            // Add the declarations
+            for (name, _) in current_scope.declaration_order.iter() {
+                declarations.insert((name.clone(), self.get_type(current_scope_id, name)?));
+            }
+
+            // Add children to the stack.
+            stack.extend(tree.get(&current_scope_id).unwrap_or(&vec![]))
+        }
+        Ok(declarations)
     }
 }
 

@@ -8,3 +8,4 @@ Grace.iml
 *.wasm
 .metadata/
 .coverage/
+*.profraw

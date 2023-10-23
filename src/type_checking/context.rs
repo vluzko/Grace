@@ -300,7 +300,16 @@ impl Context {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
         let maybe_scope_mod = self.get_declaration(scope_id, name)?;
         match maybe_scope_mod {
-            CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
+            CanModifyScope::Statement(_, ref id) => {
+                self.type_map
+                    .get(id)
+                    .ok_or(GraceError::type_error(format!(
+                        "No type found for node with ID {} and name {}",
+                        id, name
+                    )))
+                    .cloned()
+                // Ok(t.clone())
+            }
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
             CanModifyScope::ImportedModule(ref _id) => {
                 Err(GraceError::compiler_error("Not implemented".to_string()))
@@ -817,6 +826,7 @@ impl Context {
         }
     }
 
+    /// Print every scope and its parent.
     pub(crate) fn _print_scope_hierarchy(&self) {
         for (scope_id, scope) in self.scopes.iter() {
             println!("Scope {} -> {:?}", scope_id, scope.parent_id);

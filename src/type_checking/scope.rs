@@ -564,7 +564,10 @@ mod test {
             let mut stmt = minimal_examples::minimal_function_with_args_and_ops();
             let w_scopes = stmt.set_scope(context.root_id, context);
             let scope = w_scopes.get_scope(stmt.scope).unwrap();
-            panic!("Unfinished test")
+            let parent_scope = w_scopes.get_scope(scope.parent_id.unwrap()).unwrap();
+            assert!(parent_scope
+                .declarations
+                .contains_key(&Identifier::from("add_two")));
         }
     }
 
@@ -577,8 +580,11 @@ mod test {
         #[test]
         fn refined_fn_scope() {
             let code = snippets::refined_fn();
-            let (result, _context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
-            panic!("Unfinished test")
+            let (_, context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
+            let scope = context.get_scope(context.root_id).unwrap();
+            assert!(scope
+                .declarations
+                .contains_key(&Identifier::from("require_ref")));
         }
     }
 }

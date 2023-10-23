@@ -45,7 +45,7 @@ pub fn minimal_op_block() -> Node<Block> {
             type_annotation: None,
             expression: binary_op_with_identifiers(),
         },
-        Stmt::ReturnStmt(Node::from("x")),
+        Stmt::ReturnStmt(Node::from(minimal_identifiern())),
     ];
     Node::from(Block {
         statements: stmts.into_iter().map(|x| Box::new(Node::from(x))).collect(),
@@ -232,7 +232,7 @@ pub fn minimal_function_decn() -> Node<Stmt> {
 
 pub fn minimal_function_with_args_and_ops() -> Node<Stmt> {
     let dec = Stmt::FunctionDecStmt {
-        name: Identifier::from("add"),
+        name: Identifier::from("add_two"),
         args: vec![
             (Identifier::from("a"), types::Type::i32),
             (Identifier::from("b"), types::Type::i32),

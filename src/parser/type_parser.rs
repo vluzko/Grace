@@ -22,10 +22,7 @@ impl ParserContext {
 }
 
 pub fn with_self(input: PosStr) -> TypeRes {
-    alt_complete!(
-        input,
-        map!(SELF, |_x| Type::self_type(Box::new(Type::Undetermined))) | any_type
-    )
+    alt_complete!(input, map!(SELF, |_x| Type::SelfT) | any_type)
 }
 
 /// Parse a type.

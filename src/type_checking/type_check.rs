@@ -37,7 +37,7 @@ impl GetContext for Node<Module> {
         for (trait_name, struct_name, func_impls) in self.data.trait_implementations.iter() {
             match self.data.traits.get(trait_name) {
                 Some(trait_dec) => {
-                    // Check that all functions are
+                    // Check that all functions are implemented.
                     let need_impl = HashSet::<Identifier>::from_iter(
                         self.data.traits[trait_name].functions.keys().cloned(),
                     );
@@ -55,6 +55,11 @@ impl GetContext for Node<Module> {
                     let mut func_types = HashMap::new();
 
                     for dec in func_impls.iter() {
+                        // Insert self type data
+                        let local_self_type = Type::Named(struct_name.clone());
+                        new_context.self_types.insert(dec.scope, local_self_type);
+
+                        // Add the function to the context.
                         let res = dec.add_to_context(new_context)?;
                         new_context = res.0;
                         let func_type = res.1;
@@ -62,13 +67,15 @@ impl GetContext for Node<Module> {
 
                         // Check that this function declaration is an actual method of the trait.
                         // Check that the declaration type and the expected type are the same.
-                        let expected_type = trait_dec.functions.get(&func_name).expect("Unreachable code: function not found in trait, but function names already checked.");
-                        new_context.check_function_types(expected_type, &func_type)?;
+                        let expected_type = trait_dec.functions.get(&func_name).expect("Compiler error: function not found in trait, but function names already checked.");
+                        new_context.check_grad_and_ref_equality(
+                            dec.scope,
+                            &func_type,
+                            expected_type,
+                        )?;
 
                         // Add the function type to the map
                         func_types.insert(func_name.clone(), func_type.clone());
-
-                        // Remove this function from the set of functions that need to be implemented.
                     }
 
                     let alias_type = Type::Named(struct_name.clone());
@@ -163,7 +170,6 @@ fn _add_function_declaration_to_context(
     mut context: Context,
     return_type: &Type,
 ) -> TypeCheckRes {
-    // TODO: Type checking
     // Copy the types for arguments
     let mut arg_types = vec![];
     let mut kwarg_types = vec![];
@@ -178,7 +184,7 @@ fn _add_function_declaration_to_context(
 
     // Evaluate scopes and types for all keyword expressions.
     // This must be done *before* any arguments are actually added to scope,
-    // because the expressions cannot references the arguments.
+    // because the expressions cannot reference the arguments.
     for (key, t, ref val) in kwargs.iter() {
         // Get context for each expression
         let res = val.add_to_context(context)?;
@@ -345,31 +351,30 @@ fn _add_function_call_to_context(
     // Check argument length
     // If there's a self type argument, we don't check it.
     // TODO: Cleanup: In pre_cfg_rewrites rewrite args to include the self parameter.
-    let arg_types_to_match =
-        match args.len() > 1 && arg_types[0].1 == Type::self_type(Box::new(Type::Undetermined)) {
-            true => {
-                if args.len() != arg_types.len() - 1 {
-                    return Err(GraceError::type_error(format!(
-                        "Function call to {:?} has {} arguments, but expected {}",
-                        function,
-                        args.len(),
-                        arg_types.len() - 1
-                    )));
-                }
-                &arg_types[1..]
+    let arg_types_to_match = match args.len() > 1 && arg_types[0].1 == Type::SelfT {
+        true => {
+            if args.len() != arg_types.len() - 1 {
+                return Err(GraceError::type_error(format!(
+                    "Function call to {:?} has {} arguments, but expected {}",
+                    function,
+                    args.len(),
+                    arg_types.len() - 1
+                )));
             }
-            false => {
-                if args.len() != arg_types.len() {
-                    return Err(GraceError::type_error(format!(
-                        "Function call to {:?} has {} arguments, but expected {}",
-                        function,
-                        args.len(),
-                        arg_types.len()
-                    )));
-                }
-                &arg_types
+            &arg_types[1..]
+        }
+        false => {
+            if args.len() != arg_types.len() {
+                return Err(GraceError::type_error(format!(
+                    "Function call to {:?} has {} arguments, but expected {}",
+                    function,
+                    args.len(),
+                    arg_types.len()
+                )));
             }
-        };
+            &arg_types
+        }
+    };
 
     for (i, arg) in args.iter().enumerate() {
         let res = arg.add_to_context(new_c)?;

@@ -17,7 +17,8 @@ pub enum Type {
     string,
     boolean,
     empty,
-    self_type(Box<Type>),
+    /// The self type.
+    SelfT,
     /// A sum type, e.g. a union type
     Sum(Vec<Type>),
     /// A product type, e.g. a tuple

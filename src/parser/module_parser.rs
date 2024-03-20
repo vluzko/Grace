@@ -45,7 +45,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
         _ => panic!(),
     };
 
-    let w_self_type = ParserContext {
+    let w_SelfT = ParserContext {
         imported: context.imported.clone(),
         can_use_self: true,
     };
@@ -56,8 +56,8 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
                 map!(m!(context.function_declaration_stmt, 0), |x| {
                     ModuleDec::Func(x)
                 }) | map!(m!(context.struct_declaration_stmt), ModuleDec::Struct)
-                    | map!(m!(w_self_type.trait_parser), ModuleDec::TraitDec)
-                    | map!(m!(w_self_type.trait_impl), ModuleDec::TraitImpl)
+                    | map!(m!(w_SelfT.trait_parser), ModuleDec::TraitDec)
+                    | map!(m!(w_SelfT.trait_impl), ModuleDec::TraitImpl)
             ),
             between_statement
         )),

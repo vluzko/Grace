@@ -202,9 +202,6 @@ pub(in parser) fn just_int(input: PosStr) -> IO {
 }
 
 // /// Type parsers
-// pub mod type_parser {
-
-// }
 
 /// Get the next hidden variable.
 pub(in parser) fn next_hidden() -> Identifier {

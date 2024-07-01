@@ -572,6 +572,20 @@ pub mod rust_trait_impls {
                 }
             }
         }
+        impl From<Identifier> for Node<Expr> {
+            fn from(input: Identifier) -> Self {
+                let expr: Expr = Expr::from(input);
+                Node {
+                    id: general_utils::get_next_id(),
+                    start_line: 0,
+                    start_col: 0,
+                    end_line: 0,
+                    end_col: 0,
+                    data: expr,
+                    scope: 0,
+                }
+            }
+        }
         impl From<f64> for Node<Expr> {
             fn from(input: f64) -> Self {
                 let expr: Expr = Expr::from(input);

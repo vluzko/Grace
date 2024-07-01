@@ -45,7 +45,7 @@ pub fn minimal_op_block() -> Node<Block> {
             type_annotation: None,
             expression: binary_op_with_identifiers(),
         },
-        Stmt::ReturnStmt(Node::from("x")),
+        Stmt::ReturnStmt(Node::from(minimal_identifiern())),
     ];
     Node::from(Block {
         statements: stmts.into_iter().map(|x| Box::new(Node::from(x))).collect(),
@@ -58,16 +58,20 @@ pub fn minimal_name() -> String {
 }
 
 /// Minimal identifier
-pub fn minimal_identifier() -> expression::Identifier {
-    expression::Identifier::from(minimal_name())
+pub fn minimal_identifier() -> Identifier {
+    Identifier::from(minimal_name())
 }
 
 pub fn minimal_identifiern() -> Node<Expr> {
-    Node::from(Expr::from(minimal_identifier()))
+    Node::from(minimal_identifier())
 }
 
-pub fn minimal_identifier_2() -> Node<Expr> {
-    Node::from("a")
+pub fn minimal_identifier_2() -> Identifier {
+    Identifier::from("a")
+}
+
+pub fn minimal_identifier_2n() -> Node<Expr> {
+    Node::from(minimal_identifier_2())
 }
 
 pub fn minimal_identifier_3() -> Node<Expr> {
@@ -98,7 +102,7 @@ pub fn binary_op() -> Node<Expr> {
 
 pub fn binary_op_with_identifiers() -> Node<Expr> {
     Node::from(Expr::BinaryExpr {
-        left: Box::new(minimal_identifier_2()),
+        left: Box::new(minimal_identifier_2n()),
         right: Box::new(minimal_identifier_3()),
         operator: expression::BinaryOperator::Add,
     })
@@ -232,7 +236,7 @@ pub fn minimal_function_decn() -> Node<Stmt> {
 
 pub fn minimal_function_with_args_and_ops() -> Node<Stmt> {
     let dec = Stmt::FunctionDecStmt {
-        name: Identifier::from("add"),
+        name: Identifier::from("add_two"),
         args: vec![
             (Identifier::from("a"), types::Type::i32),
             (Identifier::from("b"), types::Type::i32),
@@ -323,6 +327,36 @@ pub fn minimal_trait() -> types::Trait {
     }
 }
 
+pub fn minimal_struct() -> Node<Stmt> {
+    Node::from(Stmt::StructDec {
+        name: minimal_identifier(),
+        fields: vec![(minimal_identifier_2(), types::Type::i32)],
+    })
+}
+
+/// A trait with a single function that returns Self
+pub fn minimal_self_trait() -> types::Trait {
+    let functions = HashMap::from([(
+        Identifier::from("self_func"),
+        types::Type::Function(
+            vec![(Identifier::from("self"), types::Type::SelfT)],
+            vec![],
+            Box::new(types::Type::i32),
+        ),
+    )]);
+    types::Trait {
+        name: minimal_identifier_2(),
+        functions,
+    }
+}
+
+pub fn minimal_self_struct() {
+    let self_trait = minimal_self_trait();
+    let s = minimal_struct();
+    let mut context = context::Context::builtin();
+    context.traits.insert(self_trait.name.clone(), self_trait);
+}
+
 /// Module containing a trait.
 pub fn trait_module() -> Node<expression::Module> {
     let t = minimal_trait();
@@ -332,6 +366,52 @@ pub fn trait_module() -> Node<expression::Module> {
         structs: vec![],
         traits: HashMap::from([(t.name.clone(), t)]),
         trait_implementations: vec![],
+    })
+}
+
+pub fn minimal_module_with_impl() -> Node<expression::Module> {
+    let t = minimal_self_trait();
+    let s = minimal_struct();
+    let trait_impl = Node::from(Stmt::FunctionDecStmt {
+        name: Identifier::from("self_func"),
+        args: vec![],
+        kwargs: vec![],
+        return_type: types::Type::SelfT,
+        block: Node::from(minimal_ret_block()),
+    });
+    Node::from(expression::Module {
+        functions: vec![],
+        imports: vec![],
+        structs: vec![Box::new(s)],
+        traits: HashMap::from([(t.name.clone(), t)]),
+        trait_implementations: vec![(
+            Identifier::from("a"),
+            Identifier::from("b"),
+            vec![trait_impl],
+        )],
+    })
+}
+
+pub fn minimal_module_with_self() -> Node<expression::Module> {
+    let t = minimal_self_trait();
+    let s = minimal_struct();
+    let trait_impl = Node::from(Stmt::FunctionDecStmt {
+        name: Identifier::from("self_func"),
+        args: vec![(Identifier::from("self"), types::Type::SelfT)],
+        kwargs: vec![],
+        return_type: types::Type::i32,
+        block: Node::from(minimal_ret_block()),
+    });
+    Node::from(expression::Module {
+        functions: vec![],
+        imports: vec![],
+        structs: vec![Box::new(s)],
+        traits: HashMap::from([(t.name.clone(), t)]),
+        trait_implementations: vec![(
+            Identifier::from("a"),
+            Identifier::from("b"),
+            vec![trait_impl],
+        )],
     })
 }
 

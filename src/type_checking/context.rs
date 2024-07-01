@@ -15,10 +15,10 @@ fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
         functions: hashmap! {
             method_name => Type::Function(
                 vec!(
-                    (Identifier::from("left"), Type::self_type(Box::new(Type::Undetermined))),
-                    (Identifier::from("right"), Type::self_type(Box::new(Type::Undetermined)))
+                    (Identifier::from("left"), Type::SelfT),
+                    (Identifier::from("right"), Type::SelfT)
                 ), vec!(),
-                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+                Box::new(Type::SelfT)
             )
         },
     }
@@ -32,9 +32,9 @@ fn unary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
         functions: hashmap! {
             method_name => Type::Function(
                 vec!(
-                    (Identifier::from("operand"), Type::self_type(Box::new(Type::Undetermined)))
+                    (Identifier::from("operand"), Type::SelfT)
                 ), vec!(),
-                Box::new(Type::self_type(Box::new(Type::Undetermined)))
+                Box::new(Type::SelfT)
             )
         },
     }
@@ -215,6 +215,8 @@ pub struct Context {
     /// (or the trait corresponding to trait_name, rather).
     /// The value is the map from method implementations to types.
     pub trait_implementations: HashMap<(Identifier, Type), HashMap<Identifier, Type>>,
+    /// Self types in given scopes
+    pub self_types: HashMap<usize, Type>,
 }
 
 /// Constructors
@@ -234,6 +236,7 @@ impl Context {
             gradual_constraints: HashMap::new(),
             traits: builtin_binary_traits(),
             trait_implementations: builtin_trait_implementations(),
+            self_types: HashMap::new(),
         }
     }
 
@@ -251,6 +254,7 @@ impl Context {
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
             trait_implementations: HashMap::new(),
+            self_types: HashMap::new(),
         }
     }
 
@@ -268,6 +272,7 @@ impl Context {
             gradual_constraints: HashMap::new(),
             traits: HashMap::new(),
             trait_implementations: HashMap::new(),
+            self_types: HashMap::new(),
         }
     }
 }
@@ -300,7 +305,16 @@ impl Context {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
         let maybe_scope_mod = self.get_declaration(scope_id, name)?;
         match maybe_scope_mod {
-            CanModifyScope::Statement(_, ref id) => Ok(self.type_map[id].clone()),
+            CanModifyScope::Statement(_, ref id) => {
+                self.type_map
+                    .get(id)
+                    .ok_or(GraceError::type_error(format!(
+                        "No type found for node with ID {} and name {}",
+                        id, name
+                    )))
+                    .cloned()
+                // Ok(t.clone())
+            }
             CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
             CanModifyScope::ImportedModule(ref _id) => {
                 Err(GraceError::compiler_error("Not implemented".to_string()))
@@ -449,7 +463,7 @@ impl Context {
     ) -> Result<Type, GraceError> {
         // Check if this is a direct attribute access
         let unwrapped_self = match base_type {
-            Type::self_type(x) => *x.clone(),
+            Type::SelfT => panic!("Self type not implemented"),
             x => x.clone(),
         };
         let attribute_type = match &unwrapped_self {
@@ -513,20 +527,15 @@ impl Context {
     /// Modify a Type::Self so it contains whatever Self actually is.
     pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Result<Type, GraceError> {
         match base_type {
-            Type::self_type(t) => {
-                if !(matches!(**t, Type::Undetermined)) {
-                    return Err(GraceError::type_error(format!(
-                        "Matching against a self type that is not undetermined: {:?}",
-                        base_type
-                    )));
-                }
-                let (struct_name, _) = self.get_struct_and_trait(scope_id);
-                match struct_name {
-                    Some(x) => Ok(Type::self_type(Box::new(Type::Named(x)))),
-                    None => Err(GraceError::type_error(
-                        "Self used outside of a method implementation.".to_string(),
-                    )),
-                }
+            Type::SelfT => {
+                return self
+                    .self_types
+                    .get(&scope_id)
+                    .ok_or(GraceError::type_error(format!(
+                        "No self type found for scope {}",
+                        scope_id
+                    )))
+                    .cloned();
             }
             t => Ok(t.clone()),
         }
@@ -623,61 +632,14 @@ impl Context {
         true
     }
 
-    pub fn check_function_types(
-        &self,
-        expected_type: &Type,
-        func_type: &Type,
-    ) -> Result<(), GraceError> {
-        fn check_type_match(t1: &Type, t2: &Type) -> Result<(), GraceError> {
-            let self_type_error = GraceError::type_error(format!(
-                "A self type inside a trait definition should be undetermined. Got {:?}",
-                t1
-            ));
-            let incompatible_error = GraceError::type_error(format!(
-                "Incompatible function types. Called function with type {:?}, received {:?}",
-                t1, t2
-            ));
-            match (t1, t2) {
-                (Type::self_type(ref b1), _) => {
-                    if **b1 != Type::Undetermined {
-                        return Err(self_type_error);
-                    }
-                }
-                (x, y) => {
-                    if x != y {
-                        return Err(incompatible_error);
-                    }
-                }
-            }
-            Ok(())
-        }
-        match (expected_type, &func_type) {
-            (
-                Type::Function(ref args_1, ref kwargs_1, ref ret_1),
-                Type::Function(ref args_2, ref kwargs_2, ref ret_2),
-            ) => {
-                for ((_, t1), (_, t2)) in args_1.iter().zip(args_2.iter()) {
-                    check_type_match(t1, t2)?;
-                }
-                for ((_, t1), (_, t2)) in kwargs_1.iter().zip(kwargs_2.iter()) {
-                    check_type_match(t1, t2)?;
-                }
-                check_type_match(ret_1, ret_2)
-            }
-            x => Err(GraceError::type_error(format!(
-                "Somehow got a non function type: {:?}",
-                x
-            ))),
-        }
-    }
-
+    /// Check whether a type matches in a particular scope
     pub fn _type_matches(&mut self, scope_id: usize, expr_t: &Type, desired_type: &Type) -> bool {
         if expr_t == desired_type {
             true
         } else {
-            let unwrapped_self = match expr_t {
-                Type::self_type(x) => (**x).clone(),
-                x => x.clone(),
+            let unwrapped_self = match self.resolve_self_type(expr_t, scope_id) {
+                Ok(x) => x,
+                Err(_) => return false,
             };
             return match desired_type {
                 Type::Undetermined => true,
@@ -717,7 +679,13 @@ impl Context {
                 }
                 Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
                 Type::Named(..) => desired_type == &unwrapped_self,
-                Type::self_type(x) => self._type_matches(scope_id, &unwrapped_self, x),
+                Type::SelfT => {
+                    let self_type = match self.resolve_self_type(desired_type, scope_id) {
+                        Ok(x) => x,
+                        Err(_) => return false,
+                    };
+                    self._type_matches(scope_id, &unwrapped_self, &self_type)
+                }
                 _ => false,
             };
         }
@@ -817,6 +785,7 @@ impl Context {
         }
     }
 
+    /// Print every scope and its parent.
     pub(crate) fn _print_scope_hierarchy(&self) {
         for (scope_id, scope) in self.scopes.iter() {
             println!("Scope {} -> {:?}", scope_id, scope.parent_id);
@@ -852,7 +821,6 @@ impl Context {
             // Add the declarations
             for (name, scope_mod) in current_scope.declarations.iter() {
                 if let CanModifyScope::Statement(_, _) = scope_mod {
-                    println!("Adding {:?} to declarations", scope_mod);
                     declarations.insert((name.clone(), self.get_type(current_scope_id, name)?));
                 }
             }

@@ -129,3 +129,18 @@ fn while_stmt_non_boolean() {
     let w_scopes = stmt.set_scope(context.root_id, context);
     stmt.add_to_context(w_scopes).unwrap();
 }
+
+#[test]
+fn method_dec() {
+    let context = Context::empty();
+    let mut module = minimal_examples::minimal_module_with_self();
+    let w_scopes = module.set_scope(context.root_id, context);
+    let (context, _) = module.add_to_context(w_scopes).unwrap();
+}
+
+#[test]
+fn method_call() {
+    // Should create a new context with a method and then call it
+    // Should check the return type of the call expression
+    panic!("Unimplemented")
+}

@@ -1,6 +1,6 @@
 use super::*;
-use testing::minimal_examples;
-use type_checking::type_check::GetContext;
+use crate::testing::minimal_examples;
+use crate::type_checking::type_check::GetContext;
 
 #[test]
 fn type_check_function_def() {

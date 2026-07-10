@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
-use expression::*;
-use general_utils;
-use type_checking::context::Context;
-use type_checking::types::Type;
+use crate::expression::*;
+use crate::general_utils;
+use crate::type_checking::context::Context;
+use crate::type_checking::types::Type;
 
 /// A sum type for things that can modify scope.
 /// Currently the only things that can do so are:
@@ -31,8 +31,8 @@ impl CanModifyScope {
 
     pub fn get_id(&self) -> usize {
         match self {
-            CanModifyScope::Statement(ref _ptr, ref id) => *id,
-            CanModifyScope::ImportedModule(ref id) => *id,
+            CanModifyScope::Statement(_ptr, id) => *id,
+            CanModifyScope::ImportedModule(id) => *id,
             CanModifyScope::Argument(..) | CanModifyScope::Return(..) => panic!(),
         }
     }
@@ -126,7 +126,7 @@ impl Scope {
 
 pub fn choose_return_type(possible: &Type) -> Type {
     match possible {
-        Type::Sum(ref types) => {
+        Type::Sum(types) => {
             let mut i = 0;
             let mut min_size = usize::MAX;
             for (j, t) in types.iter().enumerate() {
@@ -296,7 +296,7 @@ impl SetScope for Node<Block> {
             context = stmt.set_scope(scope_id, context);
 
             // Add declarations to scope.
-            if let Stmt::StructDec { ref name, .. } = &stmt.data {
+            if let Stmt::StructDec { name, .. } = &stmt.data {
                 context.append_declaration(self.scope, name, stmt);
             }
         }
@@ -309,44 +309,41 @@ impl SetScope for Node<Block> {
 impl SetScope for Node<Stmt> {
     fn set_scope(&mut self, parent_scope: usize, mut context: Context) -> Context {
         self.scope = parent_scope;
-        match self.data {
+        let stmt_name = match &self.data {
+            Stmt::LetStmt { name, .. } | Stmt::FunctionDecStmt { name, .. } => Some(name.clone()),
+            _ => None,
+        };
+        let mut declare: Option<(usize, Identifier)> = None;
+        context = match &mut self.data {
             Stmt::LetStmt {
-                ref name,
-                ref mut expression,
+                expression,
                 type_annotation: _,
+                ..
             } => {
                 context = expression.set_scope(parent_scope, context);
-                context.append_declaration(self.scope, name, self);
+                declare = Some((self.scope, stmt_name.unwrap()));
                 context
             }
 
-            Stmt::FunctionDecStmt {
-                ref name,
-                ref mut kwargs,
-                ref mut block,
-                ..
-            } => {
+            Stmt::FunctionDecStmt { kwargs, block, .. } => {
                 let function_scope = Scope::child(parent_scope);
                 let function_scope_id = context.new_scope(function_scope);
                 self.scope = function_scope_id;
-                for (_, _, ref mut val) in kwargs.iter_mut() {
+                for (_, _, val) in kwargs.iter_mut() {
                     context = val.set_scope(self.scope, context);
                 }
                 context = block.set_scope(self.scope, context);
-                context.append_declaration(parent_scope, name, self);
+                declare = Some((parent_scope, stmt_name.unwrap()));
                 context
             }
-            Stmt::WhileStmt {
-                ref mut condition,
-                ref mut block,
-            } => {
+            Stmt::WhileStmt { condition, block } => {
                 context = condition.set_scope(self.scope, context);
                 block.set_scope(self.scope, context)
             }
             Stmt::IfStmt {
-                ref mut condition,
-                ref mut block,
-                ref mut else_block,
+                condition,
+                block,
+                else_block,
             } => {
                 // Scope for condition and first block.
                 context = condition.set_scope(self.scope, context);
@@ -358,13 +355,16 @@ impl SetScope for Node<Stmt> {
                 context
             }
             Stmt::StructDec { .. } => context,
-            Stmt::AssignmentStmt {
-                ref mut expression, ..
+            Stmt::AssignmentStmt { expression, .. } | Stmt::ReturnStmt(expression) => {
+                expression.set_scope(parent_scope, context)
             }
-            | Stmt::ReturnStmt(ref mut expression) => expression.set_scope(parent_scope, context),
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => context,
             _ => panic!("add_to_context not implemented for {:?}", self.data),
+        };
+        if let Some((scope_id, name)) = declare {
+            context.append_declaration(scope_id, &name, self);
         }
+        context
     }
 }
 
@@ -380,42 +380,33 @@ impl Node<Expr> {
     /// Recurse, don't create new scopes.
     fn _set_scope(&mut self, parent_scope: usize) {
         self.scope = parent_scope;
-        match self.data {
-            Expr::BinaryExpr {
-                ref mut left,
-                ref mut right,
-                ..
-            } => {
+        match &mut self.data {
+            Expr::BinaryExpr { left, right, .. } => {
                 left._set_scope(parent_scope);
                 right._set_scope(parent_scope)
             }
-            Expr::UnaryExpr {
-                ref mut operand, ..
-            } => operand._set_scope(parent_scope),
+            Expr::UnaryExpr { operand, .. } => operand._set_scope(parent_scope),
             Expr::FunctionCall {
-                ref mut function,
-                ref mut args,
-                ref mut kwargs,
+                function,
+                args,
+                kwargs,
             } => {
                 function._set_scope(parent_scope);
                 for arg in args {
                     arg._set_scope(parent_scope);
                 }
-                for (_, ref mut val) in kwargs {
+                for (_, val) in kwargs {
                     val._set_scope(parent_scope);
                 }
             }
-            Expr::StructLiteral {
-                ref mut base,
-                ref mut fields,
-            } => {
+            Expr::StructLiteral { base, fields } => {
                 base._set_scope(parent_scope);
-                for ref mut val in fields {
+                for val in fields {
                     val._set_scope(parent_scope);
                 }
             }
-            Expr::AttributeAccess { ref mut base, .. } => base._set_scope(parent_scope),
-            Expr::TraitAccess { ref mut base, .. } => base._set_scope(parent_scope),
+            Expr::AttributeAccess { base, .. } => base._set_scope(parent_scope),
+            Expr::TraitAccess { base, .. } => base._set_scope(parent_scope),
             Expr::Index { .. } => panic!(),
             Expr::ModuleAccess(..)
             | Expr::IdentifierExpr(..)
@@ -423,7 +414,7 @@ impl Node<Expr> {
             | Expr::Int(..)
             | Expr::Float(..)
             | Expr::String(..) => {}
-            Expr::VecLiteral(ref mut exprs) | Expr::TupleLiteral(ref mut exprs) => {
+            Expr::VecLiteral(exprs) | Expr::TupleLiteral(exprs) => {
                 for expr in exprs {
                     expr._set_scope(parent_scope);
                 }
@@ -435,11 +426,11 @@ impl Node<Expr> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use compiler_layers;
-    use parser::base::Parseable;
-    use parser::position_tracker::PosStr;
+    use crate::compiler_layers;
+    use crate::parser::base::Parseable;
+    use crate::parser::position_tracker::PosStr;
 
-    use testing::minimal_examples;
+    use crate::testing::minimal_examples;
 
     fn check_ptr_stmt(ptr: &CanModifyScope, expected: &Stmt) -> bool {
         match ptr {
@@ -565,26 +556,30 @@ mod test {
             let w_scopes = stmt.set_scope(context.root_id, context);
             let scope = w_scopes.get_scope(stmt.scope).unwrap();
             let parent_scope = w_scopes.get_scope(scope.parent_id.unwrap()).unwrap();
-            assert!(parent_scope
-                .declarations
-                .contains_key(&Identifier::from("add_two")));
+            assert!(
+                parent_scope
+                    .declarations
+                    .contains_key(&Identifier::from("add_two"))
+            );
         }
     }
 
     #[cfg(test)]
     mod snippet_tests {
         use super::*;
-        use compiler_layers;
-        use testing::snippets;
+        use crate::compiler_layers;
+        use crate::testing::snippets;
 
         #[test]
         fn refined_fn_scope() {
             let code = snippets::refined_fn();
             let (_, context) = compiler_layers::to_scoped::<Node<Stmt>>(code.as_bytes());
             let scope = context.get_scope(context.root_id).unwrap();
-            assert!(scope
-                .declarations
-                .contains_key(&Identifier::from("require_ref")));
+            assert!(
+                scope
+                    .declarations
+                    .contains_key(&Identifier::from("require_ref"))
+            );
         }
     }
 }

@@ -9,7 +9,7 @@ extern crate nom;
 // use self::nom;
 use self::nom::*;
 use super::position_tracker::PosStr;
-use expression::Node;
+use crate::expression::Node;
 
 use self::iresult_helpers::*;
 use self::tokens::*;
@@ -199,7 +199,7 @@ pub fn between_statement(input: PosStr) -> IResult<PosStr, PosStr> {
 
 pub mod tokens {
     use super::*;
-    use expression::Identifier;
+    use crate::expression::Identifier;
 
     static RESERVED_WORDS: &[&[u8]] = &[
         b"if",
@@ -758,7 +758,11 @@ pub mod iresult_helpers {
         match res {
             Ok((i, o)) => {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.0.data);
-                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
+                assert_eq!(
+                    i.slice, b"",
+                    "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}",
+                    i, l_r, input
+                );
                 assert_eq!(
                     o.0.data, expected,
                     "Results were: {}\nInput was: {}",
@@ -783,7 +787,11 @@ pub mod iresult_helpers {
         match res {
             Ok((i, o)) => {
                 let l_r = format!("\n    Expected: {:?}\n    Actual: {:?}", expected, o.data);
-                assert_eq!(i.slice, b"", "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}", i, l_r, input);
+                assert_eq!(
+                    i.slice, b"",
+                    "Leftover input should have been empty, was: {:?}\nResults were: {}\nInput was: {}",
+                    i, l_r, input
+                );
                 assert_eq!(
                     o.data, expected,
                     "Results were: {}\nInput was: {}",

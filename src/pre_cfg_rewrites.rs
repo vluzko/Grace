@@ -1,11 +1,11 @@
 //! Rewrite the AST post-type checking and pre-CFG.
 use std::convert::From;
 
-use expression::*;
-use type_checking::context::Context;
-use type_checking::scope::choose_return_type;
-use type_checking::type_check::GetContext;
-use type_checking::types::Type;
+use crate::expression::*;
+use crate::type_checking::context::Context;
+use crate::type_checking::scope::choose_return_type;
+use crate::type_checking::type_check::GetContext;
+use crate::type_checking::types::Type;
 
 use crate::general_utils::get_next_id;
 
@@ -82,9 +82,9 @@ impl TypeRewritable<Node<Block>> for Node<Block> {
 
         for stmt in &new_block.data.statements {
             match &stmt.data {
-                Stmt::FunctionDecStmt { ref name, .. }
-                | Stmt::LetStmt { ref name, .. }
-                | Stmt::StructDec { ref name, .. } => {
+                Stmt::FunctionDecStmt { name, .. }
+                | Stmt::LetStmt { name, .. }
+                | Stmt::StructDec { name, .. } => {
                     context.append_declaration(self.scope, name, stmt);
                 }
                 _ => {}
@@ -217,7 +217,9 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
                                 right: Box::new(new_right),
                             }
                         } else {
-                            panic!("COMPILER ERROR: Not implemented: BinaryExpr with different primitive types.");
+                            panic!(
+                                "COMPILER ERROR: Not implemented: BinaryExpr with different primitive types."
+                            );
                         }
                     }
                 } else {
@@ -343,7 +345,7 @@ impl TypeRewritable<Node<Expr>> for Node<Expr> {
 mod test {
 
     use super::*;
-    use compiler_layers;
+    use crate::compiler_layers;
 
     #[cfg(test)]
     mod types {
@@ -370,12 +372,12 @@ mod test {
     #[cfg(test)]
     mod statements {
         use super::*;
-        use compiler_layers;
+        use crate::compiler_layers;
         #[test]
         fn if_stmt_typing() {
             let (fun, context) = compiler_layers::to_context::<Node<Stmt>>(if_stmt_fixture());
             match fun.data {
-                Stmt::FunctionDecStmt { ref block, .. } => {
+                Stmt::FunctionDecStmt { block, .. } => {
                     let if_stmt = block.data.statements.get(2).unwrap();
                     assert_eq!(context.type_map.get(&if_stmt.id).unwrap(), &Type::i32);
                 }

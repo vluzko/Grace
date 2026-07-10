@@ -7,8 +7,8 @@ use std::str::from_utf8;
 
 use itertools::join;
 
-use general_utils;
-use type_checking::types::{Trait, Type};
+use crate::general_utils;
+use crate::type_checking::types::{Trait, Type};
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 /// AST node.
@@ -119,10 +119,10 @@ pub enum Stmt {
 impl Stmt {
     pub fn get_name(&self) -> Identifier {
         match self {
-            Stmt::AssignmentStmt { ref name, .. } => name.clone(),
-            Stmt::LetStmt { ref name, .. } => name.clone(),
-            Stmt::FunctionDecStmt { ref name, .. } => name.clone(),
-            Stmt::StructDec { ref name, .. } => name.clone(),
+            Stmt::AssignmentStmt { name, .. } => name.clone(),
+            Stmt::LetStmt { name, .. } => name.clone(),
+            Stmt::FunctionDecStmt { name, .. } => name.clone(),
+            Stmt::StructDec { name, .. } => name.clone(),
             x => panic!(
                 "get_name called on an enum value that doesn't have a name: {:?}",
                 x
@@ -178,11 +178,8 @@ pub enum Expr {
 impl Expr {
     pub fn flatten_to_module(&self) -> String {
         match self {
-            Expr::IdentifierExpr(ref ident) => ident.name.clone(),
-            Expr::AttributeAccess {
-                ref base,
-                ref attribute,
-            } => {
+            Expr::IdentifierExpr(ident) => ident.name.clone(),
+            Expr::AttributeAccess { base, attribute } => {
                 let base_str = base.data.flatten_to_module();
                 format!("{}.{}", base_str, attribute.name)
             }
@@ -482,7 +479,7 @@ pub mod rust_trait_impls {
     /// From implementations
     mod from_impl {
         use super::*;
-        use parser::position_tracker::PosStr;
+        use crate::parser::position_tracker::PosStr;
 
         /// From for Node
 

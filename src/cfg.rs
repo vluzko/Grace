@@ -3,11 +3,11 @@ use std::collections::HashMap;
 
 extern crate petgraph;
 
-use petgraph::{graph::EdgeIndex, graph::NodeIndex, Graph};
+use petgraph::{Graph, graph::EdgeIndex, graph::NodeIndex};
 
-use expression::{Block, Expr, Identifier, Module, Node, Stmt};
-use type_checking::context::Context;
-use type_checking::types::Type;
+use crate::expression::{Block, Expr, Identifier, Module, Node, Stmt};
+use crate::type_checking::context::Context;
+use crate::type_checking::types::Type;
 
 pub type CfgMap = HashMap<Identifier, Cfg>;
 
@@ -112,12 +112,8 @@ impl Cfg {
 pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
     let mut cfg_map = HashMap::new();
     for decl in &module.data.functions {
-        match decl.data {
-            Stmt::FunctionDecStmt {
-                ref name,
-                ref block,
-                ..
-            } => {
+        match &decl.data {
+            Stmt::FunctionDecStmt { name, block, .. } => {
                 let cfg = block_to_cfg(block, context, Cfg::empty(), None).0;
                 cfg_map.insert(name.clone(), cfg);
             }
@@ -125,19 +121,15 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
         }
     }
     for decl in &module.data.structs {
-        match decl.data {
+        match &decl.data {
             Stmt::StructDec { .. } => {}
             _ => panic!(),
         }
     }
     for (trait_name, struct_name, function_decs) in &module.data.trait_implementations {
         for decl in function_decs {
-            match decl.data {
-                Stmt::FunctionDecStmt {
-                    ref name,
-                    ref block,
-                    ..
-                } => {
+            match &decl.data {
+                Stmt::FunctionDecStmt { name, block, .. } => {
                     let cfg = block_to_cfg(block, context, Cfg::empty(), None).0;
                     cfg_map.insert(
                         Identifier::from(format!("{}.{}.{}", trait_name, struct_name, name)),
@@ -175,28 +167,20 @@ pub(crate) fn block_to_cfg(
     let mut previous_index = None;
 
     for stmt in &block.data.statements {
-        match stmt.data {
-            Stmt::AssignmentStmt {
-                ref name,
-                ref expression,
-            }
+        match &stmt.data {
+            Stmt::AssignmentStmt { name, expression }
             | Stmt::LetStmt {
-                ref name,
-                ref expression,
-                ..
+                name, expression, ..
             } => {
                 statements.push(stmt.replace(CfgStmt::Assignment {
                     name: name.clone(),
                     expression: expression.clone(),
                 }));
             }
-            Stmt::ReturnStmt(ref val) | Stmt::YieldStmt(ref val) => {
+            Stmt::ReturnStmt(val) | Stmt::YieldStmt(val) => {
                 statements.push(stmt.replace(CfgStmt::Return(val.clone())));
             }
-            Stmt::WhileStmt {
-                ref condition,
-                ref block,
-            } => {
+            Stmt::WhileStmt { condition, block } => {
                 // Collect the current batch of statements into a block and add it to the CFG.
                 let new_index = new_cfg.add_block(statements, previous_index);
 
@@ -261,9 +245,9 @@ pub(crate) fn block_to_cfg(
                 break;
             }
             Stmt::IfStmt {
-                ref condition,
-                ref block,
-                ref else_block,
+                condition,
+                block,
+                else_block,
             } => {
                 // Collect existing statements into a block.
                 let new_index = new_cfg.add_block(statements, previous_index);

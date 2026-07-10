@@ -1,11 +1,11 @@
 //! Helper functions to generate minimal examples of various datatypes
 use std::collections::HashMap;
 
-use expression;
-use expression::{Block, Expr, Node, Stmt};
-use testing::test_utils;
-use type_checking::context::Context;
-use type_checking::{context, types};
+use crate::expression;
+use crate::expression::{Block, Expr, Node, Stmt};
+use crate::testing::test_utils;
+use crate::type_checking::context::Context;
+use crate::type_checking::{context, types};
 
 use crate::expression::Identifier;
 
@@ -452,8 +452,8 @@ pub fn minimal_import() -> (Node<expression::Module>, Context) {
 
 pub(crate) mod cfgs {
     use super::*;
-    use cfg;
-    use compiler_layers::UpToCfg;
+    use crate::cfg;
+    use crate::compiler_layers::UpToCfg;
 
     pub fn minimal_stmt() -> Node<cfg::CfgStmt> {
         Node::from(cfg::CfgStmt::Assignment {

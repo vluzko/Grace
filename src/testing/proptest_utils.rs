@@ -1,6 +1,6 @@
 /// Helpers for writing property based tests.
-use expression::*;
-use type_checking::types::Type;
+use crate::expression::*;
+use crate::type_checking::types::Type;
 
 /// Strategies for use in property-based testing.
 #[allow(unused)]
@@ -13,7 +13,7 @@ pub(crate) mod strategies {
 
     use proptest::arbitrary::StrategyFor;
     use proptest::strategy::{Flatten, Map, ValueTree};
-    use proptest::string::{string_regex, RegexGeneratorStrategy};
+    use proptest::string::{RegexGeneratorStrategy, string_regex};
 
     /// Generate a random binary operator.
     fn binary_operator_strat() -> impl Strategy<Value = BinaryOperator> {
@@ -220,7 +220,7 @@ pub(crate) mod strategies {
     // pub fn scoped_stmt_strategy(used_names: Vec<String>) -> impl Strategy<Value = (Stmt, Option<String>)> {
     //     return stmt_strategy().prop_map(|stmt| {
     //         let s = match &stmt {
-    //             Stmt::LetStmt{ref name, ..} => Some(name.name.clone()),
+    //             Stmt::LetStmt{name, ..} => Some(name.name.clone()),
     //             _ => None
     //         };
     //         (stmt, s)
@@ -241,19 +241,16 @@ pub(crate) mod strategies {
             let post_space: usize = rng.gen_range(0..10);
             match self {
                 Expr::BinaryExpr {
-                    ref operator,
-                    ref left,
-                    ref right,
+                    operator,
+                    left,
+                    right,
                 } => format!(
                     "{}{}{}",
                     left.data.inverse_parse(),
                     operator,
                     right.data.inverse_parse()
                 ),
-                Expr::UnaryExpr {
-                    ref operator,
-                    ref operand,
-                } => match (operator, &operand.data) {
+                Expr::UnaryExpr { operator, operand } => match (operator, &operand.data) {
                     (UnaryOperator::Negative, &Expr::Float(_))
                     | (UnaryOperator::Negative, &Expr::Int(_)) => {
                         format!("{} {}", operator, operand.data.inverse_parse())

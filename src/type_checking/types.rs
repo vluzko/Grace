@@ -1,8 +1,8 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
-use expression::*;
-use general_utils;
-use grace_error::GraceError;
+use crate::expression::*;
+use crate::general_utils;
+use crate::grace_error::GraceError;
 
 /// A Grace type
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -81,7 +81,7 @@ impl Type {
             Type::ui64 => "i64".to_string(),
             Type::boolean => "i32".to_string(),
             Type::empty => "".to_string(),
-            Type::Function(ref _args, ref _kwargs, ref ret) => {
+            Type::Function(_args, _kwargs, ret) => {
                 format!("(result {})", ret.wast_name())
             }
             Type::Record(..) => "i32".to_string(),
@@ -104,8 +104,8 @@ impl Type {
             Type::Record(..) => panic!("TODO: handle trait_impl_name for Record."),
             Type::Sum(..) => panic!("TODO: handle trait_impl_name for Sum."),
             Type::Product(..) => panic!("TODO: handle trait_impl_name for Product."),
-            Type::Named(ref name) => name.name.clone(),
-            Type::Refinement(ref t, ref _refinements) => format!("{:?}", t),
+            Type::Named(name) => name.name.clone(),
+            Type::Refinement(t, _refinements) => format!("{:?}", t),
             _ => panic!(),
         }
     }
@@ -144,15 +144,15 @@ impl Type {
     pub fn is_gradual(&self) -> bool {
         match self {
             Type::Gradual(..) => true,
-            Type::Refinement(ref inner_t, _) => inner_t.is_gradual(),
+            Type::Refinement(inner_t, _) => inner_t.is_gradual(),
             _ => false,
         }
     }
 
     pub fn refined_equal(&self, other: &Type) -> bool {
         match self {
-            Type::Refinement(ref inner_t, ..) => match other {
-                Type::Refinement(ref other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
+            Type::Refinement(inner_t, ..) => match other {
+                Type::Refinement(other_inner_t, ..) => inner_t.refined_equal(other_inner_t),
                 x => inner_t.refined_equal(x),
             },
             _ => self == other,
@@ -165,19 +165,19 @@ impl Type {
             true
         } else {
             match &other {
-                Type::Refinement(ref base, ..) => self.is_compatible(base),
+                Type::Refinement(base, ..) => self.is_compatible(base),
                 Type::Gradual(_) => true,
                 _ => match self {
-                    Type::Refinement(ref base, ..) => base.is_compatible(other),
+                    Type::Refinement(base, ..) => base.is_compatible(other),
                     Type::i32 => matches!(other, Type::i64 | Type::f64),
                     Type::f32 => matches!(other, Type::f64),
-                    Type::Sum(ref types) => match other {
+                    Type::Sum(types) => match other {
                         Type::Sum(_) => true,
                         x => types.contains(x),
                     },
                     Type::Undetermined => true,
                     x => match other {
-                        Type::Sum(ref other_types) => other_types.contains(x),
+                        Type::Sum(other_types) => other_types.contains(x),
                         _ => false,
                     },
                 },
@@ -205,11 +205,11 @@ impl Type {
             Type::ui32 => 2,
             Type::boolean => 1,
             Type::string => 1,
-            Type::Product(ref types) => types.iter().map(|x| x.size()).sum(),
-            Type::Record(_, ref fields) | Type::Module(_, ref fields) => {
+            Type::Product(types) => types.iter().map(|x| x.size()).sum(),
+            Type::Record(_, fields) | Type::Module(_, fields) => {
                 fields.iter().map(|(_, t)| t.size()).sum()
             }
-            Type::Vector(ref t) => t.size(),
+            Type::Vector(t) => t.size(),
             x => panic!("Size not implemented for {:?}", x),
         }
     }
@@ -217,8 +217,8 @@ impl Type {
     /// Return true if other can be restricted to self.
     pub fn super_type(&self, other: &Type) -> bool {
         match self {
-            Type::Sum(ref types) => match other {
-                Type::Sum(ref type_vec) => general_utils::vec_subset(type_vec, types),
+            Type::Sum(types) => match other {
+                Type::Sum(type_vec) => general_utils::vec_subset(type_vec, types),
                 x => types.contains(x),
             },
             _ => false,
@@ -309,7 +309,7 @@ impl Type {
 
     pub fn identifier_to_index(&self, ident: &Identifier) -> usize {
         match self {
-            Type::Record(ref order, ref fields) => {
+            Type::Record(order, fields) => {
                 let mut words = 0;
                 for i in order {
                     if i == ident {
@@ -327,7 +327,7 @@ impl Type {
 
     pub fn get_constructor_type(&self) -> (Vec<(Identifier, Type)>, Type) {
         match &self {
-            Type::Record(_, ref fields) => {
+            Type::Record(_, fields) => {
                 let args: Vec<(Identifier, Type)> = fields.clone().into_iter().collect();
                 (args, Type::i32)
             }
@@ -338,7 +338,7 @@ impl Type {
     /// Add a constraint if the type is a refinement. Do nothing otherwise.
     pub fn add_constraint(&self, name: &Identifier, expr: &Node<Expr>) -> Type {
         match self {
-            Type::Refinement(ref base, ref constraints) => {
+            Type::Refinement(base, constraints) => {
                 let mut new_constraints = constraints.clone();
                 new_constraints.push(Refinement {
                     operator: ComparisonOperator::Equal,

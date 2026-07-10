@@ -4,14 +4,14 @@ use std::collections::{BTreeMap, HashMap};
 use std::convert::From;
 use std::fmt;
 
-use petgraph::{visit::EdgeRef, Outgoing};
+use petgraph::{Outgoing, visit::EdgeRef};
 
-use cfg::{Cfg, CfgStmt, CfgVertex};
-use expression::{BinaryOperator, Expr, Identifier, Module, Node, Stmt, UnaryOperator};
-use general_utils;
-use grace_error::GraceError;
-use type_checking::context::Context;
-use type_checking::types::Type;
+use crate::cfg::{Cfg, CfgStmt, CfgVertex};
+use crate::expression::{BinaryOperator, Expr, Identifier, Module, Node, Stmt, UnaryOperator};
+use crate::general_utils;
+use crate::grace_error::GraceError;
+use crate::type_checking::context::Context;
+use crate::type_checking::types::Type;
 
 // These values are hardcoded by memory_management::create_chunk
 // It's one word for the next chunk pointer and one word
@@ -142,7 +142,7 @@ pub fn module_to_llr(
         for value in &import.values {
             let (wasm_args, wasm_return) = match typing_info.resolve_attribute(value)? {
                 // convert everything to WASMTypes
-                Type::Function(ref args, ref kwargs, ref return_type) => {
+                Type::Function(args, kwargs, return_type) => {
                     let mut wasm_args: Vec<(String, WASMType)> = args
                         .iter()
                         .map(|(n, t)| (n.name.clone(), WASMType::from(t)))
@@ -153,7 +153,7 @@ pub fn module_to_llr(
                             .map(|(n, t)| (n.name.clone(), WASMType::from(t))),
                     );
                     // wasm_args.extend(wasm_kwargs.into_iter());
-                    let wasm_return = WASMType::from(&**return_type);
+                    let wasm_return = WASMType::from(&*return_type);
                     (wasm_args, wasm_return)
                 }
                 Type::Named(name) => {
@@ -171,7 +171,7 @@ pub fn module_to_llr(
                     return Err(GraceError::compiler_error(format!(
                         "Wrong import type: {:?}. Expected {:?}. Should be handled by type_check",
                         x, typing_info
-                    )))
+                    )));
                 }
             };
             let joined_path = join(import.path.iter().map(|x| x.name.clone()), ".");
@@ -227,12 +227,12 @@ pub fn handle_declaration(
     context: &Context,
     cfg_map: &HashMap<Identifier, Cfg>,
 ) -> Result<WASMFunc, GraceError> {
-    return match declaration.data {
+    return match &declaration.data {
         Stmt::FunctionDecStmt {
-            ref name,
-            ref args,
-            ref kwargs,
-            ref return_type,
+            name,
+            args,
+            kwargs,
+            return_type,
             ..
         } => {
             let local_variables = context.get_contained_declarations(declaration.scope)?;
@@ -265,10 +265,7 @@ pub fn handle_declaration(
             };
             Ok(wasm_func)
         }
-        Stmt::StructDec {
-            ref name,
-            ref fields,
-        } => {
+        Stmt::StructDec { name, fields } => {
             let wasm_args: Vec<(String, WASMType)> = fields
                 .iter()
                 .map(|(name, t)| (name.name.clone(), WASMType::from(t)))
@@ -297,7 +294,7 @@ pub fn handle_declaration(
             };
             Ok(wasm_func)
         }
-        ref x => Err(GraceError::compiler_error(format!(
+        x => Err(GraceError::compiler_error(format!(
             "Got an unexpected declaration in a module: {:?}. Should not be allowed by the parser.",
             x
         ))),
@@ -376,9 +373,10 @@ impl ToLLR for Cfg {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
         let mut wasm = vec![];
 
-        let mut unvisited = vec![self
-            .entry_index
-            .expect("No entry index found for a CFG. Should be impossible.")];
+        let mut unvisited = vec![
+            self.entry_index
+                .expect("No entry index found for a CFG. Should be impossible."),
+        ];
 
         while let Some(current_index) = unvisited.pop() {
             let node = self
@@ -418,9 +416,9 @@ impl ToLLR for Cfg {
                         Some(x) => unvisited.push(x),
                         None => {
                             return Err(GraceError::compiler_error(format!(
-                            "No false block found for if statement {:?}. Should be created by cfg.",
-                            self
-                        )))
+                                "No false block found for if statement {:?}. Should be created by cfg.",
+                                self
+                            )));
                         }
                     };
 
@@ -428,9 +426,9 @@ impl ToLLR for Cfg {
                         Some(x) => unvisited.push(x),
                         None => {
                             return Err(GraceError::compiler_error(format!(
-                            "No true block found for if statement {:?}. Should be created by cfg.",
-                            self
-                        )))
+                                "No true block found for if statement {:?}. Should be created by cfg.",
+                                self
+                            )));
                         }
                     }
                 }
@@ -495,16 +493,13 @@ impl ToLLR for CfgVertex {
 
 impl ToLLR for Node<CfgStmt> {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
-        Ok(match self.data {
-            CfgStmt::Assignment {
-                ref name,
-                ref expression,
-            } => {
+        Ok(match &self.data {
+            CfgStmt::Assignment { name, expression } => {
                 let mut expr_wasm = expression.to_llr(context)?;
                 expr_wasm.push(WASM::Set(name.name.clone()));
                 expr_wasm
             }
-            CfgStmt::Return(ref val) => val.to_llr(context)?,
+            CfgStmt::Return(val) => val.to_llr(context)?,
         })
     }
 }
@@ -513,9 +508,9 @@ impl ToLLR for Node<Expr> {
     fn to_llr(&self, context: &Context) -> Result<Vec<WASM>, GraceError> {
         Ok(match &self.data {
             Expr::BinaryExpr {
-                ref left,
-                ref right,
-                ref operator,
+                left,
+                right,
+                operator,
             } => {
                 let mut llr = left.to_llr(context)?;
                 llr.append(&mut right.to_llr(context)?);
@@ -530,27 +525,23 @@ impl ToLLR for Node<Expr> {
                 ));
                 llr
             }
-            Expr::FunctionCall {
-                ref function,
-                ref args,
-                ..
-            } => {
+            Expr::FunctionCall { function, args, .. } => {
                 let mut llr = vec![];
                 for arg in args {
                     llr.append(&mut arg.to_llr(context)?);
                 }
                 match &function.data {
-                    Expr::IdentifierExpr(ref name) => {
+                    Expr::IdentifierExpr(name) => {
                         llr.push(WASM::Call(name.name.clone()));
                     }
-                    Expr::ModuleAccess(_, ref path) => {
+                    Expr::ModuleAccess(_, path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name)));
                     }
                     Expr::TraitAccess {
-                        ref base,
-                        ref trait_name,
-                        ref attribute,
+                        base,
+                        trait_name,
+                        attribute,
                     } => {
                         let base_type = context.get_node_type(base.id)?;
                         let full_func_name = format!(
@@ -565,24 +556,21 @@ impl ToLLR for Node<Expr> {
                         return Err(GraceError::compiler_error(format!(
                             "FunctionCall ToLLR not implemented for base expression: {:?}",
                             x
-                        )))
+                        )));
                     }
                 }
                 llr
             }
-            Expr::StructLiteral {
-                ref base,
-                ref fields,
-            } => {
+            Expr::StructLiteral { base, fields } => {
                 let mut llr = vec![];
                 for field in fields {
                     llr.append(&mut field.to_llr(context)?);
                 }
                 match &base.data {
-                    Expr::IdentifierExpr(ref name) => {
+                    Expr::IdentifierExpr(name) => {
                         llr.push(WASM::Call(name.name.clone()));
                     }
-                    Expr::ModuleAccess(_, ref path) => {
+                    Expr::ModuleAccess(_, path) => {
                         let func_name = join(path.iter().map(|x| x.name.clone()), ".");
                         llr.push(WASM::Call(format!(".{}", func_name)));
                     }
@@ -590,15 +578,12 @@ impl ToLLR for Node<Expr> {
                         return Err(GraceError::compiler_error(format!(
                             "StructLiteral ToLLR not implemented for base expression: {:?}",
                             x
-                        )))
+                        )));
                     }
                 }
                 llr
             }
-            Expr::AttributeAccess {
-                ref base,
-                ref attribute,
-            } => {
+            Expr::AttributeAccess { base, attribute } => {
                 let mut llr = vec![];
                 // Get the address where the result of the base expression is stored.
                 llr.append(&mut base.to_llr(context)?);
@@ -607,10 +592,7 @@ impl ToLLR for Node<Expr> {
                 llr.extend(new_llr);
                 llr
             }
-            Expr::UnaryExpr {
-                ref operator,
-                ref operand,
-            } => {
+            Expr::UnaryExpr { operator, operand } => {
                 let mut llr = operand.to_llr(context)?;
                 match operator {
                     UnaryOperator::Negative => {
@@ -630,31 +612,31 @@ impl ToLLR for Node<Expr> {
                 };
                 llr
             }
-            Expr::Int(ref value) | Expr::Float(ref value) => {
+            Expr::Int(value) | Expr::Float(value) => {
                 let id_type = context.get_node_type(self.id)?;
                 let wasm_type = WASMType::from(&id_type);
                 vec![WASM::Const(value.clone(), wasm_type)]
             }
-            Expr::Bool(ref value) => match value {
+            Expr::Bool(value) => match value {
                 true => vec![WASM::Const("1".to_string(), WASMType::i32)],
                 false => vec![WASM::Const("0".to_string(), WASMType::i32)],
             },
-            Expr::IdentifierExpr(ref identifier) => vec![WASM::Get(identifier.name.clone())],
-            Expr::VecLiteral(ref exprs) => {
+            Expr::IdentifierExpr(identifier) => vec![WASM::Get(identifier.name.clone())],
+            Expr::VecLiteral(exprs) => {
                 let t = context.get_node_type(self.id)?;
                 let type_sizes = vec![t.size(); exprs.len()];
                 // In WASM a vector is just a tuple of uniform type.
                 store_tuple(exprs, &type_sizes, context)?
             }
-            Expr::TupleLiteral(ref exprs) => {
+            Expr::TupleLiteral(exprs) => {
                 let t = context.get_node_type(self.id)?;
                 let individual_types = match &t {
-                    Type::Product(ref types) => types.clone(),
+                    Type::Product(types) => types.clone(),
                     x => {
                         return Err(GraceError::compiler_error(format!(
                             "Mistyped tuple: {:?}. Should have been caught by type checking.",
                             x
-                        )))
+                        )));
                     }
                 };
                 let type_sizes = individual_types
@@ -731,7 +713,7 @@ fn attr_access(
     context: &Context,
 ) -> Result<Vec<WASM>, GraceError> {
     Ok(match base_type {
-        Type::Record(ref names, ref fields) => {
+        Type::Record(names, fields) => {
             let mut llr = vec![];
             let attr_type = fields.get(attribute).unwrap();
             // Calculate the offset of `attribute` from the start of the expression result.
@@ -743,7 +725,7 @@ fn attr_access(
             llr.push(WASM::Load(WASMType::from(attr_type)));
             llr
         }
-        Type::Named(ref name) => {
+        Type::Named(name) => {
             let underlying_type = context.get_defined_type(name)?;
             attr_access(&underlying_type, attribute, context)?
         }
@@ -751,7 +733,7 @@ fn attr_access(
             return Err(GraceError::compiler_error(format!(
                 "Cannot access attribute of: {:?}. Should be a type error.",
                 x
-            )))
+            )));
         }
     })
 }
@@ -793,7 +775,7 @@ pub mod rust_trait_impls {
                 Type::boolean => Some(WASMType::i32),
                 Type::Sum(..) => Some(WASMType::i32),
                 Type::Named(..) => Some(WASMType::i32),
-                Type::Refinement(ref base, ..) => Option::<WASMType>::from(&**base),
+                Type::Refinement(base, ..) => Option::<WASMType>::from(&**base),
                 Type::Gradual(_) => Some(WASMType::i32),
                 Type::empty => None,
                 x => panic!("Tried to convert {:?} to WASM", x),
@@ -829,7 +811,7 @@ pub mod rust_trait_impls {
                 Type::boolean => WASMType::i32,
                 Type::Sum(..) => WASMType::i32,
                 Type::Named(..) => WASMType::i32,
-                Type::Refinement(ref base, ..) => WASMType::from(&**base),
+                Type::Refinement(base, ..) => WASMType::from(&**base),
                 Type::Gradual(_) => WASMType::i32,
                 x => panic!("Tried to convert {:?} to WASM", x),
             }
@@ -917,12 +899,12 @@ mod tests {
     use std::fs::File;
     use std::io::Read;
 
-    use cfg;
-    use compiler_layers;
-    use testing::minimal_examples;
-    use testing::minimal_examples::cfgs as min_cfg;
-    use testing::snippets;
-    use type_checking::type_check::GetContext;
+    use crate::cfg;
+    use crate::compiler_layers;
+    use crate::testing::minimal_examples;
+    use crate::testing::minimal_examples::cfgs as min_cfg;
+    use crate::testing::snippets;
+    use crate::type_checking::type_check::GetContext;
 
     /// Build a context and check the generated WASM.
     fn simple_llr_check<T: ToLLR>(value: T, expected: &[WASM]) {

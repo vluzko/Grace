@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use expression::*;
-use type_checking::context::Context;
-use type_checking::scope::SetScope;
-use type_checking::type_check::GetContext;
-use type_checking::types::Type;
+use crate::expression::*;
+use crate::type_checking::context::Context;
+use crate::type_checking::scope::SetScope;
+use crate::type_checking::type_check::GetContext;
+use crate::type_checking::types::Type;
 
 /// Add a function of the specified type and name to the given context.
 pub(crate) fn add_function_to_context(

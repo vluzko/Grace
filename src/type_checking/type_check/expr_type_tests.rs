@@ -1,10 +1,10 @@
+use crate::testing::proptest_utils::strategies;
+use crate::type_checking::type_check::*;
 use proptest::prelude::*;
-use testing::proptest_utils::strategies;
-use type_checking::type_check::*;
 // use super::*;
-use grace_error::ErrorDetails;
-use testing::test_utils;
-use type_checking::types::Trait;
+use crate::grace_error::ErrorDetails;
+use crate::testing::test_utils;
+use crate::type_checking::types::Trait;
 
 use crate::testing::minimal_examples;
 
@@ -317,7 +317,7 @@ mod prop_tests {
 
 #[cfg(test)]
 mod expected_failures {
-    use compiler_layers;
+    use crate::compiler_layers;
     #[test]
     #[should_panic]
     fn add_incompatible() {

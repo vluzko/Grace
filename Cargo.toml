@@ -1,8 +1,9 @@
 [package]
 name = "grace"
 version = "0.1.0"
+edition = "2024"
 authors = ["Vincent Luczkow <vincent.luczkow@gmail.com>",
-           "Miranda Gavrin <mirandagavrin@gmail.com"]
+           "Miranda Gavrin <mirandagavrin@gmail.com>"]
 
 [dependencies]
 nom = "^4"

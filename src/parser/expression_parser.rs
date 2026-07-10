@@ -1,14 +1,14 @@
 //! All expression parsers.
 extern crate nom;
 use self::nom::*;
-use expression::*;
-use parser::base::{
-    for_to_while, just_int, next_hidden, ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq,
+use crate::expression::*;
+use crate::parser::base::{
+    ExprNode, ExprRes, ExprU, ParserContext, Res, StmtSeq, for_to_while, just_int, next_hidden,
 };
-use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
-use parser::position_tracker::PosStr;
+use crate::parser::parser_utils::iresult_helpers::*;
+use crate::parser::parser_utils::tokens::*;
+use crate::parser::parser_utils::*;
+use crate::parser::position_tracker::PosStr;
 use std::str::from_utf8;
 
 /// Top-level expression and some extras.
@@ -1267,8 +1267,8 @@ mod tests {
             _ => panic!(),
         };
 
-        let gen = e.expression(PosStr::from("(x for x in y)"));
-        match output(gen).0.data {
+        let gen_expr = e.expression(PosStr::from("(x for x in y)"));
+        match output(gen_expr).0.data {
             Expr::IdentifierExpr(_) => {}
             _ => panic!(),
         };

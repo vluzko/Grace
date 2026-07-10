@@ -1,26 +1,26 @@
 //! Compilation.
 use std::collections::{BTreeMap, HashMap};
 use std::fmt::Debug;
-use std::fs::{canonicalize, create_dir_all, File};
+use std::fs::{File, canonicalize, create_dir_all};
 use std::io::prelude::*;
 use std::path::{Path, PathBuf};
 
 use itertools::join;
 
-use expression::{Block, Identifier, Import, Module, Node};
-use parser::base::Parseable;
-use parser::position_tracker::PosStr;
-use type_checking::context::Context;
-use type_checking::scope::SetScope;
-use type_checking::type_check::GetContext;
-use type_checking::types::Type;
+use crate::expression::{Block, Identifier, Import, Module, Node};
+use crate::parser::base::Parseable;
+use crate::parser::position_tracker::PosStr;
+use crate::type_checking::context::Context;
+use crate::type_checking::scope::SetScope;
+use crate::type_checking::type_check::GetContext;
+use crate::type_checking::types::Type;
 
-use bytecode::ToBytecode;
-use cfg::{block_to_cfg, module_to_cfg, Cfg, CfgMap};
-use general_utils::{extend_map, get_next_id, join as join_vec};
-use grace_error::GraceError;
-use llr::{module_to_llr, WASMModule};
-use pre_cfg_rewrites::TypeRewritable;
+use crate::bytecode::ToBytecode;
+use crate::cfg::{Cfg, CfgMap, block_to_cfg, module_to_cfg};
+use crate::general_utils::{extend_map, get_next_id, join as join_vec};
+use crate::grace_error::GraceError;
+use crate::llr::{WASMModule, module_to_llr};
+use crate::pre_cfg_rewrites::TypeRewritable;
 
 #[derive(Debug, Clone)]
 pub struct CompiledModule {

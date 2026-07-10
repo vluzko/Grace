@@ -7,7 +7,7 @@ use std::ops::Add;
 extern crate nom;
 use self::nom::ErrorKind;
 
-use expression::Node;
+use crate::expression::Node;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GraceError {

@@ -1,13 +1,13 @@
 extern crate nom;
 use self::nom::*;
-use expression::*;
-use parser::base::{ExprNode, ParserContext, TypeRes};
-use parser::expression_parser::{bool_expr, float_expr, int_expr};
-use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
-use parser::position_tracker::PosStr;
-use type_checking::types::{Refinement, Type};
+use crate::expression::*;
+use crate::parser::base::{ExprNode, ParserContext, TypeRes};
+use crate::parser::expression_parser::{bool_expr, float_expr, int_expr};
+use crate::parser::parser_utils::iresult_helpers::*;
+use crate::parser::parser_utils::tokens::*;
+use crate::parser::parser_utils::*;
+use crate::parser::position_tracker::PosStr;
+use crate::type_checking::types::{Refinement, Type};
 
 type JustExpr<'a> = IResult<PosStr<'a>, ExprNode>;
 
@@ -119,11 +119,11 @@ fn flatten_binary(result: (Node<Expr>, Option<(PosStr, Node<Expr>)>)) -> Node<Ex
 }
 
 /// Match a list of binary operations
-fn binary_expr(
-    input: PosStr,
-    operator_parser: impl Fn(PosStr) -> IResult<PosStr, PosStr>,
-    next_expr: impl Fn(PosStr) -> JustExpr,
-) -> JustExpr {
+fn binary_expr<'a>(
+    input: PosStr<'a>,
+    operator_parser: impl Fn(PosStr<'a>) -> IResult<PosStr<'a>, PosStr<'a>>,
+    next_expr: impl Fn(PosStr<'a>) -> JustExpr<'a>,
+) -> JustExpr<'a> {
     let parse_result = tuple!(
         input,
         next_expr,
@@ -138,26 +138,26 @@ fn binary_expr(
 
 /// Match logical expressions.
 /// Must be public because it's used by several statements
-pub fn logical_binary_expr(input: PosStr) -> JustExpr {
+pub fn logical_binary_expr(input: PosStr<'_>) -> JustExpr<'_> {
     binary_expr(input, |x| alt_complete!(x, AND | OR | XOR), additive_expr)
 }
 
 /// Match addition and subtraction expressions.
-fn additive_expr(input: PosStr) -> JustExpr {
+fn additive_expr(input: PosStr<'_>) -> JustExpr<'_> {
     binary_expr(input, |x| alt_complete!(x, PLUS | MINUS), mult_expr)
 }
 
 /// Match multiplication, division, and modulo expressions.
-fn mult_expr(input: PosStr) -> JustExpr {
+fn mult_expr(input: PosStr<'_>) -> JustExpr<'_> {
     binary_expr(input, |x| alt_complete!(x, STAR | DIV | MOD), unary_expr)
 }
 
 /// Match an exponentiation expression.
-fn power_expr(input: PosStr) -> JustExpr {
+fn power_expr(input: PosStr<'_>) -> JustExpr<'_> {
     binary_expr(input, |x| call!(x, EXP), atomic_expr)
 }
 
-fn unary_expr(input: PosStr) -> JustExpr {
+fn unary_expr(input: PosStr<'_>) -> JustExpr<'_> {
     let parse_result = alt!(
         input,
         tuple!(
@@ -176,7 +176,7 @@ fn unary_expr(input: PosStr) -> JustExpr {
     node
 }
 
-fn atomic_expr(input: PosStr) -> JustExpr {
+fn atomic_expr(input: PosStr<'_>) -> JustExpr<'_> {
     w_followed!(
         input,
         alt_complete!(

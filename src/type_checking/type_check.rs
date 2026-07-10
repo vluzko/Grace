@@ -4,12 +4,12 @@ use std::iter::FromIterator;
 
 use itertools::join;
 
-use expression::*;
-use general_utils;
-use grace_error::GraceError;
-use type_checking::context::Context;
-use type_checking::scope::{CanModifyScope, SetScope};
-use type_checking::types::Type;
+use crate::expression::*;
+use crate::general_utils;
+use crate::grace_error::GraceError;
+use crate::type_checking::context::Context;
+use crate::type_checking::scope::{CanModifyScope, SetScope};
+use crate::type_checking::types::Type;
 
 type TypeCheckRes = Result<(Context, Type), GraceError>;
 
@@ -150,7 +150,7 @@ fn _add_let_to_context(
 ) -> TypeCheckRes {
     let (mut c, t) = expression.add_to_context(context)?;
     match &type_annotation {
-        Some(ref x) => {
+        Some(x) => {
             let actual_type = c.resolve_self_type(x, scope_id)?;
             c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
         }
@@ -185,7 +185,7 @@ fn _add_function_declaration_to_context(
     // Evaluate scopes and types for all keyword expressions.
     // This must be done *before* any arguments are actually added to scope,
     // because the expressions cannot reference the arguments.
-    for (key, t, ref val) in kwargs.iter() {
+    for (key, t, val) in kwargs.iter() {
         // Get context for each expression
         let res = val.add_to_context(context)?;
         context = res.0;
@@ -223,31 +223,28 @@ fn _add_function_declaration_to_context(
 /// Call add_to_context on all expressions.
 impl GetContext for Node<Stmt> {
     fn add_to_context(&self, mut context: Context) -> TypeCheckRes {
-        let final_res: TypeCheckRes = match self.data {
+        let final_res: TypeCheckRes = match &self.data {
             Stmt::LetStmt {
-                ref name,
-                ref expression,
-                ref type_annotation,
+                name,
+                expression,
+                type_annotation,
             } => {
                 let (mut new_context, t) =
                     _add_let_to_context(self.scope, context, expression, type_annotation)?;
                 new_context.append_declaration(self.scope, name, self);
                 Ok((new_context, t))
             }
-            Stmt::AssignmentStmt {
-                ref expression,
-                ref name,
-            } => {
+            Stmt::AssignmentStmt { expression, name } => {
                 let (mut c, t) = expression.add_to_context(context)?;
                 let expected_type = c.get_type(self.scope, name)?;
                 c.check_grad_and_ref_equality(expression.scope, &t, &expected_type)?;
                 Ok((c, t))
             }
             Stmt::FunctionDecStmt {
-                ref args,
-                ref kwargs,
-                ref block,
-                ref return_type,
+                args,
+                kwargs,
+                block,
+                return_type,
                 ..
             } => _add_function_declaration_to_context(
                 self.id,
@@ -258,10 +255,7 @@ impl GetContext for Node<Stmt> {
                 context,
                 return_type,
             ),
-            Stmt::WhileStmt {
-                ref condition,
-                ref block,
-            } => {
+            Stmt::WhileStmt { condition, block } => {
                 let (condition_context, condition_type) = condition.add_to_context(context)?;
                 match condition_type {
                     Type::boolean => block.add_to_context(condition_context),
@@ -272,9 +266,9 @@ impl GetContext for Node<Stmt> {
                 }
             }
             Stmt::IfStmt {
-                ref condition,
-                ref block,
-                ref else_block,
+                condition,
+                block,
+                else_block,
             } => {
                 let (new_context, condition_type) = condition.add_to_context(context)?;
                 if condition_type != Type::boolean {
@@ -294,10 +288,7 @@ impl GetContext for Node<Stmt> {
                     None => Ok((new_context, if_type)),
                 }
             }
-            Stmt::StructDec {
-                ref name,
-                ref fields,
-            } => {
+            Stmt::StructDec { name, fields } => {
                 let mut order = vec![];
                 let mut records = BTreeMap::new();
                 for (n, t) in fields {
@@ -308,7 +299,7 @@ impl GetContext for Node<Stmt> {
                 context.define_type(name.clone(), record);
                 Ok((context, Type::Named(name.clone())))
             }
-            Stmt::ReturnStmt(ref expression) => expression.add_to_context(context),
+            Stmt::ReturnStmt(expression) => expression.add_to_context(context),
             Stmt::ContinueStmt | Stmt::BreakStmt | Stmt::PassStmt => Ok((context, Type::empty)),
             _ => panic!("add_to_context not implemented for {:?}", self.data),
         };
@@ -419,11 +410,11 @@ fn _add_function_call_to_context(
 
 impl Node<Expr> {
     fn _add_to_context(&self, context: Context) -> TypeCheckRes {
-        let (mut final_c, final_t) = match self.data {
+        let (mut final_c, final_t) = match &self.data {
             Expr::BinaryExpr {
-                ref operator,
-                ref left,
-                ref right,
+                operator,
+                left,
+                right,
             } => {
                 let (left_c, left_t) = left.add_to_context(context)?;
                 let (mut right_c, right_t) = right.add_to_context(left_c)?;
@@ -442,10 +433,7 @@ impl Node<Expr> {
 
                 Ok((right_c, return_type))
             }
-            Expr::UnaryExpr {
-                ref operand,
-                ref operator,
-            } => {
+            Expr::UnaryExpr { operand, operator } => {
                 let (mut operand_c, operand_t) = operand.add_to_context(context)?;
                 let (trait_name, method_name) = operator.get_builtin_trait();
                 let return_type = match !operand_t.is_gradual() {
@@ -461,14 +449,11 @@ impl Node<Expr> {
                 Ok((operand_c, return_type))
             }
             Expr::FunctionCall {
-                ref function,
-                ref args,
-                ref kwargs,
+                function,
+                args,
+                kwargs,
             } => _add_function_call_to_context(function, args, kwargs, context),
-            Expr::StructLiteral {
-                ref base,
-                ref fields,
-            } => {
+            Expr::StructLiteral { base, fields } => {
                 let (new_c, base_t) = base.add_to_context(context)?;
                 let element_checker =
                     |aggregate: Result<(Context, Vec<Type>), GraceError>,
@@ -482,18 +467,18 @@ impl Node<Expr> {
                     };
 
                 // TODO: cleanup: The record type checker should be separated out.
-                match base_t {
-                    Type::Record(_, ref field_types) => {
+                match &base_t {
+                    Type::Record(_, field_types) => {
                         let init = Ok((new_c, vec![]));
                         let zipped = fields.iter().zip(field_types.values());
                         let (new_c, _types) = zipped.fold(init, element_checker)?;
                         // TODO: Type checking: Decide if we should return base_t or the true type
                         Ok((new_c, base_t.clone()))
                     }
-                    Type::Named(ref name) => {
+                    Type::Named(name) => {
                         let underlying_type = new_c.get_defined_type(name)?;
                         match underlying_type {
-                            Type::Record(_, ref field_types) => {
+                            Type::Record(_, field_types) => {
                                 let init = Ok((new_c, vec![]));
                                 let zipped = fields.iter().zip(field_types.values());
                                 let (new_c, _types) = zipped.fold(init, element_checker)?;
@@ -512,16 +497,13 @@ impl Node<Expr> {
                     ))),
                 }
             }
-            Expr::AttributeAccess {
-                ref base,
-                ref attribute,
-            } => {
+            Expr::AttributeAccess { base, attribute } => {
                 let (new_c, base_t) = base.add_to_context(context)?;
                 let attr_t = new_c.resolve_attribute(&base_t, attribute)?;
                 Ok((new_c, attr_t))
             }
             // TODO: cleanup: maybe move the renaming into resolve_nested_record?
-            Expr::ModuleAccess(ref id, ref names) => {
+            Expr::ModuleAccess(id, names) => {
                 let module_type = context.get_node_type(*id)?;
                 let t = module_type.resolve_nested_record(&names[1..].to_vec())?;
                 // Named types have to be remapped to include the module access
@@ -534,11 +516,11 @@ impl Node<Expr> {
                 };
                 Ok((context, renamed_t))
             }
-            Expr::Index { ref base, .. } => {
+            Expr::Index { base, .. } => {
                 let (_new_c, _base_t) = base.add_to_context(context)?;
                 panic!("Not implemented")
             }
-            Expr::IdentifierExpr(ref name) => {
+            Expr::IdentifierExpr(name) => {
                 let t = context.get_type(self.scope, name)?;
                 Ok((context, t))
             }
@@ -546,12 +528,12 @@ impl Node<Expr> {
             Expr::Float(_) => Ok((context, Type::f32)),
             Expr::String(_) => Ok((context, Type::string)),
             Expr::Bool(_) => Ok((context, Type::boolean)),
-            Expr::VecLiteral(ref exprs) => {
+            Expr::VecLiteral(exprs) => {
                 let (new_c, vec_t) = _folded_check(exprs, context)?;
                 let t = Type::Vector(Box::new(vec_t));
                 Ok((new_c, t))
             }
-            Expr::TupleLiteral(ref exprs) => {
+            Expr::TupleLiteral(exprs) => {
                 let element_checker = |aggregate: Result<(Context, Vec<Type>), GraceError>,
                                        expr: &Node<Expr>| {
                     let (new_c, mut types) = aggregate?;
@@ -591,10 +573,10 @@ fn _folded_check(exprs: &[Node<Expr>], context: Context) -> Result<(Context, Typ
 #[cfg(test)]
 mod trait_tests {
     use super::*;
-    use compiler_layers;
+    use crate::compiler_layers;
+    use crate::testing::minimal_examples;
     use std::fs::File;
     use std::io::Read;
-    use testing::minimal_examples;
 
     #[ignore]
     #[test]

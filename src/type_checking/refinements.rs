@@ -3,11 +3,11 @@ use std::process::Command;
 
 use itertools::join;
 
-use expression::*;
-use general_utils::m_union;
-use type_checking::context::Context;
-use type_checking::scope::CanModifyScope;
-use type_checking::types::{Refinement, Type};
+use crate::expression::*;
+use crate::general_utils::m_union;
+use crate::type_checking::context::Context;
+use crate::type_checking::scope::CanModifyScope;
+use crate::type_checking::types::{Refinement, Type};
 
 pub fn check_constraints(scope_id: usize, context: &Context, constraints: Vec<Refinement>) -> bool {
     let (idents, constraint_strings) = call_from_refinement_type(scope_id, &constraints, context);
@@ -52,9 +52,9 @@ fn call_from_refinement_type(
                     let var_scope = context.get_declaring_scope(scope_id, variable).unwrap();
                     let var_type = context.get_type(scope_id, variable).unwrap();
                     match var_type {
-                        Type::Refinement(_, ref new_conds) => {
+                        Type::Refinement(_, new_conds) => {
                             let (new_idents, mut new_constraints) =
-                                call_from_refinement_type(var_scope, new_conds, context);
+                                call_from_refinement_type(var_scope, &new_conds, context);
                             checked = m_union(checked, new_idents.clone());
                             variables = m_union(variables, new_idents);
                             constraint_strings.append(&mut new_constraints);
@@ -81,7 +81,7 @@ trait ToPython {
 impl ToPython for CanModifyScope {
     fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
         match self {
-            CanModifyScope::Statement(ref raw_stmt, _) => unsafe {
+            CanModifyScope::Statement(raw_stmt, _) => unsafe {
                 (**raw_stmt).construct_condition(context)
             },
             _ => panic!(),
@@ -101,7 +101,7 @@ impl ToPython for Refinement {
 impl ToPython for Node<Stmt> {
     fn construct_condition(&self, context: &Context) -> (HashSet<Identifier>, String) {
         match &self.data {
-            Stmt::LetStmt { ref expression, .. } => expression.construct_condition(context),
+            Stmt::LetStmt { expression, .. } => expression.construct_condition(context),
             x => panic!("ToPython not implemented for {:?}", x),
         }
     }
@@ -111,16 +111,16 @@ impl ToPython for Node<Expr> {
     fn construct_condition(&self, _context: &Context) -> (HashSet<Identifier>, String) {
         match &self.data {
             Expr::BinaryExpr {
-                ref operator,
-                ref left,
-                ref right,
+                operator,
+                left,
+                right,
             } => {
                 let (l_set, l_str) = left.construct_condition(_context);
                 let (r_set, r_str) = right.construct_condition(_context);
                 let f_set = m_union(l_set, r_set);
                 (f_set, format!("({}) {} ({})", l_str, operator, r_str))
             }
-            Expr::IdentifierExpr(ref name) => {
+            Expr::IdentifierExpr(name) => {
                 let mut set = HashSet::new();
                 set.insert(name.clone());
                 (set, name.name.clone())

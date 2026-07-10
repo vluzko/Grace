@@ -1,12 +1,12 @@
 //! The context object.
 use std::collections::{BTreeSet, HashMap};
 
-use expression::*;
-use general_utils;
-use grace_error::GraceError;
-use type_checking::refinements::check_constraints;
-use type_checking::scope::{CanModifyScope, Scope};
-use type_checking::types::{Trait, Type};
+use crate::expression::*;
+use crate::general_utils;
+use crate::grace_error::GraceError;
+use crate::type_checking::refinements::check_constraints;
+use crate::type_checking::scope::{CanModifyScope, Scope};
+use crate::type_checking::types::{Trait, Type};
 
 /// Generate a single binary trait.
 fn binary_trait(trait_name: Identifier, method_name: Identifier) -> Trait {
@@ -305,7 +305,7 @@ impl Context {
     pub fn get_type(&self, scope_id: usize, name: &Identifier) -> Result<Type, GraceError> {
         let maybe_scope_mod = self.get_declaration(scope_id, name)?;
         match maybe_scope_mod {
-            CanModifyScope::Statement(_, ref id) => {
+            CanModifyScope::Statement(_, id) => {
                 self.type_map
                     .get(id)
                     .ok_or(GraceError::type_error(format!(
@@ -315,8 +315,8 @@ impl Context {
                     .cloned()
                 // Ok(t.clone())
             }
-            CanModifyScope::Argument(ref t) | CanModifyScope::Return(ref t) => Ok(t.clone()),
-            CanModifyScope::ImportedModule(ref _id) => {
+            CanModifyScope::Argument(t) | CanModifyScope::Return(t) => Ok(t.clone()),
+            CanModifyScope::ImportedModule(_id) => {
                 Err(GraceError::compiler_error("Not implemented".to_string()))
             }
         }
@@ -467,8 +467,8 @@ impl Context {
             x => x.clone(),
         };
         let attribute_type = match &unwrapped_self {
-            Type::Record(_, ref attributes) => attributes.get(name),
-            Type::Named(ref t_name) => {
+            Type::Record(_, attributes) => attributes.get(name),
+            Type::Named(t_name) => {
                 let record_t = self
                     .defined_types
                     .get(t_name)
@@ -477,7 +477,7 @@ impl Context {
                         t_name
                     )))?;
                 match record_t {
-                    Type::Record(_, ref attributes) => attributes.get(name),
+                    Type::Record(_, attributes) => attributes.get(name),
                     _ => None,
                 }
             }
@@ -506,19 +506,18 @@ impl Context {
 
                 // Just resolve the trait.
                 match possible_traits.len().cmp(&1) {
-                    std::cmp::Ordering::Less => {
-                        Err(GraceError::type_error(format!(
-                            "No matching attribute found for: {:?}, {:?}",
-                            base_type, name
-                        )))
-                    },
+                    std::cmp::Ordering::Less => Err(GraceError::type_error(format!(
+                        "No matching attribute found for: {:?}, {:?}",
+                        base_type, name
+                    ))),
                     std::cmp::Ordering::Equal => {
                         // Get the type of the trait function and return it.
                         Ok(possible_traits[0].functions.get(name).unwrap().clone())
                     }
-                    std::cmp::Ordering::Greater => {
-                        Err(GraceError::type_error(format!("Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.", base_type, name, possible_traits)))
-                    }
+                    std::cmp::Ordering::Greater => Err(GraceError::type_error(format!(
+                        "Ambiguous trait method call. Base type {:?} call to {:?} could reference any of {:?}.",
+                        base_type, name, possible_traits
+                    ))),
                 }
             }
         };
@@ -592,27 +591,30 @@ impl Context {
         .clone();
         let method_type_result = func_types.get(method_name);
         match method_type_result {
-            Some(method_type) => {
-                match method_type {
-                    Type::Function(ref args, ref kwargs, ref return_type) => {
+            Some(method_type) => match method_type {
+                Type::Function(args, kwargs, return_type) => {
+                    for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
+                        self.check_grad_and_ref_equality(scope_id, actual_t, expected_t)?;
+                    }
 
-                        for ((_, expected_t), actual_t) in args.iter().zip(arg_types.iter()) {
-                            self.check_grad_and_ref_equality(scope_id, actual_t, expected_t)?;
-                        }
+                    if !kwargs.is_empty() {
+                        return Err(GraceError::compiler_error(format!(
+                            "Trait method call to {}::{} has keyword arguments, which are not supported.",
+                            trait_name, method_name
+                        )));
+                    }
 
-                        if !kwargs.is_empty() {
-                            return Err(GraceError::compiler_error(format!(
-                                "Trait method call to {}::{} has keyword arguments, which are not supported.",
-                                trait_name, method_name
-                            )));
-                        }
-
-                        Ok(*return_type.clone())
-                    },
-                    x => Err(GraceError::type_error(format!("Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}", trait_name, method_name, x)))
+                    Ok(*return_type.clone())
                 }
-            }
-            None => Err(GraceError::type_error(format!("Could not find implementation of trait method: {:?}.", method_name)))
+                x => Err(GraceError::type_error(format!(
+                    "Non-function type for a trait method. Trait and method are: {:?} and {:?}. Type is: {:?}",
+                    trait_name, method_name, x
+                ))),
+            },
+            None => Err(GraceError::type_error(format!(
+                "Could not find implementation of trait method: {:?}.",
+                method_name
+            ))),
         }
     }
 
@@ -646,22 +648,22 @@ impl Context {
                 Type::empty => false,
                 Type::i32 | Type::i64 | Type::f32 | Type::f64 | Type::boolean | Type::string => {
                     match unwrapped_self {
-                        Type::Refinement(ref base, ..) => {
-                            self._type_matches(scope_id, base, desired_type)
+                        Type::Refinement(base, ..) => {
+                            self._type_matches(scope_id, &*base, desired_type)
                         }
-                        Type::Gradual(ref id) => self.update_gradual(*id, desired_type),
+                        Type::Gradual(id) => self.update_gradual(id, desired_type),
                         x => x.has_simple_conversion(desired_type),
                     }
                 }
-                Type::Product(ref types) => match &unwrapped_self {
-                    Type::Product(ref expr_types) => expr_types
+                Type::Product(types) => match &unwrapped_self {
+                    Type::Product(expr_types) => expr_types
                         .iter()
                         .enumerate()
                         .all(|(i, x)| self._type_matches(scope_id, x, &types[i])),
                     _ => false,
                 },
-                Type::Function(ref args, ref kwargs, ref ret) => match &unwrapped_self {
-                    Type::Function(ref e_args, ref e_kwargs, ref e_ret) => {
+                Type::Function(args, kwargs, ret) => match &unwrapped_self {
+                    Type::Function(e_args, e_kwargs, e_ret) => {
                         let args_match = args
                             .iter()
                             .enumerate()
@@ -674,10 +676,8 @@ impl Context {
                     }
                     _ => false,
                 },
-                Type::Refinement(_, ref d_conds) => {
-                    check_constraints(scope_id, self, d_conds.clone())
-                }
-                Type::Gradual(ref id) => self.update_gradual(*id, &unwrapped_self),
+                Type::Refinement(_, d_conds) => check_constraints(scope_id, self, d_conds.clone()),
+                Type::Gradual(id) => self.update_gradual(*id, &unwrapped_self),
                 Type::Named(..) => desired_type == &unwrapped_self,
                 Type::SelfT => {
                     let self_type = match self.resolve_self_type(desired_type, scope_id) {
@@ -721,8 +721,8 @@ impl Context {
             Ok(t1.clone())
         } else {
             match t1 {
-                Type::Sum(ref types) => match t2 {
-                    Type::Sum(ref other_types) => {
+                Type::Sum(types) => match t2 {
+                    Type::Sum(other_types) => {
                         Ok(Type::Sum(general_utils::vec_c_int(types, other_types)))
                     }
                     x => {
@@ -733,10 +733,10 @@ impl Context {
                         }
                     }
                 },
-                Type::Refinement(ref base, ..) => self.merge(t2, base),
+                Type::Refinement(base, ..) => self.merge(t2, base),
                 Type::Undetermined => Ok(t2.clone()),
                 x => match t2 {
-                    Type::Sum(ref other_types) => {
+                    Type::Sum(other_types) => {
                         if other_types.contains(x) {
                             Ok(x.clone())
                         } else {
@@ -842,18 +842,26 @@ mod tests {
         let a: i32 = 2;
         let i32_expr: Node<Expr> = Node::from(a);
         let string_expr = Node::from(Expr::String("foo".to_string()));
-        assert!(context
-            .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::boolean)
-            .is_ok());
-        assert!(context
-            .check_grad_and_ref_equality(string_expr.scope, &Type::string, &Type::string)
-            .is_ok());
-        assert!(context
-            .check_grad_and_ref_equality(i32_expr.scope, &Type::i32, &Type::i32)
-            .is_ok());
-        assert!(context
-            .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::string)
-            .is_err());
+        assert!(
+            context
+                .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::boolean)
+                .is_ok()
+        );
+        assert!(
+            context
+                .check_grad_and_ref_equality(string_expr.scope, &Type::string, &Type::string)
+                .is_ok()
+        );
+        assert!(
+            context
+                .check_grad_and_ref_equality(i32_expr.scope, &Type::i32, &Type::i32)
+                .is_ok()
+        );
+        assert!(
+            context
+                .check_grad_and_ref_equality(bool_expr.scope, &Type::boolean, &Type::string)
+                .is_err()
+        );
     }
 
     #[test]

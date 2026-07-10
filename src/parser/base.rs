@@ -4,28 +4,28 @@ use std::collections::HashMap;
 extern crate nom;
 use self::nom::*;
 
-use expression::*;
-use parser::module_parser::module;
-use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
-use parser::position_tracker::PosStr;
+use crate::expression::*;
+use crate::parser::module_parser::module;
+use crate::parser::parser_utils::iresult_helpers::*;
+use crate::parser::parser_utils::tokens::*;
+use crate::parser::parser_utils::*;
+use crate::parser::position_tracker::PosStr;
 
-use general_utils::get_next_var;
-use type_checking::types::{Trait, Type};
+use crate::general_utils::get_next_var;
+use crate::type_checking::types::{Trait, Type};
 
 use super::type_parser::any_type;
 
-pub(in parser) type StmtNode = Node<Stmt>;
-pub(in parser) type ExprNode = Node<Expr>;
-pub(in parser) type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
-pub(in parser) type Res<'a, T> = IResult<PosStr<'a>, T>;
-pub(in parser) type StmtSeq = Vec<Box<Node<Stmt>>>;
-pub(in parser) type ExprU = (ExprNode, StmtSeq);
-pub(in parser) type StmtU = (StmtNode, StmtSeq);
-pub(in parser) type StmtRes<'a> = IResult<PosStr<'a>, StmtU>;
-pub(in parser) type ExprRes<'a> = IResult<PosStr<'a>, ExprU>;
-pub(in parser) type TypeRes<'a> = IResult<PosStr<'a>, Type>;
+pub(in crate::parser) type StmtNode = Node<Stmt>;
+pub(in crate::parser) type ExprNode = Node<Expr>;
+pub(in crate::parser) type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
+pub(in crate::parser) type Res<'a, T> = IResult<PosStr<'a>, T>;
+pub(in crate::parser) type StmtSeq = Vec<Box<Node<Stmt>>>;
+pub(in crate::parser) type ExprU = (ExprNode, StmtSeq);
+pub(in crate::parser) type StmtU = (StmtNode, StmtSeq);
+pub(in crate::parser) type StmtRes<'a> = IResult<PosStr<'a>, StmtU>;
+pub(in crate::parser) type ExprRes<'a> = IResult<PosStr<'a>, ExprU>;
+pub(in crate::parser) type TypeRes<'a> = IResult<PosStr<'a>, Type>;
 
 pub trait Parseable {
     fn parse(input: PosStr) -> Self;
@@ -61,9 +61,9 @@ impl Parseable for Node<Expr> {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParserContext {
     /// The imports in the current module
-    pub(in parser) imported: HashMap<Identifier, Import>,
+    pub(in crate::parser) imported: HashMap<Identifier, Import>,
     /// Whether or not the current context can use the self variable.
-    pub(in parser) can_use_self: bool,
+    pub(in crate::parser) can_use_self: bool,
 }
 
 impl ParserContext {
@@ -81,7 +81,7 @@ impl ParserContext {
     /// trait NameOfTrait:
     ///     fn method_name: (arg1: type1, ...) -> return_type
     ///     ...
-    pub(in parser) fn trait_parser<'a>(&self, input: PosStr<'a>) -> Res<'a, Trait> {
+    pub(in crate::parser) fn trait_parser<'a>(&self, input: PosStr<'a>) -> Res<'a, Trait> {
         let header = delimited!(input, TRAIT, IDENTIFIER, tuple!(COLON, between_statement));
 
         let body_parser = |i: PosStr<'a>| {
@@ -126,7 +126,7 @@ impl ParserContext {
         })
     }
 
-    pub(in parser) fn trait_impl<'a>(
+    pub(in crate::parser) fn trait_impl<'a>(
         &self,
         input: PosStr<'a>,
     ) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
@@ -194,7 +194,7 @@ impl ParserContext {
 }
 
 /// Recognize an integer. No post-processing.
-pub(in parser) fn just_int(input: PosStr) -> IO {
+pub(in crate::parser) fn just_int(input: PosStr) -> IO {
     w_followed!(
         input,
         recognize!(tuple!(optc!(SIGN), terminated!(DIGIT, VALID_NUM_FOLLOW)))
@@ -204,7 +204,7 @@ pub(in parser) fn just_int(input: PosStr) -> IO {
 // /// Type parsers
 
 /// Get the next hidden variable.
-pub(in parser) fn next_hidden() -> Identifier {
+pub(in crate::parser) fn next_hidden() -> Identifier {
     Identifier::from(format!(".{}", get_next_var()))
 }
 
@@ -215,7 +215,7 @@ pub(in parser) fn next_hidden() -> Identifier {
 /// * `loop_var` - The name of the variable that contains the iterator results
 /// * `iterator` - The iterator expression
 /// * `inner_loop` - The contexts of loop.
-pub(in parser) fn for_to_while(
+pub(in crate::parser) fn for_to_while(
     loop_var: Identifier,
     iterator: &Node<Expr>,
     mut inner_loop: StmtSeq,
@@ -294,8 +294,8 @@ pub(in parser) fn for_to_while(
 #[cfg(test)]
 mod property_based_tests {
     use super::*;
+    use crate::testing::proptest_utils::strategies;
     use proptest::prelude::*;
-    use testing::proptest_utils::strategies;
 
     // Check that literal expressions can parse at all.
     proptest! {

@@ -2,16 +2,16 @@
 //! Parses imports and function declarations.
 extern crate nom;
 use self::nom::*;
-use expression::*;
-use parser::base::{ParserContext, Res};
-use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::parser_utils::*;
-use parser::position_tracker::PosStr;
+use crate::expression::*;
+use crate::parser::base::{ParserContext, Res};
+use crate::parser::parser_utils::iresult_helpers::*;
+use crate::parser::parser_utils::tokens::*;
+use crate::parser::parser_utils::*;
+use crate::parser::position_tracker::PosStr;
 use std::collections::HashMap;
 
-use general_utils::get_next_id;
-use type_checking::types::Trait;
+use crate::general_utils::get_next_id;
+use crate::type_checking::types::Trait;
 
 /// Parse a module.
 pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
@@ -34,7 +34,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
         Ok((i, parsed_imports)) => {
             for import in parsed_imports {
                 match &import.alias {
-                    Some(ref alias) => context.imported.insert(alias.clone(), import.clone()),
+                    Some(alias) => context.imported.insert(alias.clone(), import.clone()),
                     None => context
                         .imported
                         .insert(import.path.get(0).unwrap().clone(), import.clone()),
@@ -102,7 +102,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
 }
 
 /// Parse an import statement.
-pub(in parser) fn import(input: PosStr) -> Res<Import> {
+pub(in crate::parser) fn import(input: PosStr) -> Res<Import> {
     let parse_result = preceded!(
         input,
         IMPORT,

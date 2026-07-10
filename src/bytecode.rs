@@ -1,8 +1,8 @@
 //! Generate WAST bytecode from the LLR.
 use itertools::join;
 
-use llr::{WASMFunc, WASMModule, WASMType, WASM};
-use type_checking::context::Context;
+use crate::llr::{WASM, WASMFunc, WASMModule, WASMType};
+use crate::type_checking::context::Context;
 
 pub trait ToBytecode {
     /// Generate WAST bytecode from an AST

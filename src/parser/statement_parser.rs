@@ -1,15 +1,15 @@
 //! All statement parsers.
 extern crate nom;
 use self::nom::*;
-use expression::*;
-use parser::base::{for_to_while, ExprU, ParserContext, Res, StmtNode, StmtRes, IO};
-use parser::parser_utils::iresult_helpers::*;
-use parser::parser_utils::tokens::*;
-use parser::position_tracker::PosStr;
-use parser::type_parser;
+use crate::expression::*;
+use crate::parser::base::{ExprU, IO, ParserContext, Res, StmtNode, StmtRes, for_to_while};
+use crate::parser::parser_utils::iresult_helpers::*;
+use crate::parser::parser_utils::tokens::*;
+use crate::parser::position_tracker::PosStr;
+use crate::parser::type_parser;
 
-use general_utils::join;
-use type_checking::types::Type;
+use crate::general_utils::join;
+use crate::type_checking::types::Type;
 
 impl ParserContext {
     /// Match any statement.
@@ -526,18 +526,22 @@ mod tests {
             ErrorKind::Alt,
         );
 
-        check_data("if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true", |x| e.if_stmt(x, 1), Stmt::IfStmt {
-            condition: Node::from(true),
-            block: output(e.block(PosStr::from("x = true"), 0)),
-            // elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
-            else_block: Some(Node::from(Block{
-                statements: vec!(wrap(Stmt::IfStmt{
-                    condition: Node::from(false),
-                    block: output(e.block(PosStr::from("y = true"), 0)),
-                    else_block:Some(output(e.block(PosStr::from("z = true"), 0)))
-                }))
-            }))
-        });
+        check_data(
+            "if    true   :     \n\n\n  x = true\n elif    false   :   \n\n\n  y = true\n else     :  \n  z = true",
+            |x| e.if_stmt(x, 1),
+            Stmt::IfStmt {
+                condition: Node::from(true),
+                block: output(e.block(PosStr::from("x = true"), 0)),
+                // elifs: vec!((Node::from(false), output(e.block(PosStr::from("y = true"), 0)))),
+                else_block: Some(Node::from(Block {
+                    statements: vec![wrap(Stmt::IfStmt {
+                        condition: Node::from(false),
+                        block: output(e.block(PosStr::from("y = true"), 0)),
+                        else_block: Some(output(e.block(PosStr::from("z = true"), 0))),
+                    })],
+                })),
+            },
+        );
     }
 
     #[test]

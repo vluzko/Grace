@@ -283,13 +283,14 @@ pub(in crate::parser) fn for_to_while(
 mod property_based_tests {
     use super::*;
     use crate::testing::proptest_utils::strategies;
+    use crate::testing::proptest_utils::strategies::InverseParse;
     use proptest::prelude::*;
 
     // Check that literal expressions can parse at all.
     proptest! {
         #[test]
         fn lit_props(v in strategies::literal_strategy()) {
-            let expr_string = v.inverse_parse();
+            let expr_string = v.unparse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
             result.unwrap();
@@ -303,7 +304,7 @@ mod property_based_tests {
         })]
         #[test]
         fn prop_expr_parse_at_all(v in strategies::expr_strategy()) {
-            let expr_string = v.inverse_parse();
+            let expr_string = v.unparse();
             let e = ParserContext::empty();
             let result = e.expression(PosStr::from(expr_string.as_bytes()));
             result.unwrap();
@@ -317,7 +318,7 @@ mod property_based_tests {
         })]
         #[test]
         fn prop_expr_identity(v in strategies::expr_strategy()) {
-            let expr_string = v.inverse_parse();
+            let expr_string = v.unparse();
             let e = ParserContext::empty();
             check_data(expr_string.as_str(), |x| e.expression(x), v);
         }

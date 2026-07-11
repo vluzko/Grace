@@ -628,3 +628,24 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod property_based_tests {
+    use super::*;
+    use crate::testing::proptest_utils::strategies;
+    use proptest::prelude::*;
+
+    // Check that let statements can parse at all.
+    proptest! {
+        #[test]
+        fn prop_let_stmt_parses(
+            v in strategies::identifier_strategy()
+                .prop_flat_map(|ident| strategies::let_strategy(vec![ident]))
+        ) {
+            let stmt_string = v.inverse_parse();
+            let e = ParserContext::empty();
+            let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
+            result.unwrap();
+        }
+    }
+}

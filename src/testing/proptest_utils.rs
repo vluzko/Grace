@@ -89,13 +89,9 @@ pub(crate) mod strategies {
     /// Generate a random literal expression.
     pub fn literal_strategy() -> impl Strategy<Value = Expr> {
         prop_oneof![
-            // i64 Strategy
             int_strat(),
-            // f64 Strategy
             float_strat(),
-            // Boolean strategy
             bool_strat(),
-            // ASCII string strategy
             string_strat()
         ]
     }
@@ -147,10 +143,6 @@ pub(crate) mod strategies {
         ]
     }
 
-    // fn chain_let(current: Vec<Identifier>) -> (impl Strategy<Value = Stmt>, Vec<Identifier>) {
-    //     panic!()
-    // }
-
     fn chain_ident(
         current: impl Strategy<Value = Vec<Identifier>>,
     ) -> impl Strategy<Value = Vec<Identifier>> {
@@ -192,7 +184,7 @@ pub(crate) mod strategies {
             })
     }
 
-    fn let_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
+    pub fn let_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
         let n = used.last().unwrap().clone();
         expr_strategy().prop_map(move |v| Stmt::LetStmt {
             name: n.clone(),
@@ -216,20 +208,6 @@ pub(crate) mod strategies {
             (0..used.len()).prop_flat_map(move |i| assignment_strategy(other.clone(), i))
         ]
     }
-
-    // pub fn scoped_stmt_strategy(used_names: Vec<String>) -> impl Strategy<Value = (Stmt, Option<String>)> {
-    //     return stmt_strategy().prop_map(|stmt| {
-    //         let s = match &stmt {
-    //             Stmt::LetStmt{name, ..} => Some(name.name.clone()),
-    //             _ => None
-    //         };
-    //         (stmt, s)
-    //     });
-    // }
-
-    // pub fn block_strategy() -> impl Strategy<Value = Block> {
-    //     return collection::vec(stmt_strategy(), 5).prop_map(|x| Block{statements: x.into_iter().map(wrap).collect()});
-    // }
 
     impl Expr {
         /// Turn an expression into a PosStr that should parse to that expression.
@@ -262,6 +240,22 @@ pub(crate) mod strategies {
                 // Yes the code is exactly the same, but the type of `v` is different.
                 Expr::Bool(v) => format!("{}{}", v, " ".repeat(post_space)),
                 Expr::IdentifierExpr(v) => v.name.clone(),
+                x => panic!("{:?}", x),
+            }
+        }
+    }
+
+    impl Stmt {
+        /// Turn a statement into a string that should parse to that statement.
+        /// See `Expr::inverse_parse` for caveats around whitespace and shrinking.
+        pub fn inverse_parse(&self) -> String {
+            match self {
+                Stmt::LetStmt {
+                    name, expression, ..
+                } => format!("let {} = {}", name.name, expression.data.inverse_parse()),
+                Stmt::AssignmentStmt { name, expression } => {
+                    format!("{} = {}", name.name, expression.data.inverse_parse())
+                }
                 x => panic!("{:?}", x),
             }
         }

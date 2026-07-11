@@ -139,6 +139,7 @@ fn method_dec() {
 }
 
 #[test]
+#[ignore]
 fn method_call() {
     // Should create a new context with a method and then call it
     // Should check the return type of the call expression

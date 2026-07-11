@@ -88,12 +88,7 @@ pub(crate) mod strategies {
 
     /// Generate a random literal expression.
     pub fn literal_strategy() -> impl Strategy<Value = Expr> {
-        prop_oneof![
-            int_strat(),
-            float_strat(),
-            bool_strat(),
-            string_strat()
-        ]
+        prop_oneof![int_strat(), float_strat(), bool_strat(), string_strat()]
     }
 
     /// Strategy for an arbitrary integer

@@ -3,6 +3,10 @@ use std::collections::HashMap;
 
 extern crate nom;
 use self::nom::*;
+use nom::bytes::complete::tag;
+use nom::combinator::{map, opt, recognize};
+use nom::multi::{many_m_n, separated_list1};
+use nom::sequence::{delimited, preceded, terminated};
 
 use crate::expression::*;
 use crate::parser::module_parser::module;
@@ -82,19 +86,16 @@ impl ParserContext {
     ///     fn method_name: (arg1: type1, ...) -> return_type
     ///     ...
     pub(in crate::parser) fn trait_parser<'a>(&self, input: PosStr<'a>) -> Res<'a, Trait> {
-        let header = delimited!(input, TRAIT, IDENTIFIER, tuple!(COLON, between_statement));
+        let header = delimited(TRAIT, IDENTIFIER, (COLON, between_statement)).parse(input);
 
         let body_parser = |i: PosStr<'a>| {
-            do_parse!(
-                i,
-                indent: map!(many1c!(inline_whitespace_char), |x| x.len())
-                    >> statements:
-                        separated_nonempty_list_complete!(
-                            tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))),
-                            m!(self.trait_method)
-                        )
-                    >> (statements)
+            let (i, indent) = map(|i| many1c!(i, inline_whitespace_char), |x| x.len()).parse(i)?;
+            let (i, statements) = separated_list1(
+                (between_statement, many_m_n(indent, indent, tag(" "))),
+                |i| self.trait_method(i),
             )
+            .parse(i)?;
+            Ok((i, statements))
         };
 
         let full_res = chain(header, body_parser);
@@ -114,12 +115,12 @@ impl ParserContext {
     /// Parse a single function description in a trait.
     /// fn method_name: (arg1: type1, ... -> return_type)
     fn trait_method<'a>(&self, input: PosStr<'a>) -> Res<'a, (Identifier, Type)> {
-        let parse_result = tuple!(
-            input,
-            delimited!(FN, IDENTIFIER, COLON),
-            delimited!(OPEN_PAREN, m!(self.simple_args), CLOSE_PAREN),
-            preceded!(TARROW, any_type)
-        );
+        let parse_result = (
+            delimited(FN, IDENTIFIER, COLON),
+            delimited(OPEN_PAREN, |i| self.simple_args(i), CLOSE_PAREN),
+            preceded(TARROW, any_type),
+        )
+            .parse(input);
 
         fmap_iresult(parse_result, |(name, args, ret)| {
             (name, Type::Function(args, vec![], Box::new(ret)))
@@ -130,22 +131,19 @@ impl ParserContext {
         &self,
         input: PosStr<'a>,
     ) -> Res<'a, (Identifier, Identifier, Vec<Node<Stmt>>)> {
-        let header = tuple!(
-            input,
-            preceded!(IMPL, IDENTIFIER),
-            delimited!(FOR, IDENTIFIER, terminated!(COLON, between_statement))
-        );
+        let header = (
+            preceded(IMPL, IDENTIFIER),
+            delimited(FOR, IDENTIFIER, terminated(COLON, between_statement)),
+        )
+            .parse(input);
         let body_parser = |i: PosStr<'a>| {
-            do_parse!(
-                i,
-                indent: map!(many1c!(inline_whitespace_char), |x| x.len())
-                    >> declarations:
-                        separated_nonempty_list_complete!(
-                            tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))),
-                            m!(self.function_declaration_stmt, indent)
-                        )
-                    >> (declarations)
+            let (i, indent) = map(|i| many1c!(i, inline_whitespace_char), |x| x.len()).parse(i)?;
+            let (i, declarations) = separated_list1(
+                (between_statement, many_m_n(indent, indent, tag(" "))),
+                |i| self.function_declaration_stmt(i, indent),
             )
+            .parse(i)?;
+            Ok((i, declarations))
         };
 
         let full_res = chain(header, body_parser);
@@ -159,27 +157,20 @@ impl ParserContext {
 impl ParserContext {
     /// Parse a struct declaration.
     pub fn struct_declaration_stmt<'a>(&self, input: PosStr<'a>) -> Res<'a, StmtNode> {
-        let header = delimited!(
-            input,
-            STRUCT,
-            IDENTIFIER,
-            terminated!(COLON, between_statement)
-        );
+        let header =
+            delimited(STRUCT, IDENTIFIER, terminated(COLON, between_statement)).parse(input);
 
         let field_parser =
-            |i: PosStr<'a>| tuple!(i, IDENTIFIER, preceded!(COLON, m!(self.parse_type)));
+            |i: PosStr<'a>| (IDENTIFIER, preceded(COLON, |i| self.parse_type(i))).parse(i);
 
         let body_parser = |i: PosStr<'a>| {
-            do_parse!(
-                i,
-                indent: map!(many1c!(inline_whitespace_char), |x| x.len())
-                    >> fields:
-                        separated_nonempty_list_complete!(
-                            tuple!(between_statement, many_m_n!(indent, indent, tag!(" "))),
-                            field_parser
-                        )
-                    >> (fields)
+            let (i, indent) = map(|i| many1c!(i, inline_whitespace_char), |x| x.len()).parse(i)?;
+            let (i, fields) = separated_list1(
+                (between_statement, many_m_n(indent, indent, tag(" "))),
+                field_parser,
             )
+            .parse(i)?;
+            Ok((i, fields))
         };
 
         let full_res = chain(header, body_parser);
@@ -197,7 +188,7 @@ impl ParserContext {
 pub(in crate::parser) fn just_int(input: PosStr) -> IO {
     w_followed!(
         input,
-        recognize!(tuple!(optc!(SIGN), terminated!(DIGIT, VALID_NUM_FOLLOW)))
+        recognize((opt(SIGN), terminated(DIGIT, VALID_NUM_FOLLOW)))
     )
 }
 

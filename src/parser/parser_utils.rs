@@ -1,6 +1,5 @@
 #![allow(non_snake_case)]
 
-use std::clone::Clone;
 use std::cmp::PartialEq;
 use std::fmt::Debug;
 use std::str;
@@ -10,6 +9,14 @@ extern crate nom;
 use self::nom::*;
 use super::position_tracker::PosStr;
 use crate::expression::Node;
+use nom::Parser;
+use nom::branch::alt;
+use nom::bytes::complete::{tag, take_till};
+use nom::character::complete::none_of;
+use nom::combinator::{eof, not, opt, peek, recognize};
+use nom::error::ErrorKind;
+use nom::multi::many0;
+use nom::sequence::{delimited, terminated};
 
 use self::iresult_helpers::*;
 use self::tokens::*;
@@ -17,118 +24,53 @@ use self::tokens::*;
 type IO<'a> = IResult<PosStr<'a>, PosStr<'a>>;
 type Res<'a, T> = IResult<PosStr<'a>, T>;
 
-/// A macro for calling methods.
-macro_rules! m (
-    ($i:expr, $self_:ident.$method:ident) => (
-        {
-            let res = $self_.$method($i);
-            res
-        }
-    );
-    ($i:expr, $self_:ident.$method:ident, $($args:expr),* ) => (
-        {
-            let res = $self_.$method($i, $($args),*);
-            res
-        }
-    );
-);
-
-/// Alias for opt!(complete!())
-macro_rules! optc (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    opt!($i, complete!($submac!($($args)*)))
-  );
-
-  ($i:expr, $f:expr) => (
-    optc!($i, call!($f))
-  );
-);
-
-/// Alias for many0!(complete!())
+/// Alias for many0(...)
 macro_rules! many0c (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    many0!($i, complete!($submac!($($args)*)))
-  );
-
   ($i:expr, $f:expr) => (
-    many0c!($i, call!($f))
+    nom::multi::many0($f).parse($i)
   );
 );
 
-/// Alias for many1!(complete!())
+/// Alias for many1(...)
 macro_rules! many1c (
-  ($i:expr, $submac:ident!( $($args:tt)* )) => (
-    many1!($i, complete!($submac!($($args)*)))
-  );
-
   ($i:expr, $f:expr) => (
-    many1c!($i, call!($f))
+    nom::multi::many1($f).parse($i)
   );
 );
 
 /// Check that a macro is indented correctly.
 macro_rules! indented (
-  ($i:expr, $submac:ident!( $($args:tt)* ), $ind:expr) => (
-    preceded!($i, complete!(many_m_n!($ind, $ind, tag!(" "))), $submac!($($args)*))
-  );
-
   ($i:expr, $f:expr, $ind: expr) => (
-    indented!($i, call!($f), $ind)
+    nom::sequence::preceded(
+        nom::multi::many_m_n($ind, $ind, nom::bytes::complete::tag(" ")),
+        $f,
+    ).parse($i)
   );
 );
 
 /// A separated list with at least m elements.
 macro_rules! separated_at_least_m {
-    ($i:expr, $m: expr, $sep:ident!( $($args:tt)* ), $submac:ident!( $($args2:tt)* )) => ({
-        match separated_list_complete!($i, complete!($sep!($($args)*)), complete!($submac!($($args2)*))) {
+    ($i:expr, $m: expr, $sep:expr, $submac:expr) => {{
+        match nom::multi::separated_list0($sep, $submac).parse($i) {
             Ok((i, o)) => {
                 if o.len() < $m {
-                    wrap_err($i, ErrorKind::ManyMN)
+                    wrap_err($i, nom::error::ErrorKind::ManyMN)
                 } else {
                     Ok((i, o))
                 }
-            },
-            x => x
+            }
+            x => x,
         }
-    });
-
-    ($i:expr, $m: expr, $submac:ident!( $($args:tt)* ), $g:expr) => (
-        separated_at_least_m!($i, $m, $submac!($($args)*), call!($g))
-    );
-    ($i:expr, $m: expr, $f:expr, $submac:ident!( $($args:tt)* )) => (
-        separated_at_least_m!($i, $m, call!($f), $submac!($($args)*))
-    );
-    ($i:expr, $m: expr, $f:expr, $g:expr) => (
-        separated_at_least_m!($i, $m, call!($f), call!($g));
-    );
+    }};
 }
 
 /// A line that matches the given macro, followed by a block.
 macro_rules! line_and_block (
-    ($i:expr, $self_:ident, $submac: ident!($($args:tt)* ), $indent: expr) => (
-        tuple!($i,
-            terminated!(
-                $submac!($($args)*),
-                tuple!(
-                    COLON,
-                    NEWLINE
-                )
-            ),
-            m!($self_.block, $indent + 1)
-        )
-    );
-
     ($i:expr, $self_:ident, $f: expr, $indent: expr) => (
-        tuple!($i,
-            terminated!(
-                call!($f),
-                tuple!(
-                    COLON,
-                    NEWLINE
-                )
-            ),
-            m!($self_.block, $indent + 1)
-        )
+        (
+            nom::sequence::terminated($f, (COLON, NEWLINE)),
+            |i| $self_.block(i, $indent + 1),
+        ).parse($i)
     );
 );
 
@@ -147,54 +89,47 @@ macro_rules! keyword_and_block (
 /// "x" + " " * n
 /// where "x" is recognized by the submacro.
 macro_rules! w_followed (
-    ($i:expr, $submac:ident!( $($args:tt)* )) => (
+    ($i:expr, $f:expr) => (
         {
-            match tuple!($i, $submac!($($args)*), many0c!(inline_whitespace_char)) {
+            match ($f, nom::multi::many0(inline_whitespace_char)).parse($i) {
                 Ok((remaining, (o, _))) => Ok((remaining, o)),
                 Err(x) => Err(x)
             }
         }
     );
-
-    ($i:expr, $f:expr) => (
-        w_followed!($i, call!($f));
-    );
 );
 
 #[inline]
 pub fn inline_whitespace_char(input: PosStr) -> IO {
-    tag!(input, " ")
+    tag(" ").parse(input)
 }
 
 pub fn eof_or_line(input: PosStr) -> IO {
-    let val = alt!(input, eof!() | NEWLINE | EMPTY);
-    val
+    alt((eof, NEWLINE, EMPTY)).parse(input)
 }
 
 /// Recognize a single line comment.
 /// Single line comments can be placed anywhere a new line can be placed.
 pub fn single_line_comment(input: PosStr) -> IO {
     let f = |x: u8| x == b'\n';
-    recognize!(
-        input,
-        delimited!(tag!("//"), take_till!(f), alt!(tag!("\n") | END_OF_INPUT))
-    )
+    recognize(delimited(
+        tag("//"),
+        take_till(f),
+        alt((tag("\n"), END_OF_INPUT)),
+    ))
+    .parse(input)
 }
 
 /// Recognize any sequence of whitespace, newlines, and comments, possibly ending with end of input.
 pub fn between_statement(input: PosStr) -> IResult<PosStr, PosStr> {
-    let n = recognize!(
-        input,
-        terminated!(
-            many0c!(recognize!(terminated!(
-                many0c!(inline_whitespace_char),
-                NEWLINE
-            ))),
-            optc!(END_OF_INPUT)
-        )
-    );
-
-    n
+    recognize(terminated(
+        many0(recognize(terminated(
+            many0(inline_whitespace_char),
+            NEWLINE,
+        ))),
+        opt(END_OF_INPUT),
+    ))
+    .parse(input)
 }
 
 pub mod tokens {
@@ -230,7 +165,7 @@ pub mod tokens {
     macro_rules! token {
         ($name:ident, $i: expr) => {
             pub fn $name(input: PosStr) -> IO {
-                w_followed!(input, tag!($i))
+                w_followed!(input, tag($i))
             }
         };
     }
@@ -238,7 +173,7 @@ pub mod tokens {
     macro_rules! keyword {
         ($name:ident, $i: expr) => {
             pub fn $name(input: PosStr) -> IO {
-                w_followed!(input, terminated!(tag!($i), peek!(not!(IDENT_CHAR))))
+                w_followed!(input, terminated(tag($i), peek(not(IDENT_CHAR))))
             }
         };
     }
@@ -254,7 +189,7 @@ pub mod tokens {
 
     /// Recognize an empty input or an end of file
     pub fn END_OF_INPUT(input: PosStr) -> IO {
-        if input.input_len() == 0 || input.at_eof() {
+        if input.input_len() == 0 {
             Ok((input, PosStr::empty()))
         } else {
             wrap_err(input, ErrorKind::NonEmpty)
@@ -263,12 +198,12 @@ pub mod tokens {
 
     pub fn NUM_START(input: PosStr) -> IO {
         match input.slice.len() {
-            0 => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+            0 => wrap_err(input, ErrorKind::Digit),
             _ => {
                 let x = input.slice[0];
                 match (0x30..=0x39).contains(&x) || x == 0x2e {
                     true => Ok(input.take_split(1)),
-                    false => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+                    false => wrap_err(input, ErrorKind::Digit),
                 }
             }
         }
@@ -277,7 +212,7 @@ pub mod tokens {
     /// Recognize a non-empty sequence of decimal digits.
     pub fn DIGIT(input: PosStr) -> IO {
         match input.position(|x| !(0x30..=0x39).contains(&x)) {
-            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+            Some(0) => wrap_err(input, ErrorKind::Digit),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input, ErrorKind::Digit),
@@ -297,7 +232,7 @@ pub mod tokens {
     /// Recognize a sequence of (ASCII) alphabetic characters.
     pub fn ALPHA(input: PosStr) -> IO {
         match input.position(|x| !((65..=90).contains(&x) || (97..=122).contains(&x))) {
-            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+            Some(0) => wrap_err(input, ErrorKind::Digit),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input, ErrorKind::Digit),
@@ -309,7 +244,7 @@ pub mod tokens {
     /// Recognize a sequence of alphanumeric characters.
     pub fn ALPHANUM(input: PosStr) -> IO {
         match input.position(|x: u8| !x.is_alpha() && !x.is_dec_digit()) {
-            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+            Some(0) => wrap_err(input, ErrorKind::Digit),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input, ErrorKind::Digit),
@@ -325,7 +260,7 @@ pub mod tokens {
             !(y.is_alpha() || y.is_dec_digit() || y == '_')
         });
         match identifier_segment {
-            Some(0) => Err(Err::Error(Context::Code(input, ErrorKind::Digit))),
+            Some(0) => wrap_err(input, ErrorKind::Digit),
             Some(n) => Ok(input.take_split(n)),
             None => match input.input_len() {
                 0 => wrap_err(input, ErrorKind::Digit),
@@ -336,20 +271,20 @@ pub mod tokens {
 
     /// Recognize a character in a string, or an escape sequence.
     pub fn STRING_CHAR(input: PosStr) -> IO {
-        alt!(
-            input,
-            tag!("\\\"")
-                | tag!("\\\'")
-                | tag!("\\\\")
-                | tag!("\\n")
-                | tag!("\\\r")
-                | recognize!(none_of!("\r\n\"\\"))
-        )
+        alt((
+            tag("\\\""),
+            tag("\\\'"),
+            tag("\\\\"),
+            tag("\\n"),
+            tag("\\\r"),
+            recognize(none_of("\r\n\"\\")),
+        ))
+        .parse(input)
     }
 
     /// true if a key
     pub fn RESERVED(input: PosStr) -> IO {
-        let tag_lam = |x| recognize!(input, complete!(tag!(PosStr::new(x))));
+        let tag_lam = |x| -> IO { recognize(tag(PosStr::new(x))).parse(input) };
         let tag_iter = RESERVED_WORDS.iter().map(|x| x.as_bytes()).map(tag_lam);
         let mut final_result: IO = wrap_err(input, ErrorKind::Tag);
         for res in tag_iter {
@@ -366,10 +301,7 @@ pub mod tokens {
 
     /// Parser to an Identifier AST.
     pub fn IDENTIFIER(input: PosStr) -> IResult<PosStr, Identifier> {
-        let parse_result = w_followed!(
-            input,
-            recognize!(pair!(alt!(ALPHA | tag!("_")), optc!(IDENT_CHAR)))
-        );
+        let parse_result = w_followed!(input, recognize((alt((ALPHA, tag("_"))), opt(IDENT_CHAR))));
         let intermediate = match parse_result {
             Ok((i, o)) => match RESERVED_WORDS.iter().find(|x| *x == &(o.slice)) {
                 Some(_) => wrap_err(i, ErrorKind::Alt),
@@ -384,47 +316,49 @@ pub mod tokens {
         if input.input_len() == 0 {
             Ok((input, input))
         } else {
-            peek!(
-                input,
-                alt!(
-                    eof!()
-                        | tag!(" ")
-                        | tag!("(")
-                        | tag!(")")
-                        | tag!(":")
-                        | tag!("\n")
-                        | tag!(",")
-                        | tag!("]")
-                        | tag!("}")
-                        | tag!("=>")
-                        | tag!("+")
-                        | tag!("-")
-                        | tag!("*")
-                        | tag!("/")
-                        | tag!("%")
-                        | tag!("&")
-                        | tag!("|")
-                        | tag!("^")
-                        | tag!("!")
-                        | tag!("=")
-                        | tag!("<")
-                        | tag!(">")
-                )
-            )
+            peek(alt((
+                eof,
+                alt((
+                    tag(" "),
+                    tag("("),
+                    tag(")"),
+                    tag(":"),
+                    tag("\n"),
+                    tag(","),
+                    tag("]"),
+                    tag("}"),
+                    tag("=>"),
+                    tag("+"),
+                )),
+                alt((
+                    tag("-"),
+                    tag("*"),
+                    tag("/"),
+                    tag("%"),
+                    tag("&"),
+                    tag("|"),
+                    tag("^"),
+                    tag("!"),
+                    tag("="),
+                    tag("<"),
+                    tag(">"),
+                )),
+            )))
+            .parse(input)
         }
     }
 
     pub fn NEWLINE(input: PosStr) -> IO {
-        alt_complete!(input, tag!("\n") | single_line_comment)
+        alt((tag("\n"), single_line_comment)).parse(input)
     }
 
     pub fn SIGN(input: PosStr) -> IO {
-        recognize!(input, alt!(tag!("+") | tag!("-")))
+        recognize(alt((tag("+"), tag("-")))).parse(input)
     }
 
     /// Parser for the negative unary operator. Checks that it's not immediately followed by a digit.
     pub fn NEG(input: PosStr) -> IO {
-        w_followed!(input, terminated!(tag!("-"), peek!(not!(NUM_START))))
+        w_followed!(input, terminated(tag("-"), peek(not(NUM_START))))
     }
 
     // Keywords
@@ -540,7 +474,7 @@ pub mod tokens {
             check_match_and_leftover("abc     ", IDENTIFIER, Identifier::from("abc"), "");
 
             // Check that identifiers can't start with digits.
-            check_failed("123", IDENTIFIER, ErrorKind::Alt);
+            check_failed("123", IDENTIFIER, ErrorKind::Tag);
 
             // Check that reserved words aren't matched.
             check_failed("true", IDENTIFIER, ErrorKind::Alt);
@@ -647,7 +581,7 @@ pub mod iresult_helpers {
     }
 
     pub fn wrap_err<T>(input: PosStr, error: ErrorKind) -> Res<T> {
-        Err(Err::Error(Context::Code(input, error)))
+        Err(Err::Error(nom::error::Error::new(input, error)))
     }
 
     pub fn output<T>(res: Res<T>) -> T {
@@ -818,9 +752,7 @@ pub mod iresult_helpers {
     {
         match result {
             Result::Err(e) => match e {
-                Err::Error(actual_err) => match actual_err {
-                    Context::Code(_, actual_err) => assert_eq!(actual_err, expected),
-                },
+                Err::Error(actual_err) => assert_eq!(actual_err.code, expected),
                 _ => panic!(),
             },
             Ok(x) => {

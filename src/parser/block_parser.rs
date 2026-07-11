@@ -56,3 +56,25 @@ impl ParserContext {
         )
     }
 }
+
+#[cfg(test)]
+mod property_based_tests {
+    use super::*;
+    use crate::testing::proptest_utils::strategies;
+    use proptest::prelude::*;
+
+    // Check that blocks of simple statements can parse at all.
+    proptest! {
+        #[test]
+        fn prop_simple_block_parses(v in strategies::simple_block_strategy()) {
+            let block_string: String = v
+                .statements
+                .iter()
+                .map(|s| format!(" {}\n", s.data.inverse_parse()))
+                .collect();
+            let e = ParserContext::empty();
+            let result = e.block(PosStr::from(block_string.as_bytes()), 1);
+            result.unwrap();
+        }
+    }
+}

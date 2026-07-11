@@ -170,7 +170,7 @@ pub(crate) mod strategies {
             // Create a new statement.
             .prop_flat_map(|(stmts, new_idents)| {
                 // let n = new_idents.last().unwrap();
-                let s = stmt_strategy(new_idents.clone());
+                let s = simple_stmt_strategy(new_idents.clone());
                 s.prop_map(move |s| {
                     let mut new_stmts = stmts.clone();
                     new_stmts.push(s);
@@ -188,7 +188,7 @@ pub(crate) mod strategies {
         })
     }
 
-    fn assignment_strategy(used: Vec<Identifier>, i: usize) -> impl Strategy<Value = Stmt> {
+    pub fn assignment_strategy(used: Vec<Identifier>, i: usize) -> impl Strategy<Value = Stmt> {
         let n = used[i].clone();
         expr_strategy().prop_map(move |v| Stmt::AssignmentStmt {
             name: n.clone(),
@@ -196,12 +196,26 @@ pub(crate) mod strategies {
         })
     }
 
-    pub fn stmt_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
+    /// Generate a "simple" statement: one that doesn't contain a block (cf. Python's
+    /// `simple_stmt` vs `compound_stmt`). For now this only covers let and assignment.
+    pub fn simple_stmt_strategy(used: Vec<Identifier>) -> impl Strategy<Value = Stmt> {
         let other = used.clone();
         prop_oneof![
             let_strategy(used.clone()),
             (0..used.len()).prop_flat_map(move |i| assignment_strategy(other.clone(), i))
         ]
+    }
+
+    /// Generate a block containing only simple statements (see `simple_stmt_strategy`).
+    pub fn simple_block_strategy() -> impl Strategy<Value = Block> {
+        let mut chained = Just((Vec::<Stmt>::new(), Vec::<Identifier>::new())).boxed();
+        for _ in 0..4 {
+            chained = chain_stmt(chained).boxed();
+        }
+
+        chained.prop_map(|(stmts, _)| Block {
+            statements: stmts.into_iter().map(wrap).collect(),
+        })
     }
 
     impl Expr {

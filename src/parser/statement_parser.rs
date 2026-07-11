@@ -648,4 +648,18 @@ mod property_based_tests {
             result.unwrap();
         }
     }
+
+    // Check that assignment statements can parse at all.
+    proptest! {
+        #[test]
+        fn prop_assignment_stmt_parses(
+            v in strategies::identifier_strategy()
+                .prop_flat_map(|ident| strategies::assignment_strategy(vec![ident], 0))
+        ) {
+            let stmt_string = v.inverse_parse();
+            let e = ParserContext::empty();
+            let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
+            result.unwrap();
+        }
+    }
 }

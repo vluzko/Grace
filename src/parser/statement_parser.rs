@@ -633,6 +633,7 @@ mod tests {
 mod property_based_tests {
     use super::*;
     use crate::testing::proptest_utils::strategies;
+    use crate::testing::proptest_utils::strategies::InverseParse;
     use proptest::prelude::*;
 
     // Check that let statements can parse at all.
@@ -642,7 +643,7 @@ mod property_based_tests {
             v in strategies::identifier_strategy()
                 .prop_flat_map(|ident| strategies::let_strategy(vec![ident]))
         ) {
-            let stmt_string = v.inverse_parse();
+            let stmt_string = v.unparse();
             let e = ParserContext::empty();
             let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
             result.unwrap();
@@ -656,7 +657,29 @@ mod property_based_tests {
             v in strategies::identifier_strategy()
                 .prop_flat_map(|ident| strategies::assignment_strategy(vec![ident], 0))
         ) {
-            let stmt_string = v.inverse_parse();
+            let stmt_string = v.unparse();
+            let e = ParserContext::empty();
+            let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
+            result.unwrap();
+        }
+    }
+
+    // Check that while statements can parse at all.
+    proptest! {
+        #[test]
+        fn prop_while_stmt_parses(v in strategies::while_strategy()) {
+            let stmt_string = v.unparse();
+            let e = ParserContext::empty();
+            let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
+            result.unwrap();
+        }
+    }
+
+    // Check that for statements can parse at all.
+    proptest! {
+        #[test]
+        fn prop_for_stmt_parses(v in strategies::for_strategy()) {
+            let stmt_string = v.unparse();
             let e = ParserContext::empty();
             let result = e.statement(PosStr::from(stmt_string.as_bytes()), 0);
             result.unwrap();

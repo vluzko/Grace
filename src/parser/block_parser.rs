@@ -61,6 +61,7 @@ impl ParserContext {
 mod property_based_tests {
     use super::*;
     use crate::testing::proptest_utils::strategies;
+    use crate::testing::proptest_utils::strategies::InverseParse;
     use proptest::prelude::*;
 
     // Check that blocks of simple statements can parse at all.
@@ -70,7 +71,7 @@ mod property_based_tests {
             let block_string: String = v
                 .statements
                 .iter()
-                .map(|s| format!(" {}\n", s.data.inverse_parse()))
+                .map(|s| format!(" {}\n", s.data.unparse()))
                 .collect();
             let e = ParserContext::empty();
             let result = e.block(PosStr::from(block_string.as_bytes()), 1);

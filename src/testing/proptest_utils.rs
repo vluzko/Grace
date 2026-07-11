@@ -218,12 +218,61 @@ pub(crate) mod strategies {
         })
     }
 
-    impl Expr {
-        /// Turn an expression into a PosStr that should parse to that expression.
-        /// Whitespace is inserted randomly. Technically this breaks one of the assumptions of proptest,
-        /// so if there are issues with parsing whitespace proptest will not be able to replicate failing tests,
-        /// or at least won't be able to shrink test cases properly.
-        pub fn inverse_parse(&self) -> String {
+    /// Generate a while statement, with a simple body block.
+    pub fn while_strategy() -> impl Strategy<Value = Stmt> {
+        (expr_strategy(), simple_block_strategy()).prop_map(|(condition, block)| Stmt::WhileStmt {
+            condition: Node::from(condition),
+            block: Node::from(block),
+        })
+    }
+
+    /// Generate a for loop's loop variable, iterator expression, and body block.
+    /// There's no dedicated `Stmt` variant for for loops (the parser desugars them into
+    /// `let` and `while` statements), so we generate a `ForLoop` instead of a `Stmt` and
+    /// give it its own `unparse`.
+    pub fn for_strategy() -> impl Strategy<Value = ForLoop> {
+        (
+            identifier_strategy(),
+            identifier_strategy().prop_map(Expr::IdentifierExpr),
+            simple_block_strategy(),
+        )
+            .prop_map(|(loop_var, iterator, block)| ForLoop {
+                loop_var,
+                iterator,
+                block,
+            })
+    }
+
+    /// A minimal stand-in for a for loop, used only to generate source text for property
+    /// tests. See `for_strategy` for why this isn't a `Stmt`.
+    #[derive(Debug, Clone)]
+    pub struct ForLoop {
+        pub loop_var: Identifier,
+        pub iterator: Expr,
+        pub block: Block,
+    }
+
+    /// Turn a value into a string that should parse back to that value.
+    /// See `Expr`'s implementation for caveats around whitespace and shrinking.
+    /// Blocks are always rendered indented one level, since that's the only nesting
+    /// depth used by the statements that currently contain them (`while`, `for`).
+    pub trait InverseParse {
+        fn unparse(&self) -> String;
+    }
+
+    impl InverseParse for ForLoop {
+        fn unparse(&self) -> String {
+            format!(
+                "for {} in {}:\n{}",
+                self.loop_var.name,
+                self.iterator.unparse(),
+                self.block.unparse()
+            )
+        }
+    }
+
+    impl InverseParse for Expr {
+        fn unparse(&self) -> String {
             let mut rng = rand::thread_rng();
             let post_space: usize = rng.gen_range(0..10);
             match self {
@@ -233,16 +282,16 @@ pub(crate) mod strategies {
                     right,
                 } => format!(
                     "{}{}{}",
-                    left.data.inverse_parse(),
+                    left.data.unparse(),
                     operator,
-                    right.data.inverse_parse()
+                    right.data.unparse()
                 ),
                 Expr::UnaryExpr { operator, operand } => match (operator, &operand.data) {
                     (UnaryOperator::Negative, &Expr::Float(_))
                     | (UnaryOperator::Negative, &Expr::Int(_)) => {
-                        format!("{} {}", operator, operand.data.inverse_parse())
+                        format!("{} {}", operator, operand.data.unparse())
                     }
-                    _ => format!("{}{}", operator, operand.data.inverse_parse()),
+                    _ => format!("{}{}", operator, operand.data.unparse()),
                 },
                 Expr::String(v) => format!("\"{}\"{}", v, " ".repeat(post_space)),
                 Expr::Int(v) | Expr::Float(v) => format!("{}{}", v, " ".repeat(post_space)),
@@ -254,19 +303,31 @@ pub(crate) mod strategies {
         }
     }
 
-    impl Stmt {
-        /// Turn a statement into a string that should parse to that statement.
-        /// See `Expr::inverse_parse` for caveats around whitespace and shrinking.
-        pub fn inverse_parse(&self) -> String {
+    impl InverseParse for Stmt {
+        fn unparse(&self) -> String {
             match self {
                 Stmt::LetStmt {
                     name, expression, ..
-                } => format!("let {} = {}", name.name, expression.data.inverse_parse()),
+                } => format!("let {} = {}", name.name, expression.data.unparse()),
                 Stmt::AssignmentStmt { name, expression } => {
-                    format!("{} = {}", name.name, expression.data.inverse_parse())
+                    format!("{} = {}", name.name, expression.data.unparse())
                 }
+                Stmt::WhileStmt { condition, block } => format!(
+                    "while {}:\n{}",
+                    condition.data.unparse(),
+                    block.data.unparse()
+                ),
                 x => panic!("{:?}", x),
             }
+        }
+    }
+
+    impl InverseParse for Block {
+        fn unparse(&self) -> String {
+            self.statements
+                .iter()
+                .map(|s| format!(" {}\n", s.data.unparse()))
+                .collect()
         }
     }
 

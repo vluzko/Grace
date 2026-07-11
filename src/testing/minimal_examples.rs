@@ -45,7 +45,7 @@ pub fn minimal_op_block() -> Node<Block> {
             type_annotation: None,
             expression: binary_op_with_identifiers(),
         },
-        Stmt::ReturnStmt(Node::from(minimal_identifiern())),
+        Stmt::ReturnStmt(minimal_identifiern()),
     ];
     Node::from(Block {
         statements: stmts.into_iter().map(|x| Box::new(Node::from(x))).collect(),
@@ -350,9 +350,10 @@ pub fn minimal_self_trait() -> types::Trait {
     }
 }
 
+#[allow(dead_code)] // Not actually dead code, clippy just doesn't detect properly.
 pub fn minimal_self_struct() {
     let self_trait = minimal_self_trait();
-    let s = minimal_struct();
+    let _s = minimal_struct();
     let mut context = context::Context::builtin();
     context.traits.insert(self_trait.name.clone(), self_trait);
 }
@@ -369,6 +370,7 @@ pub fn trait_module() -> Node<expression::Module> {
     })
 }
 
+#[allow(dead_code)] // Not actually dead code, clippy just doesn't detect properly.
 pub fn minimal_module_with_impl() -> Node<expression::Module> {
     let t = minimal_self_trait();
     let s = minimal_struct();

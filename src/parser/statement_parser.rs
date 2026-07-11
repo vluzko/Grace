@@ -1,12 +1,16 @@
 //! All statement parsers.
 extern crate nom;
-use self::nom::*;
 use crate::expression::*;
 use crate::parser::base::{ExprU, IO, ParserContext, Res, StmtNode, StmtRes, for_to_while};
 use crate::parser::parser_utils::iresult_helpers::*;
 use crate::parser::parser_utils::tokens::*;
 use crate::parser::position_tracker::PosStr;
 use crate::parser::type_parser;
+use nom::Parser;
+use nom::branch::alt;
+use nom::combinator::{map, not, opt};
+use nom::multi::separated_list0;
+use nom::sequence::{preceded, terminated};
 
 use crate::general_utils::join;
 use crate::type_checking::types::Type;
@@ -14,34 +18,35 @@ use crate::type_checking::types::Type;
 impl ParserContext {
     /// Match any statement.
     pub fn statement<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
-        let node = alt_complete!(
-            input,
-            m!(self.let_stmt)
-                | m!(self.assignment_stmt)
-                | m!(self.while_stmt, indent)
-                | m!(self.for_in, indent)
-                | m!(self.if_stmt, indent)
-                | map!(m!(self.function_declaration_stmt, indent), |x| (x, vec!()))
-                | m!(self.return_stmt)
-                | m!(self.yield_stmt)
-                | break_stmt
-                | pass_stmt
-                | continue_stmt
-        );
-
-        node
+        alt((
+            |i| self.let_stmt(i),
+            |i| self.assignment_stmt(i),
+            |i| self.while_stmt(i, indent),
+            |i| self.for_in(i, indent),
+            |i| self.if_stmt(i, indent),
+            map(
+                |i| self.function_declaration_stmt(i, indent),
+                |x| (x, vec![]),
+            ),
+            |i| self.return_stmt(i),
+            |i| self.yield_stmt(i),
+            break_stmt,
+            pass_stmt,
+            continue_stmt,
+        ))
+        .parse(input)
     }
 
     /// Match a let statement.
     fn let_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
-        let parse_result = tuple!(
-            input,
-            preceded!(LET, IDENTIFIER),
-            optc!(preceded!(COLON, type_parser::any_type)),
-            preceded!(EQUALS, m!(self.expression))
-        );
+        let parse_result = (
+            preceded(LET, IDENTIFIER),
+            opt(preceded(COLON, type_parser::any_type)),
+            preceded(EQUALS, |i| self.expression(i)),
+        )
+            .parse(input);
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |(name, type_annotation, (expression, u))| {
                 (
@@ -54,7 +59,7 @@ impl ParserContext {
                 )
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match an assignment statement.
@@ -62,24 +67,14 @@ impl ParserContext {
     fn assignment_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         /// Match an assignment operator.
         fn assignments(input: PosStr) -> IO {
-            alt_complete!(
-                input,
-                EQUALS
-                    | ADDASN
-                    | SUBASN
-                    | MULASN
-                    | DIVASN
-                    | MODASN
-                    | EXPASN
-                    | RSHASN
-                    | LSHASN
-                    | BORASN
-                    | BANDASN
-                    | BXORASN
-            )
+            alt((
+                EQUALS, ADDASN, SUBASN, MULASN, DIVASN, MODASN, EXPASN, RSHASN, LSHASN, BORASN,
+                BANDASN, BXORASN,
+            ))
+            .parse(input)
         }
 
-        let parse_result = tuple!(input, IDENTIFIER, assignments, m!(self.expression));
+        let parse_result = (IDENTIFIER, assignments, |i| self.expression(i)).parse(input);
 
         fmap_nodeu(
             parse_result,
@@ -127,18 +122,18 @@ impl ParserContext {
         indent: usize,
     ) -> Res<'a, StmtNode> {
         let arg_parser = |i: PosStr<'a>| {
-            tuple!(
-                i,
+            (
                 IDENTIFIER,
-                preceded!(OPEN_PAREN, m!(self.simple_args)),
-                terminated!(m!(self.keyword_args), CLOSE_PAREN),
-                optc!(preceded!(TARROW, type_parser::any_type))
+                preceded(OPEN_PAREN, |j| self.simple_args(j)),
+                terminated(|j| self.keyword_args(j), CLOSE_PAREN),
+                opt(preceded(TARROW, type_parser::any_type)),
             )
+                .parse(i)
         };
 
-        let parse_result = line_and_block!(input, self, preceded!(FN, arg_parser), indent);
+        let parse_result = line_and_block!(input, self, preceded(FN, arg_parser), indent);
 
-        return fmap_node(
+        fmap_node(
             parse_result,
             |((name, args, keyword_args, return_type), body)| {
                 let mut res_kwargs = vec![];
@@ -160,25 +155,32 @@ impl ParserContext {
                 }
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match an if statement.
     // TODO: Cleanup: Rewrite to separate out some of the logic
     fn if_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
         // TODO: Split this out into subparsers so we can get line and columns accurately.
-        let parse_result = tuple!(
-            input,
-            line_and_block!(self, preceded!(IF, m!(self.expression)), indent),
-            many0c!(indented!(
-                line_and_block!(self, preceded!(ELIF, m!(self.expression)), indent),
-                indent
-            )),
-            opt!(complete!(indented!(
-                keyword_and_block!(self, ELSE, indent),
-                indent
-            )))
-        );
+        let parse_result = (
+            |i| line_and_block!(i, self, preceded(IF, |j| self.expression(j)), indent),
+            |i| {
+                many0c!(i, |j| {
+                    indented!(
+                        j,
+                        |k| line_and_block!(
+                            k,
+                            self,
+                            preceded(ELIF, |l| self.expression(l)),
+                            indent
+                        ),
+                        indent
+                    )
+                })
+            },
+            opt(|i| indented!(i, |j| keyword_and_block!(j, self, ELSE, indent), indent)),
+        )
+            .parse(input);
 
         fmap_nodeu(
             parse_result,
@@ -228,7 +230,7 @@ impl ParserContext {
     // TODO: Testing: check how parsing errors can printed out
     fn while_stmt<'a>(&self, input: PosStr<'a>, indent: usize) -> StmtRes<'a> {
         let parse_result =
-            line_and_block!(input, self, preceded!(WHILE, m!(self.expression)), indent);
+            line_and_block!(input, self, preceded(WHILE, |i| self.expression(i)), indent);
         fmap_nodeu(
             parse_result,
             |((cond, cu), block)| {
@@ -249,9 +251,9 @@ impl ParserContext {
         let parse_result = line_and_block!(
             input,
             self,
-            tuple!(
-                preceded!(FOR, IDENTIFIER),
-                preceded!(IN, m!(self.expression))
+            (
+                preceded(FOR, IDENTIFIER),
+                preceded(IN, |i| self.expression(i)),
             ),
             indent
         );
@@ -268,53 +270,44 @@ impl ParserContext {
 
     /// Match a return statement.
     fn return_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
-        let parse_result = preceded!(input, RETURN, m!(self.expression));
-        return fmap_pass(parse_result, Stmt::ReturnStmt, &(input.line, input.column));
+        let parse_result = preceded(RETURN, |i| self.expression(i)).parse(input);
+        fmap_pass(parse_result, Stmt::ReturnStmt, &(input.line, input.column))
     }
 
     /// Match a yield statement.
     fn yield_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
-        let parse_result = preceded!(input, YIELD, m!(self.expression));
-        return fmap_pass(parse_result, Stmt::YieldStmt, &(input.line, input.column));
+        let parse_result = preceded(YIELD, |i| self.expression(i)).parse(input);
+        fmap_pass(parse_result, Stmt::YieldStmt, &(input.line, input.column))
     }
 
     /// Match all keyword arguments in a function declaration.
     fn keyword_args<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type, ExprU)>> {
-        let parse_result = optc!(
-            input,
-            preceded!(
+        let parse_result = opt(preceded(
+            COMMA,
+            separated_list0(
                 COMMA,
-                separated_list_complete!(
-                    COMMA,
-                    tuple!(
-                        IDENTIFIER,
-                        preceded!(COLON, type_parser::any_type),
-                        preceded!(EQUALS, m!(self.expression))
-                    )
-                )
-            )
-        );
+                (
+                    IDENTIFIER,
+                    preceded(COLON, type_parser::any_type),
+                    preceded(EQUALS, |i| self.expression(i)),
+                ),
+            ),
+        ))
+        .parse(input);
 
-        return fmap_iresult(parse_result, |x| match x {
-            Some(y) => y,
-            None => vec![],
-        });
+        fmap_iresult(parse_result, |x| x.unwrap_or_default())
     }
 
     /// Match the standard arguments in a function declaration.
     pub fn simple_args<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, Type)>> {
-        let result = separated_list_complete!(
-            input,
+        separated_list0(
             COMMA,
-            tuple!(
+            (
                 IDENTIFIER,
-                preceded!(
-                    COLON,
-                    terminated!(m!(self.parse_type), not!(complete!(EQUALS)))
-                )
-            )
-        );
-        result
+                preceded(COLON, terminated(|i| self.parse_type(i), not(EQUALS))),
+            ),
+        )
+        .parse(input)
     }
 }
 
@@ -322,38 +315,39 @@ impl ParserContext {
 pub fn break_stmt(input: PosStr) -> StmtRes {
     let parse_result = BREAK(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::BreakStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a pass statement.
 pub fn pass_stmt(input: PosStr) -> StmtRes {
     let parse_result = PASS(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::PassStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a continue statement.
 pub fn continue_stmt(input: PosStr) -> StmtRes {
     let parse_result = CONTINUE(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::ContinueStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::error::ErrorKind;
 
     #[test]
     fn parse_let_stmt() {
@@ -523,7 +517,7 @@ mod tests {
         check_failed(
             "ifa and b:\n x = true",
             |x| e.statement(x, 0),
-            ErrorKind::Alt,
+            ErrorKind::Tag,
         );
 
         check_data(

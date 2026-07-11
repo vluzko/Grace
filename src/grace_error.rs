@@ -5,7 +5,7 @@ use std::fmt;
 use std::ops::Add;
 
 extern crate nom;
-use self::nom::ErrorKind;
+use self::nom::error::ErrorKind;
 
 use crate::expression::Node;
 

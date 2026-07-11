@@ -66,10 +66,10 @@ pub struct Import {
 impl Import {
     /// Get a string referring to the imported value.
     pub fn string_ref(&self) -> String {
-        return match &self.alias {
+        match &self.alias {
             Some(x) => x.name.clone(),
             None => join(self.path.iter().map(|x| x.name.clone()), "."),
-        };
+        }
     }
 }
 
@@ -381,7 +381,7 @@ pub mod rust_trait_impls {
     use super::*;
 
     /// PartialEq implementations
-
+    ///
     /// We don't compare the ids of Nodes.
     impl<T> PartialEq for Node<T>
     where
@@ -482,7 +482,6 @@ pub mod rust_trait_impls {
         use crate::parser::position_tracker::PosStr;
 
         /// From for Node
-
         impl<T> From<(T, u32, u32, u32, u32)> for Node<T> {
             fn from(input: (T, u32, u32, u32, u32)) -> Self {
                 Node {

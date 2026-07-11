@@ -8,6 +8,11 @@ use crate::parser::parser_utils::iresult_helpers::*;
 use crate::parser::parser_utils::tokens::*;
 use crate::parser::parser_utils::*;
 use crate::parser::position_tracker::PosStr;
+use nom::Parser;
+use nom::branch::alt;
+use nom::combinator::{eof, map, opt};
+use nom::multi::{many0, many1, separated_list1};
+use nom::sequence::{preceded, terminated};
 use std::collections::HashMap;
 
 use crate::general_utils::get_next_id;
@@ -24,11 +29,11 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
         TraitImpl((Identifier, Identifier, Vec<Node<Stmt>>)),
     }
 
-    let just_imports = preceded!(
-        input,
-        opt!(between_statement),
-        many0c!(terminated!(import, between_statement))
-    );
+    let just_imports = preceded(
+        opt(between_statement),
+        many0(terminated(import, between_statement)),
+    )
+    .parse(input);
 
     let (remaining, imports) = match &just_imports {
         Ok((i, parsed_imports)) => {
@@ -37,7 +42,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
                     Some(alias) => context.imported.insert(alias.clone(), import.clone()),
                     None => context
                         .imported
-                        .insert(import.path.get(0).unwrap().clone(), import.clone()),
+                        .insert(import.path.first().unwrap().clone(), import.clone()),
                 };
             }
             (i, parsed_imports)
@@ -45,26 +50,25 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
         _ => panic!(),
     };
 
-    let w_SelfT = ParserContext {
+    let w_self_t = ParserContext {
         imported: context.imported.clone(),
         can_use_self: true,
     };
-    let declarations = terminated!(
-        remaining,
-        many1c!(terminated!(
-            alt_complete!(
-                map!(m!(context.function_declaration_stmt, 0), |x| {
-                    ModuleDec::Func(x)
-                }) | map!(m!(context.struct_declaration_stmt), ModuleDec::Struct)
-                    | map!(m!(w_SelfT.trait_parser), ModuleDec::TraitDec)
-                    | map!(m!(w_SelfT.trait_impl), ModuleDec::TraitImpl)
-            ),
-            between_statement
+    let declarations = terminated(
+        many1(terminated(
+            alt((
+                map(|i| context.function_declaration_stmt(i, 0), ModuleDec::Func),
+                map(|i| context.struct_declaration_stmt(i), ModuleDec::Struct),
+                map(|i| w_self_t.trait_parser(i), ModuleDec::TraitDec),
+                map(|i| w_self_t.trait_impl(i), ModuleDec::TraitImpl),
+            )),
+            between_statement,
         )),
-        alt_complete!(eof!() | EMPTY)
-    );
+        alt((eof, EMPTY)),
+    )
+    .parse(*remaining);
 
-    return fmap_node(
+    fmap_node(
         declarations,
         |just_decs| {
             let mut traits = HashMap::new();
@@ -98,25 +102,25 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
             }
         },
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Parse an import statement.
 pub(in crate::parser) fn import(input: PosStr) -> Res<Import> {
-    let parse_result = preceded!(
-        input,
+    let parse_result = preceded(
         IMPORT,
-        pair!(
-            separated_nonempty_list_complete!(DOT, IDENTIFIER),
-            optc!(preceded!(AS, IDENTIFIER))
-        )
-    );
-    return fmap_iresult(parse_result, |(x, y)| Import {
+        (
+            separated_list1(DOT, IDENTIFIER),
+            opt(preceded(AS, IDENTIFIER)),
+        ),
+    )
+    .parse(input);
+    fmap_iresult(parse_result, |(x, y)| Import {
         id: get_next_id(),
         path: x,
         alias: y,
         values: vec![],
-    });
+    })
 }
 
 #[cfg(test)]

@@ -24,6 +24,7 @@ pub fn compile_folder(subfolder: &str) -> (String, String) {
 pub fn check_against_expected(subfolder: &str) {
     let (folder_path, output_path) = compile_folder(subfolder);
     let paths = read_dir(folder_path).unwrap();
+    let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
     for path in paths {
         let p = path.unwrap().path();
         let is_gr = match p.extension() {
@@ -41,7 +42,6 @@ pub fn check_against_expected(subfolder: &str) {
             let actual = read_to_string(output_file).unwrap();
             let expected = read_to_string(expected_file).unwrap();
             let changeset = Changeset::new(expected.as_str(), actual.as_str(), "");
-            let scope_suffix_regex = Regex::new(r"^\.(\d)+$").unwrap();
             for diff in changeset.diffs {
                 match diff {
                     Difference::Same(_) => {}

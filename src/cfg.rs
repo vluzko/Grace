@@ -152,7 +152,7 @@ pub fn module_to_cfg(module: &Node<Module>, context: &Context) -> CfgMap {
 /// * `context`     - The compilation context.
 /// * `current`     - The CFG the block is embedded in.
 /// * `loop_start`  - A pointer to the start of the loop, if any. Only required for handling continue statements, which need to behave
-///                   differently from all other block ends.
+///   differently from all other block ends.
 pub(crate) fn block_to_cfg(
     block: &Node<Block>,
     context: &Context,

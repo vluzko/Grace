@@ -9,24 +9,30 @@ use crate::parser::parser_utils::iresult_helpers::*;
 use crate::parser::parser_utils::tokens::*;
 use crate::parser::parser_utils::*;
 use crate::parser::position_tracker::PosStr;
+use nom::Parser;
+use nom::branch::alt;
+use nom::bytes::complete::tag;
+use nom::combinator::{map, not, opt, peek, recognize, success, value};
+use nom::multi::{many1, separated_list0, separated_list1};
+use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use std::str::from_utf8;
 
 /// Top-level expression and some extras.
 impl ParserContext {
     pub fn expression<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        alt_complete!(input, m!(self.comparison_expr))
+        self.comparison_expr(input)
     }
 
     /// Match any unary expression.
     /// Implemented as a single parser because all unary expressions have the same precedence.
     fn unary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let (i, (maybe_op, (expr, u))) = alt!(
-            input,
-            tuple!(
-                map!(alt_complete!(PLUS | NEG | TILDE | NOT), Some),
-                m!(self.unary_expr)
-            ) | tuple!(value!(None, tag!("")), m!(self.power_expr))
-        )?;
+        let (i, (maybe_op, (expr, u))) = alt((
+            (map(alt((PLUS, NEG, TILDE, NOT)), Some), |i| {
+                self.unary_expr(i)
+            }),
+            (value(None, tag("")), |i| self.power_expr(i)),
+        ))
+        .parse(input)?;
 
         let node_update = match maybe_op {
             Some(op_str) => (
@@ -53,17 +59,17 @@ impl ParserContext {
 impl ParserContext {
     /// Match a comparison expression.
     fn comparison_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = tuple!(
-            input,
-            m!(self.logical_binary_expr),
-            optc!(tuple!(
-                alt_complete!(DEQUAL | NEQUAL | LEQUAL | GEQUAL | LANGLE | RANGLE),
-                m!(self.logical_binary_expr)
-            ))
-        );
+        let parse_result = (
+            |i| self.logical_binary_expr(i),
+            opt(
+                (alt((DEQUAL, NEQUAL, LEQUAL, GEQUAL, LANGLE, RANGLE)), |i| {
+                    self.logical_binary_expr(i)
+                }),
+            ),
+        )
+            .parse(input);
 
-        let node = fmap_iresult(parse_result, flatten_binary);
-        node
+        fmap_iresult(parse_result, flatten_binary)
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -71,17 +77,16 @@ impl ParserContext {
     fn binary_expr<'a>(
         &self,
         input: PosStr<'a>,
-        operator_parser: impl Fn(PosStr) -> IResult<PosStr, PosStr>,
-        next_expr: impl Fn(PosStr) -> ExprRes,
+        operator_parser: impl Fn(PosStr) -> IResult<PosStr, PosStr> + Copy,
+        next_expr: impl Fn(PosStr) -> ExprRes + Copy,
     ) -> ExprRes<'a> {
-        let parse_result = tuple!(
-            input,
+        let parse_result = (
             next_expr,
-            optc!(tuple!(
-                operator_parser,
-                m!(self.binary_expr, operator_parser, next_expr)
-            ))
-        );
+            opt((operator_parser, |i| {
+                self.binary_expr(i, operator_parser, next_expr)
+            })),
+        )
+            .parse(input);
 
         fmap_iresult(parse_result, flatten_binary)
     }
@@ -91,7 +96,7 @@ impl ParserContext {
     pub fn logical_binary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         self.binary_expr(
             input,
-            |x| alt_complete!(x, AND | OR | XOR),
+            |x| alt((AND, OR, XOR)).parse(x),
             |x| self.bitwise_binary_expr(x),
         )
     }
@@ -100,7 +105,7 @@ impl ParserContext {
     fn bitwise_binary_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         self.binary_expr(
             input,
-            |x| alt_complete!(x, BAND | VBAR | BXOR),
+            |x| alt((BAND, VBAR, BXOR)).parse(x),
             |x| self.shift_expr(x),
         )
     }
@@ -109,7 +114,7 @@ impl ParserContext {
     fn shift_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         self.binary_expr(
             input,
-            |x| alt_complete!(x, LSHIFT | RSHIFT),
+            |x| alt((LSHIFT, RSHIFT)).parse(x),
             |x| self.additive_expr(x),
         )
     }
@@ -118,7 +123,7 @@ impl ParserContext {
     fn additive_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         self.binary_expr(
             input,
-            |x| alt_complete!(x, PLUS | MINUS),
+            |x| alt((PLUS, MINUS)).parse(x),
             |x| self.mult_expr(x),
         )
     }
@@ -127,14 +132,14 @@ impl ParserContext {
     fn mult_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         self.binary_expr(
             input,
-            |x| alt_complete!(x, STAR | DIV | MOD),
+            |x| alt((STAR, DIV, MOD)).parse(x),
             |x| self.unary_expr(x),
         )
     }
 
     /// Match an exponentiation expression.
     fn power_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        self.binary_expr(input, |x| call!(x, EXP), |x| self.atomic_expr(x))
+        self.binary_expr(input, EXP, |x| self.atomic_expr(x))
     }
 }
 
@@ -143,70 +148,75 @@ impl ParserContext {
     fn atomic_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
         w_followed!(
             input,
-            alt_complete!(
-                tuple!(bool_expr, value!(vec!()))
-                    | tuple!(float_expr, value!(vec!()))
-                    | tuple!(int_expr, value!(vec!()))
-                    | tuple!(string_expr, value!(vec!()))
-                    | delimited!(
-                        OPEN_BRACE,
-                        alt_complete!(
-                            m!(self.map_or_set_comprehension)
-                                | m!(self.map_literal)
-                                | m!(self.set_literal)
-                        ),
-                        CLOSE_BRACE
-                    )
-                    | delimited!(
-                        OPEN_BRACKET,
-                        alt_complete!(m!(self.vector_comprehension) | m!(self.vec_literal)),
-                        CLOSE_BRACKET
-                    )
-                    | m!(self.expr_with_trailer)
-            )
+            alt((
+                (bool_expr, success(vec![])),
+                (float_expr, success(vec![])),
+                (int_expr, success(vec![])),
+                (string_expr, success(vec![])),
+                delimited(
+                    OPEN_BRACE,
+                    alt((
+                        |i| self.map_or_set_comprehension(i),
+                        |i| self.map_literal(i),
+                        |i| self.set_literal(i),
+                    )),
+                    CLOSE_BRACE,
+                ),
+                delimited(
+                    OPEN_BRACKET,
+                    alt((|i| self.vector_comprehension(i), |i| self.vec_literal(i),)),
+                    CLOSE_BRACKET,
+                ),
+                |i| self.expr_with_trailer(i),
+            ))
         )
     }
 
     /// An expression wrapped in parentheses.
     fn wrapped_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        delimited!(
-            input,
+        delimited(
             OPEN_PAREN,
-            alt_complete!(
-                m!(self.generator_comprehension) | m!(self.tuple_literal) | m!(self.expression)
-            ),
-            CLOSE_PAREN
+            alt((
+                |i| self.generator_comprehension(i),
+                |i| self.tuple_literal(i),
+                |i| self.expression(i),
+            )),
+            CLOSE_PAREN,
         )
+        .parse(input)
     }
 
     /// Match a list of arguments in a function call.
     fn args_list<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<ExprU>> {
-        separated_nonempty_list_complete!(
-            input,
+        separated_list1(
             COMMA,
-            terminated!(m!(self.logical_binary_expr), not!(EQUALS))
+            terminated(|i| self.logical_binary_expr(i), not(EQUALS)),
         )
+        .parse(input)
     }
 
     /// Match a list of keyword arguments in a function call.
     fn kwargs_list<'a>(&self, input: PosStr<'a>) -> Res<'a, Vec<(Identifier, ExprU)>> {
-        separated_list!(
-            input,
+        separated_list0(
             COMMA,
-            tuple!(IDENTIFIER, preceded!(EQUALS, m!(self.logical_binary_expr)))
+            (
+                IDENTIFIER,
+                preceded(EQUALS, |i| self.logical_binary_expr(i)),
+            ),
         )
+        .parse(input)
     }
 
     /// A struct literal
     fn struct_expr<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let (i, o) = tuple!(
-            input,
-            separated_nonempty_list_complete!(DOT, IDENTIFIER),
-            delimited!(OPEN_BRACE, m!(self.args_list), CLOSE_BRACE)
-        )?;
+        let (i, o) = (
+            separated_list1(DOT, IDENTIFIER),
+            delimited(OPEN_BRACE, |i| self.args_list(i), CLOSE_BRACE),
+        )
+            .parse(input)?;
 
         let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
-            let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
+            let mut tree_base = Expr::IdentifierExpr(idents.first().unwrap().clone());
             let rewritten = if idents.len() > 1 {
                 for attribute in idents[1..idents.len() - 1].iter() {
                     tree_base = Expr::AttributeAccess {
@@ -258,14 +268,13 @@ impl ParserContext {
             )
         };
 
-        let parse_result = alt_complete!(
-            input,
-            tuple!(m!(self.struct_expr), value!(vec!()))
-                | tuple!(
-                    alt_complete!(ident_as_expr | m!(self.wrapped_expr)),
-                    many0c!(m!(self.trailer))
-                )
-        );
+        let parse_result = alt((
+            (|i| self.struct_expr(i), success(vec![])),
+            (alt((ident_as_expr, |i| self.wrapped_expr(i))), |i| {
+                many0c!(i, |j| self.trailer(j))
+            }),
+        ))
+        .parse(input);
 
         // Convert the vector of post identifiers into a single usable expression.
         let map = |((base, mut update), post): (ExprU, Vec<(PostIdent, StmtSeq)>)| {
@@ -293,26 +302,24 @@ impl ParserContext {
 
     /// Parse an expression trailer.
     fn trailer<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
-        alt_complete!(
-            input,
-            m!(self.post_call) | post_access | m!(self.post_index)
-        )
+        alt((|i| self.post_call(i), post_access, |i| self.post_index(i))).parse(input)
     }
 
     /// Match a function call following an expression.
     fn post_call<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
-        let parse_result = delimited!(
-            input,
+        let parse_result = delimited(
             OPEN_PAREN,
-            alt_complete!(
-                tuple!(
-                    m!(self.args_list),
-                    opt!(preceded!(COMMA, m!(self.kwargs_list)))
-                ) | map!(m!(self.kwargs_list), |x| (vec!(), Some(x)))
-                    | map!(peek!(CLOSE_PAREN), |_x| (vec!(), None))
-            ),
-            CLOSE_PAREN
-        );
+            alt((
+                (
+                    |i| self.args_list(i),
+                    opt(preceded(COMMA, |i| self.kwargs_list(i))),
+                ),
+                map(|i| self.kwargs_list(i), |x| (vec![], Some(x))),
+                map(peek(CLOSE_PAREN), |_x| (vec![], None)),
+            )),
+            CLOSE_PAREN,
+        )
+        .parse(input);
         fmap_iresult(parse_result, |(args, kwargs)| {
             let mut just_args = vec![];
             let mut update = vec![];
@@ -345,31 +352,25 @@ impl ParserContext {
 
     /// Match an indexing operation following an expression.
     fn post_index<'a>(&self, input: PosStr<'a>) -> Res<'a, (PostIdent, StmtSeq)> {
-        let parse_result = delimited!(
-            input,
+        let parse_result = delimited(
             OPEN_BRACKET,
-            separated_nonempty_list_complete!(
+            separated_list1(
                 COMMA,
-                tuple!(
-                    optc!(m!(self.logical_binary_expr)),
-                    map!(
-                        optc!(preceded!(COLON, optc!(m!(self.logical_binary_expr)))),
-                        |x| match x {
-                            Some(y) => y,
-                            None => None,
-                        }
+                (
+                    opt(|i| self.logical_binary_expr(i)),
+                    map(
+                        opt(preceded(COLON, opt(|i| self.logical_binary_expr(i)))),
+                        |x: Option<_>| x.unwrap_or_default(),
                     ),
-                    map!(
-                        optc!(preceded!(COLON, optc!(m!(self.logical_binary_expr)))),
-                        |x| match x {
-                            Some(y) => y,
-                            None => None,
-                        }
-                    )
-                )
+                    map(
+                        opt(preceded(COLON, opt(|i| self.logical_binary_expr(i)))),
+                        |x: Option<_>| x.unwrap_or_default(),
+                    ),
+                ),
             ),
-            CLOSE_BRACKET
-        );
+            CLOSE_BRACKET,
+        )
+        .parse(input);
 
         fmap_iresult(parse_result, |x| {
             let mut indices = vec![];
@@ -410,7 +411,7 @@ impl ParserContext {
     /// Rewrite an AttributeAccess as a ModuleAccess if necessary
     /// Will rewrite if the base expression is an identifier in the imports set, or if it's a ModuleExpression.
     fn rewrite_access(&self, base: Expr, attribute: Identifier) -> Expr {
-        return match base {
+        match base {
             Expr::ModuleAccess(id, mut v) => {
                 v.push(attribute);
                 Expr::ModuleAccess(id, v)
@@ -426,7 +427,7 @@ impl ParserContext {
                 base: wrap(x),
                 attribute,
             },
-        };
+        }
     }
 }
 
@@ -434,13 +435,13 @@ impl ParserContext {
 impl ParserContext {
     /// Match a vector literal.
     fn vec_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = terminated!(
-            input,
-            separated_nonempty_list_complete!(COMMA, m!(self.logical_binary_expr)),
-            peek!(CLOSE_BRACKET)
-        );
+        let parse_result = terminated(
+            separated_list1(COMMA, |i| self.logical_binary_expr(i)),
+            peek(CLOSE_BRACKET),
+        )
+        .parse(input);
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |x| {
                 let mut exprs = vec![];
@@ -452,13 +453,12 @@ impl ParserContext {
                 (Expr::VecLiteral(exprs), updates)
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match a set literal.
     fn set_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result =
-            separated_nonempty_list_complete!(input, COMMA, m!(self.logical_binary_expr));
+        let parse_result = separated_list1(COMMA, |i| self.logical_binary_expr(i)).parse(input);
 
         fmap_nodeu(
             parse_result,
@@ -478,15 +478,15 @@ impl ParserContext {
 
     /// Match a map literal.
     fn map_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = separated_nonempty_list_complete!(
-            input,
+        let parse_result = separated_list1(
             COMMA,
-            separated_pair!(
-                m!(self.logical_binary_expr),
+            separated_pair(
+                |i| self.logical_binary_expr(i),
                 COLON,
-                m!(self.logical_binary_expr)
-            )
-        );
+                |i| self.logical_binary_expr(i),
+            ),
+        )
+        .parse(input);
 
         fmap_nodeu(
             parse_result,
@@ -509,25 +509,23 @@ impl ParserContext {
     /// Match a tuple literal
     /// e.g. (), (1, ), (1,2,3), (1,2,3,)
     fn tuple_literal<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let parse_result = alt_complete!(
-            input,
+        let parse_result = alt((
             // Empty input
-            map!(peek!(CLOSE_PAREN), |_| vec!()) |
+            map(peek(CLOSE_PAREN), |_| vec![]),
             // Single element tuple.
-            map!(
-                terminated!(
-                    m!(self.logical_binary_expr),
-                    tuple!(
-                        COMMA,
-                        peek!(CLOSE_PAREN)
-                    )
-                ), |x| vec!(x)
-            ) |
-            terminated!(
-                separated_at_least_m!(2, COMMA, m!(self.logical_binary_expr)),
-                optc!(COMMA)
-            )
-        );
+            map(
+                terminated(|i| self.logical_binary_expr(i), (COMMA, peek(CLOSE_PAREN))),
+                |x| vec![x],
+            ),
+            |i| {
+                terminated(
+                    |j| separated_at_least_m!(j, 2, COMMA, |k| self.logical_binary_expr(k)),
+                    opt(COMMA),
+                )
+                .parse(i)
+            },
+        ))
+        .parse(input);
 
         fmap_nodeu(
             parse_result,
@@ -585,7 +583,8 @@ fn rewrite_comprehension(
 
         outer_stmts.append(&mut iter_u);
 
-        let mut rewritten = for_to_while(iter_vars.get(0).unwrap().clone(), &iterator, inner_stmts);
+        let mut rewritten =
+            for_to_while(iter_vars.first().unwrap().clone(), &iterator, inner_stmts);
 
         outer_stmts.append(&mut rewritten.1);
         outer_stmts.push(wrap(rewritten.0));
@@ -613,25 +612,23 @@ impl ParserContext {
         &self,
         input: PosStr<'a>,
     ) -> Res<'a, (Vec<Identifier>, ExprU, Option<ExprU>)> {
-        let parse_result = tuple!(
-            input,
-            delimited!(FOR, variable_unpacking, IN),
-            m!(self.logical_binary_expr),
-            optc!(preceded!(IF, m!(self.logical_binary_expr)))
-        );
-
-        parse_result
+        (
+            delimited(FOR, variable_unpacking, IN),
+            |i| self.logical_binary_expr(i),
+            opt(preceded(IF, |i| self.logical_binary_expr(i))),
+        )
+            .parse(input)
     }
 
     /// Match a vector comprehension.
     fn vector_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let (i, o) = tuple!(
-            input,
-            m!(self.logical_binary_expr),
-            many1!(m!(self.comprehension_for))
-        )?;
+        let (i, o) = (
+            |i| self.logical_binary_expr(i),
+            many1(|i| self.comprehension_for(i)),
+        )
+            .parse(input)?;
 
-        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
+        fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
@@ -644,18 +641,18 @@ impl ParserContext {
             v_update.append(&mut rewritten);
 
             (ref_expr, v_update)
-        });
+        })
     }
 
     /// Match a generator comprehension.
     fn generator_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let (i, o) = tuple!(
-            input,
-            m!(self.logical_binary_expr),
-            many1!(m!(self.comprehension_for))
-        )?;
+        let (i, o) = (
+            |i| self.logical_binary_expr(i),
+            many1(|i| self.comprehension_for(i)),
+        )
+            .parse(input)?;
 
-        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
+        fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
@@ -667,19 +664,19 @@ impl ParserContext {
             v_update.append(&mut rewritten);
 
             (ref_expr, v_update)
-        });
+        })
     }
 
     /// Match a map or a set.
     fn map_or_set_comprehension<'a>(&self, input: PosStr<'a>) -> ExprRes<'a> {
-        let (i, o) = tuple!(
-            input,
-            m!(self.logical_binary_expr),
-            opt!(complete!(preceded!(COLON, m!(self.logical_binary_expr)))),
-            many1!(m!(self.comprehension_for))
-        )?;
+        let (i, o) = (
+            |i| self.logical_binary_expr(i),
+            opt(preceded(COLON, |i| self.logical_binary_expr(i))),
+            many1(|i| self.comprehension_for(i)),
+        )
+            .parse(input)?;
 
-        return fmap_iresult(
+        fmap_iresult(
             Ok((i, o)),
             |((key_or_value, mut kv_update), opt_value, iterators)| {
                 let coll_name = next_hidden();
@@ -709,7 +706,7 @@ impl ParserContext {
 
                 (ref_expr, kv_update)
             },
-        );
+        )
     }
 }
 
@@ -731,7 +728,7 @@ enum PostIdent {
 
 /// Match an access operation following an expression.
 fn post_access(input: PosStr) -> IResult<PosStr, (PostIdent, StmtSeq)> {
-    let result = preceded!(input, DOT, IDENTIFIER);
+    let result = preceded(DOT, IDENTIFIER).parse(input);
     fmap_iresult(result, |x| (PostIdent::Access { attribute: x }, vec![]))
 }
 
@@ -740,10 +737,10 @@ fn post_access(input: PosStr) -> IResult<PosStr, (PostIdent, StmtSeq)> {
 pub(super) fn bool_expr(input: PosStr) -> IResult<PosStr, ExprNode> {
     let parse_result = w_followed!(
         input,
-        alt!(
-            terminated!(tag!("true"), peek!(not!(IDENT_CHAR)))
-                | terminated!(tag!("false"), peek!(not!(IDENT_CHAR)))
-        )
+        alt((
+            terminated(tag("true"), peek(not(IDENT_CHAR))),
+            terminated(tag("false"), peek(not(IDENT_CHAR))),
+        ))
     );
     fmap_node(
         parse_result,
@@ -770,39 +767,42 @@ pub(super) fn int_expr(input: PosStr) -> IResult<PosStr, ExprNode> {
 
 /// Match a floating point literal expression.
 pub(super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode> {
-    let exponent =
-        |x: PosStr<'a>| preceded!(x, alt!(tag!("e") | tag!("E")), tuple!(opt!(SIGN), DIGIT));
+    let exponent = |x: PosStr<'a>| preceded(alt((tag("e"), tag("E"))), (opt(SIGN), DIGIT)).parse(x);
 
-    let with_dec = |x: PosStr<'a>| tuple!(x, tag!("."), DIGIT0, opt!(complete!(exponent)));
+    let with_dec = |x: PosStr<'a>| (tag("."), DIGIT0, opt(exponent)).parse(x);
 
     let parse_result = w_followed!(
         input,
-        recognize!(tuple!(
-            opt!(SIGN),
+        recognize((
+            opt(SIGN),
             DIGIT,
-            alt!(value!((), with_dec) | value!((), complete!(exponent))),
-            VALID_NUM_FOLLOW
+            alt((value((), with_dec), value((), exponent))),
+            VALID_NUM_FOLLOW,
         ))
     );
 
-    return fmap_node(
+    fmap_node(
         parse_result,
         |x| Expr::Float(from_utf8(x.slice).unwrap().to_string()),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a string literal expression.
 fn string_expr(input: PosStr) -> IResult<PosStr, ExprNode> {
     let result = w_followed!(
         input,
-        delimited!(tag!("\""), recognize!(many0c!(STRING_CHAR)), tag!("\""))
+        delimited(
+            tag("\""),
+            |i| recognize(|j| many0c!(j, STRING_CHAR)).parse(i),
+            tag("\"")
+        )
     );
-    return fmap_node(
+    fmap_node(
         result,
         |x| Expr::String(from_utf8(x.slice).unwrap().to_string()),
         &(input.line, input.column),
-    );
+    )
 }
 
 // END SIMPLE LITERALS
@@ -837,12 +837,13 @@ fn flatten_binary(result: (ExprU, Option<(PosStr, ExprU)>)) -> ExprU {
 
 /// Match a split variable.
 fn variable_unpacking(input: PosStr) -> IResult<PosStr, Vec<Identifier>> {
-    separated_nonempty_list_complete!(input, COMMA, IDENTIFIER)
+    separated_list1(COMMA, IDENTIFIER).parse(input)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nom::error::ErrorKind;
     use std::fs::File;
     use std::io::Read;
     use std::path::Path;
@@ -968,7 +969,7 @@ mod tests {
     #[test]
     fn parse_post_ident() {
         let e = ParserContext::empty();
-        let expected_args = vec!["a", "b", "c"].iter().map(|x| Node::from(*x)).collect();
+        let expected_args = ["a", "b", "c"].iter().map(|x| Node::from(*x)).collect();
         check_match_no_update(
             "( a ,  b , c ) ",
             |x| e.trailer(x),
@@ -1125,8 +1126,8 @@ mod tests {
     #[test]
     fn parse_comparison_expr() {
         let e = ParserContext::empty();
-        let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-        let comp_ops = vec![
+        let comp_strs = [">", "<", ">=", "<=", "==", "!="];
+        let comp_ops = [
             BinaryOperator::Greater,
             BinaryOperator::Less,
             BinaryOperator::GreaterEqual,
@@ -1299,7 +1300,7 @@ mod tests {
         let expected = Node::from("abc_123");
         check_match_no_update("abc_123", |x| e.expression(x), expected);
 
-        check_failed("(", |x| e.expression(x), ErrorKind::Alt);
+        check_failed("(", |x| e.expression(x), ErrorKind::Tag);
     }
 
     #[test]
@@ -1336,7 +1337,7 @@ mod tests {
             ])),
         );
 
-        check_failed(".", |x| e.expression(x), ErrorKind::Alt);
+        check_failed(".", |x| e.expression(x), ErrorKind::Tag);
     }
 
     #[test]
@@ -1419,7 +1420,7 @@ mod tests {
             },
         );
 
-        check_failed("123", |x| e.expr_with_trailer(x), ErrorKind::Alt);
+        check_failed("123", |x| e.expr_with_trailer(x), ErrorKind::Tag);
     }
 
     #[test]

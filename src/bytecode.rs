@@ -53,7 +53,7 @@ impl ToBytecode for WASMModule {
 
 impl ToBytecode for WASMFunc {
     fn to_bytecode(&self, context: &Context) -> String {
-        fn empty_or_prepend(fill: &str, x: &Vec<(String, WASMType)>) -> String {
+        fn empty_or_prepend(fill: &str, x: &[(String, WASMType)]) -> String {
             match x.len() {
                 0 => "".to_string(),
                 _ => format!(

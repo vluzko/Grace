@@ -123,7 +123,7 @@ fn builtin_unary_traits() -> HashMap<Identifier, Trait> {
 fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identifier, Type>> {
     let mut impls = HashMap::new();
     for (tn, mn) in builtin_numeric().into_iter() {
-        for t in vec![Type::i32, Type::i64, Type::f32, Type::f64] {
+        for t in [Type::i32, Type::i64, Type::f32, Type::f64] {
             let func_t = Type::Function(
                 vec![
                     (Identifier::from("left"), t.clone()),
@@ -137,7 +137,8 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
         }
     }
     for (tn, mn) in builtin_binary_bool().into_iter() {
-        for t in [Type::boolean] {
+        {
+            let t = Type::boolean;
             let func_t = Type::Function(
                 vec![
                     (Identifier::from("left"), t.clone()),
@@ -152,7 +153,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
     }
 
     for (tn, mn) in builtin_comparison().into_iter() {
-        for t in vec![Type::boolean, Type::i32, Type::i64, Type::f32, Type::f64] {
+        for t in [Type::boolean, Type::i32, Type::i64, Type::f32, Type::f64] {
             let func_t = Type::Function(
                 vec![
                     (Identifier::from("left"), t.clone()),
@@ -167,7 +168,8 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
     }
 
     for (tn, mn) in builtin_unary().into_iter() {
-        for t in [Type::boolean] {
+        {
+            let t = Type::boolean;
             let func_t = Type::Function(
                 vec![(Identifier::from("operand"), t.clone())],
                 vec![],
@@ -179,7 +181,7 @@ fn builtin_trait_implementations() -> HashMap<(Identifier, Type), HashMap<Identi
     }
 
     for (tn, mn) in builtin_unary_numeric().into_iter() {
-        for t in vec![Type::i32, Type::i64, Type::f32, Type::f64] {
+        for t in [Type::i32, Type::i64, Type::f32, Type::f64] {
             let func_t = Type::Function(
                 vec![(Identifier::from("operand"), t.clone())],
                 vec![],
@@ -338,24 +340,22 @@ impl Context {
 impl Context {
     /// Access a scope.
     pub fn get_scope(&self, scope_id: usize) -> Result<&Scope, GraceError> {
-        return self
-            .scopes
+        self.scopes
             .get(&scope_id)
             .ok_or(GraceError::scoping_error(format!(
                 "No scope with id {} found.",
                 scope_id
-            )));
+            )))
     }
 
     /// Get a mutable reference to a Scope.
     pub fn get_mut_scope(&mut self, scope_id: usize) -> Result<&mut Scope, GraceError> {
-        return self
-            .scopes
+        self.scopes
             .get_mut(&scope_id)
             .ok_or(GraceError::scoping_error(format!(
                 "No scope with id {} found.",
                 scope_id
-            )));
+            )))
     }
 
     /// Create a new scope, returning the ID.
@@ -373,7 +373,7 @@ impl Context {
 
     /// Add an import to a scope.
     pub fn append_import(&mut self, import: &Import) {
-        let import_name = import.path.get(0).unwrap().clone();
+        let import_name = import.path.first().unwrap().clone();
         let scope_mod = CanModifyScope::ImportedModule(import.id);
 
         let scope = self.get_mut_scope(self.root_id).expect("Scope not found");
@@ -412,13 +412,13 @@ impl Context {
         let dec_scope_id = self.get_declaring_scope(scope_id, name)?;
         // This can only fail if the scope hierarchy is constructed incorrectly.
         let scope = &self.scopes[&dec_scope_id];
-        return scope
+        scope
             .declarations
             .get(name)
             .ok_or(GraceError::scoping_error(format!(
                 "No declaration found for {:?} in scope {}",
                 name, scope_id
-            )));
+            )))
     }
 
     pub fn get_struct_and_trait(
@@ -484,7 +484,7 @@ impl Context {
             _ => None,
         };
 
-        return match attribute_type {
+        match attribute_type {
             Some(x) => Ok(x.clone()),
             None => {
                 // Check if this is a trait access
@@ -520,22 +520,20 @@ impl Context {
                     ))),
                 }
             }
-        };
+        }
     }
 
     /// Modify a Type::Self so it contains whatever Self actually is.
     pub fn resolve_self_type(&self, base_type: &Type, scope_id: usize) -> Result<Type, GraceError> {
         match base_type {
-            Type::SelfT => {
-                return self
-                    .self_types
-                    .get(&scope_id)
-                    .ok_or(GraceError::type_error(format!(
-                        "No self type found for scope {}",
-                        scope_id
-                    )))
-                    .cloned();
-            }
+            Type::SelfT => self
+                .self_types
+                .get(&scope_id)
+                .ok_or(GraceError::type_error(format!(
+                    "No self type found for scope {}",
+                    scope_id
+                )))
+                .cloned(),
             t => Ok(t.clone()),
         }
     }
@@ -643,13 +641,13 @@ impl Context {
                 Ok(x) => x,
                 Err(_) => return false,
             };
-            return match desired_type {
+            match desired_type {
                 Type::Undetermined => true,
                 Type::empty => false,
                 Type::i32 | Type::i64 | Type::f32 | Type::f64 | Type::boolean | Type::string => {
                     match unwrapped_self {
                         Type::Refinement(base, ..) => {
-                            self._type_matches(scope_id, &*base, desired_type)
+                            self._type_matches(scope_id, &base, desired_type)
                         }
                         Type::Gradual(id) => self.update_gradual(id, desired_type),
                         x => x.has_simple_conversion(desired_type),
@@ -687,7 +685,7 @@ impl Context {
                     self._type_matches(scope_id, &unwrapped_self, &self_type)
                 }
                 _ => false,
-            };
+            }
         }
     }
 

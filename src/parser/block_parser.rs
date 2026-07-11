@@ -30,18 +30,18 @@ impl ParserContext {
             // We end up reparsing the initial indent, but that's okay. The alternative is joining two
             // vectors, which is much slower.
             // TODO: See if we can clean this up with a separated_list_complete.
-            let statements = preceded(
+
+            preceded(
                 opt(between_statement),
                 many1(terminated(
                     |i| indented!(i, |j| self.statement(j, expected_indent), expected_indent),
                     between_statement,
                 )),
             )
-            .parse(input);
-            statements
+            .parse(input)
         };
 
-        return fmap_node(
+        fmap_node(
             parse_result,
             |x| {
                 let mut statements = vec![];
@@ -53,6 +53,6 @@ impl ParserContext {
                 Block { statements }
             },
             &(input.line, input.column),
-        );
+        )
     }
 }

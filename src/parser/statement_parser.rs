@@ -46,7 +46,7 @@ impl ParserContext {
         )
             .parse(input);
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |(name, type_annotation, (expression, u))| {
                 (
@@ -59,7 +59,7 @@ impl ParserContext {
                 )
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match an assignment statement.
@@ -133,7 +133,7 @@ impl ParserContext {
 
         let parse_result = line_and_block!(input, self, preceded(FN, arg_parser), indent);
 
-        return fmap_node(
+        fmap_node(
             parse_result,
             |((name, args, keyword_args, return_type), body)| {
                 let mut res_kwargs = vec![];
@@ -155,7 +155,7 @@ impl ParserContext {
                 }
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match an if statement.
@@ -271,13 +271,13 @@ impl ParserContext {
     /// Match a return statement.
     fn return_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded(RETURN, |i| self.expression(i)).parse(input);
-        return fmap_pass(parse_result, Stmt::ReturnStmt, &(input.line, input.column));
+        fmap_pass(parse_result, Stmt::ReturnStmt, &(input.line, input.column))
     }
 
     /// Match a yield statement.
     fn yield_stmt<'a>(&self, input: PosStr<'a>) -> StmtRes<'a> {
         let parse_result = preceded(YIELD, |i| self.expression(i)).parse(input);
-        return fmap_pass(parse_result, Stmt::YieldStmt, &(input.line, input.column));
+        fmap_pass(parse_result, Stmt::YieldStmt, &(input.line, input.column))
     }
 
     /// Match all keyword arguments in a function declaration.
@@ -295,10 +295,7 @@ impl ParserContext {
         ))
         .parse(input);
 
-        return fmap_iresult(parse_result, |x| match x {
-            Some(y) => y,
-            None => vec![],
-        });
+        fmap_iresult(parse_result, |x| x.unwrap_or_default())
     }
 
     /// Match the standard arguments in a function declaration.
@@ -318,33 +315,33 @@ impl ParserContext {
 pub fn break_stmt(input: PosStr) -> StmtRes {
     let parse_result = BREAK(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::BreakStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a pass statement.
 pub fn pass_stmt(input: PosStr) -> StmtRes {
     let parse_result = PASS(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::PassStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a continue statement.
 pub fn continue_stmt(input: PosStr) -> StmtRes {
     let parse_result = CONTINUE(input);
 
-    return fmap_nodeu(
+    fmap_nodeu(
         parse_result,
         |_| (Stmt::ContinueStmt, vec![]),
         &(input.line, input.column),
-    );
+    )
 }
 
 #[cfg(test)]

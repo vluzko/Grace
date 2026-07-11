@@ -19,10 +19,10 @@ pub fn check_constraints(scope_id: usize, context: &Context, constraints: Vec<Re
         constraints_str.as_str(),
     ];
     let res = Command::new("python").args(args).output();
-    return match res {
+    match res {
         Ok(output) => output.stdout != "no solution\n".as_bytes(),
         Err(_) => false,
-    };
+    }
 }
 
 fn call_from_refinement_type(

@@ -206,7 +206,7 @@ impl UnaryOperator {
 
 impl<'a> From<&'a Identifier> for Type {
     fn from(input: &'a Identifier) -> Self {
-        return match input.name.as_ref() {
+        match input.name.as_ref() {
             "i32" => Type::i32,
             "i64" => Type::i64,
             "f32" => Type::f32,
@@ -217,7 +217,7 @@ impl<'a> From<&'a Identifier> for Type {
             "string" => Type::string,
             "any" => Type::Gradual(general_utils::get_next_grad()),
             _ => Type::Named(input.clone()),
-        };
+        }
     }
 }
 

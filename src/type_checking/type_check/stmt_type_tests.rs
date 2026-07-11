@@ -135,7 +135,7 @@ fn method_dec() {
     let context = Context::empty();
     let mut module = minimal_examples::minimal_module_with_self();
     let w_scopes = module.set_scope(context.root_id, context);
-    let (context, _) = module.add_to_context(w_scopes).unwrap();
+    let (_context, _) = module.add_to_context(w_scopes).unwrap();
 }
 
 #[test]

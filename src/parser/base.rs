@@ -37,7 +37,7 @@ pub trait Parseable {
 
 impl Parseable for Node<Module> {
     fn parse(input: PosStr) -> Node<Module> {
-        return output(module(input));
+        output(module(input))
     }
 }
 
@@ -100,16 +100,14 @@ impl ParserContext {
 
         let full_res = chain(header, body_parser);
 
-        let trait_val = fmap_iresult(full_res, |(name, signatures)| {
+        fmap_iresult(full_res, |(name, signatures)| {
             let mut m = HashMap::new();
 
             for (k, v) in signatures {
                 m.insert(k, v);
             }
             Trait { name, functions: m }
-        });
-
-        trait_val
+        })
     }
 
     /// Parse a single function description in a trait.
@@ -174,13 +172,12 @@ impl ParserContext {
         };
 
         let full_res = chain(header, body_parser);
-        let struct_dec = fmap_node(
+
+        fmap_node(
             full_res,
             |(name, fields)| Stmt::StructDec { name, fields },
             &(input.line, input.column),
-        );
-
-        struct_dec
+        )
     }
 }
 

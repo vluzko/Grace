@@ -69,8 +69,7 @@ impl ParserContext {
         )
             .parse(input);
 
-        let node = fmap_iresult(parse_result, flatten_binary);
-        node
+        fmap_iresult(parse_result, flatten_binary)
     }
 
     #[allow(clippy::only_used_in_recursion)]
@@ -217,7 +216,7 @@ impl ParserContext {
             .parse(input)?;
 
         let map = |(idents, au): (Vec<Identifier>, Vec<ExprU>)| {
-            let mut tree_base = Expr::IdentifierExpr(idents.get(0).unwrap().clone());
+            let mut tree_base = Expr::IdentifierExpr(idents.first().unwrap().clone());
             let rewritten = if idents.len() > 1 {
                 for attribute in idents[1..idents.len() - 1].iter() {
                     tree_base = Expr::AttributeAccess {
@@ -361,17 +360,11 @@ impl ParserContext {
                     opt(|i| self.logical_binary_expr(i)),
                     map(
                         opt(preceded(COLON, opt(|i| self.logical_binary_expr(i)))),
-                        |x| match x {
-                            Some(y) => y,
-                            None => None,
-                        },
+                        |x: Option<_>| x.unwrap_or_default(),
                     ),
                     map(
                         opt(preceded(COLON, opt(|i| self.logical_binary_expr(i)))),
-                        |x| match x {
-                            Some(y) => y,
-                            None => None,
-                        },
+                        |x: Option<_>| x.unwrap_or_default(),
                     ),
                 ),
             ),
@@ -418,7 +411,7 @@ impl ParserContext {
     /// Rewrite an AttributeAccess as a ModuleAccess if necessary
     /// Will rewrite if the base expression is an identifier in the imports set, or if it's a ModuleExpression.
     fn rewrite_access(&self, base: Expr, attribute: Identifier) -> Expr {
-        return match base {
+        match base {
             Expr::ModuleAccess(id, mut v) => {
                 v.push(attribute);
                 Expr::ModuleAccess(id, v)
@@ -434,7 +427,7 @@ impl ParserContext {
                 base: wrap(x),
                 attribute,
             },
-        };
+        }
     }
 }
 
@@ -448,7 +441,7 @@ impl ParserContext {
         )
         .parse(input);
 
-        return fmap_nodeu(
+        fmap_nodeu(
             parse_result,
             |x| {
                 let mut exprs = vec![];
@@ -460,7 +453,7 @@ impl ParserContext {
                 (Expr::VecLiteral(exprs), updates)
             },
             &(input.line, input.column),
-        );
+        )
     }
 
     /// Match a set literal.
@@ -590,7 +583,8 @@ fn rewrite_comprehension(
 
         outer_stmts.append(&mut iter_u);
 
-        let mut rewritten = for_to_while(iter_vars.get(0).unwrap().clone(), &iterator, inner_stmts);
+        let mut rewritten =
+            for_to_while(iter_vars.first().unwrap().clone(), &iterator, inner_stmts);
 
         outer_stmts.append(&mut rewritten.1);
         outer_stmts.push(wrap(rewritten.0));
@@ -618,14 +612,12 @@ impl ParserContext {
         &self,
         input: PosStr<'a>,
     ) -> Res<'a, (Vec<Identifier>, ExprU, Option<ExprU>)> {
-        let parse_result = (
+        (
             delimited(FOR, variable_unpacking, IN),
             |i| self.logical_binary_expr(i),
             opt(preceded(IF, |i| self.logical_binary_expr(i))),
         )
-            .parse(input);
-
-        parse_result
+            .parse(input)
     }
 
     /// Match a vector comprehension.
@@ -636,7 +628,7 @@ impl ParserContext {
         )
             .parse(input)?;
 
-        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
+        fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
@@ -649,7 +641,7 @@ impl ParserContext {
             v_update.append(&mut rewritten);
 
             (ref_expr, v_update)
-        });
+        })
     }
 
     /// Match a generator comprehension.
@@ -660,7 +652,7 @@ impl ParserContext {
         )
             .parse(input)?;
 
-        return fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
+        fmap_iresult(Ok((i, o)), |((value, mut v_update), iterators)| {
             // The internal name for the collection.
             let coll_name = next_hidden();
             // The statement to create the vector.
@@ -672,7 +664,7 @@ impl ParserContext {
             v_update.append(&mut rewritten);
 
             (ref_expr, v_update)
-        });
+        })
     }
 
     /// Match a map or a set.
@@ -684,7 +676,7 @@ impl ParserContext {
         )
             .parse(input)?;
 
-        return fmap_iresult(
+        fmap_iresult(
             Ok((i, o)),
             |((key_or_value, mut kv_update), opt_value, iterators)| {
                 let coll_name = next_hidden();
@@ -714,7 +706,7 @@ impl ParserContext {
 
                 (ref_expr, kv_update)
             },
-        );
+        )
     }
 }
 
@@ -789,11 +781,11 @@ pub(super) fn float_expr<'a>(input: PosStr<'a>) -> IResult<PosStr<'a>, ExprNode>
         ))
     );
 
-    return fmap_node(
+    fmap_node(
         parse_result,
         |x| Expr::Float(from_utf8(x.slice).unwrap().to_string()),
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Match a string literal expression.
@@ -806,11 +798,11 @@ fn string_expr(input: PosStr) -> IResult<PosStr, ExprNode> {
             tag("\"")
         )
     );
-    return fmap_node(
+    fmap_node(
         result,
         |x| Expr::String(from_utf8(x.slice).unwrap().to_string()),
         &(input.line, input.column),
-    );
+    )
 }
 
 // END SIMPLE LITERALS
@@ -977,7 +969,7 @@ mod tests {
     #[test]
     fn parse_post_ident() {
         let e = ParserContext::empty();
-        let expected_args = vec!["a", "b", "c"].iter().map(|x| Node::from(*x)).collect();
+        let expected_args = ["a", "b", "c"].iter().map(|x| Node::from(*x)).collect();
         check_match_no_update(
             "( a ,  b , c ) ",
             |x| e.trailer(x),
@@ -1134,8 +1126,8 @@ mod tests {
     #[test]
     fn parse_comparison_expr() {
         let e = ParserContext::empty();
-        let comp_strs = vec![">", "<", ">=", "<=", "==", "!="];
-        let comp_ops = vec![
+        let comp_strs = [">", "<", ">=", "<=", "==", "!="];
+        let comp_ops = [
             BinaryOperator::Greater,
             BinaryOperator::Less,
             BinaryOperator::GreaterEqual,

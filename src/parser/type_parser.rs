@@ -165,14 +165,13 @@ fn unary_expr(input: PosStr<'_>) -> JustExpr<'_> {
     ))
     .parse(input);
 
-    let node = fmap_iresult(parse_result, |(maybe_op, expr)| match maybe_op {
+    fmap_iresult(parse_result, |(maybe_op, expr)| match maybe_op {
         Some(op_str) => Node::from(Expr::UnaryExpr {
             operator: UnaryOperator::from(op_str),
             operand: Box::new(expr),
         }),
         None => expr,
-    });
-    node
+    })
 }
 
 fn atomic_expr(input: PosStr<'_>) -> JustExpr<'_> {

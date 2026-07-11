@@ -227,7 +227,7 @@ pub fn handle_declaration(
     context: &Context,
     cfg_map: &HashMap<Identifier, Cfg>,
 ) -> Result<WASMFunc, GraceError> {
-    return match &declaration.data {
+    match &declaration.data {
         Stmt::FunctionDecStmt {
             name,
             args,
@@ -298,7 +298,7 @@ pub fn handle_declaration(
             "Got an unexpected declaration in a module: {:?}. Should not be allowed by the parser.",
             x
         ))),
-    };
+    }
 }
 
 /// Convert a trait function to LLR.
@@ -308,7 +308,7 @@ pub fn handle_trait_func_dec(
     context: &Context,
     cfg_map: &HashMap<Identifier, Cfg>,
 ) -> Result<WASMFunc, GraceError> {
-    return match &declaration.data {
+    match &declaration.data {
         Stmt::FunctionDecStmt {
             name,
             args,
@@ -359,7 +359,7 @@ pub fn handle_trait_func_dec(
             "Got a non-function declaration in a trait: {:?}. Should not be allowed by the parser.",
             x
         ))),
-    };
+    }
 }
 
 /// Convert a value to LLR.

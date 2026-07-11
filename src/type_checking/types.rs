@@ -207,7 +207,7 @@ impl Type {
             Type::string => 1,
             Type::Product(types) => types.iter().map(|x| x.size()).sum(),
             Type::Record(_, fields) | Type::Module(_, fields) => {
-                fields.iter().map(|(_, t)| t.size()).sum()
+                fields.values().map(|t| t.size()).sum()
             }
             Type::Vector(t) => t.size(),
             x => panic!("Size not implemented for {:?}", x),

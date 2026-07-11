@@ -149,12 +149,9 @@ fn _add_let_to_context(
     type_annotation: &Option<Type>,
 ) -> TypeCheckRes {
     let (mut c, t) = expression.add_to_context(context)?;
-    match &type_annotation {
-        Some(x) => {
-            let actual_type = c.resolve_self_type(x, scope_id)?;
-            c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
-        }
-        None => {}
+    if let Some(x) = &type_annotation {
+        let actual_type = c.resolve_self_type(x, scope_id)?;
+        c.check_grad_and_ref_equality(expression.scope, &t, &actual_type)?;
     };
 
     Ok((c, t))
@@ -326,7 +323,7 @@ impl GetContext for Node<Expr> {
 /// Add a function call to the context.
 fn _add_function_call_to_context(
     function: &Node<Expr>,
-    args: &Vec<Node<Expr>>,
+    args: &[Node<Expr>],
     kwargs: &Vec<(Identifier, Node<Expr>)>,
     context: Context,
 ) -> TypeCheckRes {

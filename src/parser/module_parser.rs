@@ -42,7 +42,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
                     Some(alias) => context.imported.insert(alias.clone(), import.clone()),
                     None => context
                         .imported
-                        .insert(import.path.get(0).unwrap().clone(), import.clone()),
+                        .insert(import.path.first().unwrap().clone(), import.clone()),
                 };
             }
             (i, parsed_imports)
@@ -50,20 +50,17 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
         _ => panic!(),
     };
 
-    let w_SelfT = ParserContext {
+    let w_self_t = ParserContext {
         imported: context.imported.clone(),
         can_use_self: true,
     };
     let declarations = terminated(
         many1(terminated(
             alt((
-                map(
-                    |i| context.function_declaration_stmt(i, 0),
-                    |x| ModuleDec::Func(x),
-                ),
+                map(|i| context.function_declaration_stmt(i, 0), ModuleDec::Func),
                 map(|i| context.struct_declaration_stmt(i), ModuleDec::Struct),
-                map(|i| w_SelfT.trait_parser(i), ModuleDec::TraitDec),
-                map(|i| w_SelfT.trait_impl(i), ModuleDec::TraitImpl),
+                map(|i| w_self_t.trait_parser(i), ModuleDec::TraitDec),
+                map(|i| w_self_t.trait_impl(i), ModuleDec::TraitImpl),
             )),
             between_statement,
         )),
@@ -71,7 +68,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
     )
     .parse(*remaining);
 
-    return fmap_node(
+    fmap_node(
         declarations,
         |just_decs| {
             let mut traits = HashMap::new();
@@ -105,7 +102,7 @@ pub fn module(input: PosStr) -> IResult<PosStr, Node<Module>> {
             }
         },
         &(input.line, input.column),
-    );
+    )
 }
 
 /// Parse an import statement.
@@ -118,12 +115,12 @@ pub(in crate::parser) fn import(input: PosStr) -> Res<Import> {
         ),
     )
     .parse(input);
-    return fmap_iresult(parse_result, |(x, y)| Import {
+    fmap_iresult(parse_result, |(x, y)| Import {
         id: get_next_id(),
         path: x,
         alias: y,
         values: vec![],
-    });
+    })
 }
 
 #[cfg(test)]

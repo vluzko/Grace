@@ -403,7 +403,7 @@ mod test {
                 return a
             else::
                 return b"#;
-        return if_stmt.as_bytes();
+        if_stmt.as_bytes()
     }
 
     #[cfg(test)]

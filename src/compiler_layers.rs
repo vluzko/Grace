@@ -293,7 +293,7 @@ impl Compilation {
 
         let scope_context = parsed_module.set_scope(init_context.root_id, init_context);
         let context_res = parsed_module.add_to_context(scope_context);
-        return match context_res {
+        match context_res {
             Ok((context, _)) => {
                 let cfg_map = module_to_cfg(&parsed_module, &context);
                 let wasm = module_to_llr(&parsed_module, &context, &cfg_map);
@@ -313,7 +313,7 @@ impl Compilation {
                 compilation
             }
             Err(_) => panic!("Unimplemented error handling"),
-        };
+        }
     }
 
     /// Merge two Compilations together.
@@ -533,6 +533,7 @@ where
 }
 
 /// Run the compiler from the implementing type to a CFG.
+#[allow(dead_code)] // Not actually dead code, clippy just doesn't detect properly.
 pub(crate) trait UpToCfg<T> {
     fn up_to_cfg(self) -> Result<(T, Cfg, Context), GraceError>;
 }
